@@ -164,6 +164,8 @@
         const fileName = entry.fileName || "";
         const pagesUrl = entry.downloadUrl || `maps/${encodeURIComponent(fileName)}`;
         const rawUrl = `https://raw.githubusercontent.com/acakebread/TileStormDataHosting/main/maps/${encodeURIComponent(fileName)}`;
+        const launchId = entry.mapHash || entry.id || fileName;
+        const openUrl = `https://acakebread.github.io/TileStormEvo/?map=${encodeURIComponent(launchId)}`;
         return `
           <div class="entry">
             <h2>${escapeHtml(entry.name || fileName || entry.id || "Untitled")}</h2>
@@ -172,6 +174,7 @@
             <div class="meta">
               ${fileName ? `<a href="${escapeHtml(pagesUrl)}">Download file</a>` : ""}
               ${fileName ? ` • <a href="${escapeHtml(rawUrl)}" target="_blank" rel="noopener">View raw file</a>` : ""}
+              ${fileName ? ` • <a href="${escapeHtml(openUrl)}">Open in TileStorm</a>` : ""}
             </div>
           </div>
         `;
