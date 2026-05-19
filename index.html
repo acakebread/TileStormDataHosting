@@ -71,6 +71,58 @@
       gap: 10px;
     }
 
+    .section {
+      margin-top: 24px;
+      padding-top: 18px;
+      border-top: 1px solid var(--border);
+    }
+
+    .manifest {
+      display: grid;
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .entry {
+      background: #11151d;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+    }
+
+    .entry h2 {
+      margin: 0 0 4px;
+      font-size: 1rem;
+    }
+
+    .meta {
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .error {
+      color: #ffb7b7;
+    }
+
+    .empty {
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    button {
+      background: linear-gradient(180deg, #2a5f9c, #1c4b7d);
+      color: white;
+      border: 1px solid #4f7fb8;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    button:hover {
+      filter: brightness(1.06);
+    }
+
     .links a {
       display: inline-block;
       width: fit-content;
@@ -92,14 +144,75 @@
 
       <div class="links">
         <a href="./manifest.json">Open manifest.json</a>
-        <a href="./maps/">Open maps folder</a>
+      </div>
+
+      <div class="section">
+        <button id="refresh">Refresh map list</button>
+        <div id="summary" class="note"></div>
+        <div id="manifest" class="manifest"></div>
       </div>
 
       <p class="note">
-        If the maps folder shows a 404 in the browser, that is normal unless you add an <code>index.html</code> inside <code>maps/</code>.
-        TileStorm does not browse that folder directly; it reads the manifest and downloads exact files.
+        The public page is read-only. Deleting maps later should be handled as an admin feature through authenticated API access, not from the public browser page.
       </p>
     </section>
   </main>
+  <script>
+    const manifestEl = document.getElementById("manifest");
+    const summaryEl = document.getElementById("summary");
+    const refreshBtn = document.getElementById("refresh");
+
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, ch => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+      }[ch]));
+    }
+
+    function render(entries, repositoryName, generatedUtc) {
+      if (!entries || entries.length === 0) {
+        manifestEl.innerHTML = '<div class="empty">No maps have been uploaded yet.</div>';
+        summaryEl.textContent = repositoryName ? `${repositoryName} • ${generatedUtc || "unknown time"}` : "";
+        return;
+      }
+
+      summaryEl.textContent = `${repositoryName || "TileStorm Shared Maps"} • ${entries.length} map(s) • ${generatedUtc || "unknown time"}`;
+      manifestEl.innerHTML = entries.map(entry => {
+        const fileUrl = entry.downloadUrl || `maps/${encodeURIComponent(entry.fileName || "")}`;
+        return `
+          <div class="entry">
+            <h2>${escapeHtml(entry.name || entry.fileName || entry.id || "Untitled")}</h2>
+            <div class="meta">${escapeHtml(entry.fileName || "")}</div>
+            <div class="meta">${escapeHtml(entry.sizeBytes || 0)} bytes • ${escapeHtml(entry.updatedUtc || "unknown time")}</div>
+            <div class="meta">${entry.fileName ? `<a href="${escapeHtml(fileUrl)}">Download file</a>` : ""}</div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    async function loadManifest() {
+      summaryEl.textContent = "Loading manifest...";
+      manifestEl.innerHTML = "";
+      try {
+        const response = await fetch("./manifest.json", { cache: "no-store" });
+        if (!response.ok) {
+          summaryEl.innerHTML = `<span class="error">Failed to load manifest: HTTP ${response.status}</span>`;
+          manifestEl.innerHTML = "";
+          return;
+        }
+        const manifest = await response.json();
+        render(manifest.entries || [], manifest.repositoryName, manifest.generatedUtc);
+      } catch (error) {
+        summaryEl.innerHTML = `<span class="error">Failed to load manifest: ${escapeHtml(error.message || error)}</span>`;
+        manifestEl.innerHTML = "";
+      }
+    }
+
+    refreshBtn.addEventListener("click", loadManifest);
+    loadManifest();
+  </script>
 </body>
 </html>
