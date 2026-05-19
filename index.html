@@ -14,7 +14,6 @@
       --accent: #7bb7ff;
       --border: #2a3140;
     }
-
     html, body {
       margin: 0;
       min-height: 100%;
@@ -22,13 +21,11 @@
       color: var(--text);
       font: 16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
     }
-
     .wrap {
       max-width: 860px;
       margin: 8vh auto;
       padding: 32px;
     }
-
     .card {
       background: rgba(23, 26, 33, 0.92);
       border: 1px solid var(--border);
@@ -36,27 +33,22 @@
       padding: 28px;
       box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
     }
-
     h1 {
       margin: 0 0 8px;
       font-size: 2rem;
       letter-spacing: -0.02em;
     }
-
     p {
       margin: 0 0 14px;
       color: var(--muted);
     }
-
     a {
       color: var(--accent);
       text-decoration: none;
     }
-
     a:hover {
       text-decoration: underline;
     }
-
     code {
       background: #0f131a;
       border: 1px solid var(--border);
@@ -64,51 +56,42 @@
       border-radius: 6px;
       color: #d6e8ff;
     }
-
     .links {
       margin-top: 18px;
       display: grid;
       gap: 10px;
     }
-
     .section {
       margin-top: 24px;
       padding-top: 18px;
       border-top: 1px solid var(--border);
     }
-
     .manifest {
       display: grid;
       gap: 12px;
       margin-top: 14px;
     }
-
     .entry {
       background: #11151d;
       border: 1px solid var(--border);
       border-radius: 12px;
       padding: 14px 16px;
     }
-
     .entry h2 {
       margin: 0 0 4px;
       font-size: 1rem;
     }
-
     .meta {
       color: var(--muted);
       font-size: 0.92rem;
     }
-
     .error {
       color: #ffb7b7;
     }
-
     .empty {
       color: var(--muted);
       font-style: italic;
     }
-
     button {
       background: linear-gradient(180deg, #2a5f9c, #1c4b7d);
       color: white;
@@ -118,16 +101,13 @@
       font: inherit;
       cursor: pointer;
     }
-
     button:hover {
       filter: brightness(1.06);
     }
-
     .links a {
       display: inline-block;
       width: fit-content;
     }
-
     .note {
       margin-top: 20px;
       font-size: 0.95rem;
@@ -181,13 +161,18 @@
 
       summaryEl.textContent = `${repositoryName || "TileStorm Shared Maps"} • ${entries.length} map(s) • ${generatedUtc || "unknown time"}`;
       manifestEl.innerHTML = entries.map(entry => {
-        const fileUrl = entry.downloadUrl || `maps/${encodeURIComponent(entry.fileName || "")}`;
+        const fileName = entry.fileName || "";
+        const pagesUrl = entry.downloadUrl || `maps/${encodeURIComponent(fileName)}`;
+        const rawUrl = `https://raw.githubusercontent.com/acakebread/TileStormDataHosting/main/maps/${encodeURIComponent(fileName)}`;
         return `
           <div class="entry">
-            <h2>${escapeHtml(entry.name || entry.fileName || entry.id || "Untitled")}</h2>
-            <div class="meta">${escapeHtml(entry.fileName || "")}</div>
+            <h2>${escapeHtml(entry.name || fileName || entry.id || "Untitled")}</h2>
+            <div class="meta">${escapeHtml(fileName)}</div>
             <div class="meta">${escapeHtml(entry.sizeBytes || 0)} bytes • ${escapeHtml(entry.updatedUtc || "unknown time")}</div>
-            <div class="meta">${entry.fileName ? `<a href="${escapeHtml(fileUrl)}">Download file</a>` : ""}</div>
+            <div class="meta">
+              ${fileName ? `<a href="${escapeHtml(pagesUrl)}">Download file</a>` : ""}
+              ${fileName ? ` • <a href="${escapeHtml(rawUrl)}" target="_blank" rel="noopener">View raw file</a>` : ""}
+            </div>
           </div>
         `;
       }).join("");
