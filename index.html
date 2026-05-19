@@ -165,7 +165,7 @@
         const pagesUrl = entry.downloadUrl || `maps/${encodeURIComponent(fileName)}`;
         const rawUrl = `https://raw.githubusercontent.com/acakebread/TileStormDataHosting/main/maps/${encodeURIComponent(fileName)}`;
         const launchId = entry.mapHash || entry.id || fileName;
-        const openUrl = `https://acakebread.github.io/TileStormEvo/?map=${encodeURIComponent(launchId)}`;
+        const openUrl = `https://acakebread.github.io/TileStormEvo/WebGL/?map=${encodeURIComponent(launchId)}`;
         return `
           <div class="entry">
             <h2>${escapeHtml(entry.name || fileName || entry.id || "Untitled")}</h2>
@@ -174,7 +174,7 @@
             <div class="meta">
               ${fileName ? `<a href="${escapeHtml(pagesUrl)}">Download file</a>` : ""}
               ${fileName ? ` • <a href="${escapeHtml(rawUrl)}" target="_blank" rel="noopener">View raw file</a>` : ""}
-              ${fileName ? ` • <a href="${escapeHtml(openUrl)}">Open in TileStorm</a>` : ""}
+              ${fileName ? ` • <a href="${escapeHtml(openUrl)}" data-launch-map="${escapeHtml(launchId)}">Open in TileStorm</a>` : ""}
             </div>
           </div>
         `;
@@ -200,6 +200,19 @@
     }
 
     refreshBtn.addEventListener("click", loadManifest);
+    document.addEventListener("click", event => {
+      const link = event.target.closest("[data-launch-map]");
+      if (!link) {
+        return;
+      }
+
+      try {
+        localStorage.setItem("TileStormLaunchMap", link.getAttribute("data-launch-map") || "");
+        localStorage.setItem("TileStormLaunchMapTime", String(Date.now()));
+      } catch (error) {
+        // The query string on the link remains the primary fallback.
+      }
+    });
     loadManifest();
   </script>
 </body>
