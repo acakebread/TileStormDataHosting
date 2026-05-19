@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TileStorm Maps</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f1115;
+      --panel: #171a21;
+      --text: #e8edf2;
+      --muted: #99a6b3;
+      --accent: #7bb7ff;
+      --border: #2a3140;
+    }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background: radial-gradient(circle at top, #1a2030 0%, var(--bg) 55%);
+      color: var(--text);
+      font: 16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    }
+    .wrap {
+      max-width: 760px;
+      margin: 8vh auto;
+      padding: 32px;
+    }
+    .card {
+      background: rgba(23, 26, 33, 0.92);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 28px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+    }
+    h1 { margin: 0 0 8px; font-size: 2rem; }
+    p { margin: 0 0 14px; color: var(--muted); }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code {
+      background: #0f131a;
+      border: 1px solid var(--border);
+      padding: 2px 6px;
+      border-radius: 6px;
+      color: #d6e8ff;
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="card">
+      <h1>TileStorm Maps</h1>
+      <p>This folder stores uploaded map packages. It is not meant to be browsed directly as a directory listing.</p>
+      <p>Open the repository manifest instead:</p>
+      <p><a href="../manifest.json">Go to manifest.json</a></p>
+      <p><a href="../">Back to repository home</a></p>
+      <p><code>TileStorm</code> reads <code>manifest.json</code> and downloads exact map files from this folder.</p>
+    </section>
+  </main>
+</body>
+</html>
