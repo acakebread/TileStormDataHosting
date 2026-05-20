@@ -1,18 +1,5 @@
 {
   "repositoryName": "TileStorm Shared Maps",
-  "generatedUtc": "2026-05-20T11:28:42.455Z",
-  "entries": [
-    {
-      "id": "external_test__C2XMmJ.json",
-      "name": "external test",
-      "fileName": "external_test__C2XMmJ.json",
-      "downloadUrl": "maps/external_test__C2XMmJ.json",
-      "contentType": "application/json;charset=utf-8",
-      "mapHash": "C2XMmJ",
-      "description": "",
-      "updatedUtc": "2026-05-19T17:23:25.8018059Z",
-      "sizeBytes": 617,
-      "DisplayName": "external test"
-    }
-  ]
+  "generatedUtc": "2026-05-20T11:28:50.575Z",
+  "entries": []
 }
