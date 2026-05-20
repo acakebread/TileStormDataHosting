@@ -1,18 +1,18 @@
 {
   "repositoryName": "TileStorm Shared Maps",
-  "generatedUtc": "2026-05-20T11:31:26.2803737Z",
+  "generatedUtc": "2026-05-20T11:32:37.6496345Z",
   "entries": [
     {
       "id": "5E5fdC.json",
-      "name": "unity edtior client map",
+      "name": "test shared map",
       "fileName": "5E5fdC.json",
       "downloadUrl": "maps/5E5fdC.json",
       "contentType": "application/json;charset=utf-8",
       "mapHash": "5E5fdC",
       "description": "",
-      "updatedUtc": "2026-05-20T11:31:26.2813755Z",
-      "sizeBytes": 582,
-      "DisplayName": "unity edtior client map"
+      "updatedUtc": "2026-05-20T11:32:37.6496345Z",
+      "sizeBytes": 574,
+      "DisplayName": "test shared map"
     }
   ]
 }
