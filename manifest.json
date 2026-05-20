@@ -1,7 +1,19 @@
 {
   "repositoryName": "TileStorm Shared Maps",
-  "generatedUtc": "2026-05-20T13:43:28.4580000Z",
+  "generatedUtc": "2026-05-20T14:00:12.7613099Z",
   "entries": [
+    {
+      "id": "7M9jch.json",
+      "name": "empty map test",
+      "fileName": "7M9jch.json",
+      "downloadUrl": "maps/7M9jch.json",
+      "contentType": "application/json;charset=utf-8",
+      "mapHash": "7M9jch",
+      "description": "",
+      "updatedUtc": "2026-05-20T14:00:12.7623138Z",
+      "sizeBytes": 188,
+      "DisplayName": "empty map test"
+    },
     {
       "id": "EVc43c.json",
       "name": "NEW_MAP_EVc43c",
