@@ -1,13 +1,17 @@
 # TileStorm Evolution Data Hosting
 
-This repository is the public web host for shared TileStorm Evolution map data.
+This repository hosts the public community map catalogue for TileStorm Evolution.
 
-Contents:
+Use the web portal to:
 
-- `index.html` landing page and map browser
-- `manifest.json` map catalogue
-- `maps/` published map packages
-- `thumbs/` preview thumbnails named by map hash
-- `content-authoring-guide.html` short placeholder author guide
+- Launch the live WebGL build.
+- Browse shared maps.
+- Open a shared map directly in TileStorm Evolution.
+- Download a map package for local testing.
+- Read the authoring guide for publishing and updating maps.
 
-The landing page is intentionally short. Use the linked guide for fuller authoring and submission notes.
+Useful links:
+
+- Portal: `index.html`
+- Authoring guide: `content-authoring-guide.html`
+- Technical notes: `technical-notes.md`

@@ -317,28 +317,28 @@
         <div class="hero-copy">
           <h1>TileStorm Evolution Data Hosting</h1>
           <div>
-            <p>This portal hosts community map data for TileStorm Evolution.</p>
-            <p>The portal reads <code>manifest.json</code> and shows map packages from <code>/maps/</code> plus preview thumbnails from <code>/thumbs/</code>.</p>
-            <p><a href="./manifest.json">Open manifest.json</a></p>
+            <p>Browse shared community maps, launch them directly in the WebGL build, or download them for local testing.</p>
+            <p>Choose a map below to open TileStorm Evolution with that map loaded, or start the game first and use the Community catalogue in-game.</p>
           </div>
         </div>
         <div class="launch-panel">
-          <p>Jump straight into the live WebGL build.</p>
+          <p>Start the live build, then use Options > Community to browse and import shared maps.</p>
           <a class="primary-launch" id="launchGame" href="https://acakebread.github.io/TileStormEvo/WebGL/">Launch TileStorm Evolution</a>
         </div>
       </div>
 
       <div class="readme">
-        <h2>README</h2>
-        <p>This page is the public landing page for TileStorm shared maps. It stays intentionally short so the important instructions are easy to find.</p>
+        <h2>How to use shared maps</h2>
+        <p>Community maps can be opened from this page or from inside TileStorm Evolution.</p>
         <ul>
-          <li>Downloadable maps live in <code>maps/</code>.</li>
-          <li>Thumbnail previews live in <code>thumbs/&lt;mapHash&gt;.png</code>.</li>
-          <li>Open the guide if you want the fuller authoring and submission workflow.</li>
+          <li>Click <strong>Open in TileStorm</strong> on any map to launch the game with that map selected.</li>
+          <li>Use <strong>Download</strong> if you want to save the map package manually.</li>
+          <li>Open the authoring guide if you want to create, publish, or update your own shared maps.</li>
         </ul>
         <div class="readme-links">
-          <a class="button-link" href="./content-authoring-guide.html">Open full authoring guide</a>
-          <a class="button-link" href="./README.md">Open README.md</a>
+          <a class="button-link" href="./content-authoring-guide.html">Open authoring guide</a>
+          <a class="button-link" href="./README.md">Repository notes</a>
+          <a class="button-link" href="./technical-notes.md">Technical notes</a>
         </div>
       </div>
 
@@ -352,7 +352,7 @@
 
       <details>
         <summary>Admin tools</summary>
-        <p class="note">Temporary development controls. Paste a GitHub token with read/write Contents access to enable map deletion from this browser.</p>
+        <p class="note">Publisher controls. Paste a GitHub token with read/write access to remove maps while the community library is being curated.</p>
         <div class="toolbar">
           <input id="adminToken" type="password" autocomplete="off" placeholder="GitHub personal access token">
           <button id="saveToken">Use token</button>

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>TileStorm Content Authoring Guide</title>
+  <title>TileStorm Evolution Authoring Guide</title>
   <style>
     :root {
       color-scheme: dark;
@@ -12,78 +12,97 @@
       --text: #f2f6fb;
       --muted: #a8b7c8;
       --accent: #69c8ff;
+      --gold: #f0c35b;
       --border: #2a394a;
     }
     html, body {
       margin: 0;
       min-height: 100%;
-      background: radial-gradient(circle at top left, rgba(105, 200, 255, 0.14), transparent 30rem), var(--bg);
+      background:
+        linear-gradient(180deg, rgba(7, 12, 18, 0.58), rgba(7, 12, 18, 0.92)),
+        url("./web_portal_background.png") center top / cover fixed no-repeat,
+        var(--bg);
       color: var(--text);
       font: 16px/1.6 "Segoe UI", "Trebuchet MS", system-ui, sans-serif;
     }
     .wrap {
-      max-width: 840px;
+      max-width: 900px;
       margin: 6vh auto;
       padding: 28px;
     }
     .card {
       background: rgba(18, 25, 35, 0.92);
+      backdrop-filter: blur(10px) saturate(1.08);
       border: 1px solid var(--border);
       border-radius: 22px;
-      padding: 28px;
+      padding: 30px;
       box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
     }
     h1, h2 { line-height: 1.12; }
-    h1 { margin: 0 0 12px; font-size: clamp(2rem, 5vw, 3.2rem); }
-    h2 { margin: 28px 0 8px; font-size: 1.05rem; text-transform: uppercase; letter-spacing: 0.02em; color: var(--accent); }
+    h1 { margin: 0 0 14px; font-size: clamp(2rem, 5vw, 3.2rem); letter-spacing: -0.04em; }
+    h2 { margin: 30px 0 8px; font-size: 1.08rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--accent); }
     p, li { color: var(--muted); }
     a { color: var(--accent); text-decoration: none; }
     a:hover { text-decoration: underline; }
-    code {
-      background: #071018;
-      border: 1px solid var(--border);
-      padding: 2px 6px;
-      border-radius: 6px;
-      color: #d6efff;
+    strong { color: var(--text); }
+    .callout {
+      margin: 18px 0;
+      padding: 14px 16px;
+      border: 1px solid rgba(240, 195, 91, 0.35);
+      border-radius: 14px;
+      background: rgba(240, 195, 91, 0.10);
+      color: #f7dfaa;
     }
-    ul { padding-left: 20px; }
+    ol, ul { padding-left: 22px; }
+    li { margin-bottom: 8px; }
   </style>
 </head>
 <body>
   <main class="wrap">
     <section class="card">
-      <p><a href="./index.html">Back to portal</a></p>
-      <h1>TileStorm Content Authoring Guide</h1>
-      <p>
-        This is a short placeholder guide for map authors and submitters. It is intentionally not exhaustive.
-      </p>
+      <p><a href="./index.html">Back to map portal</a></p>
+      <h1>TileStorm Evolution Authoring Guide</h1>
+      <p>Create a map in TileStorm Evolution, test it in play mode, then publish it to the shared community catalogue when it is ready for others to try.</p>
 
-      <h2>Authoring</h2>
-      <ul>
-        <li>Build and test the map in TileStorm.</li>
-        <li>Keep the final published version clean and readable.</li>
-        <li>The map package is exported separately from the thumbnail image.</li>
-      </ul>
+      <div class="callout">
+        A published map keeps its identity even if you rename it later. Rename freely for presentation; updates replace the same shared map instead of creating duplicates.
+      </div>
 
-      <h2>Publishing</h2>
-      <ul>
-        <li>Open the shared map panel in a build that has publish access.</li>
-        <li>Press <strong>Publish Current</strong>.</li>
-        <li>The app uploads the map package and the thumbnail as separate files using the same hash.</li>
-      </ul>
+      <h2>Create and test a map</h2>
+      <ol>
+        <li>Launch TileStorm Evolution and switch to <strong>Editor</strong> mode.</li>
+        <li>Build the map layout, add start/end markers where required, and set the map name to something readable.</li>
+        <li>Switch to <strong>Player</strong> mode and play through the map so obvious setup issues are caught before publishing.</li>
+        <li>Save the database if you want a local recovery point before publishing.</li>
+      </ol>
 
-      <h2>Downloads</h2>
-      <ul>
-        <li>Use the portal landing page to browse maps.</li>
-        <li>Open the map file link to download the package.</li>
-        <li>Use the thumbnail only as a preview asset.</li>
-      </ul>
+      <h2>Publish to the community catalogue</h2>
+      <ol>
+        <li>Open <strong>Options</strong> in the game.</li>
+        <li>Open <strong>Community</strong> to bring up the shared map catalogue.</li>
+        <li>Select the local or currently loaded map you want to share.</li>
+        <li>Press <strong>Publish</strong> or <strong>Publish Loaded</strong>.</li>
+        <li>Wait for the upload to complete. GitHub Pages may take a short moment before the public portal shows the update.</li>
+      </ol>
 
-      <h2>Deletion</h2>
-      <ul>
-        <li>Deleting a map should remove both the package and the matching thumbnail.</li>
-        <li>The shared hash is what keeps those two files paired.</li>
-      </ul>
+      <h2>Update an existing shared map</h2>
+      <ol>
+        <li>Load the map in TileStorm Evolution.</li>
+        <li>Make your changes and test the result.</li>
+        <li>Publish again from the Community catalogue.</li>
+        <li>The shared entry is updated in place, including its display name, package, timestamp, and preview image when available.</li>
+      </ol>
+
+      <h2>Import maps from the community</h2>
+      <ol>
+        <li>From the web portal, click <strong>Open in TileStorm</strong> on a map to launch directly into it.</li>
+        <li>From inside the game, open <strong>Options > Community</strong>.</li>
+        <li>Use <strong>Import</strong> or <strong>Update Local</strong> to bring a shared map into your local catalogue.</li>
+        <li>Use <strong>Import / Update All Remote</strong> when you want to sync every shared map currently listed.</li>
+      </ol>
+
+      <h2>Curating shared maps</h2>
+      <p>During development, publisher/admin builds can remove shared maps from the Community catalogue. On the web portal, the Admin tools section can also remove entries when supplied with a suitable GitHub access token.</p>
     </section>
   </main>
 </body>
