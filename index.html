@@ -3,144 +3,287 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>TileStorm Data Hosting</title>
+  <title>TileStorm Evolution Data Hosting</title>
   <style>
     :root {
       color-scheme: dark;
-      --bg: #0f1115;
-      --panel: #171a21;
-      --text: #e8edf2;
-      --muted: #99a6b3;
-      --accent: #7bb7ff;
-      --border: #2a3140;
+      --bg: #081016;
+      --panel: #121923;
+      --panel-soft: #172333;
+      --text: #f2f6fb;
+      --muted: #a8b7c8;
+      --accent: #69c8ff;
+      --accent-strong: #f0c35b;
+      --danger: #ff7979;
+      --danger-bg: #411b22;
+      --border: #2a394a;
     }
-    html, body {
+
+    html,
+    body {
       margin: 0;
       min-height: 100%;
-      background: radial-gradient(circle at top, #1a2030 0%, var(--bg) 55%);
+      background:
+        radial-gradient(circle at 18% 12%, rgba(105, 200, 255, 0.20), transparent 30rem),
+        radial-gradient(circle at 88% 18%, rgba(240, 195, 91, 0.16), transparent 26rem),
+        linear-gradient(145deg, #071016 0%, #10141c 52%, #080b10 100%);
       color: var(--text);
-      font: 16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      font: 16px/1.5 "Segoe UI", "Trebuchet MS", system-ui, sans-serif;
     }
+
     .wrap {
-      max-width: 860px;
-      margin: 8vh auto;
-      padding: 32px;
-    }
-    .card {
-      background: rgba(23, 26, 33, 0.92);
-      border: 1px solid var(--border);
-      border-radius: 18px;
+      max-width: 980px;
+      margin: 6vh auto;
       padding: 28px;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
     }
+
+    .card {
+      background: rgba(18, 25, 35, 0.94);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 32px;
+      box-shadow: 0 28px 80px rgba(0, 0, 0, 0.45);
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 20px;
+    }
+
     h1 {
-      margin: 0 0 8px;
-      font-size: 2rem;
-      letter-spacing: -0.02em;
+      margin: 0;
+      font-size: clamp(2rem, 5vw, 3.8rem);
+      letter-spacing: -0.055em;
+      line-height: 0.95;
     }
+
+    h2 {
+      margin: 0 0 4px;
+      font-size: 1.05rem;
+    }
+
     p {
       margin: 0 0 14px;
       color: var(--muted);
     }
+
     a {
       color: var(--accent);
       text-decoration: none;
     }
+
     a:hover {
       text-decoration: underline;
     }
+
     code {
-      background: #0f131a;
+      background: #071018;
       border: 1px solid var(--border);
       padding: 2px 6px;
       border-radius: 6px;
-      color: #d6e8ff;
+      color: #d6efff;
     }
-    .links {
-      margin-top: 18px;
-      display: grid;
-      gap: 10px;
+
+    .launch-panel {
+      background: linear-gradient(135deg, rgba(240, 195, 91, 0.18), rgba(105, 200, 255, 0.10));
+      border: 1px solid rgba(240, 195, 91, 0.35);
+      border-radius: 18px;
+      padding: 20px;
     }
+
+    .primary-launch {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 54px;
+      padding: 0 24px;
+      border-radius: 14px;
+      background: linear-gradient(180deg, #f4cf72, #bf8424);
+      color: #171008;
+      font-weight: 800;
+      letter-spacing: 0.01em;
+      box-shadow: 0 14px 35px rgba(191, 132, 36, 0.26);
+    }
+
+    .primary-launch:hover {
+      filter: brightness(1.06);
+      text-decoration: none;
+    }
+
     .section {
-      margin-top: 24px;
-      padding-top: 18px;
+      margin-top: 26px;
+      padding-top: 22px;
       border-top: 1px solid var(--border);
     }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
     .manifest {
       display: grid;
       gap: 12px;
-      margin-top: 14px;
+      margin-top: 16px;
     }
+
     .entry {
-      background: #11151d;
+      background: rgba(10, 16, 24, 0.78);
       border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 14px 16px;
+      border-radius: 15px;
+      padding: 16px;
     }
-    .entry h2 {
-      margin: 0 0 4px;
-      font-size: 1rem;
+
+    .entry-top {
+      display: flex;
+      gap: 12px;
+      justify-content: space-between;
+      align-items: flex-start;
     }
+
     .meta {
       color: var(--muted);
       font-size: 0.92rem;
     }
-    .error {
-      color: #ffb7b7;
+
+    .entry-actions,
+    .admin-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
     }
+
     .empty {
       color: var(--muted);
       font-style: italic;
     }
-    button {
-      background: linear-gradient(180deg, #2a5f9c, #1c4b7d);
+
+    .error {
+      color: #ffc5c5;
+    }
+
+    .success {
+      color: #aeffc5;
+    }
+
+    button,
+    .button-link {
+      background: linear-gradient(180deg, #2a628f, #1a4266);
       color: white;
-      border: 1px solid #4f7fb8;
+      border: 1px solid #5082aa;
       border-radius: 10px;
       padding: 10px 14px;
       font: inherit;
       cursor: pointer;
     }
-    button:hover {
-      filter: brightness(1.06);
+
+    button:hover,
+    .button-link:hover {
+      filter: brightness(1.08);
+      text-decoration: none;
     }
-    .links a {
-      display: inline-block;
-      width: fit-content;
+
+    button.danger {
+      background: linear-gradient(180deg, #6d2631, #451822);
+      border-color: #9d4a55;
+      color: #ffe5e5;
     }
+
+    input {
+      min-width: min(460px, 100%);
+      background: #071018;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      padding: 10px 12px;
+      font: inherit;
+    }
+
+    details {
+      margin-top: 18px;
+      background: rgba(8, 15, 22, 0.48);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px 16px;
+    }
+
+    summary {
+      cursor: pointer;
+      font-weight: 700;
+    }
+
     .note {
-      margin-top: 20px;
+      margin-top: 14px;
+      color: #b6c4d3;
       font-size: 0.95rem;
-      color: #a8b4c2;
+    }
+
+    @media (min-width: 760px) {
+      .hero {
+        grid-template-columns: 1.25fr 0.75fr;
+        align-items: center;
+      }
     }
   </style>
 </head>
 <body>
   <main class="wrap">
     <section class="card">
-      <h1>TileStorm Data Hosting</h1>
-      <p>This repository hosts the shared map manifest and map packages used by TileStorm.</p>
-      <p>The app reads <code>manifest.json</code> and downloads files from <code>/maps/</code>.</p>
-
-      <div class="links">
-        <a href="./manifest.json">Open manifest.json</a>
+      <div class="hero">
+        <div>
+          <h1>TileStorm Evolution Data Hosting</h1>
+          <p>This portal hosts community map data for TileStorm Evolution.</p>
+          <p>The game reads <code>manifest.json</code> and downloads shared map packages from <code>/maps/</code>.</p>
+          <p><a href="./manifest.json">Open manifest.json</a></p>
+        </div>
+        <div class="launch-panel">
+          <p>Jump straight into the live WebGL build.</p>
+          <a class="primary-launch" id="launchGame" href="https://acakebread.github.io/TileStormEvo/WebGL/">Launch TileStorm Evolution</a>
+        </div>
       </div>
 
       <div class="section">
-        <button id="refresh">Refresh map list</button>
+        <div class="toolbar">
+          <button id="refresh">Refresh map list</button>
+        </div>
         <div id="summary" class="note"></div>
         <div id="manifest" class="manifest"></div>
       </div>
 
-      <p class="note">
-        The public page is read-only. Deleting maps later should be handled as an admin feature through authenticated API access, not from the public browser page.
-      </p>
+      <details>
+        <summary>Admin tools</summary>
+        <p class="note">Temporary development controls. Paste a GitHub token with read/write Contents access to enable map deletion from this browser.</p>
+        <div class="toolbar">
+          <input id="adminToken" type="password" autocomplete="off" placeholder="GitHub personal access token">
+          <button id="saveToken">Use token</button>
+          <button id="clearToken">Clear</button>
+        </div>
+        <div id="adminStatus" class="note"></div>
+      </details>
     </section>
   </main>
+
   <script>
+    const owner = "acakebread";
+    const repo = "TileStormDataHosting";
+    const branch = "main";
+    const gameUrl = "https://acakebread.github.io/TileStormEvo/WebGL/";
+    const tokenStorageKey = "TileStormDataHostingAdminToken";
+
     const manifestEl = document.getElementById("manifest");
     const summaryEl = document.getElementById("summary");
     const refreshBtn = document.getElementById("refresh");
+    const adminTokenInput = document.getElementById("adminToken");
+    const saveTokenBtn = document.getElementById("saveToken");
+    const clearTokenBtn = document.getElementById("clearToken");
+    const adminStatusEl = document.getElementById("adminStatus");
+
+    let currentManifest = null;
+    let adminToken = "";
 
     function escapeHtml(value) {
       return String(value ?? "").replace(/[&<>"']/g, ch => ({
@@ -152,29 +295,56 @@
       }[ch]));
     }
 
+    function setAdminStatus(message, className = "") {
+      adminStatusEl.className = `note ${className}`.trim();
+      adminStatusEl.textContent = message || "";
+    }
+
+    function loadSavedToken() {
+      try {
+        adminToken = localStorage.getItem(tokenStorageKey) || "";
+        adminTokenInput.value = adminToken;
+      } catch (error) {
+        adminToken = "";
+      }
+      setAdminStatus(adminToken ? "Admin token is active in this browser." : "No admin token is active.");
+    }
+
+    function normaliseFileUrl(fileName, downloadUrl) {
+      if (downloadUrl) {
+        return downloadUrl;
+      }
+      return `maps/${encodeURIComponent(fileName || "")}`;
+    }
+
     function render(entries, repositoryName, generatedUtc) {
       if (!entries || entries.length === 0) {
         manifestEl.innerHTML = '<div class="empty">No maps have been uploaded yet.</div>';
-        summaryEl.textContent = repositoryName ? `${repositoryName} • ${generatedUtc || "unknown time"}` : "";
+        summaryEl.textContent = repositoryName ? `${repositoryName} | ${generatedUtc || "unknown time"}` : "";
         return;
       }
 
-      summaryEl.textContent = `${repositoryName || "TileStorm Shared Maps"} • ${entries.length} map(s) • ${generatedUtc || "unknown time"}`;
+      summaryEl.textContent = `${repositoryName || "TileStorm Shared Maps"} | ${entries.length} map(s) | ${generatedUtc || "unknown time"}`;
       manifestEl.innerHTML = entries.map(entry => {
         const fileName = entry.fileName || "";
-        const pagesUrl = entry.downloadUrl || `maps/${encodeURIComponent(fileName)}`;
-        const rawUrl = `https://raw.githubusercontent.com/acakebread/TileStormDataHosting/main/maps/${encodeURIComponent(fileName)}`;
+        const pagesUrl = normaliseFileUrl(fileName, entry.downloadUrl);
+        const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/maps/${encodeURIComponent(fileName)}`;
         const launchId = entry.mapHash || entry.id || fileName;
-        const openUrl = `https://acakebread.github.io/TileStormEvo/WebGL/?map=${encodeURIComponent(launchId)}`;
+        const openUrl = `${gameUrl}?map=${encodeURIComponent(launchId)}`;
         return `
           <div class="entry">
-            <h2>${escapeHtml(entry.name || fileName || entry.id || "Untitled")}</h2>
-            <div class="meta">${escapeHtml(fileName)}</div>
-            <div class="meta">${escapeHtml(entry.sizeBytes || 0)} bytes • ${escapeHtml(entry.updatedUtc || "unknown time")}</div>
-            <div class="meta">
-              ${fileName ? `<a href="${escapeHtml(pagesUrl)}">Download file</a>` : ""}
-              ${fileName ? ` • <a href="${escapeHtml(rawUrl)}" target="_blank" rel="noopener">View raw file</a>` : ""}
-              ${fileName ? ` • <a href="${escapeHtml(openUrl)}" data-launch-map="${escapeHtml(launchId)}">Open in TileStorm</a>` : ""}
+            <div class="entry-top">
+              <div>
+                <h2>${escapeHtml(entry.name || fileName || entry.id || "Untitled")}</h2>
+                <div class="meta">${escapeHtml(fileName)}</div>
+                <div class="meta">${escapeHtml(entry.sizeBytes || 0)} bytes | ${escapeHtml(entry.updatedUtc || "unknown time")}</div>
+              </div>
+            </div>
+            <div class="entry-actions">
+              ${fileName ? `<a class="button-link" href="${escapeHtml(openUrl)}" data-launch-map="${escapeHtml(launchId)}">Open in TileStorm</a>` : ""}
+              ${fileName ? `<a class="button-link" href="${escapeHtml(pagesUrl)}">Download</a>` : ""}
+              ${fileName ? `<a class="button-link" href="${escapeHtml(rawUrl)}" target="_blank" rel="noopener">Raw</a>` : ""}
+              ${fileName && adminToken ? `<button class="danger" data-delete-map="${escapeHtml(fileName)}">Delete</button>` : ""}
             </div>
           </div>
         `;
@@ -185,34 +355,152 @@
       summaryEl.textContent = "Loading manifest...";
       manifestEl.innerHTML = "";
       try {
-        const response = await fetch("./manifest.json", { cache: "no-store" });
+        const response = await fetch(`./manifest.json?ts=${Date.now()}`, { cache: "no-store" });
         if (!response.ok) {
           summaryEl.innerHTML = `<span class="error">Failed to load manifest: HTTP ${response.status}</span>`;
           manifestEl.innerHTML = "";
           return;
         }
-        const manifest = await response.json();
-        render(manifest.entries || [], manifest.repositoryName, manifest.generatedUtc);
+        currentManifest = await response.json();
+        render(currentManifest.entries || [], currentManifest.repositoryName, currentManifest.generatedUtc);
       } catch (error) {
         summaryEl.innerHTML = `<span class="error">Failed to load manifest: ${escapeHtml(error.message || error)}</span>`;
         manifestEl.innerHTML = "";
       }
     }
 
+    async function githubRequest(path, options = {}) {
+      if (!adminToken) {
+        throw new Error("Paste an admin token first.");
+      }
+
+      const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}`, {
+        ...options,
+        headers: {
+          "Accept": "application/vnd.github+json",
+          "Authorization": `Bearer ${adminToken}`,
+          "X-GitHub-Api-Version": "2022-11-28",
+          ...(options.headers || {})
+        }
+      });
+
+      const text = await response.text();
+      const body = text ? JSON.parse(text) : null;
+      if (!response.ok) {
+        throw new Error(body?.message || `GitHub API request failed: HTTP ${response.status}`);
+      }
+
+      return body;
+    }
+
+    function toBase64Utf8(value) {
+      return btoa(unescape(encodeURIComponent(value)));
+    }
+
+    async function deleteMap(fileName) {
+      if (!fileName) {
+        return;
+      }
+
+      const confirmed = window.confirm(`Delete ${fileName} from the shared map repository?`);
+      if (!confirmed) {
+        return;
+      }
+
+      setAdminStatus(`Deleting ${fileName}...`);
+      const mapPath = `maps/${fileName}`;
+      const manifestPath = "manifest.json";
+
+      const [mapFile, manifestFile] = await Promise.all([
+        githubRequest(mapPath),
+        githubRequest(manifestPath)
+      ]);
+
+      await githubRequest(mapPath, {
+        method: "DELETE",
+        body: JSON.stringify({
+          message: `Delete TileStorm shared map ${fileName}`,
+          sha: mapFile.sha,
+          branch
+        })
+      });
+
+      const latestManifest = JSON.parse(decodeURIComponent(escape(atob((manifestFile.content || "").replace(/\s/g, "")))));
+      latestManifest.entries = (latestManifest.entries || []).filter(entry =>
+        entry && entry.fileName !== fileName && entry.id !== fileName
+      );
+      latestManifest.generatedUtc = new Date().toISOString();
+
+      await githubRequest(manifestPath, {
+        method: "PUT",
+        body: JSON.stringify({
+          message: `Update TileStorm shared map manifest after deleting ${fileName}`,
+          content: toBase64Utf8(JSON.stringify(latestManifest, null, 2)),
+          sha: manifestFile.sha,
+          branch
+        })
+      });
+
+      setAdminStatus(`Deleted ${fileName}. GitHub Pages may take a minute to show the change.`, "success");
+      await loadManifest();
+    }
+
     refreshBtn.addEventListener("click", loadManifest);
-    document.addEventListener("click", event => {
-      const link = event.target.closest("[data-launch-map]");
-      if (!link) {
+
+    saveTokenBtn.addEventListener("click", () => {
+      adminToken = adminTokenInput.value.trim();
+      try {
+        if (adminToken) {
+          localStorage.setItem(tokenStorageKey, adminToken);
+        }
+      } catch (error) {
+        // Token still works for this page session if localStorage is blocked.
+      }
+      setAdminStatus(adminToken ? "Admin token is active in this browser." : "No admin token is active.");
+      if (currentManifest) {
+        render(currentManifest.entries || [], currentManifest.repositoryName, currentManifest.generatedUtc);
+      }
+    });
+
+    clearTokenBtn.addEventListener("click", () => {
+      adminToken = "";
+      adminTokenInput.value = "";
+      try {
+        localStorage.removeItem(tokenStorageKey);
+      } catch (error) {
+        // Nothing else needed.
+      }
+      setAdminStatus("Admin token cleared.");
+      if (currentManifest) {
+        render(currentManifest.entries || [], currentManifest.repositoryName, currentManifest.generatedUtc);
+      }
+    });
+
+    document.addEventListener("click", async event => {
+      const launchLink = event.target.closest("[data-launch-map]");
+      if (launchLink) {
+        try {
+          localStorage.setItem("TileStormLaunchMap", launchLink.getAttribute("data-launch-map") || "");
+          localStorage.setItem("TileStormLaunchMapTime", String(Date.now()));
+        } catch (error) {
+          // The query string on the link remains the primary fallback.
+        }
+        return;
+      }
+
+      const deleteButton = event.target.closest("[data-delete-map]");
+      if (!deleteButton) {
         return;
       }
 
       try {
-        localStorage.setItem("TileStormLaunchMap", link.getAttribute("data-launch-map") || "");
-        localStorage.setItem("TileStormLaunchMapTime", String(Date.now()));
+        await deleteMap(deleteButton.getAttribute("data-delete-map"));
       } catch (error) {
-        // The query string on the link remains the primary fallback.
+        setAdminStatus(error.message || String(error), "error");
       }
     });
+
+    loadSavedToken();
     loadManifest();
   </script>
 </body>
