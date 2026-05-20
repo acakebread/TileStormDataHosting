@@ -1,6 +1,6 @@
 {
   "repositoryName": "TileStorm Shared Maps",
-  "generatedUtc": "2026-05-20T18:57:15.1250000Z",
+  "generatedUtc": "2026-05-20T19:00:18.2590000Z",
   "entries": [
     {
       "id": "2YJ1TM.json",
@@ -10,8 +10,8 @@
       "contentType": "application/json;charset=utf-8",
       "mapHash": "2YJ1TM",
       "description": "",
-      "updatedUtc": "2026-05-20T18:57:15.1250000Z",
-      "sizeBytes": 391,
+      "updatedUtc": "2026-05-20T19:00:18.2590000Z",
+      "sizeBytes": 400,
       "DisplayName": "Scooper map"
     },
     {
