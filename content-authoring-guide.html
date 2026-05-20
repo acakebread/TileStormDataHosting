@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TileStorm Content Authoring Guide</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #081016;
+      --panel: #121923;
+      --text: #f2f6fb;
+      --muted: #a8b7c8;
+      --accent: #69c8ff;
+      --border: #2a394a;
+    }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background: radial-gradient(circle at top left, rgba(105, 200, 255, 0.14), transparent 30rem), var(--bg);
+      color: var(--text);
+      font: 16px/1.6 "Segoe UI", "Trebuchet MS", system-ui, sans-serif;
+    }
+    .wrap {
+      max-width: 840px;
+      margin: 6vh auto;
+      padding: 28px;
+    }
+    .card {
+      background: rgba(18, 25, 35, 0.92);
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      padding: 28px;
+      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
+    }
+    h1, h2 { line-height: 1.12; }
+    h1 { margin: 0 0 12px; font-size: clamp(2rem, 5vw, 3.2rem); }
+    h2 { margin: 28px 0 8px; font-size: 1.05rem; text-transform: uppercase; letter-spacing: 0.02em; color: var(--accent); }
+    p, li { color: var(--muted); }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code {
+      background: #071018;
+      border: 1px solid var(--border);
+      padding: 2px 6px;
+      border-radius: 6px;
+      color: #d6efff;
+    }
+    ul { padding-left: 20px; }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="card">
+      <p><a href="./index.html">Back to portal</a></p>
+      <h1>TileStorm Content Authoring Guide</h1>
+      <p>
+        This is a short placeholder guide for map authors and submitters. It is intentionally not exhaustive.
+      </p>
+
+      <h2>Authoring</h2>
+      <ul>
+        <li>Build and test the map in TileStorm.</li>
+        <li>Keep the final published version clean and readable.</li>
+        <li>The map package is exported separately from the thumbnail image.</li>
+      </ul>
+
+      <h2>Publishing</h2>
+      <ul>
+        <li>Open the shared map panel in a build that has publish access.</li>
+        <li>Press <strong>Publish Current</strong>.</li>
+        <li>The app uploads the map package and the thumbnail as separate files using the same hash.</li>
+      </ul>
+
+      <h2>Downloads</h2>
+      <ul>
+        <li>Use the portal landing page to browse maps.</li>
+        <li>Open the map file link to download the package.</li>
+        <li>Use the thumbnail only as a preview asset.</li>
+      </ul>
+
+      <h2>Deletion</h2>
+      <ul>
+        <li>Deleting a map should remove both the package and the matching thumbnail.</li>
+        <li>The shared hash is what keeps those two files paired.</li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

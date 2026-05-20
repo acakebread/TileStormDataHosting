@@ -148,9 +148,49 @@
 
     .entry-top {
       display: flex;
-      gap: 12px;
-      justify-content: space-between;
+      gap: 14px;
       align-items: flex-start;
+    }
+
+    .entry-thumb {
+      width: 180px;
+      max-width: 42vw;
+      aspect-ratio: 16 / 9;
+      object-fit: cover;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: #0e151f;
+      flex: 0 0 auto;
+    }
+
+    .entry-copy {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+
+    .readme {
+      background: rgba(8, 15, 22, 0.48);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      margin-top: 18px;
+    }
+
+    .readme ul {
+      margin: 10px 0 0;
+      padding-left: 20px;
+      color: var(--muted);
+    }
+
+    .readme li {
+      margin-bottom: 6px;
+    }
+
+    .readme-links {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 10px;
     }
 
     .meta {
@@ -253,6 +293,15 @@
         max-width: none;
         font-size: clamp(2rem, 12vw, 3rem);
       }
+
+      .entry-top {
+        flex-direction: column;
+      }
+
+      .entry-thumb {
+        width: 100%;
+        max-width: none;
+      }
     }
   </style>
 </head>
@@ -264,13 +313,27 @@
           <h1>TileStorm Evolution Data Hosting</h1>
           <div>
             <p>This portal hosts community map data for TileStorm Evolution.</p>
-            <p>The game reads <code>manifest.json</code> and downloads shared map packages from <code>/maps/</code>.</p>
+            <p>The portal reads <code>manifest.json</code> and shows map packages from <code>/maps/</code> plus preview thumbnails from <code>/thumbs/</code>.</p>
             <p><a href="./manifest.json">Open manifest.json</a></p>
           </div>
         </div>
         <div class="launch-panel">
           <p>Jump straight into the live WebGL build.</p>
           <a class="primary-launch" id="launchGame" href="https://acakebread.github.io/TileStormEvo/WebGL/">Launch TileStorm Evolution</a>
+        </div>
+      </div>
+
+      <div class="readme">
+        <h2>README</h2>
+        <p>This page is the public landing page for TileStorm shared maps. It stays intentionally short so the important instructions are easy to find.</p>
+        <ul>
+          <li>Downloadable maps live in <code>maps/</code>.</li>
+          <li>Thumbnail previews live in <code>thumbs/&lt;mapHash&gt;.png</code>.</li>
+          <li>Open the guide if you want the fuller authoring and submission workflow.</li>
+        </ul>
+        <div class="readme-links">
+          <a class="button-link" href="./content-authoring-guide.html">Open full authoring guide</a>
+          <a class="button-link" href="./README.md">Open README.md</a>
         </div>
       </div>
 
@@ -345,6 +408,16 @@
       return `maps/${encodeURIComponent(fileName || "")}`;
     }
 
+    function getMapHash(entry) {
+      const raw = entry?.mapHash || entry?.id || entry?.fileName || "";
+      return String(raw).trim();
+    }
+
+    function getThumbUrl(entry) {
+      const hash = getMapHash(entry);
+      return hash ? `thumbs/${encodeURIComponent(hash)}.png` : "";
+    }
+
     function render(entries, repositoryName, generatedUtc) {
       if (!entries || entries.length === 0) {
         manifestEl.innerHTML = '<div class="empty">No maps have been uploaded yet.</div>';
@@ -357,22 +430,26 @@
         const fileName = entry.fileName || "";
         const pagesUrl = normaliseFileUrl(fileName, entry.downloadUrl);
         const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/maps/${encodeURIComponent(fileName)}`;
-        const launchId = entry.mapHash || entry.id || fileName;
+        const launchId = getMapHash(entry) || fileName;
         const openUrl = `${gameUrl}?map=${encodeURIComponent(launchId)}`;
+        const thumbUrl = getThumbUrl(entry);
         return `
           <div class="entry">
             <div class="entry-top">
-              <div>
+              ${thumbUrl ? `<img class="entry-thumb" src="${escapeHtml(thumbUrl)}" alt="${escapeHtml(entry.name || fileName || entry.id || "Untitled")} thumbnail">` : ""}
+              <div class="entry-copy">
                 <h2>${escapeHtml(entry.name || fileName || entry.id || "Untitled")}</h2>
                 <div class="meta">${escapeHtml(fileName)}</div>
                 <div class="meta">${escapeHtml(entry.sizeBytes || 0)} bytes | ${escapeHtml(entry.updatedUtc || "unknown time")}</div>
+                <div class="meta">${escapeHtml(launchId ? `Hash ${launchId}` : "No hash available")}</div>
               </div>
             </div>
             <div class="entry-actions">
               ${fileName ? `<a class="button-link" href="${escapeHtml(openUrl)}" data-launch-map="${escapeHtml(launchId)}">Open in TileStorm</a>` : ""}
               ${fileName ? `<a class="button-link" href="${escapeHtml(pagesUrl)}">Download</a>` : ""}
               ${fileName ? `<a class="button-link" href="${escapeHtml(rawUrl)}" target="_blank" rel="noopener">Raw</a>` : ""}
-              ${fileName && adminToken ? `<button class="danger" data-delete-map="${escapeHtml(fileName)}" data-delete-hash="${escapeHtml(entry.mapHash || "")}">Delete</button>` : ""}
+              ${thumbUrl ? `<a class="button-link" href="${escapeHtml(thumbUrl)}" target="_blank" rel="noopener">Thumbnail</a>` : ""}
+              ${fileName && adminToken ? `<button class="danger" data-delete-map="${escapeHtml(fileName)}" data-delete-hash="${escapeHtml(launchId)}">Delete</button>` : ""}
             </div>
           </div>
         `;
@@ -437,12 +514,17 @@
 
       setAdminStatus(`Deleting ${fileName}...`);
       const mapPath = `maps/${fileName}`;
+      const thumbPath = mapHash ? `thumbs/${mapHash}.png` : "";
       const manifestPath = "manifest.json";
 
-      const [mapFile, manifestFile] = await Promise.all([
+      const requests = [
         githubRequest(mapPath),
         githubRequest(manifestPath)
-      ]);
+      ];
+      if (thumbPath) {
+        requests.splice(1, 0, githubRequest(thumbPath).catch(() => null));
+      }
+      const [mapFile, thumbFile, manifestFile] = await Promise.all(requests);
 
       await githubRequest(mapPath, {
         method: "DELETE",
@@ -452,6 +534,17 @@
           branch
         })
       });
+
+      if (thumbFile?.sha) {
+        await githubRequest(thumbPath, {
+          method: "DELETE",
+          body: JSON.stringify({
+            message: `Delete TileStorm shared map thumbnail ${mapHash}`,
+            sha: thumbFile.sha,
+            branch
+          })
+        });
+      }
 
       const latestManifest = JSON.parse(decodeURIComponent(escape(atob((manifestFile.content || "").replace(/\s/g, "")))));
       latestManifest.entries = (latestManifest.entries || []).filter(entry =>
