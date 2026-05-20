@@ -24,8 +24,10 @@
       margin: 0;
       min-height: 100%;
       background:
+        linear-gradient(180deg, rgba(7, 12, 18, 0.58), rgba(7, 12, 18, 0.90)),
         radial-gradient(circle at 18% 12%, rgba(105, 200, 255, 0.20), transparent 30rem),
         radial-gradient(circle at 88% 18%, rgba(240, 195, 91, 0.16), transparent 26rem),
+        url("./web_portal_background.png") center top / cover fixed no-repeat,
         linear-gradient(145deg, #071016 0%, #10141c 52%, #080b10 100%);
       color: var(--text);
       font: 16px/1.5 "Segoe UI", "Trebuchet MS", system-ui, sans-serif;
@@ -38,7 +40,8 @@
     }
 
     .card {
-      background: rgba(18, 25, 35, 0.94);
+      background: rgba(18, 25, 35, 0.90);
+      backdrop-filter: blur(10px) saturate(1.08);
       border: 1px solid var(--border);
       border-radius: 24px;
       padding: 32px;
@@ -51,11 +54,17 @@
       gap: 20px;
     }
 
+    .hero-copy {
+      display: grid;
+      gap: 16px;
+    }
+
     h1 {
       margin: 0;
-      font-size: clamp(2rem, 5vw, 3.8rem);
+      max-width: 12.5ch;
+      font-size: clamp(2.2rem, 5vw, 3.7rem);
       letter-spacing: -0.055em;
-      line-height: 0.95;
+      line-height: 1.04;
     }
 
     h2 {
@@ -224,8 +233,25 @@
 
     @media (min-width: 760px) {
       .hero {
-        grid-template-columns: 1.25fr 0.75fr;
-        align-items: center;
+        grid-template-columns: minmax(0, 1.08fr) minmax(280px, 0.58fr);
+        align-items: start;
+      }
+    }
+
+    @media (max-width: 520px) {
+      .wrap {
+        margin: 0;
+        padding: 14px;
+      }
+
+      .card {
+        padding: 22px;
+        border-radius: 18px;
+      }
+
+      h1 {
+        max-width: none;
+        font-size: clamp(2rem, 12vw, 3rem);
       }
     }
   </style>
@@ -234,11 +260,13 @@
   <main class="wrap">
     <section class="card">
       <div class="hero">
-        <div>
+        <div class="hero-copy">
           <h1>TileStorm Evolution Data Hosting</h1>
-          <p>This portal hosts community map data for TileStorm Evolution.</p>
-          <p>The game reads <code>manifest.json</code> and downloads shared map packages from <code>/maps/</code>.</p>
-          <p><a href="./manifest.json">Open manifest.json</a></p>
+          <div>
+            <p>This portal hosts community map data for TileStorm Evolution.</p>
+            <p>The game reads <code>manifest.json</code> and downloads shared map packages from <code>/maps/</code>.</p>
+            <p><a href="./manifest.json">Open manifest.json</a></p>
+          </div>
         </div>
         <div class="launch-panel">
           <p>Jump straight into the live WebGL build.</p>
