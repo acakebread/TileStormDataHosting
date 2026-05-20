@@ -1,7 +1,19 @@
 {
   "repositoryName": "TileStorm Shared Maps",
-  "generatedUtc": "2026-05-20T01:22:29.3139083Z",
+  "generatedUtc": "2026-05-20T01:34:55.3876349Z",
   "entries": [
+    {
+      "id": "Map_4__AkNPTv.json",
+      "name": "Map 4",
+      "fileName": "Map_4__AkNPTv.json",
+      "downloadUrl": "maps/Map_4__AkNPTv.json",
+      "contentType": "application/json;charset=utf-8",
+      "mapHash": "AkNPTv",
+      "description": "",
+      "updatedUtc": "2026-05-20T01:34:55.3881387Z",
+      "sizeBytes": 234,
+      "DisplayName": "Map 4"
+    },
     {
       "id": "Map_3__9rv9K3.json",
       "name": "Map 3",
