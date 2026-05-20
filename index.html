@@ -344,7 +344,7 @@
               ${fileName ? `<a class="button-link" href="${escapeHtml(openUrl)}" data-launch-map="${escapeHtml(launchId)}">Open in TileStorm</a>` : ""}
               ${fileName ? `<a class="button-link" href="${escapeHtml(pagesUrl)}">Download</a>` : ""}
               ${fileName ? `<a class="button-link" href="${escapeHtml(rawUrl)}" target="_blank" rel="noopener">Raw</a>` : ""}
-              ${fileName && adminToken ? `<button class="danger" data-delete-map="${escapeHtml(fileName)}">Delete</button>` : ""}
+              ${fileName && adminToken ? `<button class="danger" data-delete-map="${escapeHtml(fileName)}" data-delete-hash="${escapeHtml(entry.mapHash || "")}">Delete</button>` : ""}
             </div>
           </div>
         `;
@@ -397,7 +397,7 @@
       return btoa(unescape(encodeURIComponent(value)));
     }
 
-    async function deleteMap(fileName) {
+    async function deleteMap(fileName, mapHash = "") {
       if (!fileName) {
         return;
       }
@@ -427,7 +427,10 @@
 
       const latestManifest = JSON.parse(decodeURIComponent(escape(atob((manifestFile.content || "").replace(/\s/g, "")))));
       latestManifest.entries = (latestManifest.entries || []).filter(entry =>
-        entry && entry.fileName !== fileName && entry.id !== fileName
+        entry &&
+        entry.fileName !== fileName &&
+        entry.id !== fileName &&
+        (!mapHash || entry.mapHash !== mapHash)
       );
       latestManifest.generatedUtc = new Date().toISOString();
 
@@ -494,7 +497,10 @@
       }
 
       try {
-        await deleteMap(deleteButton.getAttribute("data-delete-map"));
+        await deleteMap(
+          deleteButton.getAttribute("data-delete-map"),
+          deleteButton.getAttribute("data-delete-hash") || ""
+        );
       } catch (error) {
         setAdminStatus(error.message || String(error), "error");
       }
