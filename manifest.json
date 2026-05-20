@@ -1,7 +1,19 @@
 {
   "repositoryName": "TileStorm Shared Maps",
-  "generatedUtc": "2026-05-20T14:01:39.979Z",
+  "generatedUtc": "2026-05-20T15:16:55.7060000Z",
   "entries": [
+    {
+      "id": "84RUrE.json",
+      "name": "test from webgl",
+      "fileName": "84RUrE.json",
+      "downloadUrl": "maps/84RUrE.json",
+      "contentType": "application/json;charset=utf-8",
+      "mapHash": "84RUrE",
+      "description": "",
+      "updatedUtc": "2026-05-20T15:16:55.7060000Z",
+      "sizeBytes": 265,
+      "DisplayName": "test from webgl"
+    },
     {
       "id": "EVc43c.json",
       "name": "NEW_MAP_EVc43c",
