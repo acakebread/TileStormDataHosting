@@ -198,6 +198,11 @@
       font-size: 0.92rem;
     }
 
+    .key-meta {
+      color: var(--accent-strong);
+      font-weight: 700;
+    }
+
     .entry-actions,
     .admin-actions {
       display: flex;
@@ -418,6 +423,34 @@
       return hash ? `thumbs/${encodeURIComponent(hash)}.png` : "";
     }
 
+    function formatBytes(sizeBytes) {
+      const size = Number(sizeBytes || 0);
+      if (size <= 0) {
+        return "0 B";
+      }
+      if (size < 1024) {
+        return `${size} B`;
+      }
+      if (size < 1024 * 1024) {
+        return `${(size / 1024).toFixed(1)} KB`;
+      }
+      return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+    }
+
+    function formatTimestamp(value) {
+      if (!value) {
+        return "Unknown time";
+      }
+
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) {
+        return "Unknown time";
+      }
+
+      const pad = number => String(number).padStart(2, "0");
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+    }
+
     function render(entries, repositoryName, generatedUtc) {
       if (!entries || entries.length === 0) {
         manifestEl.innerHTML = '<div class="empty">No maps have been uploaded yet.</div>';
@@ -440,8 +473,8 @@
               <div class="entry-copy">
                 <h2>${escapeHtml(entry.name || fileName || entry.id || "Untitled")}</h2>
                 <div class="meta">${escapeHtml(fileName)}</div>
-                <div class="meta">${escapeHtml(entry.sizeBytes || 0)} bytes | ${escapeHtml(entry.updatedUtc || "unknown time")}</div>
-                <div class="meta">${escapeHtml(launchId ? `Hash ${launchId}` : "No hash available")}</div>
+                <div class="meta">${escapeHtml(formatBytes(entry.sizeBytes))} | ${escapeHtml(formatTimestamp(entry.updatedUtc))}</div>
+                <div class="meta key-meta">${escapeHtml(launchId ? `Key ${launchId}` : "No key available")}</div>
               </div>
             </div>
             <div class="entry-actions">
