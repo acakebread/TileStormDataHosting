@@ -1,7 +1,19 @@
 {
   "repositoryName": "TileStorm Shared Maps",
-  "generatedUtc": "2026-05-20T01:09:48.3457489Z",
+  "generatedUtc": "2026-05-20T01:15:18.3905788Z",
   "entries": [
+    {
+      "id": "Map_3__9rv9K3.json",
+      "name": "Map 3",
+      "fileName": "Map_3__9rv9K3.json",
+      "downloadUrl": "maps/Map_3__9rv9K3.json",
+      "contentType": "application/json;charset=utf-8",
+      "mapHash": "9rv9K3",
+      "description": "",
+      "updatedUtc": "2026-05-20T01:15:18.3905788Z",
+      "sizeBytes": 265,
+      "DisplayName": "Map 3"
+    },
     {
       "id": "Map_2__8jX4TK.json",
       "name": "Map 2",
