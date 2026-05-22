@@ -1,19 +1,7 @@
 {
   "repositoryName": "TileStorm Shared Maps",
-  "generatedUtc": "2026-05-21T14:28:16.732Z",
+  "generatedUtc": "2026-05-22T11:02:46.1944987Z",
   "entries": [
-    {
-      "id": "2YJ1TM.json",
-      "name": "Scooper map",
-      "fileName": "2YJ1TM.json",
-      "downloadUrl": "maps/2YJ1TM.json",
-      "contentType": "application/json;charset=utf-8",
-      "mapHash": "2YJ1TM",
-      "description": "",
-      "updatedUtc": "2026-05-20T19:00:18.2590000Z",
-      "sizeBytes": 400,
-      "DisplayName": "Scooper map"
-    },
     {
       "id": "EVc43c.json",
       "name": "user_map_EVc43c",
