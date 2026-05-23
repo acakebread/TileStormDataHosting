@@ -1,19 +1,7 @@
 {
   "repositoryName": "TileStorm Shared Maps",
-  "generatedUtc": "2026-05-23T12:27:35.3592127Z",
+  "generatedUtc": "2026-05-23T19:10:38.966Z",
   "entries": [
-    {
-      "id": "EHRJUA.json",
-      "name": "missing token test",
-      "fileName": "EHRJUA.json",
-      "downloadUrl": "maps/EHRJUA.json",
-      "contentType": "application/json;charset=utf-8",
-      "mapHash": "EHRJUA",
-      "description": "",
-      "updatedUtc": "2026-05-23T12:27:35.3592127Z",
-      "sizeBytes": 322,
-      "DisplayName": "missing token test"
-    },
     {
       "id": "CAfAAv.json",
       "name": "Industrial test",
