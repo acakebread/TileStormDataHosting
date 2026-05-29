@@ -1,6 +1,6 @@
 {
   "repositoryName": "TileStorm Shared Maps",
-  "generatedUtc": "2026-05-29T10:47:50.4164163Z",
+  "generatedUtc": "2026-05-29T10:48:12.5318129Z",
   "entries": [
     {
       "id": "6yarpw.json",
@@ -49,18 +49,6 @@
       "updatedUtc": "2026-05-22T11:54:42.8980899Z",
       "sizeBytes": 1635,
       "DisplayName": "Industrial test"
-    },
-    {
-      "id": "2NqYCC.json",
-      "name": "Egypt test",
-      "fileName": "2NqYCC.json",
-      "downloadUrl": "maps/2NqYCC.json",
-      "contentType": "application/json;charset=utf-8",
-      "mapHash": "2NqYCC",
-      "description": "",
-      "updatedUtc": "2026-05-22T11:53:30.4485156Z",
-      "sizeBytes": 2481,
-      "DisplayName": "Egypt test"
     },
     {
       "id": "6rDpFF.json",
