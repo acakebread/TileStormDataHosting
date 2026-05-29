@@ -1,6 +1,6 @@
 {
   "repositoryName": "TileStorm Shared Maps",
-  "generatedUtc": "2026-05-29T10:46:19.0438084Z",
+  "generatedUtc": "2026-05-29T10:47:09.8593082Z",
   "entries": [
     {
       "id": "C2XMmJ.json",
@@ -37,18 +37,6 @@
       "updatedUtc": "2026-05-22T11:53:30.4485156Z",
       "sizeBytes": 2481,
       "DisplayName": "Egypt test"
-    },
-    {
-      "id": "6yarpw.json",
-      "name": "Medieval test",
-      "fileName": "6yarpw.json",
-      "downloadUrl": "maps/6yarpw.json",
-      "contentType": "application/json;charset=utf-8",
-      "mapHash": "6yarpw",
-      "description": "",
-      "updatedUtc": "2026-05-22T11:03:38.2185796Z",
-      "sizeBytes": 1968,
-      "DisplayName": "Medieval test"
     },
     {
       "id": "6VDuh3.json",
