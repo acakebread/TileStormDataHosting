@@ -1,7 +1,19 @@
 {
   "repositoryName": "TileStorm Shared Maps",
-  "generatedUtc": "2026-05-29T10:48:35.5715324Z",
+  "generatedUtc": "2026-05-29T10:48:40.9672641Z",
   "entries": [
+    {
+      "id": "CAfAAv.json",
+      "name": "Industrial test",
+      "fileName": "CAfAAv.json",
+      "downloadUrl": "maps/CAfAAv.json",
+      "contentType": "application/json;charset=utf-8",
+      "mapHash": "CAfAAv",
+      "description": "",
+      "updatedUtc": "2026-05-29T10:48:40.9672641Z",
+      "sizeBytes": 1509,
+      "DisplayName": "Industrial test"
+    },
     {
       "id": "2NqYCC.json",
       "name": "Egypt test",
