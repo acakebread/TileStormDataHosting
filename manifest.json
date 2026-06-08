@@ -1,7 +1,19 @@
 {
   "repositoryName": "TileStorm Shared Maps",
-  "generatedUtc": "2026-06-07T12:12:23.652Z",
+  "generatedUtc": "2026-06-08T10:22:25.2857470Z",
   "entries": [
+    {
+      "id": "9cycn0.json",
+      "name": "test nav map",
+      "fileName": "9cycn0.json",
+      "downloadUrl": "maps/9cycn0.json",
+      "contentType": "application/json;charset=utf-8",
+      "mapHash": "9cycn0",
+      "description": "",
+      "updatedUtc": "2026-06-08T10:22:25.2867559Z",
+      "sizeBytes": 595,
+      "DisplayName": "test nav map"
+    },
     {
       "id": "CAfAAv.json",
       "name": "Industrial test",
