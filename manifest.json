@@ -1,19 +1,7 @@
 {
   "repositoryName": "TileStorm Shared Maps",
-  "generatedUtc": "2026-06-08T10:29:25.5890000Z",
+  "generatedUtc": "2026-06-08T10:32:03.089Z",
   "entries": [
-    {
-      "id": "1F7pDp.json",
-      "name": "user_map_1F7pDp",
-      "fileName": "1F7pDp.json",
-      "downloadUrl": "maps/1F7pDp.json",
-      "contentType": "application/json;charset=utf-8",
-      "mapHash": "1F7pDp",
-      "description": "",
-      "updatedUtc": "2026-06-08T10:29:25.5890000Z",
-      "sizeBytes": 453,
-      "DisplayName": "user_map_1F7pDp"
-    },
     {
       "id": "CAfAAv.json",
       "name": "Industrial test",
