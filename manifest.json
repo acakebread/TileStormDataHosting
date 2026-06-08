@@ -1,7 +1,19 @@
 {
   "repositoryName": "TileStorm Shared Maps",
-  "generatedUtc": "2026-06-08T10:22:25.2857470Z",
+  "generatedUtc": "2026-06-08T10:23:22.2078167Z",
   "entries": [
+    {
+      "id": "34v5Ak.zip",
+      "name": "puzzle test",
+      "fileName": "34v5Ak.zip",
+      "downloadUrl": "maps/34v5Ak.zip",
+      "contentType": "application/zip",
+      "mapHash": "34v5Ak",
+      "description": "",
+      "updatedUtc": "2026-06-08T10:23:22.2078167Z",
+      "sizeBytes": 524018,
+      "DisplayName": "puzzle test"
+    },
     {
       "id": "9cycn0.json",
       "name": "test nav map",
