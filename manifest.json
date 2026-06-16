@@ -1,19 +1,7 @@
 {
   "repositoryName": "TileStorm Shared Maps",
-  "generatedUtc": "2026-06-16T06:51:19.773Z",
+  "generatedUtc": "2026-06-16T06:52:09.795Z",
   "entries": [
-    {
-      "id": "EfqWPk.json",
-      "name": "user_map_EfqWPk",
-      "fileName": "EfqWPk.json",
-      "downloadUrl": "maps/EfqWPk.json",
-      "contentType": "application/json;charset=utf-8",
-      "mapHash": "EfqWPk",
-      "description": "",
-      "updatedUtc": "2026-06-16T06:42:16.8726422Z",
-      "sizeBytes": 303,
-      "DisplayName": "user_map_EfqWPk"
-    },
     {
       "id": "CAfAAv.json",
       "name": "Industrial test",
