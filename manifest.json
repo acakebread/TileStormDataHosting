@@ -1,6 +1,6 @@
 {
   "repositoryName": "TileStorm Shared Maps",
-  "generatedUtc": "2026-06-16T06:46:27.4014529Z",
+  "generatedUtc": "2026-06-16T06:50:55.325Z",
   "entries": [
     {
       "id": "1Gcc1H.json",
@@ -49,18 +49,6 @@
       "updatedUtc": "2026-06-08T12:11:33.2410000Z",
       "sizeBytes": 224,
       "DisplayName": "test v1"
-    },
-    {
-      "id": "CE6V6E.json",
-      "name": "mike new test",
-      "fileName": "CE6V6E.json",
-      "downloadUrl": "maps/CE6V6E.json",
-      "contentType": "application/json;charset=utf-8",
-      "mapHash": "CE6V6E",
-      "description": "",
-      "updatedUtc": "2026-06-08T10:43:50.9490000Z",
-      "sizeBytes": 296,
-      "DisplayName": "mike new test"
     },
     {
       "id": "CAfAAv.json",
