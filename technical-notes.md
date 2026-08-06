@@ -21,3 +21,5 @@ The shared map manifest stores the human-readable map name separately from the f
 ## Publishing Notes
 
 The Unity app publishes maps through the GitHub Contents API when a suitable token is configured. GitHub Pages then serves the static files publicly. Public Pages updates can take a short time to appear after a commit.
+
+The portal also cross-checks its deployed `manifest.json` against the canonical raw repository copy and warns if the Pages site falls behind the repo state.

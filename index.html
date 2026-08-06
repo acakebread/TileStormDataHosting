@@ -224,6 +224,10 @@
       color: #aeffc5;
     }
 
+    .warning {
+      color: #ffd36b;
+    }
+
     button,
     .button-link {
       background: linear-gradient(180deg, #2a628f, #1a4266);
@@ -347,6 +351,7 @@
           <button id="refresh">Refresh map list</button>
         </div>
         <div id="summary" class="note"></div>
+        <div id="freshness" class="note"></div>
         <div id="manifest" class="manifest"></div>
       </div>
 
@@ -368,10 +373,12 @@
     const repo = "TileStormDataHosting";
     const branch = "main";
     const gameUrl = "https://acakebread.github.io/TileStormEvo/WebGL/";
+    const sourceManifestUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/manifest.json`;
     const tokenStorageKey = "TileStormDataHostingAdminToken";
 
     const manifestEl = document.getElementById("manifest");
     const summaryEl = document.getElementById("summary");
+    const freshnessEl = document.getElementById("freshness");
     const refreshBtn = document.getElementById("refresh");
     const adminTokenInput = document.getElementById("adminToken");
     const saveTokenBtn = document.getElementById("saveToken");
@@ -394,6 +401,11 @@
     function setAdminStatus(message, className = "") {
       adminStatusEl.className = `note ${className}`.trim();
       adminStatusEl.textContent = message || "";
+    }
+
+    function setFreshnessStatus(message, className = "") {
+      freshnessEl.className = `note ${className}`.trim();
+      freshnessEl.textContent = message || "";
     }
 
     function loadSavedToken() {
@@ -491,6 +503,7 @@
 
     async function loadManifest() {
       summaryEl.textContent = "Loading manifest...";
+      setFreshnessStatus("");
       manifestEl.innerHTML = "";
       try {
         const response = await fetch(`./manifest.json?ts=${Date.now()}`, { cache: "no-store" });
@@ -501,9 +514,41 @@
         }
         currentManifest = await response.json();
         render(currentManifest.entries || [], currentManifest.repositoryName, currentManifest.generatedUtc);
+        verifyManifestFreshness().catch(() => {});
       } catch (error) {
         summaryEl.innerHTML = `<span class="error">Failed to load manifest: ${escapeHtml(error.message || error)}</span>`;
         manifestEl.innerHTML = "";
+      }
+    }
+
+    async function verifyManifestFreshness() {
+      if (!currentManifest) {
+        return;
+      }
+
+      try {
+        const response = await fetch(`${sourceManifestUrl}?ts=${Date.now()}`, { cache: "no-store" });
+        if (!response.ok) {
+          setFreshnessStatus("");
+          return;
+        }
+
+        const sourceManifest = await response.json();
+        const pagesStamp = currentManifest.generatedUtc || "";
+        const sourceStamp = sourceManifest.generatedUtc || "";
+        const pagesCount = (currentManifest.entries || []).length;
+        const sourceCount = (sourceManifest.entries || []).length;
+
+        if (pagesStamp !== sourceStamp || pagesCount !== sourceCount) {
+          setFreshnessStatus(
+            `Freshness check: this Pages copy is behind the repo manifest. Pages shows ${pagesCount} map(s) at ${pagesStamp || "unknown time"}, repo shows ${sourceCount} map(s) at ${sourceStamp || "unknown time"}.`,
+            "warning"
+          );
+        } else {
+          setFreshnessStatus("");
+        }
+      } catch (error) {
+        setFreshnessStatus("");
       }
     }
 
