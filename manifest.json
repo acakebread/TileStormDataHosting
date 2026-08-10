@@ -8,8 +8,8 @@
 			"id": "CAfAAv.json",
 			"mapHash": "CAfAAv",
 			"name": "Industrial test",
-			"sizeBytes": 1509,
-			"updatedUtc": "2026-05-29T10:48:40.9672641Z"
+			"sizeBytes": 1876,
+			"updatedUtc": "2026-08-10T19:37:24.5565356Z"
 		},
 		{
 			"contentType": "application/json;charset=utf-8",
@@ -67,6 +67,6 @@
 			"updatedUtc": "2026-05-22T11:03:11.9901663Z"
 		}
 	],
-	"generatedUtc": "2026-08-06T14:35:00.0000000Z",
+	"generatedUtc": "2026-08-10T19:37:24.5555200Z",
 	"repositoryName": "TileStorm Shared Maps"
 }
