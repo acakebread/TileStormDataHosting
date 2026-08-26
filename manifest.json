@@ -3,6 +3,17 @@
 		{
 			"contentType": "application/json;charset=utf-8",
 			"description": "",
+			"downloadUrl": "maps/AudCi8.json",
+			"fileName": "AudCi8.json",
+			"id": "AudCi8.json",
+			"mapHash": "AudCi8",
+			"name": "user_map_AudCi8",
+			"sizeBytes": 194,
+			"updatedUtc": "2026-08-26T06:29:58.4190000Z"
+		},
+		{
+			"contentType": "application/json;charset=utf-8",
+			"description": "",
 			"downloadUrl": "maps/6yarpw.json",
 			"fileName": "6yarpw.json",
 			"id": "6yarpw.json",
@@ -67,6 +78,6 @@
 			"updatedUtc": "2026-05-22T11:03:11.9901663Z"
 		}
 	],
-	"generatedUtc": "2026-08-11T20:07:14.3033713Z",
+	"generatedUtc": "2026-08-26T06:29:58.4190000Z",
 	"repositoryName": "TileStorm Shared Maps"
 }
