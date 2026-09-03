@@ -4,6 +4,47 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>TileStorm Evolution Data Hosting</title>
+  <script>
+    window.TileStormAnalytics = (() => {
+      const pending = [];
+      let retryCount = 0;
+      let retryTimer = null;
+
+      function flush() {
+        retryTimer = null;
+        if (window.goatcounter && typeof window.goatcounter.count === "function") {
+          while (pending.length > 0) {
+            window.goatcounter.count(pending.shift());
+          }
+          return;
+        }
+
+        if (pending.length > 0 && retryCount++ < 120) {
+          retryTimer = window.setTimeout(flush, 250);
+        }
+      }
+
+      return {
+        track(path, title, alwaysCount = true) {
+          if (!path) {
+            return;
+          }
+
+          pending.push({
+            path: String(path),
+            title: String(title || path),
+            event: true,
+            no_session: Boolean(alwaysCount)
+          });
+
+          if (!retryTimer) {
+            flush();
+          }
+        }
+      };
+    })();
+  </script>
+  <script data-goatcounter="https://acakebread.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
   <style>
     :root {
       color-scheme: dark;
@@ -203,6 +244,11 @@
       font-weight: 700;
     }
 
+    .launch-count {
+      color: #bfe7ff;
+      font-size: 0.92rem;
+    }
+
     .entry-actions,
     .admin-actions {
       display: flex;
@@ -328,6 +374,7 @@
         <div class="launch-panel">
           <p>Start the live build, then use Options > Community to browse and import shared maps.</p>
           <a class="primary-launch" id="launchGame" href="https://acakebread.github.io/TileStormEvo/WebGL/">Launch TileStorm Evolution</a>
+          <div class="launch-count" id="appLaunchCount" hidden></div>
         </div>
       </div>
 
@@ -373,6 +420,7 @@
     const repo = "TileStormDataHosting";
     const branch = "main";
     const gameUrl = "https://acakebread.github.io/TileStormEvo/WebGL/";
+    const goatCounterUrl = "https://acakebread.goatcounter.com";
     const sourceManifestUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/manifest.json`;
     const tokenStorageKey = "TileStormDataHostingAdminToken";
 
@@ -384,6 +432,7 @@
     const saveTokenBtn = document.getElementById("saveToken");
     const clearTokenBtn = document.getElementById("clearToken");
     const adminStatusEl = document.getElementById("adminStatus");
+    const appLaunchCountEl = document.getElementById("appLaunchCount");
 
     let currentManifest = null;
     let adminToken = "";
@@ -463,6 +512,53 @@
       return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
     }
 
+    function trackAnalyticsEvent(path, title) {
+      window.TileStormAnalytics?.track(path, title, true);
+    }
+
+    async function readPublicCount(path) {
+      const counterPath = encodeURIComponent(path);
+      const response = await fetch(`${goatCounterUrl}/counter/${counterPath}.json`);
+      if (!response.ok) {
+        throw new Error(`Counter request failed: HTTP ${response.status}`);
+      }
+
+      const body = await response.json();
+      return String(body?.count ?? "0");
+    }
+
+    async function loadAppLaunchCount() {
+      try {
+        const count = await readPublicCount("app-started");
+        appLaunchCountEl.textContent = `${count} recorded app ${count === "1" ? "launch" : "launches"}`;
+        appLaunchCountEl.hidden = false;
+      } catch (error) {
+        appLaunchCountEl.hidden = true;
+      }
+    }
+
+    async function loadMapLaunchCounts(entries) {
+      await Promise.all((entries || []).map(async entry => {
+        const mapHash = getMapHash(entry);
+        if (!mapHash) {
+          return;
+        }
+
+        const countEl = manifestEl.querySelector(`[data-map-launch-count="${CSS.escape(mapHash)}"]`);
+        if (!countEl) {
+          return;
+        }
+
+        try {
+          const count = await readPublicCount(`map-loaded/${mapHash}`);
+          countEl.textContent = `${count} ${count === "1" ? "launch" : "launches"}`;
+          countEl.hidden = false;
+        } catch (error) {
+          countEl.hidden = true;
+        }
+      }));
+    }
+
     function render(entries, repositoryName, generatedUtc) {
       if (!entries || entries.length === 0) {
         manifestEl.innerHTML = '<div class="empty">No maps have been uploaded yet.</div>';
@@ -487,6 +583,7 @@
                 <div class="meta">${escapeHtml(fileName)}</div>
                 <div class="meta">${escapeHtml(formatBytes(entry.sizeBytes))} | ${escapeHtml(formatTimestamp(entry.updatedUtc))}</div>
                 <div class="meta key-meta">${escapeHtml(launchId ? `Key ${launchId}` : "No key available")}</div>
+                ${launchId ? `<div class="launch-count" data-map-launch-count="${escapeHtml(launchId)}" hidden></div>` : ""}
               </div>
             </div>
             <div class="entry-actions">
@@ -499,6 +596,7 @@
           </div>
         `;
       }).join("");
+      loadMapLaunchCounts(entries).catch(() => {});
     }
 
     async function loadManifest() {
@@ -649,6 +747,10 @@
 
     refreshBtn.addEventListener("click", loadManifest);
 
+    document.getElementById("launchGame").addEventListener("click", () => {
+      trackAnalyticsEvent("game-launch-clicked", "Launch TileStorm Evolution clicked");
+    });
+
     saveTokenBtn.addEventListener("click", () => {
       adminToken = adminTokenInput.value.trim();
       try {
@@ -681,8 +783,10 @@
     document.addEventListener("click", async event => {
       const launchLink = event.target.closest("[data-launch-map]");
       if (launchLink) {
+        const mapHash = launchLink.getAttribute("data-launch-map") || "";
+        trackAnalyticsEvent(`map-launch-clicked/${mapHash}`, `Map launch clicked: ${mapHash}`);
         try {
-          localStorage.setItem("TileStormLaunchMap", launchLink.getAttribute("data-launch-map") || "");
+          localStorage.setItem("TileStormLaunchMap", mapHash);
           localStorage.setItem("TileStormLaunchMapTime", String(Date.now()));
         } catch (error) {
           // The query string on the link remains the primary fallback.
@@ -707,6 +811,7 @@
 
     loadSavedToken();
     loadManifest();
+    loadAppLaunchCount();
   </script>
 </body>
 </html>
