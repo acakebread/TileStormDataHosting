@@ -175,6 +175,29 @@
       align-items: center;
     }
 
+    .sort-control {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .sort-control select {
+      max-width: 100%;
+      background: #071018;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      padding: 10px 12px;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    .sort-control select:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
     .manifest {
       display: grid;
       gap: 12px;
@@ -397,7 +420,17 @@
       <div class="section">
         <div class="toolbar">
           <button id="refresh">Refresh map list</button>
+          <div class="sort-control">
+            <label for="sortBy">Sort by</label>
+            <select id="sortBy" aria-describedby="sortStatus">
+              <option value="popular" selected>Most played</option>
+              <option value="recent">Most recent</option>
+              <option value="size-desc">Size: largest first</option>
+              <option value="size-asc">Size: smallest first</option>
+            </select>
+          </div>
         </div>
+        <div id="sortStatus" class="note" role="status"></div>
         <div id="summary" class="note"></div>
         <div id="freshness" class="note"></div>
         <div id="manifest" class="manifest"></div>
@@ -429,6 +462,8 @@
     const summaryEl = document.getElementById("summary");
     const freshnessEl = document.getElementById("freshness");
     const refreshBtn = document.getElementById("refresh");
+    const sortByEl = document.getElementById("sortBy");
+    const sortStatusEl = document.getElementById("sortStatus");
     const adminTokenInput = document.getElementById("adminToken");
     const saveTokenBtn = document.getElementById("saveToken");
     const clearTokenBtn = document.getElementById("clearToken");
@@ -437,6 +472,28 @@
 
     let currentManifest = null;
     let adminToken = "";
+    let mapLaunchCounts = new Map();
+    let loadingMapLaunchCounts = false;
+    let manifestLoadId = 0;
+
+    function sortEntries(entries) {
+      return [...entries].sort((a, b) => {
+        let difference = 0;
+        if (sortByEl.value === "popular") {
+          difference = (mapLaunchCounts.get(getMapHash(b)) ?? -1) -
+            (mapLaunchCounts.get(getMapHash(a)) ?? -1);
+        } else if (sortByEl.value === "size-desc") {
+          difference = (Number(b.sizeBytes) || 0) - (Number(a.sizeBytes) || 0);
+        } else if (sortByEl.value === "size-asc") {
+          difference = (Number(a.sizeBytes) || 0) - (Number(b.sizeBytes) || 0);
+        }
+
+        // Newer maps break popularity/size ties and provide the recent sort.
+        return difference || (Date.parse(b.updatedUtc) || 0) - (Date.parse(a.updatedUtc) || 0) ||
+          String(a.name || getMapHash(a)).localeCompare(String(b.name || getMapHash(b))) ||
+          getMapHash(a).localeCompare(getMapHash(b));
+      });
+    }
 
     function escapeHtml(value) {
       return String(value ?? "").replace(/[&<>"']/g, ch => ({
@@ -519,62 +576,84 @@
 
     async function readPublicCount(path) {
       const counterPath = encodeURIComponent(path);
-      const response = await fetch(`${goatCounterUrl}/counter/${counterPath}.json`);
-      if (!response.ok) {
-        throw new Error(`Counter request failed: HTTP ${response.status}`);
-      }
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 10000);
+      try {
+        const response = await fetch(`${goatCounterUrl}/counter/${counterPath}.json`, { signal: controller.signal });
+        // GoatCounter has no public counter until the first recorded event.
+        if (response.status === 404) {
+          return 0;
+        }
+        if (!response.ok) {
+          throw new Error(`Counter request failed: HTTP ${response.status}`);
+        }
 
-      const body = await response.json();
-      return String(body?.count ?? "0");
+        const body = await response.json();
+        // Public counts are formatted strings, e.g. "1,234"; compare numerically.
+        const digits = String(body?.count ?? "").replace(/[,\s]/g, "");
+        const count = Number(digits);
+        if (!/^\d+$/.test(digits) || !Number.isSafeInteger(count)) {
+          throw new Error("Counter response did not contain a valid count.");
+        }
+        return count;
+      } finally {
+        window.clearTimeout(timeout);
+      }
     }
 
     async function loadAppLaunchCount() {
       try {
         const count = await readPublicCount("app-started");
-        appLaunchCountEl.textContent = `${count} recorded app ${count === "1" ? "launch" : "launches"}`;
+        appLaunchCountEl.textContent = `${count.toLocaleString("en-GB")} recorded app ${count === 1 ? "launch" : "launches"}`;
         appLaunchCountEl.hidden = false;
       } catch (error) {
         appLaunchCountEl.hidden = true;
       }
     }
 
-    async function loadMapLaunchCounts(entries) {
-      await Promise.all((entries || []).map(async entry => {
-        const mapHash = getMapHash(entry);
-        if (!mapHash) {
-          return;
-        }
-
-        const countEl = manifestEl.querySelector(`[data-map-launch-count="${CSS.escape(mapHash)}"]`);
-        if (!countEl) {
-          return;
-        }
-
+    async function loadMapLaunchCounts(entries, loadId) {
+      const hashes = [...new Set(entries.map(getMapHash).filter(Boolean))];
+      const counts = await Promise.all(hashes.map(async mapHash => {
         try {
-          const count = await readPublicCount(`map-loaded/${mapHash}`);
-          countEl.textContent = `${count} ${count === "1" ? "launch" : "launches"}`;
-          countEl.hidden = false;
+          return [mapHash, await readPublicCount(`map-loaded/${mapHash}`)];
         } catch (error) {
-          countEl.hidden = true;
+          return [mapHash, null];
         }
       }));
+      // Ignore responses from a previous refresh; honour the current sort choice.
+      if (loadId !== manifestLoadId) {
+        return;
+      }
+      mapLaunchCounts = new Map(counts);
+      loadingMapLaunchCounts = false;
+      render(currentManifest.entries || [], currentManifest.repositoryName, currentManifest.generatedUtc);
     }
 
     function render(entries, repositoryName, generatedUtc) {
+      sortStatusEl.textContent = "";
       if (!entries || entries.length === 0) {
         manifestEl.innerHTML = '<div class="empty">No maps have been uploaded yet.</div>';
         summaryEl.textContent = repositoryName ? `${repositoryName} | ${generatedUtc || "unknown time"}` : "";
         return;
       }
 
+      if (sortByEl.value === "popular") {
+        if (loadingMapLaunchCounts) {
+          sortStatusEl.textContent = "Loading play counts; showing most recent maps for now.";
+        } else if (entries.some(entry => mapLaunchCounts.get(getMapHash(entry)) == null)) {
+          sortStatusEl.textContent = "Some play counts are unavailable; those maps are shown last.";
+        }
+      }
+
       summaryEl.textContent = `${repositoryName || "TileStorm Shared Maps"} | ${entries.length} map(s) | ${generatedUtc || "unknown time"}`;
-      manifestEl.innerHTML = entries.map(entry => {
+      manifestEl.innerHTML = sortEntries(entries).map(entry => {
         const fileName = entry.fileName || "";
         const pagesUrl = normaliseFileUrl(fileName, entry.downloadUrl);
         const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/maps/${encodeURIComponent(fileName)}`;
         const launchId = getMapHash(entry) || fileName;
         const openUrl = `${gameUrl}?map=${encodeURIComponent(launchId)}`;
         const thumbUrl = getThumbUrl(entry);
+        const launchCount = mapLaunchCounts.get(launchId);
         return `
           <div class="entry">
             <div class="entry-top">
@@ -584,7 +663,7 @@
                 <div class="meta">${escapeHtml(fileName)}</div>
                 <div class="meta">${escapeHtml(formatBytes(entry.sizeBytes))} | ${escapeHtml(formatTimestamp(entry.updatedUtc))}</div>
                 <div class="meta key-meta">${escapeHtml(launchId ? `Key ${launchId}` : "No key available")}</div>
-                ${launchId ? `<div class="launch-count" data-map-launch-count="${escapeHtml(launchId)}" hidden></div>` : ""}
+                ${launchId ? `<div class="launch-count" data-map-launch-count="${escapeHtml(launchId)}" ${launchCount == null ? "hidden" : ""}>${launchCount == null ? "" : `${launchCount.toLocaleString("en-GB")} ${launchCount === 1 ? "launch" : "launches"}`}</div>` : ""}
               </div>
             </div>
             <div class="entry-actions">
@@ -597,42 +676,65 @@
           </div>
         `;
       }).join("");
-      loadMapLaunchCounts(entries).catch(() => {});
     }
 
     async function loadManifest() {
+      const loadId = ++manifestLoadId;
+      currentManifest = null;
+      mapLaunchCounts = new Map();
+      loadingMapLaunchCounts = false;
+      sortStatusEl.textContent = "";
       summaryEl.textContent = "Loading manifest...";
       setFreshnessStatus("");
       manifestEl.innerHTML = "";
       try {
         const response = await fetch(`./manifest.json?ts=${Date.now()}`, { cache: "no-store" });
+        if (loadId !== manifestLoadId) {
+          return;
+        }
         if (!response.ok) {
           summaryEl.innerHTML = `<span class="error">Failed to load manifest: HTTP ${response.status}</span>`;
           manifestEl.innerHTML = "";
           return;
         }
-        currentManifest = await response.json();
+        const manifest = await response.json();
+        if (loadId !== manifestLoadId) {
+          return;
+        }
+        currentManifest = manifest;
+        loadingMapLaunchCounts = true;
         render(currentManifest.entries || [], currentManifest.repositoryName, currentManifest.generatedUtc);
         verifyManifestFreshness().catch(() => {});
+        await loadMapLaunchCounts(currentManifest.entries || [], loadId);
       } catch (error) {
+        if (loadId !== manifestLoadId) {
+          return;
+        }
         summaryEl.innerHTML = `<span class="error">Failed to load manifest: ${escapeHtml(error.message || error)}</span>`;
         manifestEl.innerHTML = "";
       }
     }
 
     async function verifyManifestFreshness() {
-      if (!currentManifest) {
+      const manifest = currentManifest;
+      if (!manifest) {
         return;
       }
 
       try {
         const response = await fetch(`${sourceManifestUrl}?ts=${Date.now()}`, { cache: "no-store" });
+        if (currentManifest !== manifest) {
+          return;
+        }
         if (!response.ok) {
           setFreshnessStatus("");
           return;
         }
 
         const sourceManifest = await response.json();
+        if (currentManifest !== manifest) {
+          return;
+        }
         const pagesStamp = currentManifest.generatedUtc || "";
         const sourceStamp = sourceManifest.generatedUtc || "";
         const pagesCount = (currentManifest.entries || []).length;
@@ -647,7 +749,9 @@
           setFreshnessStatus("");
         }
       } catch (error) {
-        setFreshnessStatus("");
+        if (currentManifest === manifest) {
+          setFreshnessStatus("");
+        }
       }
     }
 
@@ -747,6 +851,11 @@
     }
 
     refreshBtn.addEventListener("click", loadManifest);
+    sortByEl.addEventListener("change", () => {
+      if (currentManifest) {
+        render(currentManifest.entries || [], currentManifest.repositoryName, currentManifest.generatedUtc);
+      }
+    });
 
     document.getElementById("launchGame").addEventListener("click", () => {
       trackAnalyticsEvent("game-launch-clicked", "Launch TileStorm Evolution clicked");
@@ -810,6 +919,7 @@
       }
     });
 
+    sortByEl.value = "popular";
     loadSavedToken();
     loadManifest();
     loadAppLaunchCount();
