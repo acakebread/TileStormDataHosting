@@ -472,6 +472,7 @@
 
     let currentManifest = null;
     let adminToken = "";
+    let appLaunchCount = null;
     let mapLaunchCounts = new Map();
     let loadingMapLaunchCounts = false;
     let manifestLoadId = 0;
@@ -515,6 +516,16 @@
       freshnessEl.textContent = message || "";
     }
 
+    function renderAppLaunchCount() {
+      if (!adminToken || appLaunchCount == null) {
+        appLaunchCountEl.hidden = true;
+        return;
+      }
+
+      appLaunchCountEl.textContent = `${appLaunchCount.toLocaleString("en-GB")} recorded app ${appLaunchCount === 1 ? "launch" : "launches"}`;
+      appLaunchCountEl.hidden = false;
+    }
+
     function loadSavedToken() {
       try {
         adminToken = localStorage.getItem(tokenStorageKey) || "";
@@ -523,6 +534,7 @@
         adminToken = "";
       }
       setAdminStatus(adminToken ? "Admin token is active in this browser." : "No admin token is active.");
+      renderAppLaunchCount();
     }
 
     function normaliseFileUrl(fileName, downloadUrl) {
@@ -603,10 +615,10 @@
 
     async function loadAppLaunchCount() {
       try {
-        const count = await readPublicCount("app-started");
-        appLaunchCountEl.textContent = `${count.toLocaleString("en-GB")} recorded app ${count === 1 ? "launch" : "launches"}`;
-        appLaunchCountEl.hidden = false;
+        appLaunchCount = await readPublicCount("app-started");
+        renderAppLaunchCount();
       } catch (error) {
+        appLaunchCount = null;
         appLaunchCountEl.hidden = true;
       }
     }
@@ -663,7 +675,7 @@
                 <div class="meta">${escapeHtml(fileName)}</div>
                 <div class="meta">${escapeHtml(formatBytes(entry.sizeBytes))} | ${escapeHtml(formatTimestamp(entry.updatedUtc))}</div>
                 <div class="meta key-meta">${escapeHtml(launchId ? `Key ${launchId}` : "No key available")}</div>
-                ${launchId ? `<div class="launch-count" data-map-launch-count="${escapeHtml(launchId)}" ${launchCount == null ? "hidden" : ""}>${launchCount == null ? "" : `${launchCount.toLocaleString("en-GB")} ${launchCount === 1 ? "launch" : "launches"}`}</div>` : ""}
+                ${launchId ? `<div class="launch-count" data-map-launch-count="${escapeHtml(launchId)}" ${launchCount == null ? "hidden" : ""}>${launchCount == null ? "" : `${launchCount.toLocaleString("en-GB")} ${launchCount === 1 ? "play" : "plays"}`}</div>` : ""}
               </div>
             </div>
             <div class="entry-actions">
@@ -871,6 +883,7 @@
         // Token still works for this page session if localStorage is blocked.
       }
       setAdminStatus(adminToken ? "Admin token is active in this browser." : "No admin token is active.");
+      renderAppLaunchCount();
       if (currentManifest) {
         render(currentManifest.entries || [], currentManifest.repositoryName, currentManifest.generatedUtc);
       }
@@ -885,6 +898,7 @@
         // Nothing else needed.
       }
       setAdminStatus("Admin token cleared.");
+      renderAppLaunchCount();
       if (currentManifest) {
         render(currentManifest.entries || [], currentManifest.repositoryName, currentManifest.generatedUtc);
       }
