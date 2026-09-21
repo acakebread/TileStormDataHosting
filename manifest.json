@@ -1,84 +1,97 @@
 {
-  "entries": [
-    {
-      "contentType": "application/json;charset=utf-8",
-      "description": "",
-      "downloadUrl": "maps/CwnEy7.json",
-      "fileName": "CwnEy7.json",
-      "id": "CwnEy7.json",
-      "mapHash": "CwnEy7",
-      "name": "public sandbox",
-      "sizeBytes": 932,
-      "updatedUtc": "2026-09-21T19:48:46.5770000Z",
-      "utc": "9m5ut0"
-    },
-    {
-      "contentType": "application/json;charset=utf-8",
-      "description": "",
-      "downloadUrl": "maps/6yarpw.json",
-      "fileName": "6yarpw.json",
-      "id": "6yarpw.json",
-      "mapHash": "6yarpw",
-      "name": "Medieval test",
-      "sizeBytes": 3568,
-      "updatedUtc": "2026-09-19T19:47:25.2125426Z"
-    },
-    {
-      "contentType": "application/json;charset=utf-8",
-      "description": "",
-      "downloadUrl": "maps/6rDpFF.json",
-      "fileName": "6rDpFF.json",
-      "id": "6rDpFF.json",
-      "mapHash": "6rDpFF",
-      "name": "Mike Test 01",
-      "sizeBytes": 2683,
-      "updatedUtc": "2026-09-17T00:59:51.2687829Z"
-    },
-    {
-      "contentType": "application/json;charset=utf-8",
-      "description": "",
-      "downloadUrl": "maps/CAfAAv.json",
-      "fileName": "CAfAAv.json",
-      "id": "CAfAAv.json",
-      "mapHash": "CAfAAv",
-      "name": "Industrial test",
-      "sizeBytes": 2524,
-      "updatedUtc": "2026-09-14T16:34:14.0330000Z"
-    },
-    {
-      "contentType": "application/json;charset=utf-8",
-      "description": "",
-      "downloadUrl": "maps/2NqYCC.json",
-      "fileName": "2NqYCC.json",
-      "id": "2NqYCC.json",
-      "mapHash": "2NqYCC",
-      "name": "Egypt test",
-      "sizeBytes": 2415,
-      "updatedUtc": "2026-05-29T10:48:20.3144336Z"
-    },
-    {
-      "contentType": "application/json;charset=utf-8",
-      "description": "",
-      "downloadUrl": "maps/6VDuh3.json",
-      "fileName": "6VDuh3.json",
-      "id": "6VDuh3.json",
-      "mapHash": "6VDuh3",
-      "name": "Jungle test",
-      "sizeBytes": 1736,
-      "updatedUtc": "2026-05-29T10:47:25.4263789Z"
-    },
-    {
-      "contentType": "application/json;charset=utf-8",
-      "description": "",
-      "downloadUrl": "maps/C2XMmJ.json",
-      "fileName": "C2XMmJ.json",
-      "id": "C2XMmJ.json",
-      "mapHash": "C2XMmJ",
-      "name": "external test",
-      "sizeBytes": 602,
-      "updatedUtc": "2026-05-29T10:46:19.0438084Z"
-    }
-  ],
-  "generatedUtc": "2026-09-21T20:58:53.337Z",
-  "repositoryName": "TileStorm Shared Maps"
+	"entries": [
+		{
+			"contentType": "application/json;charset=utf-8",
+			"description": "",
+			"downloadUrl": "maps/5YXeyP.json",
+			"fileName": "5YXeyP.json",
+			"id": "5YXeyP.json",
+			"mapHash": "5YXeyP",
+			"name": "small local test",
+			"sizeBytes": 1862,
+			"updatedUtc": "2026-09-21T23:04:32.1520000Z",
+			"utc": "6ePFWK",
+			"visibility": "private"
+		},
+		{
+			"contentType": "application/json;charset=utf-8",
+			"description": "",
+			"downloadUrl": "maps/CwnEy7.json",
+			"fileName": "CwnEy7.json",
+			"id": "CwnEy7.json",
+			"mapHash": "CwnEy7",
+			"name": "public sandbox",
+			"sizeBytes": 932,
+			"updatedUtc": "2026-09-21T19:48:46.5770000Z",
+			"utc": "9m5ut0"
+		},
+		{
+			"contentType": "application/json;charset=utf-8",
+			"description": "",
+			"downloadUrl": "maps/6yarpw.json",
+			"fileName": "6yarpw.json",
+			"id": "6yarpw.json",
+			"mapHash": "6yarpw",
+			"name": "Medieval test",
+			"sizeBytes": 3568,
+			"updatedUtc": "2026-09-19T19:47:25.2125426Z"
+		},
+		{
+			"contentType": "application/json;charset=utf-8",
+			"description": "",
+			"downloadUrl": "maps/6rDpFF.json",
+			"fileName": "6rDpFF.json",
+			"id": "6rDpFF.json",
+			"mapHash": "6rDpFF",
+			"name": "Mike Test 01",
+			"sizeBytes": 2683,
+			"updatedUtc": "2026-09-17T00:59:51.2687829Z"
+		},
+		{
+			"contentType": "application/json;charset=utf-8",
+			"description": "",
+			"downloadUrl": "maps/CAfAAv.json",
+			"fileName": "CAfAAv.json",
+			"id": "CAfAAv.json",
+			"mapHash": "CAfAAv",
+			"name": "Industrial test",
+			"sizeBytes": 2524,
+			"updatedUtc": "2026-09-14T16:34:14.0330000Z"
+		},
+		{
+			"contentType": "application/json;charset=utf-8",
+			"description": "",
+			"downloadUrl": "maps/2NqYCC.json",
+			"fileName": "2NqYCC.json",
+			"id": "2NqYCC.json",
+			"mapHash": "2NqYCC",
+			"name": "Egypt test",
+			"sizeBytes": 2415,
+			"updatedUtc": "2026-05-29T10:48:20.3144336Z"
+		},
+		{
+			"contentType": "application/json;charset=utf-8",
+			"description": "",
+			"downloadUrl": "maps/6VDuh3.json",
+			"fileName": "6VDuh3.json",
+			"id": "6VDuh3.json",
+			"mapHash": "6VDuh3",
+			"name": "Jungle test",
+			"sizeBytes": 1736,
+			"updatedUtc": "2026-05-29T10:47:25.4263789Z"
+		},
+		{
+			"contentType": "application/json;charset=utf-8",
+			"description": "",
+			"downloadUrl": "maps/C2XMmJ.json",
+			"fileName": "C2XMmJ.json",
+			"id": "C2XMmJ.json",
+			"mapHash": "C2XMmJ",
+			"name": "external test",
+			"sizeBytes": 602,
+			"updatedUtc": "2026-05-29T10:46:19.0438084Z"
+		}
+	],
+	"generatedUtc": "2026-09-21T23:04:32.1520000Z",
+	"repositoryName": "TileStorm Shared Maps"
 }
