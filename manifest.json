@@ -3,6 +3,17 @@
 		{
 			"contentType": "application/json;charset=utf-8",
 			"description": "",
+			"downloadUrl": "maps/9fj4rX.json",
+			"fileName": "9fj4rX.json",
+			"id": "9fj4rX.json",
+			"mapHash": "9fj4rX",
+			"name": "user_map_9fj4rX",
+			"sizeBytes": 391,
+			"updatedUtc": "2026-09-21T09:16:21.5149938Z"
+		},
+		{
+			"contentType": "application/json;charset=utf-8",
+			"description": "",
 			"downloadUrl": "maps/CwnEy7.json",
 			"fileName": "CwnEy7.json",
 			"id": "CwnEy7.json",
@@ -21,17 +32,6 @@
 			"name": "test editable map",
 			"sizeBytes": 1010,
 			"updatedUtc": "2026-09-21T01:51:20.4992890Z"
-		},
-		{
-			"contentType": "application/json;charset=utf-8",
-			"description": "",
-			"downloadUrl": "maps/9fj4rX.json",
-			"fileName": "9fj4rX.json",
-			"id": "9fj4rX.json",
-			"mapHash": "9fj4rX",
-			"name": "user_map_9fj4rX",
-			"sizeBytes": 375,
-			"updatedUtc": "2026-09-21T01:45:48.9361694Z"
 		},
 		{
 			"contentType": "application/json;charset=utf-8",
@@ -111,6 +111,6 @@
 			"updatedUtc": "2026-05-29T10:46:19.0438084Z"
 		}
 	],
-	"generatedUtc": "2026-09-21T08:35:59.8572225Z",
+	"generatedUtc": "2026-09-21T09:16:21.5149938Z",
 	"repositoryName": "TileStorm Shared Maps"
 }
