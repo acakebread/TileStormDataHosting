@@ -1,151 +1,139 @@
 {
-	"entries": [
-		{
-			"contentType": "application/json;charset=utf-8",
-			"description": "",
-			"downloadUrl": "maps/9fj4rX.json",
-			"fileName": "9fj4rX.json",
-			"id": "9fj4rX.json",
-			"mapHash": "9fj4rX",
-			"name": "test public level",
-			"sizeBytes": 444,
-			"updatedUtc": "2026-09-21T20:31:46.4309216Z",
-			"utc": "36Duy9"
-		},
-		{
-			"contentType": "application/json;charset=utf-8",
-			"description": "",
-			"downloadUrl": "maps/CwnEy7.json",
-			"fileName": "CwnEy7.json",
-			"id": "CwnEy7.json",
-			"mapHash": "CwnEy7",
-			"name": "public sandbox",
-			"sizeBytes": 932,
-			"updatedUtc": "2026-09-21T19:48:46.5770000Z",
-			"utc": "9m5ut0"
-		},
-		{
-			"contentType": "application/json;charset=utf-8",
-			"description": "",
-			"downloadUrl": "maps/5J5t32.json",
-			"fileName": "5J5t32.json",
-			"id": "5J5t32.json",
-			"mapHash": "5J5t32",
-			"name": "owned by chrome",
-			"sizeBytes": 903,
-			"updatedUtc": "2026-09-21T17:52:50.7640000Z"
-		},
-		{
-			"contentType": "application/json;charset=utf-8",
-			"description": "",
-			"downloadUrl": "maps/9d5A2N.json",
-			"fileName": "9d5A2N.json",
-			"id": "9d5A2N.json",
-			"mapHash": "9d5A2N",
-			"name": "rainbow",
-			"sizeBytes": 300,
-			"updatedUtc": "2026-09-21T11:28:19.3281729Z"
-		},
-		{
-			"contentType": "application/json;charset=utf-8",
-			"description": "",
-			"downloadUrl": "maps/4YuNPp.json",
-			"fileName": "4YuNPp.json",
-			"id": "4YuNPp.json",
-			"mapHash": "4YuNPp",
-			"name": "web public test",
-			"sizeBytes": 228,
-			"updatedUtc": "2026-09-21T09:20:04.0360000Z"
-		},
-		{
-			"contentType": "application/json;charset=utf-8",
-			"description": "",
-			"downloadUrl": "maps/10Jia4.json",
-			"fileName": "10Jia4.json",
-			"id": "10Jia4.json",
-			"mapHash": "10Jia4",
-			"name": "test editable map",
-			"sizeBytes": 1010,
-			"updatedUtc": "2026-09-21T01:51:20.4992890Z"
-		},
-		{
-			"contentType": "application/json;charset=utf-8",
-			"description": "",
-			"downloadUrl": "maps/6yarpw.json",
-			"fileName": "6yarpw.json",
-			"id": "6yarpw.json",
-			"mapHash": "6yarpw",
-			"name": "Medieval test",
-			"sizeBytes": 3568,
-			"updatedUtc": "2026-09-19T19:47:25.2125426Z"
-		},
-		{
-			"contentType": "application/zip",
-			"description": "",
-			"downloadUrl": "maps/5MyrUq.zip",
-			"fileName": "5MyrUq.zip",
-			"id": "5MyrUq.zip",
-			"mapHash": "5MyrUq",
-			"name": "user_map_5MyrUq",
-			"sizeBytes": 465349,
-			"updatedUtc": "2026-09-19T14:57:22.7390000Z"
-		},
-		{
-			"contentType": "application/json;charset=utf-8",
-			"description": "",
-			"downloadUrl": "maps/6rDpFF.json",
-			"fileName": "6rDpFF.json",
-			"id": "6rDpFF.json",
-			"mapHash": "6rDpFF",
-			"name": "Mike Test 01",
-			"sizeBytes": 2683,
-			"updatedUtc": "2026-09-17T00:59:51.2687829Z"
-		},
-		{
-			"contentType": "application/json;charset=utf-8",
-			"description": "",
-			"downloadUrl": "maps/CAfAAv.json",
-			"fileName": "CAfAAv.json",
-			"id": "CAfAAv.json",
-			"mapHash": "CAfAAv",
-			"name": "Industrial test",
-			"sizeBytes": 2524,
-			"updatedUtc": "2026-09-14T16:34:14.0330000Z"
-		},
-		{
-			"contentType": "application/json;charset=utf-8",
-			"description": "",
-			"downloadUrl": "maps/2NqYCC.json",
-			"fileName": "2NqYCC.json",
-			"id": "2NqYCC.json",
-			"mapHash": "2NqYCC",
-			"name": "Egypt test",
-			"sizeBytes": 2415,
-			"updatedUtc": "2026-05-29T10:48:20.3144336Z"
-		},
-		{
-			"contentType": "application/json;charset=utf-8",
-			"description": "",
-			"downloadUrl": "maps/6VDuh3.json",
-			"fileName": "6VDuh3.json",
-			"id": "6VDuh3.json",
-			"mapHash": "6VDuh3",
-			"name": "Jungle test",
-			"sizeBytes": 1736,
-			"updatedUtc": "2026-05-29T10:47:25.4263789Z"
-		},
-		{
-			"contentType": "application/json;charset=utf-8",
-			"description": "",
-			"downloadUrl": "maps/C2XMmJ.json",
-			"fileName": "C2XMmJ.json",
-			"id": "C2XMmJ.json",
-			"mapHash": "C2XMmJ",
-			"name": "external test",
-			"sizeBytes": 602,
-			"updatedUtc": "2026-05-29T10:46:19.0438084Z"
-		}
-	],
-	"generatedUtc": "2026-09-21T20:57:04.4110000Z",
-	"repositoryName": "TileStorm Shared Maps"
+  "entries": [
+    {
+      "contentType": "application/json;charset=utf-8",
+      "description": "",
+      "downloadUrl": "maps/CwnEy7.json",
+      "fileName": "CwnEy7.json",
+      "id": "CwnEy7.json",
+      "mapHash": "CwnEy7",
+      "name": "public sandbox",
+      "sizeBytes": 932,
+      "updatedUtc": "2026-09-21T19:48:46.5770000Z",
+      "utc": "9m5ut0"
+    },
+    {
+      "contentType": "application/json;charset=utf-8",
+      "description": "",
+      "downloadUrl": "maps/5J5t32.json",
+      "fileName": "5J5t32.json",
+      "id": "5J5t32.json",
+      "mapHash": "5J5t32",
+      "name": "owned by chrome",
+      "sizeBytes": 903,
+      "updatedUtc": "2026-09-21T17:52:50.7640000Z"
+    },
+    {
+      "contentType": "application/json;charset=utf-8",
+      "description": "",
+      "downloadUrl": "maps/9d5A2N.json",
+      "fileName": "9d5A2N.json",
+      "id": "9d5A2N.json",
+      "mapHash": "9d5A2N",
+      "name": "rainbow",
+      "sizeBytes": 300,
+      "updatedUtc": "2026-09-21T11:28:19.3281729Z"
+    },
+    {
+      "contentType": "application/json;charset=utf-8",
+      "description": "",
+      "downloadUrl": "maps/4YuNPp.json",
+      "fileName": "4YuNPp.json",
+      "id": "4YuNPp.json",
+      "mapHash": "4YuNPp",
+      "name": "web public test",
+      "sizeBytes": 228,
+      "updatedUtc": "2026-09-21T09:20:04.0360000Z"
+    },
+    {
+      "contentType": "application/json;charset=utf-8",
+      "description": "",
+      "downloadUrl": "maps/10Jia4.json",
+      "fileName": "10Jia4.json",
+      "id": "10Jia4.json",
+      "mapHash": "10Jia4",
+      "name": "test editable map",
+      "sizeBytes": 1010,
+      "updatedUtc": "2026-09-21T01:51:20.4992890Z"
+    },
+    {
+      "contentType": "application/json;charset=utf-8",
+      "description": "",
+      "downloadUrl": "maps/6yarpw.json",
+      "fileName": "6yarpw.json",
+      "id": "6yarpw.json",
+      "mapHash": "6yarpw",
+      "name": "Medieval test",
+      "sizeBytes": 3568,
+      "updatedUtc": "2026-09-19T19:47:25.2125426Z"
+    },
+    {
+      "contentType": "application/zip",
+      "description": "",
+      "downloadUrl": "maps/5MyrUq.zip",
+      "fileName": "5MyrUq.zip",
+      "id": "5MyrUq.zip",
+      "mapHash": "5MyrUq",
+      "name": "user_map_5MyrUq",
+      "sizeBytes": 465349,
+      "updatedUtc": "2026-09-19T14:57:22.7390000Z"
+    },
+    {
+      "contentType": "application/json;charset=utf-8",
+      "description": "",
+      "downloadUrl": "maps/6rDpFF.json",
+      "fileName": "6rDpFF.json",
+      "id": "6rDpFF.json",
+      "mapHash": "6rDpFF",
+      "name": "Mike Test 01",
+      "sizeBytes": 2683,
+      "updatedUtc": "2026-09-17T00:59:51.2687829Z"
+    },
+    {
+      "contentType": "application/json;charset=utf-8",
+      "description": "",
+      "downloadUrl": "maps/CAfAAv.json",
+      "fileName": "CAfAAv.json",
+      "id": "CAfAAv.json",
+      "mapHash": "CAfAAv",
+      "name": "Industrial test",
+      "sizeBytes": 2524,
+      "updatedUtc": "2026-09-14T16:34:14.0330000Z"
+    },
+    {
+      "contentType": "application/json;charset=utf-8",
+      "description": "",
+      "downloadUrl": "maps/2NqYCC.json",
+      "fileName": "2NqYCC.json",
+      "id": "2NqYCC.json",
+      "mapHash": "2NqYCC",
+      "name": "Egypt test",
+      "sizeBytes": 2415,
+      "updatedUtc": "2026-05-29T10:48:20.3144336Z"
+    },
+    {
+      "contentType": "application/json;charset=utf-8",
+      "description": "",
+      "downloadUrl": "maps/6VDuh3.json",
+      "fileName": "6VDuh3.json",
+      "id": "6VDuh3.json",
+      "mapHash": "6VDuh3",
+      "name": "Jungle test",
+      "sizeBytes": 1736,
+      "updatedUtc": "2026-05-29T10:47:25.4263789Z"
+    },
+    {
+      "contentType": "application/json;charset=utf-8",
+      "description": "",
+      "downloadUrl": "maps/C2XMmJ.json",
+      "fileName": "C2XMmJ.json",
+      "id": "C2XMmJ.json",
+      "mapHash": "C2XMmJ",
+      "name": "external test",
+      "sizeBytes": 602,
+      "updatedUtc": "2026-05-29T10:46:19.0438084Z"
+    }
+  ],
+  "generatedUtc": "2026-09-21T20:57:35.258Z",
+  "repositoryName": "TileStorm Shared Maps"
 }
