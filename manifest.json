@@ -3,6 +3,17 @@
 		{
 			"contentType": "application/json;charset=utf-8",
 			"description": "",
+			"downloadUrl": "maps/6wchdi.json",
+			"fileName": "6wchdi.json",
+			"id": "6wchdi.json",
+			"mapHash": "6wchdi",
+			"name": "houses",
+			"sizeBytes": 357,
+			"updatedUtc": "2026-09-21T11:42:46.3832695Z"
+		},
+		{
+			"contentType": "application/json;charset=utf-8",
+			"description": "",
 			"downloadUrl": "maps/9d5A2N.json",
 			"fileName": "9d5A2N.json",
 			"id": "9d5A2N.json",
@@ -144,6 +155,6 @@
 			"updatedUtc": "2026-05-29T10:46:19.0438084Z"
 		}
 	],
-	"generatedUtc": "2026-09-21T11:34:51.9863354Z",
+	"generatedUtc": "2026-09-21T11:42:46.3832695Z",
 	"repositoryName": "TileStorm Shared Maps"
 }
