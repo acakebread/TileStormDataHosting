@@ -8,9 +8,9 @@
 			"id": "CwnEy7.json",
 			"mapHash": "CwnEy7",
 			"name": "public sandbox",
-			"sizeBytes": 748,
-			"updatedUtc": "2026-09-21T19:37:11.7620000Z",
-			"utc": "44Xpur"
+			"sizeBytes": 932,
+			"updatedUtc": "2026-09-21T19:43:08.9790000Z",
+			"utc": "3QKCF7"
 		},
 		{
 			"contentType": "application/json;charset=utf-8",
@@ -157,6 +157,6 @@
 			"updatedUtc": "2026-05-29T10:46:19.0438084Z"
 		}
 	],
-	"generatedUtc": "2026-09-21T19:37:11.7620000Z",
+	"generatedUtc": "2026-09-21T19:43:08.9790000Z",
 	"repositoryName": "TileStorm Shared Maps"
 }
