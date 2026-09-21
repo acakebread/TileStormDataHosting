@@ -15,17 +15,6 @@
     {
       "contentType": "application/json;charset=utf-8",
       "description": "",
-      "downloadUrl": "maps/10Jia4.json",
-      "fileName": "10Jia4.json",
-      "id": "10Jia4.json",
-      "mapHash": "10Jia4",
-      "name": "test editable map",
-      "sizeBytes": 1010,
-      "updatedUtc": "2026-09-21T01:51:20.4992890Z"
-    },
-    {
-      "contentType": "application/json;charset=utf-8",
-      "description": "",
       "downloadUrl": "maps/6yarpw.json",
       "fileName": "6yarpw.json",
       "id": "6yarpw.json",
@@ -90,6 +79,6 @@
       "updatedUtc": "2026-05-29T10:46:19.0438084Z"
     }
   ],
-  "generatedUtc": "2026-09-21T20:58:06.740Z",
+  "generatedUtc": "2026-09-21T20:58:53.337Z",
   "repositoryName": "TileStorm Shared Maps"
 }
