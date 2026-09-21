@@ -68,17 +68,6 @@
       "updatedUtc": "2026-09-19T19:47:25.2125426Z"
     },
     {
-      "contentType": "application/zip",
-      "description": "",
-      "downloadUrl": "maps/5MyrUq.zip",
-      "fileName": "5MyrUq.zip",
-      "id": "5MyrUq.zip",
-      "mapHash": "5MyrUq",
-      "name": "user_map_5MyrUq",
-      "sizeBytes": 465349,
-      "updatedUtc": "2026-09-19T14:57:22.7390000Z"
-    },
-    {
       "contentType": "application/json;charset=utf-8",
       "description": "",
       "downloadUrl": "maps/6rDpFF.json",
@@ -134,6 +123,6 @@
       "updatedUtc": "2026-05-29T10:46:19.0438084Z"
     }
   ],
-  "generatedUtc": "2026-09-21T20:57:35.258Z",
+  "generatedUtc": "2026-09-21T20:57:44.700Z",
   "repositoryName": "TileStorm Shared Maps"
 }
