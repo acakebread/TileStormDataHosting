@@ -25,17 +25,6 @@
 		{
 			"contentType": "application/json;charset=utf-8",
 			"description": "",
-			"downloadUrl": "maps/9Ww5GH.json",
-			"fileName": "9Ww5GH.json",
-			"id": "9Ww5GH.json",
-			"mapHash": "9Ww5GH",
-			"name": "test editable map",
-			"sizeBytes": 1010,
-			"updatedUtc": "2026-09-20T20:50:37.5469715Z"
-		},
-		{
-			"contentType": "application/json;charset=utf-8",
-			"description": "",
 			"downloadUrl": "maps/6yarpw.json",
 			"fileName": "6yarpw.json",
 			"id": "6yarpw.json",
@@ -111,6 +100,6 @@
 			"updatedUtc": "2026-05-29T10:46:19.0438084Z"
 		}
 	],
-	"generatedUtc": "2026-09-21T01:45:48.9361694Z",
+	"generatedUtc": "2026-09-21T01:48:52.6264642Z",
 	"repositoryName": "TileStorm Shared Maps"
 }
