@@ -1,0 +1,1 @@
+{"id":"6wchdi","name":"houses","width":4,"height":5,"tiles":[1,1,0,0,1,0,0,1,0,0,0,1,0,0,0,1,0,1,1,1],"table":["5GN3cm","000000"],"definitions":[{"id":"5GN3cm","name":"house test","model":"4wjfjE","surfaceLightMode":"content","surfaceLightIntensity":0.0625,"surfaceLightRange":0.65625}],"version":"1.0","author":"Player","exportedFrom":"TileStormEvolution"}
