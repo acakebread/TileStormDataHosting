@@ -15,17 +15,6 @@
     {
       "contentType": "application/json;charset=utf-8",
       "description": "",
-      "downloadUrl": "maps/5J5t32.json",
-      "fileName": "5J5t32.json",
-      "id": "5J5t32.json",
-      "mapHash": "5J5t32",
-      "name": "owned by chrome",
-      "sizeBytes": 903,
-      "updatedUtc": "2026-09-21T17:52:50.7640000Z"
-    },
-    {
-      "contentType": "application/json;charset=utf-8",
-      "description": "",
       "downloadUrl": "maps/10Jia4.json",
       "fileName": "10Jia4.json",
       "id": "10Jia4.json",
@@ -101,6 +90,6 @@
       "updatedUtc": "2026-05-29T10:46:19.0438084Z"
     }
   ],
-  "generatedUtc": "2026-09-21T20:57:58.690Z",
+  "generatedUtc": "2026-09-21T20:58:06.740Z",
   "repositoryName": "TileStorm Shared Maps"
 }
