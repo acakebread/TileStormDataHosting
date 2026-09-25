@@ -328,6 +328,35 @@
       align-items: center;
     }
 
+    .map-toolbar {
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .map-toolbar-title {
+      min-width: 190px;
+    }
+
+    .map-toolbar-title strong {
+      color: var(--tile-community);
+      font-size: 1.02rem;
+    }
+
+    .map-access-note {
+      color: var(--muted);
+      font-size: 0.88rem;
+      margin-top: 8px;
+    }
+
+    .map-toolbar-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: flex-end;
+      margin-left: auto;
+    }
+
     .sort-control {
       display: flex;
       flex-wrap: wrap;
@@ -714,6 +743,11 @@
         font-size: 0.85rem;
       }
 
+      .map-toolbar,
+      .map-toolbar-controls {
+        justify-content: flex-start;
+      }
+
       .wrap {
         margin: 0;
         padding: 14px;
@@ -776,24 +810,30 @@
   <main class="wrap">
     <section class="card">
       <div class="section">
-        <div class="toolbar">
-          <button class="icon-button" id="refresh" aria-label="Refresh map list" title="Refresh map list">↻</button>
-          <div class="sort-control">
-            <label for="sortBy">Sort by</label>
-            <select id="sortBy" aria-describedby="sortStatus">
-              <option value="popular" selected>Most played</option>
-              <option value="recent">Most recent</option>
-              <option value="size-desc">Size: largest first</option>
-              <option value="size-asc">Size: smallest first</option>
-            </select>
+        <div class="toolbar map-toolbar">
+          <div class="map-toolbar-title">
+            <strong>Community maps</strong>
           </div>
-          <div class="filter-control" role="radiogroup" aria-label="Filter maps by access level">
-            <span class="filter-label">Filter by</span>
-            <label class="filter-option"><input type="radio" name="accessFilter" value="all" checked><span>All</span></label>
-            <label class="filter-option"><input type="radio" name="accessFilter" value="public"><span>Public</span></label>
-            <label class="filter-option"><input type="radio" name="accessFilter" value="restricted"><span>Restricted</span></label>
+          <div class="map-toolbar-controls">
+            <button class="icon-button" id="refresh" aria-label="Refresh map list" title="Refresh map list">↻</button>
+            <div class="sort-control">
+              <label for="sortBy">Sort by</label>
+              <select id="sortBy" aria-describedby="sortStatus">
+                <option value="popular" selected>Most played</option>
+                <option value="recent">Most recent</option>
+                <option value="size-desc">Size: largest first</option>
+                <option value="size-asc">Size: smallest first</option>
+              </select>
+            </div>
+            <div class="filter-control" role="radiogroup" aria-label="Filter maps by access level">
+              <span class="filter-label">Filter by</span>
+              <label class="filter-option"><input type="radio" name="accessFilter" value="all" checked><span>All</span></label>
+              <label class="filter-option"><input type="radio" name="accessFilter" value="public"><span>Public</span></label>
+              <label class="filter-option"><input type="radio" name="accessFilter" value="restricted"><span>Restricted</span></label>
+            </div>
           </div>
         </div>
+        <div class="map-access-note">Access labels describe editing: every listed map is playable.</div>
         <div id="sortStatus" class="note" role="status"></div>
         <div id="summary" class="note"></div>
         <div id="freshness" class="note"></div>
