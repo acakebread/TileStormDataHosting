@@ -329,8 +329,10 @@
     }
 
     .map-toolbar {
-      justify-content: space-between;
-      gap: 16px;
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) auto;
+      gap: 14px 22px;
+      align-items: center;
     }
 
     .map-toolbar-title {
@@ -339,13 +341,34 @@
 
     .map-toolbar-title strong {
       color: var(--tile-community);
-      font-size: 1.02rem;
+      font-size: 1.5rem;
+      text-shadow: 0 0 12px rgba(245, 230, 158, 0.18);
     }
 
     .map-access-note {
+      grid-column: 1 / -1;
+      grid-row: 2;
+      justify-self: end;
+      max-width: 45%;
       color: var(--muted);
       font-size: 0.88rem;
-      margin-top: 8px;
+      text-align: right;
+    }
+
+    .map-access-note::before {
+      content: "* ";
+      color: var(--tile-azure);
+      font-weight: 800;
+    }
+
+    .map-summary {
+      grid-column: 1 / -1;
+      grid-row: 2;
+      margin-top: 0;
+      padding-right: min(46%, 430px);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .map-toolbar-controls {
@@ -354,7 +377,6 @@
       gap: 10px;
       align-items: center;
       justify-content: flex-end;
-      margin-left: auto;
     }
 
     .sort-control {
@@ -744,8 +766,23 @@
       }
 
       .map-toolbar,
-      .map-toolbar-controls {
+      .map-toolbar-controls,
+      .map-access-note {
         justify-content: flex-start;
+        text-align: left;
+      }
+
+      .map-toolbar {
+        grid-template-columns: 1fr;
+      }
+
+      .map-access-note,
+      .map-summary {
+        grid-column: 1;
+        grid-row: auto;
+        max-width: none;
+        padding-right: 0;
+        white-space: normal;
       }
 
       .wrap {
@@ -832,10 +869,10 @@
               <label class="filter-option"><input type="radio" name="accessFilter" value="restricted"><span>Restricted</span></label>
             </div>
           </div>
+          <div id="summary" class="note map-summary"></div>
+          <div class="map-access-note">Access labels describe editing: every listed map is playable.</div>
         </div>
-        <div class="map-access-note">Access labels describe editing: every listed map is playable.</div>
         <div id="sortStatus" class="note" role="status"></div>
-        <div id="summary" class="note"></div>
         <div id="freshness" class="note"></div>
         <div id="manifest" class="manifest"></div>
       </div>
