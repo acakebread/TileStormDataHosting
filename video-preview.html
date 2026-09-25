@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TileStorm Background Video</title>
+  <link rel="canonical" href="https://www.massivehadron.com/video-preview.html">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #081016;
+      --panel: #121923;
+      --text: #f2f6fb;
+      --muted: #a8b7c8;
+      --border: #2a394a;
+      --tile-azure: #8cebed;
+      --tile-community: #f5e69e;
+    }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font: 16px/1.5 "Segoe UI", "Trebuchet MS", system-ui, sans-serif;
+    }
+
+    .wrap {
+      box-sizing: border-box;
+      min-height: 100vh;
+      padding: 24px;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      gap: 18px;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    h1 {
+      margin: 0;
+      color: var(--tile-community);
+      font-size: clamp(1.5rem, 4vw, 2.5rem);
+      line-height: 1.1;
+    }
+
+    a {
+      color: var(--tile-azure);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .button-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 38px;
+      padding: 0 14px;
+      border: 1px solid rgba(140, 235, 237, 0.55);
+      border-radius: 8px;
+      background: rgba(7, 16, 24, 0.78);
+      color: var(--text);
+      font-weight: 700;
+    }
+
+    .button-link:hover {
+      filter: brightness(1.08);
+      text-decoration: none;
+    }
+
+    .video-frame {
+      min-height: 0;
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      overflow: hidden;
+      background: #02070b;
+      box-shadow: 0 28px 80px rgba(0, 0, 0, 0.45);
+    }
+
+    video {
+      display: block;
+      width: 100%;
+      height: 100%;
+      max-height: calc(100vh - 116px);
+      object-fit: contain;
+      background: #02070b;
+    }
+
+    @media (max-width: 560px) {
+      .wrap {
+        padding: 14px;
+      }
+
+      .toolbar {
+        align-items: flex-start;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <div class="toolbar">
+      <h1>Background Video</h1>
+      <a class="button-link" href="./help.html">Back to help</a>
+    </div>
+    <div class="video-frame">
+      <video controls autoplay muted loop playsinline poster="./web_portal_background.png">
+        <source src="./preview.webm" type="video/webm">
+        <source src="./preview.mkv" type="video/x-matroska">
+      </video>
+    </div>
+  </main>
+</body>
+</html>

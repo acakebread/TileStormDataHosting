@@ -85,7 +85,7 @@
       width: 100%;
       height: 100%;
       object-fit: cover;
-      filter: brightness(0.62) saturate(1.02);
+      filter: brightness(0.74) saturate(1.04);
     }
 
     .video-backdrop::after {
@@ -93,7 +93,7 @@
       position: absolute;
       inset: 0;
       background:
-        linear-gradient(180deg, rgba(7, 12, 18, 0.50), rgba(7, 12, 18, 0.90)),
+        linear-gradient(180deg, rgba(7, 12, 18, 0.34), rgba(7, 12, 18, 0.78)),
         radial-gradient(circle at 18% 12%, rgba(105, 200, 255, 0.20), transparent 30rem),
         radial-gradient(circle at 88% 18%, rgba(240, 195, 91, 0.16), transparent 26rem);
     }
@@ -116,12 +116,12 @@
 
     .site-banner-inner {
       max-width: 1040px;
-      min-height: 132px;
+      min-height: 148px;
       margin: 0 auto;
-      padding: 14px 28px;
+      padding: 10px 28px;
       display: grid;
-      grid-template-columns: 132px minmax(0, 1fr) 48px;
-      gap: 18px;
+      grid-template-columns: 160px minmax(0, 1fr) 160px;
+      gap: 20px;
       align-items: center;
     }
 
@@ -136,8 +136,8 @@
     }
 
     .brand-mark {
-      width: 130px;
-      height: 112px;
+      width: 156px;
+      height: 138px;
       flex: 0 0 auto;
       object-fit: contain;
       object-position: center bottom;
@@ -182,11 +182,31 @@
       line-height: 1.35;
     }
 
-    .banner-actions {
+    .studio-link {
+      justify-self: end;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 156px;
+      height: 138px;
+      line-height: 0;
+    }
+
+    .studio-link:hover {
+      filter: brightness(1.08);
+      text-decoration: none;
+    }
+
+    .studio-mark {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .footer-actions {
       display: flex;
       gap: 8px;
       align-items: center;
-      justify-content: flex-end;
     }
 
     .help-link {
@@ -200,7 +220,8 @@
     .wrap {
       position: relative;
       z-index: 1;
-      max-width: 980px;
+      box-sizing: border-box;
+      max-width: 1040px;
       margin: 22px auto 96px;
       padding: 28px;
     }
@@ -223,7 +244,7 @@
       margin: 0 auto;
       padding: 8px 28px;
       display: grid;
-      grid-template-columns: auto minmax(0, 1fr);
+      grid-template-columns: auto minmax(0, 1fr) auto;
       gap: 16px;
       align-items: center;
     }
@@ -353,12 +374,6 @@
       color: var(--muted);
       font-size: 0.88rem;
       text-align: right;
-    }
-
-    .map-access-note::before {
-      content: "* ";
-      color: var(--tile-azure);
-      font-weight: 800;
     }
 
     .map-summary {
@@ -724,15 +739,20 @@
 
     @media (max-width: 520px) {
       .site-banner-inner {
-        min-height: 108px;
+        min-height: 112px;
         padding: 10px 14px;
-        grid-template-columns: 76px minmax(0, 1fr) 38px;
+        grid-template-columns: 86px minmax(0, 1fr) 54px;
         gap: 10px;
       }
 
       .brand-mark {
-        width: 76px;
-        height: 84px;
+        width: 86px;
+        height: 96px;
+      }
+
+      .studio-link {
+        width: 86px;
+        height: 96px;
       }
 
       .site-title {
@@ -753,6 +773,10 @@
         padding: 8px 14px;
         grid-template-columns: auto minmax(0, 1fr);
         gap: 10px;
+      }
+
+      .launch-footer .launch-count {
+        display: none;
       }
 
       .news-strip {
@@ -839,9 +863,9 @@
         </div>
         <div class="site-slogan">Eggbot is back from the team at Massive Hadron. Play classic maps, or create and share your own with the community.</div>
       </div>
-      <div class="banner-actions">
-        <a class="help-link icon-button" href="./help.html" aria-label="Open help" title="Help">?</a>
-      </div>
+      <a class="studio-link" href="./massive-hadron.html" aria-label="About Massive Hadron" title="About Massive Hadron">
+        <img class="studio-mark" src="./massive%20hadron%20logo.png" alt="Massive Hadron">
+      </a>
     </div>
   </header>
   <main class="wrap">
@@ -870,7 +894,7 @@
             </div>
           </div>
           <div id="summary" class="note map-summary"></div>
-          <div class="map-access-note">Access labels describe editing: every listed map is playable.</div>
+          <div class="map-access-note">Access labels describe editing, not play access.</div>
         </div>
         <div id="sortStatus" class="note" role="status"></div>
         <div id="freshness" class="note"></div>
@@ -891,7 +915,10 @@
   </main>
   <footer class="launch-footer" aria-label="TileStorm Evolution launch and updates">
     <div class="launch-footer-inner">
-      <a class="primary-launch" id="launchGame" href="https://acakebread.github.io/TileStormEvo/WebGL/" data-launch-game>Launch</a>
+      <div class="footer-actions">
+        <a class="primary-launch" id="launchGame" href="https://acakebread.github.io/TileStormEvo/WebGL/" data-launch-game>Launch</a>
+        <a class="help-link icon-button" href="./help.html" aria-label="Open help" title="Help">?</a>
+      </div>
       <div class="news-strip" aria-label="Latest update">
         <span class="news-strip-text" id="newsStripText">Eggbot has news... community catalogue online.</span>
       </div>

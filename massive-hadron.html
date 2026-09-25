@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Massive Hadron</title>
+  <link rel="canonical" href="https://www.massivehadron.com/massive-hadron.html">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #081016;
+      --panel: #121923;
+      --text: #f2f6fb;
+      --muted: #a8b7c8;
+      --border: #2a394a;
+      --tile-azure: #8cebed;
+      --tile-community: #f5e69e;
+    }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font: 16px/1.5 "Segoe UI", "Trebuchet MS", system-ui, sans-serif;
+    }
+
+    .video-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      overflow: hidden;
+      pointer-events: none;
+      background: url("./web_portal_background.png") center top / cover no-repeat;
+    }
+
+    .video-backdrop video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      filter: brightness(0.74) saturate(1.04);
+    }
+
+    .video-backdrop::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(7, 12, 18, 0.48), rgba(7, 12, 18, 0.84));
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .video-backdrop video {
+        display: none;
+      }
+    }
+
+    .wrap {
+      position: relative;
+      z-index: 1;
+      box-sizing: border-box;
+      max-width: 1040px;
+      margin: 6vh auto;
+      padding: 28px;
+    }
+
+    .card {
+      background: rgba(18, 25, 35, 0.92);
+      backdrop-filter: blur(10px) saturate(1.08);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 32px;
+      box-shadow: 0 28px 80px rgba(0, 0, 0, 0.45);
+    }
+
+    .masthead {
+      display: grid;
+      grid-template-columns: 136px minmax(0, 1fr);
+      gap: 24px;
+      align-items: center;
+      margin-bottom: 28px;
+    }
+
+    .studio-mark {
+      width: 136px;
+      height: 136px;
+      object-fit: contain;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(2.2rem, 5vw, 3.5rem);
+      line-height: 1;
+      letter-spacing: 0;
+      color: var(--tile-azure);
+      text-shadow: 0 0 18px rgba(140, 235, 237, 0.22);
+    }
+
+    h2 {
+      margin: 26px 0 12px;
+      color: var(--tile-community);
+      font-size: 1.22rem;
+    }
+
+    p {
+      margin: 0 0 14px;
+      color: var(--muted);
+    }
+
+    a {
+      color: var(--tile-azure);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .team {
+      display: grid;
+      gap: 12px;
+    }
+
+    .person {
+      display: grid;
+      grid-template-columns: 86px minmax(0, 1fr);
+      gap: 16px;
+      align-items: center;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: rgba(8, 15, 22, 0.48);
+    }
+
+    .portrait-placeholder {
+      width: 86px;
+      aspect-ratio: 1;
+      border: 1px solid rgba(140, 235, 237, 0.28);
+      border-radius: 12px;
+      background:
+        linear-gradient(180deg, rgba(140, 235, 237, 0.13), rgba(245, 230, 158, 0.08)),
+        rgba(7, 16, 24, 0.72);
+    }
+
+    .person h3 {
+      margin: 0 0 4px;
+      font-size: 1.04rem;
+      color: var(--text);
+    }
+
+    .person p {
+      margin-bottom: 0;
+    }
+
+    .links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 24px;
+    }
+
+    .button-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 38px;
+      padding: 0 14px;
+      border: 1px solid rgba(140, 235, 237, 0.55);
+      border-radius: 8px;
+      background: rgba(7, 16, 24, 0.78);
+      color: var(--text);
+      font-weight: 700;
+    }
+
+    .button-link:hover {
+      filter: brightness(1.08);
+      text-decoration: none;
+    }
+
+    @media (max-width: 620px) {
+      .wrap {
+        margin: 0;
+        padding: 14px;
+      }
+
+      .card {
+        padding: 22px;
+        border-radius: 18px;
+      }
+
+      .masthead,
+      .person {
+        grid-template-columns: 1fr;
+      }
+
+      .studio-mark {
+        width: 108px;
+        height: 108px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="video-backdrop" aria-hidden="true">
+    <video autoplay muted loop playsinline poster="./web_portal_background.png">
+      <source src="./preview.webm" type="video/webm">
+      <source src="./preview.mkv" type="video/x-matroska">
+    </video>
+  </div>
+  <main class="wrap">
+    <section class="card">
+      <div class="masthead">
+        <img class="studio-mark" src="./massive%20hadron%20logo.png" alt="Massive Hadron">
+        <div>
+          <h1>Massive Hadron</h1>
+          <p>Massive Hadron is a small Guildford based company with a team consisting of Andrew Cakebread, designer and main developer; Mike Green, artist; Adrian Moore, original music; and Enrica Sciandrone, additional music.</p>
+        </div>
+      </div>
+
+      <h2>Team</h2>
+      <div class="team">
+        <article class="person">
+          <div class="portrait-placeholder" aria-hidden="true"></div>
+          <div>
+            <h3>Andrew Cakebread</h3>
+            <p>Designer and main developer. Placeholder bio: Andrew is excellent at shaping TileStorm&apos;s systems, tools, and overall design direction.</p>
+          </div>
+        </article>
+        <article class="person">
+          <div class="portrait-placeholder" aria-hidden="true"></div>
+          <div>
+            <h3>Mike Green</h3>
+            <p>Artist. Placeholder bio: Mike is excellent at giving the world its distinctive look, character, and visual charm.</p>
+          </div>
+        </article>
+        <article class="person">
+          <div class="portrait-placeholder" aria-hidden="true"></div>
+          <div>
+            <h3>Adrian Moore</h3>
+            <p>Original music. Placeholder bio: Adrian is excellent at creating the musical identity and atmosphere around the game.</p>
+          </div>
+        </article>
+        <article class="person">
+          <div class="portrait-placeholder" aria-hidden="true"></div>
+          <div>
+            <h3>Enrica Sciandrone</h3>
+            <p>Additional music. Placeholder bio: Enrica is excellent at adding musical colour, depth, and extra personality.</p>
+          </div>
+        </article>
+      </div>
+
+      <div class="links">
+        <a class="button-link" href="./">Back to maps</a>
+        <a class="button-link" href="./help.html">Help</a>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
