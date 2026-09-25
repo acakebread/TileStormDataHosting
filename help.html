@@ -40,14 +40,14 @@
       width: 100%;
       height: 100%;
       object-fit: cover;
-      filter: brightness(0.62) saturate(1.02);
+      filter: brightness(0.74) saturate(1.04);
     }
 
     .video-backdrop::after {
       content: "";
       position: absolute;
       inset: 0;
-      background: linear-gradient(180deg, rgba(7, 12, 18, 0.66), rgba(7, 12, 18, 0.92));
+      background: linear-gradient(180deg, rgba(7, 12, 18, 0.48), rgba(7, 12, 18, 0.84));
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -163,6 +163,19 @@
       text-decoration: none;
     }
 
+    .video-icon-link {
+      width: 40px;
+      min-height: 40px;
+      padding: 0;
+    }
+
+    .video-icon-link img {
+      width: 24px;
+      height: 24px;
+      object-fit: contain;
+      display: block;
+    }
+
     @media (max-width: 520px) {
       .wrap {
         margin: 0;
@@ -222,6 +235,9 @@
         <a class="button-link" href="./content-authoring-guide.html">Authoring guide</a>
         <a class="button-link" href="./README.md">Repository notes</a>
         <a class="button-link" href="./technical-notes.md">Technical notes</a>
+        <a class="button-link video-icon-link" href="./video-preview.html" aria-label="See background video" title="See background video">
+          <img src="./film-2-128.png" alt="">
+        </a>
       </div>
     </section>
   </main>
