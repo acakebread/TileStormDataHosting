@@ -56,6 +56,8 @@
       --muted: #a8b7c8;
       --accent: #69c8ff;
       --accent-strong: #f0c35b;
+      --tile-azure: #8cebed;
+      --tile-community: #f5e69e;
       --danger: #ff7979;
       --danger-bg: #411b22;
       --border: #2a394a;
@@ -113,25 +115,78 @@
     }
 
     .site-banner-inner {
-      max-width: 980px;
-      min-height: 54px;
+      max-width: 1040px;
+      min-height: 132px;
       margin: 0 auto;
-      padding: 6px 28px;
-      display: flex;
-      gap: 12px;
+      padding: 14px 28px;
+      display: grid;
+      grid-template-columns: 132px minmax(0, 1fr) 48px;
+      gap: 18px;
       align-items: center;
+    }
+
+    .brand-mark-link {
+      display: block;
+      line-height: 0;
+    }
+
+    .brand-mark-link:hover {
+      filter: brightness(1.08);
+      text-decoration: none;
+    }
+
+    .brand-mark {
+      width: 130px;
+      height: 112px;
+      flex: 0 0 auto;
+      object-fit: contain;
+      object-position: center bottom;
+      mix-blend-mode: lighten;
+      -webkit-mask-image: radial-gradient(ellipse 66% 70% at 50% 53%, #000 58%, rgba(0, 0, 0, 0.75) 72%, transparent 100%);
+      mask-image: radial-gradient(ellipse 66% 70% at 50% 53%, #000 58%, rgba(0, 0, 0, 0.75) 72%, transparent 100%);
+    }
+
+    .brand-copy {
+      flex: 1 1 auto;
+      min-width: 0;
+      display: grid;
+      gap: 8px;
+      justify-items: center;
+      text-align: center;
     }
 
     .site-title {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.32em;
       font-weight: 800;
-      white-space: nowrap;
+      font-size: clamp(2.2rem, 4vw, 3.35rem);
+      line-height: 1;
+      letter-spacing: 0;
+    }
+
+    .site-title-tile {
+      color: var(--tile-azure);
+      text-shadow: 0 0 18px rgba(140, 235, 237, 0.24);
+    }
+
+    .site-title-evolution {
+      color: var(--tile-community);
+    }
+
+    .site-slogan {
+      max-width: 640px;
+      color: #c3d0dc;
+      font-size: clamp(0.95rem, 1.6vw, 1.08rem);
+      line-height: 1.35;
     }
 
     .banner-actions {
-      margin-left: auto;
       display: flex;
-      gap: 10px;
+      gap: 8px;
       align-items: center;
+      justify-content: flex-end;
     }
 
     .help-link {
@@ -156,8 +211,63 @@
       position: relative;
       z-index: 1;
       max-width: 980px;
-      margin: 4vh auto 6vh;
+      margin: 22px auto 96px;
       padding: 28px;
+    }
+
+    .launch-footer {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 22;
+      background: rgba(8, 16, 22, 0.94);
+      border-top: 1px solid rgba(140, 235, 237, 0.22);
+      box-shadow: 0 -14px 36px rgba(0, 0, 0, 0.30);
+      backdrop-filter: blur(12px) saturate(1.08);
+    }
+
+    .launch-footer-inner {
+      max-width: 1040px;
+      min-height: 58px;
+      margin: 0 auto;
+      padding: 8px 28px;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 16px;
+      align-items: center;
+    }
+
+    .news-strip {
+      overflow: hidden;
+      color: #c3d0dc;
+      font-size: 0.92rem;
+      white-space: nowrap;
+      mask-image: linear-gradient(90deg, transparent, black 8%, black 92%, transparent);
+    }
+
+    .news-strip-text {
+      display: inline-block;
+      min-width: max-content;
+      padding-right: 52px;
+      animation: news-scroll 28s linear infinite;
+    }
+
+    @keyframes news-scroll {
+      from {
+        transform: translateX(0);
+      }
+
+      to {
+        transform: translateX(-100%);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .news-strip-text {
+        padding-left: 0;
+        animation: none;
+      }
     }
 
     .card {
@@ -167,25 +277,6 @@
       border-radius: 24px;
       padding: 32px;
       box-shadow: 0 28px 80px rgba(0, 0, 0, 0.45);
-    }
-
-    .hero {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 14px;
-    }
-
-    .hero-copy {
-      display: grid;
-      gap: 16px;
-    }
-
-    h1 {
-      margin: 0;
-      max-width: none;
-      font-size: clamp(2rem, 5vw, 3.1rem);
-      letter-spacing: 0;
-      line-height: 1.04;
     }
 
     h2 {
@@ -220,13 +311,14 @@
       align-items: center;
       justify-content: center;
       min-height: 38px;
-      padding: 0 16px;
+      padding: 0 18px;
       border-radius: 8px;
-      background: linear-gradient(180deg, #f4cf72, #bf8424);
-      color: #171008;
+      background: linear-gradient(135deg, var(--tile-azure), var(--tile-community));
+      border: 1px solid rgba(140, 235, 237, 0.70);
+      color: #061217;
       font-weight: 800;
       letter-spacing: 0.01em;
-      box-shadow: 0 10px 24px rgba(191, 132, 36, 0.22);
+      box-shadow: 0 10px 28px rgba(140, 235, 237, 0.22);
     }
 
     .primary-launch:hover {
@@ -235,9 +327,7 @@
     }
 
     .section {
-      margin-top: 24px;
-      padding-top: 20px;
-      border-top: 1px solid var(--border);
+      margin-top: 0;
     }
 
     .toolbar {
@@ -340,6 +430,37 @@
       overflow-wrap: anywhere;
     }
 
+    .file-row {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      min-width: 0;
+    }
+
+    .download-icon-link {
+      width: 20px;
+      height: 20px;
+      flex: 0 0 auto;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 5px;
+    }
+
+    .download-icon-link:hover {
+      background: rgba(140, 235, 237, 0.12);
+      text-decoration: none;
+    }
+
+    .download-icon {
+      width: 15px;
+      height: 15px;
+      display: block;
+      background: var(--tile-azure);
+      -webkit-mask: url("./save-256.png") center / contain no-repeat;
+      mask: url("./save-256.png") center / contain no-repeat;
+    }
+
     .key-meta {
       color: var(--accent-strong);
       font-weight: 700;
@@ -348,6 +469,11 @@
     .launch-count {
       color: #bfe7ff;
       font-size: 0.92rem;
+    }
+
+    .launch-footer .launch-count {
+      font-size: 0.78rem;
+      line-height: 1.2;
     }
 
     .entry-actions,
@@ -442,13 +568,45 @@
 
     @media (max-width: 520px) {
       .site-banner-inner {
-        padding: 6px 14px;
+        min-height: 108px;
+        padding: 10px 14px;
+        grid-template-columns: 76px minmax(0, 1fr) 38px;
+        gap: 10px;
+      }
+
+      .brand-mark {
+        width: 76px;
+        height: 84px;
       }
 
       .site-title {
-        max-width: 34vw;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        font-size: 1.55rem;
+      }
+
+      .site-slogan {
+        font-size: 0.72rem;
+        line-height: 1.25;
+      }
+
+      .banner-actions {
+        gap: 7px;
+      }
+
+      .launch-footer-inner {
+        min-height: 54px;
+        padding: 8px 14px;
+        grid-template-columns: auto minmax(0, 1fr);
+        gap: 10px;
+      }
+
+      .news-strip {
+        font-size: 0.78rem;
+      }
+
+      .primary-launch {
+        min-height: 30px;
+        padding: 0 10px;
+        font-size: 0.85rem;
       }
 
       .wrap {
@@ -459,11 +617,6 @@
       .card {
         padding: 22px;
         border-radius: 18px;
-      }
-
-      h1 {
-        max-width: none;
-        font-size: clamp(2rem, 12vw, 3rem);
       }
 
       .entry-top {
@@ -494,31 +647,29 @@
 <body>
   <div class="video-backdrop" aria-hidden="true">
     <video autoplay muted loop playsinline poster="./web_portal_background.png">
+      <source src="./preview.webm" type="video/webm">
       <source src="./preview.mkv" type="video/x-matroska">
     </video>
   </div>
   <header class="site-banner">
     <div class="site-banner-inner">
-      <div class="site-title">TileStorm Evolution</div>
+      <a class="brand-mark-link" href="https://acakebread.github.io/TileStormEvo/WebGL/" data-launch-game aria-label="Launch TileStorm Evolution">
+        <img class="brand-mark" src="./eggbot_render.png" alt="" aria-hidden="true">
+      </a>
+      <div class="brand-copy">
+        <div class="site-title" aria-label="TileStorm Evolution">
+          <span class="site-title-tile">TileStorm</span>
+          <span class="site-title-evolution">Evolution</span>
+        </div>
+        <div class="site-slogan">Eggbot is back from the team at Massive Hadron. Play classic maps, or create and share your own with the community.</div>
+      </div>
       <div class="banner-actions">
         <a class="help-link" href="./help.html" aria-label="Open help" title="Help">?</a>
-        <a class="primary-launch" id="launchGame" href="https://acakebread.github.io/TileStormEvo/WebGL/">Launch</a>
-        <div class="launch-count" id="appLaunchCount" hidden></div>
       </div>
     </div>
   </header>
   <main class="wrap">
     <section class="card">
-      <div class="hero">
-        <div class="hero-copy">
-          <h1>TileStorm Evolution</h1>
-          <div>
-            <p>Browse shared community maps, launch them directly in the WebGL build, or download them for local testing.</p>
-            <p>Choose a map below to open TileStorm Evolution with that map loaded.</p>
-          </div>
-        </div>
-      </div>
-
       <div class="section">
         <div class="toolbar">
           <button id="refresh">Refresh map list</button>
@@ -550,6 +701,15 @@
       </details>
     </section>
   </main>
+  <footer class="launch-footer" aria-label="TileStorm Evolution launch and updates">
+    <div class="launch-footer-inner">
+      <a class="primary-launch" id="launchGame" href="https://acakebread.github.io/TileStormEvo/WebGL/" data-launch-game>Launch</a>
+      <div class="news-strip" aria-label="Latest update">
+        <span class="news-strip-text" id="newsStripText">Community catalogue online - Eggbot is back - classic maps, fresh creations, and new shared levels from the TileStorm community.</span>
+      </div>
+      <div class="launch-count" id="appLaunchCount" hidden></div>
+    </div>
+  </footer>
 
   <script>
     const owner = "acakebread";
@@ -571,6 +731,7 @@
     const clearTokenBtn = document.getElementById("clearToken");
     const adminStatusEl = document.getElementById("adminStatus");
     const appLaunchCountEl = document.getElementById("appLaunchCount");
+    const newsStripTextEl = document.getElementById("newsStripText");
 
     let currentManifest = null;
     let adminToken = "";
@@ -684,6 +845,48 @@
       return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
     }
 
+    function formatMapTitle(entry) {
+      return String(entry?.name || entry?.fileName || entry?.id || "Untitled");
+    }
+
+    function updateNewsTicker(entries) {
+      const liveEntries = Array.isArray(entries) ? entries.filter(Boolean) : [];
+      const messages = [];
+
+      if (liveEntries.length > 0) {
+        messages.push(`${liveEntries.length} community ${liveEntries.length === 1 ? "map" : "maps"} online`);
+
+        const counted = liveEntries
+          .map(entry => ({ entry, count: mapLaunchCounts.get(getMapHash(entry)) }))
+          .filter(item => Number.isFinite(item.count))
+          .sort((a, b) => b.count - a.count);
+        if (counted.length > 0) {
+          const top = counted[0];
+          messages.push(`Most played: ${formatMapTitle(top.entry)} with ${top.count.toLocaleString("en-GB")} ${top.count === 1 ? "play" : "plays"}`);
+        } else if (loadingMapLaunchCounts) {
+          messages.push("Loading play-count highlights");
+        }
+
+        const newest = [...liveEntries].sort((a, b) =>
+          (Date.parse(b.updatedUtc) || 0) - (Date.parse(a.updatedUtc) || 0)
+        )[0];
+        if (newest) {
+          messages.push(`Newest share: ${formatMapTitle(newest)}`);
+        }
+
+        const smallest = [...liveEntries]
+          .filter(entry => Number(entry.sizeBytes) > 0)
+          .sort((a, b) => Number(a.sizeBytes) - Number(b.sizeBytes))[0];
+        if (smallest) {
+          messages.push(`Lightest download: ${formatMapTitle(smallest)} at ${formatBytes(smallest.sizeBytes)}`);
+        }
+      }
+
+      messages.push("Eggbot is back from the team at Massive Hadron");
+      messages.push("Create and share your own TileStorm maps with the community");
+      newsStripTextEl.textContent = messages.join(" - ");
+    }
+
     function trackAnalyticsEvent(path, title) {
       window.TileStormAnalytics?.track(path, title, true);
     }
@@ -748,6 +951,7 @@
       if (!entries || entries.length === 0) {
         manifestEl.innerHTML = '<div class="empty">No maps have been uploaded yet.</div>';
         summaryEl.textContent = repositoryName ? `${repositoryName} | ${generatedUtc || "unknown time"}` : "";
+        updateNewsTicker([]);
         return;
       }
 
@@ -760,6 +964,7 @@
       }
 
       summaryEl.textContent = `${repositoryName || "TileStorm Shared Maps"} | ${entries.length} map(s) | ${generatedUtc || "unknown time"}`;
+      updateNewsTicker(entries);
       manifestEl.innerHTML = sortEntries(entries).map(entry => {
         const fileName = entry.fileName || "";
         const pagesUrl = normaliseFileUrl(fileName, entry.downloadUrl);
@@ -773,7 +978,7 @@
               ${thumbUrl ? `<a class="entry-thumb-link" href="${escapeHtml(openUrl)}" data-launch-map="${escapeHtml(launchId)}" aria-label="Open ${escapeHtml(entry.name || fileName || entry.id || "map")} in TileStorm"><img class="entry-thumb" src="${escapeHtml(thumbUrl)}" alt="${escapeHtml(entry.name || fileName || entry.id || "Untitled")} thumbnail"></a>` : ""}
               <div class="entry-copy">
                 <h2>${escapeHtml(entry.name || fileName || entry.id || "Untitled")}</h2>
-                <div class="meta">${fileName ? `<a class="file-link" href="${escapeHtml(pagesUrl)}">${escapeHtml(fileName)}</a>` : ""}</div>
+                <div class="meta">${fileName ? `<div class="file-row"><a class="download-icon-link" href="${escapeHtml(pagesUrl)}" aria-label="Download ${escapeHtml(fileName)}" title="Download ${escapeHtml(fileName)}"><span class="download-icon" aria-hidden="true"></span></a><a class="file-link" href="${escapeHtml(pagesUrl)}">${escapeHtml(fileName)}</a></div>` : ""}</div>
                 <div class="meta">${escapeHtml(formatBytes(entry.sizeBytes))} | ${escapeHtml(formatTimestamp(entry.updatedUtc))}</div>
                 <div class="meta key-meta">${escapeHtml(launchId ? `Key ${launchId}` : "No key available")}</div>
                 ${launchId ? `<div class="launch-count" data-map-launch-count="${escapeHtml(launchId)}" ${launchCount == null ? "hidden" : ""}>${launchCount == null ? "" : `${launchCount.toLocaleString("en-GB")} ${launchCount === 1 ? "play" : "plays"}`}</div>` : ""}
@@ -797,6 +1002,7 @@
       loadingMapLaunchCounts = false;
       sortStatusEl.textContent = "";
       summaryEl.textContent = "Loading manifest...";
+      updateNewsTicker([]);
       setFreshnessStatus("");
       manifestEl.innerHTML = "";
       try {
@@ -969,8 +1175,10 @@
       }
     });
 
-    document.getElementById("launchGame").addEventListener("click", () => {
-      trackAnalyticsEvent("game-launch-clicked", "Launch TileStorm Evolution clicked");
+    document.querySelectorAll("[data-launch-game]").forEach(link => {
+      link.addEventListener("click", () => {
+        trackAnalyticsEvent("game-launch-clicked", "Launch TileStorm Evolution clicked");
+      });
     });
 
     saveTokenBtn.addEventListener("click", () => {
