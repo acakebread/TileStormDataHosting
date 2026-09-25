@@ -13,6 +13,8 @@
       --muted: #a8b7c8;
       --accent: #69c8ff;
       --gold: #f0c35b;
+      --tile-azure: #8cebed;
+      --tile-community: #f5e69e;
       --border: #2a394a;
     }
     html, body {
@@ -39,8 +41,10 @@
       box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
     }
     h1, h2 { line-height: 1.12; }
-    h1 { margin: 0 0 14px; font-size: clamp(2rem, 5vw, 3.2rem); letter-spacing: -0.04em; }
-    h2 { margin: 30px 0 8px; font-size: 1.08rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--accent); }
+    h1 { margin: 0 0 14px; font-size: clamp(2rem, 5vw, 3.2rem); letter-spacing: 0; }
+    h2 { margin: 30px 0 8px; font-size: 1.08rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--tile-community); }
+    .title-tile { color: var(--tile-azure); text-shadow: 0 0 18px rgba(140, 235, 237, 0.24); }
+    .title-community { color: var(--tile-community); }
     p, li { color: var(--muted); }
     a { color: var(--accent); text-decoration: none; }
     a:hover { text-decoration: underline; }
@@ -61,7 +65,7 @@
   <main class="wrap">
     <section class="card">
       <p><a href="./index.html">Back to map portal</a></p>
-      <h1>TileStorm Evolution Authoring Guide</h1>
+      <h1><span class="title-tile">TileStorm</span> <span class="title-community">Authoring Guide</span></h1>
       <p>Create a map in TileStorm Evolution, test it in play mode, then publish it to the shared community catalogue when it is ready for others to try.</p>
 
       <div class="callout">

@@ -190,20 +190,10 @@
     }
 
     .help-link {
-      width: 36px;
-      height: 36px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      border: 1px solid var(--border);
-      border-radius: 50%;
-      color: var(--text);
-      background: rgba(255, 255, 255, 0.06);
       font-weight: 800;
     }
 
     .help-link:hover {
-      background: rgba(255, 255, 255, 0.12);
       text-decoration: none;
     }
 
@@ -314,7 +304,7 @@
       min-height: 38px;
       padding: 0 18px;
       border-radius: 8px;
-      background: linear-gradient(135deg, var(--tile-azure), var(--tile-community));
+      background: var(--tile-azure);
       border: 1px solid rgba(140, 235, 237, 0.70);
       color: #061217;
       font-weight: 800;
@@ -345,6 +335,46 @@
       align-items: center;
     }
 
+    .filter-control {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      border: 0;
+      margin: 0;
+      padding: 0;
+    }
+
+    .filter-label {
+      color: var(--muted);
+      padding: 0;
+    }
+
+    .filter-option input {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .filter-option span {
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 0 11px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--muted);
+      background: rgba(7, 16, 24, 0.78);
+      cursor: pointer;
+    }
+
+    .filter-option input:checked + span {
+      color: #061217;
+      border-color: rgba(140, 235, 237, 0.74);
+      background: var(--tile-azure);
+      font-weight: 800;
+    }
+
     .sort-control select {
       max-width: 100%;
       background: #071018;
@@ -373,9 +403,18 @@
       border-radius: 15px;
       padding: 16px;
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-columns: minmax(0, 1fr) minmax(220px, 0.38fr);
       gap: 14px;
       align-items: center;
+      cursor: pointer;
+      transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+    }
+
+    .entry:hover,
+    .entry:focus-visible {
+      background: rgba(13, 22, 32, 0.88);
+      border-color: rgba(140, 235, 237, 0.55);
+      outline: none;
     }
 
     .entry-top {
@@ -385,6 +424,7 @@
     }
 
     .entry-thumb-link {
+      position: relative;
       display: block;
       width: 180px;
       max-width: 42vw;
@@ -410,13 +450,72 @@
     }
 
     .entry-thumb-link:hover .entry-thumb {
-      filter: brightness(1.12);
+      filter: brightness(1.12) saturate(1.08);
       transform: translateY(-1px);
+      border-color: var(--tile-azure);
+      box-shadow: 0 0 0 2px rgba(140, 235, 237, 0.28), 0 12px 26px rgba(0, 0, 0, 0.32);
     }
 
     .entry-copy {
       flex: 1 1 auto;
       min-width: 0;
+    }
+
+    .entry-title-line {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: baseline;
+      margin-bottom: 4px;
+    }
+
+    .entry-title-line h2 {
+      margin: 0;
+    }
+
+    .entry-key {
+      color: var(--accent-strong);
+      font-weight: 800;
+    }
+
+    .entry-meta-line {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 9px;
+      margin-top: 5px;
+    }
+
+    .entry-meta-line span + span::before {
+      content: "|";
+      color: #5d7083;
+      margin-right: 9px;
+    }
+
+    .entry-blurb {
+      align-self: stretch;
+      display: grid;
+      gap: 7px;
+      align-content: center;
+      color: #c6d3df;
+      font-size: 0.92rem;
+      line-height: 1.36;
+    }
+
+    .entry-blurb strong {
+      color: var(--tile-community);
+    }
+
+    .admin-thumb-link {
+      position: absolute;
+      right: 8px;
+      bottom: 8px;
+      width: auto;
+      padding: 2px 6px;
+      border-radius: 5px;
+      background: rgba(8, 16, 22, 0.82);
+      color: var(--danger);
+      font-size: 0.78rem;
+      text-align: right;
     }
 
     .meta {
@@ -462,11 +561,6 @@
       mask: url("./save-256.png") center / contain no-repeat;
     }
 
-    .key-meta {
-      color: var(--accent-strong);
-      font-weight: 700;
-    }
-
     .launch-count {
       color: #bfe7ff;
       font-size: 0.92rem;
@@ -488,14 +582,7 @@
     }
 
     .entry-actions {
-      min-width: 118px;
-    }
-
-    .admin-thumb-link {
-      width: 100%;
-      color: var(--danger);
-      font-size: 0.82rem;
-      text-align: right;
+      justify-content: flex-start;
     }
 
     .empty {
@@ -524,6 +611,23 @@
       padding: 10px 14px;
       font: inherit;
       cursor: pointer;
+    }
+
+    .icon-button {
+      width: 40px;
+      height: 40px;
+      min-height: 40px;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--tile-azure);
+      font-size: 1.25rem;
+      line-height: 1;
+      background: rgba(7, 16, 24, 0.78);
+      border: 1px solid rgba(140, 235, 237, 0.45);
+      border-color: rgba(140, 235, 237, 0.45);
+      border-radius: 8px;
     }
 
     button:hover,
@@ -665,7 +769,7 @@
         <div class="site-slogan">Eggbot is back from the team at Massive Hadron. Play classic maps, or create and share your own with the community.</div>
       </div>
       <div class="banner-actions">
-        <a class="help-link" href="./help.html" aria-label="Open help" title="Help">?</a>
+        <a class="help-link icon-button" href="./help.html" aria-label="Open help" title="Help">?</a>
       </div>
     </div>
   </header>
@@ -673,7 +777,7 @@
     <section class="card">
       <div class="section">
         <div class="toolbar">
-          <button id="refresh">Refresh map list</button>
+          <button class="icon-button" id="refresh" aria-label="Refresh map list" title="Refresh map list">↻</button>
           <div class="sort-control">
             <label for="sortBy">Sort by</label>
             <select id="sortBy" aria-describedby="sortStatus">
@@ -682,6 +786,12 @@
               <option value="size-desc">Size: largest first</option>
               <option value="size-asc">Size: smallest first</option>
             </select>
+          </div>
+          <div class="filter-control" role="radiogroup" aria-label="Filter maps by access level">
+            <span class="filter-label">Filter by</span>
+            <label class="filter-option"><input type="radio" name="accessFilter" value="all" checked><span>All</span></label>
+            <label class="filter-option"><input type="radio" name="accessFilter" value="public"><span>Public</span></label>
+            <label class="filter-option"><input type="radio" name="accessFilter" value="restricted"><span>Restricted</span></label>
           </div>
         </div>
         <div id="sortStatus" class="note" role="status"></div>
@@ -726,6 +836,7 @@
     const freshnessEl = document.getElementById("freshness");
     const refreshBtn = document.getElementById("refresh");
     const sortByEl = document.getElementById("sortBy");
+    const accessFilterEls = [...document.querySelectorAll('input[name="accessFilter"]')];
     const sortStatusEl = document.getElementById("sortStatus");
     const adminTokenInput = document.getElementById("adminToken");
     const saveTokenBtn = document.getElementById("saveToken");
@@ -738,7 +849,9 @@
     let adminToken = "";
     let appLaunchCount = null;
     let mapLaunchCounts = new Map();
+    let mapDetails = new Map();
     let loadingMapLaunchCounts = false;
+    let loadingMapDetails = false;
     let manifestLoadId = 0;
 
     function sortEntries(entries) {
@@ -825,6 +938,48 @@
       return hash ? `thumbs/${encodeURIComponent(hash)}.png` : "";
     }
 
+    function getAccessFilter() {
+      return accessFilterEls.find(input => input.checked)?.value || "all";
+    }
+
+    function isJsonMap(entry) {
+      return String(entry?.fileName || "").toLowerCase().endsWith(".json");
+    }
+
+    function getMapMetadataUrl(entry) {
+      const fileName = String(entry?.fileName || "");
+      const fileUrl = normaliseFileUrl(fileName, entry?.downloadUrl);
+      const lowerName = fileName.toLowerCase();
+      if (lowerName.endsWith(".json")) {
+        return fileUrl;
+      }
+      if (lowerName.endsWith(".zip")) {
+        const slashIndex = fileUrl.lastIndexOf("/");
+        const folder = slashIndex >= 0 ? fileUrl.slice(0, slashIndex + 1) : "";
+        const baseName = entry?.mapHash || fileName.replace(/\.[^.]+$/, "");
+        return baseName ? `${folder}${encodeURIComponent(baseName)}.json` : "";
+      }
+      return "";
+    }
+
+    function getMapDetail(entry) {
+      return mapDetails.get(getMapHash(entry)) || mapDetails.get(entry?.fileName || "") || null;
+    }
+
+    function hasPublicEditAccess(entry) {
+      const detail = getMapDetail(entry);
+      return Boolean(detail?.edit);
+    }
+
+    function accessLevelLabel(entry) {
+      return hasPublicEditAccess(entry) ? "public" : "individual";
+    }
+
+    function normaliseAuthor(value) {
+      const author = String(value || "").trim();
+      return !author || /^(player|default)$/i.test(author) ? "anonymous" : author;
+    }
+
     function formatBytes(sizeBytes) {
       const size = Number(sizeBytes || 0);
       if (size <= 0) {
@@ -855,6 +1010,102 @@
 
     function formatMapTitle(entry) {
       return String(entry?.name || entry?.fileName || entry?.id || "Untitled");
+    }
+
+    function hashNumber(value) {
+      return [...String(value || "")].reduce((total, char) => ((total * 31) + char.charCodeAt(0)) >>> 0, 7);
+    }
+
+    function pickPhrase(seed, phrases) {
+      return phrases[hashNumber(seed) % phrases.length];
+    }
+
+    function themePhrase(name, seed) {
+      const lower = String(name || "").toLowerCase();
+      if (lower.includes("egypt")) {
+        return pickPhrase(seed, [
+          "Sun-baked stonework and monument-builder energy.",
+          "A compact journey through pyramid-age puzzle country.",
+          "Ancient sands, clean sightlines, and a hint of mystery."
+        ]);
+      }
+      if (lower.includes("jungle")) {
+        return pickPhrase(seed, [
+          "Lush routes with a little expedition pressure.",
+          "Green edges, hidden turns, and a humid sense of trouble.",
+          "A leafy run built for careful tile-reading."
+        ]);
+      }
+      if (lower.includes("medieval")) {
+        return pickPhrase(seed, [
+          "Castle-town geometry with old-world puzzle rhythm.",
+          "Stone paths and village drama in a tidy challenge space.",
+          "A medieval-flavoured route with sturdy corners."
+        ]);
+      }
+      if (lower.includes("industrial")) {
+        return pickPhrase(seed, [
+          "Hard-edged machinery, bright signals, and factory-floor logic.",
+          "A crisp industrial layout with plenty of readable structure.",
+          "Steel, glow, and precision routing for Eggbot."
+        ]);
+      }
+      if (lower.includes("sandbox")) {
+        return pickPhrase(seed, [
+          "An open testing ground for trying ideas quickly.",
+          "Loose, readable terrain with room to experiment.",
+          "A workshop-style map for poking at the rules."
+        ]);
+      }
+      return pickPhrase(seed, [
+        "A community-made route with its own little personality.",
+        "Fresh terrain from the shared catalogue.",
+        "A compact TileStorm experiment ready for a quick run.",
+        "A handmade challenge from the community shelf.",
+        "A small slice of Eggbot trouble, packaged for play."
+      ]);
+    }
+
+    function difficultyLabel(detail) {
+      const tileCount = Array.isArray(detail?.tiles)
+        ? detail.tiles.filter(tile => Number(tile) > 0).length
+        : (Number(detail?.width) || 0) * (Number(detail?.height) || 0);
+      if (tileCount >= 180) return "high";
+      if (tileCount >= 80) return "medium";
+      return "light";
+    }
+
+    function mapBlurb(entry) {
+      const detail = getMapDetail(entry);
+      const width = Number(detail?.width) || 0;
+      const height = Number(detail?.height) || 0;
+      const footprint = width && height ? `${width} x ${height}` : "unknown";
+      const tileCount = Array.isArray(detail?.tiles)
+        ? detail.tiles.filter(tile => Number(tile) > 0).length
+        : 0;
+      const features = [];
+      if (Array.isArray(detail?.waypoints) && detail.waypoints.length > 0) {
+        features.push(`${detail.waypoints.length} waypoint${detail.waypoints.length === 1 ? "" : "s"}`);
+      }
+      const emitters = Array.isArray(detail?.attachments)
+        ? detail.attachments.filter(item => item?.type === "Emitter").length
+        : 0;
+      if (emitters > 0) {
+        features.push(`${emitters} effect emitter${emitters === 1 ? "" : "s"}`);
+      }
+      const featureText = features.length > 0 ? features.join(", ") : "clean layout data";
+      return {
+        phrase: themePhrase(entry?.name || entry?.fileName, getMapHash(entry)),
+        stats: `${footprint} footprint, ${tileCount || "unknown"} placed tiles, ${difficultyLabel(detail)} estimated difficulty, ${featureText}.`
+      };
+    }
+
+    function filterEntries(entries) {
+      const filter = getAccessFilter();
+      if (filter === "all") {
+        return entries;
+      }
+      return entries.filter(entry => filter === "public" ? hasPublicEditAccess(entry) : !hasPublicEditAccess(entry));
     }
 
     function updateNewsTicker(entries) {
@@ -952,6 +1203,28 @@
       render(currentManifest.entries || [], currentManifest.repositoryName, currentManifest.generatedUtc);
     }
 
+    async function loadMapDetails(entries, loadId) {
+      const metadataEntries = entries
+        .map(entry => ({ entry, metadataUrl: getMapMetadataUrl(entry) }))
+        .filter(item => item.metadataUrl);
+      const details = await Promise.all(metadataEntries.map(async ({ entry, metadataUrl }) => {
+        try {
+          const response = await fetch(`${metadataUrl}?ts=${Date.now()}`, { cache: "no-store" });
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+          return [getMapHash(entry), await response.json()];
+        } catch (error) {
+          return [getMapHash(entry), null];
+        }
+      }));
+      if (loadId !== manifestLoadId) {
+        return;
+      }
+      mapDetails = new Map(details);
+      loadingMapDetails = false;
+    }
+
     function render(entries, repositoryName, generatedUtc) {
       sortStatusEl.textContent = "";
       if (!entries || entries.length === 0) {
@@ -969,9 +1242,18 @@
         }
       }
 
-      summaryEl.textContent = `${repositoryName || "TileStorm Shared Maps"} | ${entries.length} map(s) | ${generatedUtc || "unknown time"}`;
+      if (loadingMapDetails) {
+        sortStatusEl.textContent = [sortStatusEl.textContent, "Loading map details for access filters."].filter(Boolean).join(" ");
+      }
+
+      const visibleEntries = filterEntries(entries);
+      summaryEl.textContent = `${repositoryName || "TileStorm Shared Maps"} | ${visibleEntries.length} of ${entries.length} map(s) | ${generatedUtc || "unknown time"}`;
       updateNewsTicker(entries);
-      manifestEl.innerHTML = sortEntries(entries).map(entry => {
+      if (visibleEntries.length === 0) {
+        manifestEl.innerHTML = '<div class="empty">No maps match this filter.</div>';
+        return;
+      }
+      manifestEl.innerHTML = sortEntries(visibleEntries).map(entry => {
         const fileName = entry.fileName || "";
         const pagesUrl = normaliseFileUrl(fileName, entry.downloadUrl);
         const previewUrl = getPreviewUrl(fileName, entry.downloadUrl);
@@ -979,24 +1261,37 @@
         const openUrl = `${gameUrl}?map=${encodeURIComponent(launchId)}`;
         const thumbUrl = getThumbUrl(entry);
         const launchCount = mapLaunchCounts.get(launchId);
+        const detail = getMapDetail(entry);
+        const author = normaliseAuthor(detail?.author);
+        const blurb = mapBlurb(entry);
+        const playText = Number.isFinite(launchCount) && launchCount > 0
+          ? `${launchCount.toLocaleString("en-GB")} ${launchCount === 1 ? "play" : "plays"}`
+          : "";
         return `
-          <div class="entry">
+          <div class="entry" role="link" tabindex="0" data-launch-map="${escapeHtml(launchId)}" aria-label="Open ${escapeHtml(entry.name || fileName || entry.id || "map")} in TileStorm">
             <div class="entry-top">
-              ${thumbUrl ? `<a class="entry-thumb-link" href="${escapeHtml(openUrl)}" data-launch-map="${escapeHtml(launchId)}" aria-label="Open ${escapeHtml(entry.name || fileName || entry.id || "map")} in TileStorm"><img class="entry-thumb" src="${escapeHtml(thumbUrl)}" alt="${escapeHtml(entry.name || fileName || entry.id || "Untitled")} thumbnail"></a>` : ""}
+              ${thumbUrl ? `<a class="entry-thumb-link" href="${escapeHtml(openUrl)}" data-launch-map="${escapeHtml(launchId)}" aria-label="Open ${escapeHtml(entry.name || fileName || entry.id || "map")} in TileStorm"><img class="entry-thumb" src="${escapeHtml(thumbUrl)}" alt="${escapeHtml(entry.name || fileName || entry.id || "Untitled")} thumbnail">${adminToken ? `<span class="admin-thumb-link">thumbnail</span>` : ""}</a>` : ""}
               <div class="entry-copy">
-                <h2>${escapeHtml(entry.name || fileName || entry.id || "Untitled")}</h2>
+                <div class="entry-title-line">
+                  <h2>${escapeHtml(entry.name || fileName || entry.id || "Untitled")}</h2>
+                  ${launchId ? `<span class="entry-key">[${escapeHtml(launchId)}]</span>` : ""}
+                  ${playText ? `<span class="launch-count" data-map-launch-count="${escapeHtml(launchId)}">${escapeHtml(playText)}</span>` : ""}
+                  ${adminToken && fileName ? `<button class="danger" data-delete-map="${escapeHtml(fileName)}" data-delete-hash="${escapeHtml(launchId)}">Delete</button>` : ""}
+                </div>
                 <div class="meta">${fileName ? `<div class="file-row"><a class="download-icon-link" href="${escapeHtml(pagesUrl)}" download="${escapeHtml(fileName)}" aria-label="Download ${escapeHtml(fileName)}" title="Download ${escapeHtml(fileName)}"><span class="download-icon" aria-hidden="true"></span></a><a class="file-link" href="${escapeHtml(previewUrl)}">${escapeHtml(fileName)}</a></div>` : ""}</div>
-                <div class="meta">${escapeHtml(formatBytes(entry.sizeBytes))} | ${escapeHtml(formatTimestamp(entry.updatedUtc))}</div>
-                <div class="meta key-meta">${escapeHtml(launchId ? `Key ${launchId}` : "No key available")}</div>
-                ${launchId ? `<div class="launch-count" data-map-launch-count="${escapeHtml(launchId)}" ${launchCount == null ? "hidden" : ""}>${launchCount == null ? "" : `${launchCount.toLocaleString("en-GB")} ${launchCount === 1 ? "play" : "plays"}`}</div>` : ""}
+                <div class="meta entry-meta-line">
+                  <span>${escapeHtml(formatBytes(entry.sizeBytes))}</span>
+                  <span>${escapeHtml(formatTimestamp(entry.updatedUtc))}</span>
+                  <span>author: ${escapeHtml(author)}</span>
+                  <span>access level: ${escapeHtml(accessLevelLabel(entry))}</span>
+                </div>
               </div>
             </div>
-            ${adminToken ? `
-              <div class="entry-actions">
-                ${thumbUrl ? `<a class="admin-thumb-link" href="${escapeHtml(thumbUrl)}" target="_blank" rel="noopener">thumbnail</a>` : ""}
-                ${fileName ? `<button class="danger" data-delete-map="${escapeHtml(fileName)}" data-delete-hash="${escapeHtml(launchId)}">Delete</button>` : ""}
-              </div>
-            ` : ""}
+            <div class="entry-blurb">
+              <div><strong>${escapeHtml(accessLevelLabel(entry) === "public" ? "Public access" : "Restricted access")}</strong></div>
+              <div>${escapeHtml(blurb.phrase)}</div>
+              <div>${escapeHtml(blurb.stats)}</div>
+            </div>
           </div>
         `;
       }).join("");
@@ -1006,7 +1301,9 @@
       const loadId = ++manifestLoadId;
       currentManifest = null;
       mapLaunchCounts = new Map();
+      mapDetails = new Map();
       loadingMapLaunchCounts = false;
+      loadingMapDetails = false;
       sortStatusEl.textContent = "";
       summaryEl.textContent = "Loading manifest...";
       updateNewsTicker([]);
@@ -1028,8 +1325,13 @@
         }
         currentManifest = manifest;
         loadingMapLaunchCounts = true;
+        loadingMapDetails = true;
         render(currentManifest.entries || [], currentManifest.repositoryName, currentManifest.generatedUtc);
         verifyManifestFreshness().catch(() => {});
+        await loadMapDetails(currentManifest.entries || [], loadId);
+        if (loadId === manifestLoadId) {
+          render(currentManifest.entries || [], currentManifest.repositoryName, currentManifest.generatedUtc);
+        }
         await loadMapLaunchCounts(currentManifest.entries || [], loadId);
       } catch (error) {
         if (loadId !== manifestLoadId) {
@@ -1181,6 +1483,13 @@
         render(currentManifest.entries || [], currentManifest.repositoryName, currentManifest.generatedUtc);
       }
     });
+    accessFilterEls.forEach(input => {
+      input.addEventListener("change", () => {
+        if (currentManifest) {
+          render(currentManifest.entries || [], currentManifest.repositoryName, currentManifest.generatedUtc);
+        }
+      });
+    });
 
     document.querySelectorAll("[data-launch-game]").forEach(link => {
       link.addEventListener("click", () => {
@@ -1219,33 +1528,60 @@
       }
     });
 
+    function primeMapLaunch(mapHash) {
+      trackAnalyticsEvent(`map-launch-clicked/${mapHash}`, `Map launch clicked: ${mapHash}`);
+      try {
+        localStorage.setItem("TileStormLaunchMap", mapHash);
+        localStorage.setItem("TileStormLaunchMapTime", String(Date.now()));
+      } catch (error) {
+        // The query string on the link remains the primary fallback.
+      }
+    }
+
     document.addEventListener("click", async event => {
-      const launchLink = event.target.closest("[data-launch-map]");
-      if (launchLink) {
-        const mapHash = launchLink.getAttribute("data-launch-map") || "";
-        trackAnalyticsEvent(`map-launch-clicked/${mapHash}`, `Map launch clicked: ${mapHash}`);
+      const deleteButton = event.target.closest("[data-delete-map]");
+      if (deleteButton) {
         try {
-          localStorage.setItem("TileStormLaunchMap", mapHash);
-          localStorage.setItem("TileStormLaunchMapTime", String(Date.now()));
+          await deleteMap(
+            deleteButton.getAttribute("data-delete-map"),
+            deleteButton.getAttribute("data-delete-hash") || ""
+          );
         } catch (error) {
-          // The query string on the link remains the primary fallback.
+          setAdminStatus(error.message || String(error), "error");
         }
         return;
       }
 
-      const deleteButton = event.target.closest("[data-delete-map]");
-      if (!deleteButton) {
+      const launchLink = event.target.closest("a[data-launch-map]");
+      if (launchLink) {
+        primeMapLaunch(launchLink.getAttribute("data-launch-map") || "");
         return;
       }
 
-      try {
-        await deleteMap(
-          deleteButton.getAttribute("data-delete-map"),
-          deleteButton.getAttribute("data-delete-hash") || ""
-        );
-      } catch (error) {
-        setAdminStatus(error.message || String(error), "error");
+      if (event.target.closest("a, button, input, select, textarea, summary, details")) {
+        return;
       }
+
+      const launchRow = event.target.closest(".entry[data-launch-map]");
+      if (launchRow) {
+        const mapHash = launchRow.getAttribute("data-launch-map") || "";
+        primeMapLaunch(mapHash);
+        window.location.href = `${gameUrl}?map=${encodeURIComponent(mapHash)}`;
+      }
+    });
+
+    document.addEventListener("keydown", event => {
+      if (event.key !== "Enter" && event.key !== " ") {
+        return;
+      }
+      const launchRow = event.target.closest?.(".entry[data-launch-map]");
+      if (!launchRow || event.target.closest("a, button, input, select, textarea, summary, details")) {
+        return;
+      }
+      event.preventDefault();
+      const mapHash = launchRow.getAttribute("data-launch-map") || "";
+      primeMapLaunch(mapHash);
+      window.location.href = `${gameUrl}?map=${encodeURIComponent(mapHash)}`;
     });
 
     sortByEl.value = "popular";
