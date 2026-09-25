@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TileStorm Evolution Help</title>
+  <link rel="canonical" href="https://www.massivehadron.com/help.html">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #081016;
+      --panel: #121923;
+      --text: #f2f6fb;
+      --muted: #a8b7c8;
+      --accent: #69c8ff;
+      --border: #2a394a;
+    }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      background:
+        linear-gradient(180deg, rgba(7, 12, 18, 0.74), rgba(7, 12, 18, 0.92)),
+        url("./web_portal_background.png") center top / cover fixed no-repeat,
+        var(--bg);
+      color: var(--text);
+      font: 16px/1.5 "Segoe UI", "Trebuchet MS", system-ui, sans-serif;
+    }
+
+    .wrap {
+      max-width: 780px;
+      margin: 6vh auto;
+      padding: 28px;
+    }
+
+    .card {
+      background: rgba(18, 25, 35, 0.92);
+      backdrop-filter: blur(10px) saturate(1.08);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 30px;
+      box-shadow: 0 28px 80px rgba(0, 0, 0, 0.45);
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: clamp(2rem, 5vw, 3rem);
+      letter-spacing: 0;
+      line-height: 1.05;
+    }
+
+    h2 {
+      margin: 26px 0 8px;
+      font-size: 1.1rem;
+    }
+
+    p,
+    li {
+      color: var(--muted);
+    }
+
+    p {
+      margin: 0 0 14px;
+    }
+
+    ul {
+      margin: 10px 0 0;
+      padding-left: 20px;
+    }
+
+    li {
+      margin-bottom: 7px;
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .button-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 38px;
+      padding: 0 14px;
+      border: 1px solid #5082aa;
+      border-radius: 8px;
+      background: linear-gradient(180deg, #2a628f, #1a4266);
+      color: white;
+    }
+
+    .button-link:hover {
+      filter: brightness(1.08);
+      text-decoration: none;
+    }
+
+    @media (max-width: 520px) {
+      .wrap {
+        margin: 0;
+        padding: 14px;
+      }
+
+      .card {
+        padding: 22px;
+        border-radius: 14px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="card">
+      <h1>TileStorm Evolution Help</h1>
+      <p>Community maps can be opened from the shared map list or from inside TileStorm Evolution.</p>
+
+      <h2>Shared Maps</h2>
+      <ul>
+        <li>Click a map thumbnail to launch TileStorm Evolution with that map selected.</li>
+        <li>Click the JSON filename below a level name if you want to save the map package manually.</li>
+        <li>Start the live build and use Options &gt; Community to browse and import shared maps in-game.</li>
+      </ul>
+
+      <h2>Publishing</h2>
+      <p>Use the authoring guide when you want to create, publish, or update your own shared maps.</p>
+
+      <div class="links">
+        <a class="button-link" href="./">Back to maps</a>
+        <a class="button-link" href="./content-authoring-guide.html">Authoring guide</a>
+        <a class="button-link" href="./README.md">Repository notes</a>
+        <a class="button-link" href="./technical-notes.md">Technical notes</a>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

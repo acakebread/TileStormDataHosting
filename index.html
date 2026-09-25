@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>TileStorm Evolution Data Hosting</title>
+  <title>TileStorm Evolution</title>
   <link rel="canonical" href="https://www.massivehadron.com/">
   <script>
     window.TileStormAnalytics = (() => {
@@ -75,9 +75,59 @@
       font: 16px/1.5 "Segoe UI", "Trebuchet MS", system-ui, sans-serif;
     }
 
+    .site-banner {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: rgba(8, 16, 22, 0.94);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+      box-shadow: 0 14px 36px rgba(0, 0, 0, 0.26);
+      backdrop-filter: blur(12px) saturate(1.08);
+    }
+
+    .site-banner-inner {
+      max-width: 980px;
+      min-height: 54px;
+      margin: 0 auto;
+      padding: 6px 28px;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .site-title {
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .banner-actions {
+      margin-left: auto;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .help-link {
+      width: 36px;
+      height: 36px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--border);
+      border-radius: 50%;
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.06);
+      font-weight: 800;
+    }
+
+    .help-link:hover {
+      background: rgba(255, 255, 255, 0.12);
+      text-decoration: none;
+    }
+
     .wrap {
       max-width: 980px;
-      margin: 6vh auto;
+      margin: 4vh auto 6vh;
       padding: 28px;
     }
 
@@ -93,7 +143,7 @@
     .hero {
       display: grid;
       grid-template-columns: 1fr;
-      gap: 20px;
+      gap: 14px;
     }
 
     .hero-copy {
@@ -103,9 +153,9 @@
 
     h1 {
       margin: 0;
-      max-width: 12.5ch;
-      font-size: clamp(2.2rem, 5vw, 3.7rem);
-      letter-spacing: -0.055em;
+      max-width: none;
+      font-size: clamp(2rem, 5vw, 3.1rem);
+      letter-spacing: 0;
       line-height: 1.04;
     }
 
@@ -136,25 +186,18 @@
       color: #d6efff;
     }
 
-    .launch-panel {
-      background: linear-gradient(135deg, rgba(240, 195, 91, 0.18), rgba(105, 200, 255, 0.10));
-      border: 1px solid rgba(240, 195, 91, 0.35);
-      border-radius: 18px;
-      padding: 20px;
-    }
-
     .primary-launch {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      min-height: 54px;
-      padding: 0 24px;
-      border-radius: 14px;
+      min-height: 38px;
+      padding: 0 16px;
+      border-radius: 8px;
       background: linear-gradient(180deg, #f4cf72, #bf8424);
       color: #171008;
       font-weight: 800;
       letter-spacing: 0.01em;
-      box-shadow: 0 14px 35px rgba(191, 132, 36, 0.26);
+      box-shadow: 0 10px 24px rgba(191, 132, 36, 0.22);
     }
 
     .primary-launch:hover {
@@ -163,8 +206,8 @@
     }
 
     .section {
-      margin-top: 26px;
-      padding-top: 22px;
+      margin-top: 24px;
+      padding-top: 20px;
       border-top: 1px solid var(--border);
     }
 
@@ -209,12 +252,28 @@
       border: 1px solid var(--border);
       border-radius: 15px;
       padding: 16px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 14px;
+      align-items: center;
     }
 
     .entry-top {
       display: flex;
       gap: 14px;
       align-items: flex-start;
+    }
+
+    .entry-thumb-link {
+      display: block;
+      width: 180px;
+      max-width: 42vw;
+      flex: 0 0 auto;
+      border-radius: 12px;
+    }
+
+    .entry-thumb-link:hover {
+      text-decoration: none;
     }
 
     .entry-thumb {
@@ -226,6 +285,13 @@
       border: 1px solid rgba(255,255,255,0.08);
       background: #0e151f;
       flex: 0 0 auto;
+      display: block;
+      transition: filter 160ms ease, transform 160ms ease;
+    }
+
+    .entry-thumb-link:hover .entry-thumb {
+      filter: brightness(1.12);
+      transform: translateY(-1px);
     }
 
     .entry-copy {
@@ -233,34 +299,16 @@
       min-width: 0;
     }
 
-    .readme {
-      background: rgba(8, 15, 22, 0.48);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 16px;
-      margin-top: 18px;
-    }
-
-    .readme ul {
-      margin: 10px 0 0;
-      padding-left: 20px;
-      color: var(--muted);
-    }
-
-    .readme li {
-      margin-bottom: 6px;
-    }
-
-    .readme-links {
-      display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
-      margin-top: 10px;
-    }
-
     .meta {
       color: var(--muted);
       font-size: 0.92rem;
+    }
+
+    .file-link {
+      display: inline-flex;
+      max-width: 100%;
+      color: #d6efff;
+      overflow-wrap: anywhere;
     }
 
     .key-meta {
@@ -278,7 +326,20 @@
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
-      margin-top: 10px;
+      margin-top: 0;
+      justify-content: flex-end;
+      align-items: center;
+    }
+
+    .entry-actions {
+      min-width: 118px;
+    }
+
+    .admin-thumb-link {
+      width: 100%;
+      color: var(--danger);
+      font-size: 0.82rem;
+      text-align: right;
     }
 
     .empty {
@@ -350,14 +411,17 @@
       font-size: 0.95rem;
     }
 
-    @media (min-width: 760px) {
-      .hero {
-        grid-template-columns: minmax(0, 1.08fr) minmax(280px, 0.58fr);
-        align-items: start;
-      }
-    }
-
     @media (max-width: 520px) {
+      .site-banner-inner {
+        padding: 6px 14px;
+      }
+
+      .site-title {
+        max-width: 34vw;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
       .wrap {
         margin: 0;
         padding: 14px;
@@ -377,6 +441,20 @@
         flex-direction: column;
       }
 
+      .entry {
+        grid-template-columns: 1fr;
+      }
+
+      .entry-actions {
+        justify-content: flex-start;
+      }
+
+      .admin-thumb-link {
+        width: auto;
+        text-align: left;
+      }
+
+      .entry-thumb-link,
       .entry-thumb {
         width: 100%;
         max-width: none;
@@ -385,35 +463,25 @@
   </style>
 </head>
 <body>
+  <header class="site-banner">
+    <div class="site-banner-inner">
+      <div class="site-title">TileStorm Evolution</div>
+      <div class="banner-actions">
+        <a class="help-link" href="./help.html" aria-label="Open help" title="Help">?</a>
+        <a class="primary-launch" id="launchGame" href="https://acakebread.github.io/TileStormEvo/WebGL/">Launch</a>
+        <div class="launch-count" id="appLaunchCount" hidden></div>
+      </div>
+    </div>
+  </header>
   <main class="wrap">
     <section class="card">
       <div class="hero">
         <div class="hero-copy">
-          <h1>TileStorm Evolution Data Hosting</h1>
+          <h1>TileStorm Evolution</h1>
           <div>
             <p>Browse shared community maps, launch them directly in the WebGL build, or download them for local testing.</p>
-            <p>Choose a map below to open TileStorm Evolution with that map loaded, or start the game first and use the Community catalogue in-game.</p>
+            <p>Choose a map below to open TileStorm Evolution with that map loaded.</p>
           </div>
-        </div>
-        <div class="launch-panel">
-          <p>Start the live build, then use Options > Community to browse and import shared maps.</p>
-          <a class="primary-launch" id="launchGame" href="https://acakebread.github.io/TileStormEvo/WebGL/">Launch TileStorm Evolution</a>
-          <div class="launch-count" id="appLaunchCount" hidden></div>
-        </div>
-      </div>
-
-      <div class="readme">
-        <h2>How to use shared maps</h2>
-        <p>Community maps can be opened from this page or from inside TileStorm Evolution.</p>
-        <ul>
-          <li>Click <strong>Open in TileStorm</strong> on any map to launch the game with that map selected.</li>
-          <li>Use <strong>Download</strong> if you want to save the map package manually.</li>
-          <li>Open the authoring guide if you want to create, publish, or update your own shared maps.</li>
-        </ul>
-        <div class="readme-links">
-          <a class="button-link" href="./content-authoring-guide.html">Open authoring guide</a>
-          <a class="button-link" href="./README.md">Repository notes</a>
-          <a class="button-link" href="./technical-notes.md">Technical notes</a>
         </div>
       </div>
 
@@ -669,20 +737,18 @@
         return `
           <div class="entry">
             <div class="entry-top">
-              ${thumbUrl ? `<img class="entry-thumb" src="${escapeHtml(thumbUrl)}" alt="${escapeHtml(entry.name || fileName || entry.id || "Untitled")} thumbnail">` : ""}
+              ${thumbUrl ? `<a class="entry-thumb-link" href="${escapeHtml(openUrl)}" data-launch-map="${escapeHtml(launchId)}" aria-label="Open ${escapeHtml(entry.name || fileName || entry.id || "map")} in TileStorm"><img class="entry-thumb" src="${escapeHtml(thumbUrl)}" alt="${escapeHtml(entry.name || fileName || entry.id || "Untitled")} thumbnail"></a>` : ""}
               <div class="entry-copy">
                 <h2>${escapeHtml(entry.name || fileName || entry.id || "Untitled")}</h2>
-                <div class="meta">${escapeHtml(fileName)}</div>
+                <div class="meta">${fileName ? `<a class="file-link" href="${escapeHtml(pagesUrl)}">${escapeHtml(fileName)}</a>` : ""}</div>
                 <div class="meta">${escapeHtml(formatBytes(entry.sizeBytes))} | ${escapeHtml(formatTimestamp(entry.updatedUtc))}</div>
                 <div class="meta key-meta">${escapeHtml(launchId ? `Key ${launchId}` : "No key available")}</div>
                 ${launchId ? `<div class="launch-count" data-map-launch-count="${escapeHtml(launchId)}" ${launchCount == null ? "hidden" : ""}>${launchCount == null ? "" : `${launchCount.toLocaleString("en-GB")} ${launchCount === 1 ? "play" : "plays"}`}</div>` : ""}
               </div>
             </div>
             <div class="entry-actions">
-              ${fileName ? `<a class="button-link" href="${escapeHtml(openUrl)}" data-launch-map="${escapeHtml(launchId)}">Open in TileStorm</a>` : ""}
-              ${fileName ? `<a class="button-link" href="${escapeHtml(pagesUrl)}">Download</a>` : ""}
               ${fileName ? `<a class="button-link" href="${escapeHtml(rawUrl)}" target="_blank" rel="noopener">Raw</a>` : ""}
-              ${thumbUrl ? `<a class="button-link" href="${escapeHtml(thumbUrl)}" target="_blank" rel="noopener">Thumbnail</a>` : ""}
+              ${thumbUrl && adminToken ? `<a class="admin-thumb-link" href="${escapeHtml(thumbUrl)}" target="_blank" rel="noopener">thumbnail</a>` : ""}
               ${fileName && adminToken ? `<button class="danger" data-delete-map="${escapeHtml(fileName)}" data-delete-hash="${escapeHtml(launchId)}">Delete</button>` : ""}
             </div>
           </div>
