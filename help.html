@@ -14,6 +14,8 @@
       --muted: #a8b7c8;
       --accent: #69c8ff;
       --border: #2a394a;
+      --tile-azure: #8cebed;
+      --tile-community: #f5e69e;
     }
 
     html,
@@ -72,7 +74,7 @@
     }
 
     h1 {
-      margin: 0 0 12px;
+      margin: 0;
       font-size: clamp(2rem, 5vw, 3rem);
       letter-spacing: 0;
       line-height: 1.05;
@@ -81,6 +83,32 @@
     h2 {
       margin: 26px 0 8px;
       font-size: 1.1rem;
+      color: var(--tile-community);
+    }
+
+    .masthead {
+      display: flex;
+      gap: 18px;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .brand-mark {
+      width: 96px;
+      height: 84px;
+      object-fit: contain;
+      mix-blend-mode: lighten;
+      -webkit-mask-image: radial-gradient(ellipse 66% 70% at 50% 53%, #000 58%, rgba(0, 0, 0, 0.75) 72%, transparent 100%);
+      mask-image: radial-gradient(ellipse 66% 70% at 50% 53%, #000 58%, rgba(0, 0, 0, 0.75) 72%, transparent 100%);
+    }
+
+    .title-tile {
+      color: var(--tile-azure);
+      text-shadow: 0 0 18px rgba(140, 235, 237, 0.24);
+    }
+
+    .title-community {
+      color: var(--tile-community);
     }
 
     p,
@@ -102,7 +130,7 @@
     }
 
     a {
-      color: var(--accent);
+      color: var(--tile-azure);
       text-decoration: none;
     }
 
@@ -123,10 +151,11 @@
       justify-content: center;
       min-height: 38px;
       padding: 0 14px;
-      border: 1px solid #5082aa;
+      border: 1px solid rgba(140, 235, 237, 0.55);
       border-radius: 8px;
-      background: linear-gradient(180deg, #2a628f, #1a4266);
-      color: white;
+      background: linear-gradient(135deg, rgba(140, 235, 237, 0.22), rgba(245, 230, 158, 0.16));
+      color: var(--text);
+      font-weight: 700;
     }
 
     .button-link:hover {
@@ -144,6 +173,16 @@
         padding: 22px;
         border-radius: 14px;
       }
+
+      .masthead {
+        align-items: flex-start;
+        gap: 12px;
+      }
+
+      .brand-mark {
+        width: 68px;
+        height: 62px;
+      }
     }
   </style>
 </head>
@@ -156,8 +195,13 @@
   </div>
   <main class="wrap">
     <section class="card">
-      <h1>TileStorm Evolution Help</h1>
-      <p>Community maps can be opened from the shared map list or from inside TileStorm Evolution.</p>
+      <div class="masthead">
+        <img class="brand-mark" src="./eggbot_render.png" alt="" aria-hidden="true">
+        <div>
+          <h1><span class="title-tile">TileStorm</span> <span class="title-community">Help</span></h1>
+          <p>Community maps can be opened from the shared map list or from inside TileStorm Evolution.</p>
+        </div>
+      </div>
 
       <h2>Shared Maps</h2>
       <ul>

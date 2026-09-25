@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TileStorm Evolution ZIP Preview</title>
+  <link rel="canonical" href="https://www.massivehadron.com/zip-preview.html">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #081016;
+      --panel: #121923;
+      --text: #f2f6fb;
+      --muted: #a8b7c8;
+      --border: #2a394a;
+      --tile-azure: #8cebed;
+      --tile-community: #f5e69e;
+    }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font: 16px/1.5 "Segoe UI", "Trebuchet MS", system-ui, sans-serif;
+    }
+
+    .video-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      overflow: hidden;
+      pointer-events: none;
+      background: url("./web_portal_background.png") center top / cover no-repeat;
+    }
+
+    .video-backdrop video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      filter: brightness(0.58) saturate(1.02);
+    }
+
+    .video-backdrop::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(7, 12, 18, 0.66), rgba(7, 12, 18, 0.92));
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .video-backdrop video {
+        display: none;
+      }
+    }
+
+    .wrap {
+      position: relative;
+      z-index: 1;
+      max-width: 900px;
+      margin: 6vh auto;
+      padding: 28px;
+    }
+
+    .card {
+      background: rgba(18, 25, 35, 0.92);
+      backdrop-filter: blur(10px) saturate(1.08);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 30px;
+      box-shadow: 0 28px 80px rgba(0, 0, 0, 0.45);
+    }
+
+    .masthead {
+      display: flex;
+      gap: 18px;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .brand-mark {
+      width: 92px;
+      height: 82px;
+      object-fit: contain;
+      mix-blend-mode: lighten;
+      -webkit-mask-image: radial-gradient(ellipse 66% 70% at 50% 53%, #000 58%, rgba(0, 0, 0, 0.75) 72%, transparent 100%);
+      mask-image: radial-gradient(ellipse 66% 70% at 50% 53%, #000 58%, rgba(0, 0, 0, 0.75) 72%, transparent 100%);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(2rem, 5vw, 3rem);
+      line-height: 1.05;
+      letter-spacing: 0;
+    }
+
+    .title-tile {
+      color: var(--tile-azure);
+      text-shadow: 0 0 18px rgba(140, 235, 237, 0.24);
+    }
+
+    .title-community {
+      color: var(--tile-community);
+    }
+
+    p {
+      margin: 0 0 14px;
+      color: var(--muted);
+    }
+
+    a {
+      color: var(--tile-azure);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 18px 0;
+    }
+
+    .button-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 38px;
+      padding: 0 14px;
+      border: 1px solid rgba(140, 235, 237, 0.55);
+      border-radius: 8px;
+      background: linear-gradient(135deg, rgba(140, 235, 237, 0.22), rgba(245, 230, 158, 0.16));
+      color: var(--text);
+      font-weight: 700;
+    }
+
+    .button-link:hover {
+      filter: brightness(1.08);
+      text-decoration: none;
+    }
+
+    .status {
+      color: var(--muted);
+    }
+
+    .error {
+      color: #ffc5c5;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 18px;
+      overflow-wrap: anywhere;
+    }
+
+    th,
+    td {
+      padding: 10px 8px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--tile-community);
+      font-size: 0.86rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    td {
+      color: #d9e5ee;
+      font-size: 0.94rem;
+    }
+
+    .num {
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    @media (max-width: 620px) {
+      .wrap {
+        margin: 0;
+        padding: 14px;
+      }
+
+      .card {
+        padding: 22px;
+        border-radius: 14px;
+      }
+
+      .masthead {
+        align-items: flex-start;
+      }
+
+      .brand-mark {
+        width: 64px;
+        height: 58px;
+      }
+
+      table {
+        display: block;
+        overflow-x: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="video-backdrop" aria-hidden="true">
+    <video autoplay muted loop playsinline poster="./web_portal_background.png">
+      <source src="./preview.webm" type="video/webm">
+      <source src="./preview.mkv" type="video/x-matroska">
+    </video>
+  </div>
+  <main class="wrap">
+    <section class="card">
+      <div class="masthead">
+        <img class="brand-mark" src="./eggbot_render.png" alt="" aria-hidden="true">
+        <div>
+          <h1><span class="title-tile">ZIP</span> <span class="title-community">Preview</span></h1>
+          <p id="summary">Reading archive...</p>
+        </div>
+      </div>
+
+      <div class="actions">
+        <a class="button-link" href="./">Back to maps</a>
+        <a class="button-link" id="downloadLink" href="#" download>Download archive</a>
+      </div>
+
+      <div id="status" class="status" role="status">Loading ZIP contents...</div>
+      <div id="contents"></div>
+    </section>
+  </main>
+
+  <script>
+    const statusEl = document.getElementById("status");
+    const summaryEl = document.getElementById("summary");
+    const contentsEl = document.getElementById("contents");
+    const downloadLink = document.getElementById("downloadLink");
+
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, ch => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+      }[ch]));
+    }
+
+    function formatBytes(sizeBytes) {
+      const size = Number(sizeBytes || 0);
+      if (size < 1024) return `${size} B`;
+      if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+      return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+    }
+
+    function readString(view, offset, length) {
+      const bytes = new Uint8Array(view.buffer, view.byteOffset + offset, length);
+      return new TextDecoder("utf-8").decode(bytes);
+    }
+
+    function dosDateTimeToDate(dateValue, timeValue) {
+      const day = dateValue & 0x1f;
+      const month = (dateValue >> 5) & 0x0f;
+      const year = ((dateValue >> 9) & 0x7f) + 1980;
+      const second = (timeValue & 0x1f) * 2;
+      const minute = (timeValue >> 5) & 0x3f;
+      const hour = (timeValue >> 11) & 0x1f;
+      return new Date(year, month - 1, day, hour, minute, second);
+    }
+
+    function parseZipEntries(buffer) {
+      const view = new DataView(buffer);
+      let eocd = -1;
+      for (let i = view.byteLength - 22; i >= Math.max(0, view.byteLength - 66000); i--) {
+        if (view.getUint32(i, true) === 0x06054b50) {
+          eocd = i;
+          break;
+        }
+      }
+
+      if (eocd < 0) {
+        throw new Error("Could not find the ZIP central directory.");
+      }
+
+      const entryCount = view.getUint16(eocd + 10, true);
+      let offset = view.getUint32(eocd + 16, true);
+      const entries = [];
+
+      for (let i = 0; i < entryCount; i++) {
+        if (view.getUint32(offset, true) !== 0x02014b50) {
+          throw new Error("ZIP central directory is not readable.");
+        }
+
+        const method = view.getUint16(offset + 10, true);
+        const modifiedTime = view.getUint16(offset + 12, true);
+        const modifiedDate = view.getUint16(offset + 14, true);
+        const compressedSize = view.getUint32(offset + 20, true);
+        const uncompressedSize = view.getUint32(offset + 24, true);
+        const nameLength = view.getUint16(offset + 28, true);
+        const extraLength = view.getUint16(offset + 30, true);
+        const commentLength = view.getUint16(offset + 32, true);
+        const name = readString(view, offset + 46, nameLength);
+
+        entries.push({
+          name,
+          method,
+          compressedSize,
+          uncompressedSize,
+          modified: dosDateTimeToDate(modifiedDate, modifiedTime)
+        });
+
+        offset += 46 + nameLength + extraLength + commentLength;
+      }
+
+      return entries;
+    }
+
+    function renderEntries(entries, archiveName) {
+      const totalSize = entries.reduce((sum, entry) => sum + entry.uncompressedSize, 0);
+      summaryEl.textContent = `${archiveName} contains ${entries.length} ${entries.length === 1 ? "item" : "items"} (${formatBytes(totalSize)} unpacked).`;
+      statusEl.textContent = "";
+      contentsEl.innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th class="num">Size</th>
+              <th class="num">Compressed</th>
+              <th>Method</th>
+              <th>Modified</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${entries.map(entry => `
+              <tr>
+                <td>${escapeHtml(entry.name)}</td>
+                <td class="num">${escapeHtml(formatBytes(entry.uncompressedSize))}</td>
+                <td class="num">${escapeHtml(formatBytes(entry.compressedSize))}</td>
+                <td>${escapeHtml(entry.method === 0 ? "Stored" : entry.method === 8 ? "Deflated" : `Method ${entry.method}`)}</td>
+                <td>${escapeHtml(Number.isNaN(entry.modified.getTime()) ? "Unknown" : entry.modified.toLocaleString("en-GB"))}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      `;
+    }
+
+    async function loadZip() {
+      const params = new URLSearchParams(window.location.search);
+      const file = params.get("file") || "";
+      const name = params.get("name") || file.split("/").pop() || "archive.zip";
+      if (!file) {
+        throw new Error("No ZIP file was specified.");
+      }
+
+      downloadLink.href = file;
+      downloadLink.download = name;
+      const response = await fetch(file, { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error(`Could not load ZIP: HTTP ${response.status}`);
+      }
+
+      const entries = parseZipEntries(await response.arrayBuffer());
+      renderEntries(entries, name);
+    }
+
+    loadZip().catch(error => {
+      statusEl.className = "status error";
+      statusEl.textContent = error.message || String(error);
+      summaryEl.textContent = "ZIP preview unavailable.";
+    });
+  </script>
+</body>
+</html>

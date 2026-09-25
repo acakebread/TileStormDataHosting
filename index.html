@@ -250,12 +250,13 @@
       display: inline-block;
       min-width: max-content;
       padding-right: 52px;
-      animation: news-scroll 28s linear infinite;
+      animation: news-scroll 30s linear infinite;
+      transform: translateX(100%);
     }
 
     @keyframes news-scroll {
       from {
-        transform: translateX(0);
+        transform: translateX(100%);
       }
 
       to {
@@ -705,7 +706,7 @@
     <div class="launch-footer-inner">
       <a class="primary-launch" id="launchGame" href="https://acakebread.github.io/TileStormEvo/WebGL/" data-launch-game>Launch</a>
       <div class="news-strip" aria-label="Latest update">
-        <span class="news-strip-text" id="newsStripText">Community catalogue online - Eggbot is back - classic maps, fresh creations, and new shared levels from the TileStorm community.</span>
+        <span class="news-strip-text" id="newsStripText">Eggbot has news... community catalogue online.</span>
       </div>
       <div class="launch-count" id="appLaunchCount" hidden></div>
     </div>
@@ -807,6 +808,13 @@
       return `maps/${encodeURIComponent(fileName || "")}`;
     }
 
+    function getPreviewUrl(fileName, downloadUrl) {
+      const fileUrl = normaliseFileUrl(fileName, downloadUrl);
+      return String(fileName || "").toLowerCase().endsWith(".zip")
+        ? `zip-preview.html?file=${encodeURIComponent(fileUrl)}&name=${encodeURIComponent(fileName)}`
+        : fileUrl;
+    }
+
     function getMapHash(entry) {
       const raw = entry?.mapHash || entry?.id || entry?.fileName || "";
       return String(raw).trim();
@@ -851,7 +859,7 @@
 
     function updateNewsTicker(entries) {
       const liveEntries = Array.isArray(entries) ? entries.filter(Boolean) : [];
-      const messages = [];
+      const messages = ["Eggbot has news..."];
 
       if (liveEntries.length > 0) {
         messages.push(`${liveEntries.length} community ${liveEntries.length === 1 ? "map" : "maps"} online`);
@@ -882,8 +890,6 @@
         }
       }
 
-      messages.push("Eggbot is back from the team at Massive Hadron");
-      messages.push("Create and share your own TileStorm maps with the community");
       newsStripTextEl.textContent = messages.join(" - ");
     }
 
@@ -968,6 +974,7 @@
       manifestEl.innerHTML = sortEntries(entries).map(entry => {
         const fileName = entry.fileName || "";
         const pagesUrl = normaliseFileUrl(fileName, entry.downloadUrl);
+        const previewUrl = getPreviewUrl(fileName, entry.downloadUrl);
         const launchId = getMapHash(entry) || fileName;
         const openUrl = `${gameUrl}?map=${encodeURIComponent(launchId)}`;
         const thumbUrl = getThumbUrl(entry);
@@ -978,7 +985,7 @@
               ${thumbUrl ? `<a class="entry-thumb-link" href="${escapeHtml(openUrl)}" data-launch-map="${escapeHtml(launchId)}" aria-label="Open ${escapeHtml(entry.name || fileName || entry.id || "map")} in TileStorm"><img class="entry-thumb" src="${escapeHtml(thumbUrl)}" alt="${escapeHtml(entry.name || fileName || entry.id || "Untitled")} thumbnail"></a>` : ""}
               <div class="entry-copy">
                 <h2>${escapeHtml(entry.name || fileName || entry.id || "Untitled")}</h2>
-                <div class="meta">${fileName ? `<div class="file-row"><a class="download-icon-link" href="${escapeHtml(pagesUrl)}" aria-label="Download ${escapeHtml(fileName)}" title="Download ${escapeHtml(fileName)}"><span class="download-icon" aria-hidden="true"></span></a><a class="file-link" href="${escapeHtml(pagesUrl)}">${escapeHtml(fileName)}</a></div>` : ""}</div>
+                <div class="meta">${fileName ? `<div class="file-row"><a class="download-icon-link" href="${escapeHtml(pagesUrl)}" download="${escapeHtml(fileName)}" aria-label="Download ${escapeHtml(fileName)}" title="Download ${escapeHtml(fileName)}"><span class="download-icon" aria-hidden="true"></span></a><a class="file-link" href="${escapeHtml(previewUrl)}">${escapeHtml(fileName)}</a></div>` : ""}</div>
                 <div class="meta">${escapeHtml(formatBytes(entry.sizeBytes))} | ${escapeHtml(formatTimestamp(entry.updatedUtc))}</div>
                 <div class="meta key-meta">${escapeHtml(launchId ? `Key ${launchId}` : "No key available")}</div>
                 ${launchId ? `<div class="launch-count" data-map-launch-count="${escapeHtml(launchId)}" ${launchCount == null ? "hidden" : ""}>${launchCount == null ? "" : `${launchCount.toLocaleString("en-GB")} ${launchCount === 1 ? "play" : "plays"}`}</div>` : ""}
