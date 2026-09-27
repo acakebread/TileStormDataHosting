@@ -367,23 +367,24 @@
     }
 
     .map-access-note {
-      grid-column: 1 / -1;
-      grid-row: 2;
-      justify-self: end;
-      max-width: 45%;
       color: var(--muted);
       font-size: 0.88rem;
       text-align: right;
     }
 
     .map-summary {
-      grid-column: 1 / -1;
-      grid-row: 2;
       margin-top: 0;
-      padding-right: min(46%, 430px);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+
+    .map-toolbar-meta {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 18px;
+      align-items: baseline;
     }
 
     .map-toolbar-controls {
@@ -827,11 +828,13 @@
 
       .map-access-note,
       .map-summary {
-        grid-column: 1;
-        grid-row: auto;
         max-width: none;
-        padding-right: 0;
         white-space: normal;
+      }
+
+      .map-toolbar-meta {
+        grid-template-columns: 1fr;
+        gap: 6px;
       }
 
       .wrap {
@@ -914,8 +917,10 @@
               <label class="filter-option"><input type="radio" name="accessFilter" value="restricted"><span>Restricted</span></label>
             </div>
           </div>
-          <div id="summary" class="note map-summary"></div>
-          <div class="map-access-note">Access labels describe editing, not play access.</div>
+          <div class="map-toolbar-meta">
+            <div id="summary" class="note map-summary"></div>
+            <div class="map-access-note">*Access labels describe editing, not play access.</div>
+          </div>
         </div>
         <div id="sortStatus" class="note" role="status"></div>
         <div id="freshness" class="note"></div>
