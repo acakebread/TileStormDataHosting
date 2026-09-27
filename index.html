@@ -574,38 +574,36 @@
 
     .admin-thumb-link {
       position: absolute;
-      right: 8px;
-      bottom: 8px;
-      width: 28px;
-      height: 24px;
-      border: 1px solid rgba(140, 235, 237, 0.55);
-      border-radius: 6px;
-      background: rgba(8, 16, 22, 0.84);
-      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.30);
+      left: 6px;
+      top: 6px;
+      z-index: 2;
+      width: 24px;
+      height: 21px;
+      border-radius: 4px;
+      filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.85));
     }
 
     .admin-thumb-link:hover {
-      background: rgba(8, 16, 22, 0.94);
-      border-color: var(--tile-azure);
+      filter: drop-shadow(0 0 6px rgba(140, 235, 237, 0.75));
       text-decoration: none;
     }
 
     .admin-thumb-link::before {
       content: "";
       position: absolute;
-      inset: 5px;
-      border: 2px solid var(--tile-azure);
+      inset: 3px;
+      border: 2px solid var(--accent);
       border-radius: 3px;
     }
 
     .admin-thumb-link::after {
       content: "";
       position: absolute;
-      left: 9px;
-      right: 7px;
-      bottom: 7px;
-      height: 6px;
-      background: linear-gradient(135deg, transparent 47%, var(--tile-community) 48%);
+      left: 7px;
+      right: 6px;
+      bottom: 5px;
+      height: 7px;
+      background: linear-gradient(135deg, transparent 47%, var(--accent) 48%);
       clip-path: polygon(0 100%, 38% 42%, 58% 70%, 74% 48%, 100% 100%);
     }
 
@@ -955,6 +953,23 @@
     const goatCounterUrl = "https://acakebread.goatcounter.com";
     const sourceManifestUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/manifest.json`;
     const tokenStorageKey = "TileStormDataHostingAdminToken";
+    const previewManifest = {
+      repositoryName: "TileStorm Shared Maps",
+      generatedUtc: "local preview",
+      entries: [
+        {
+          contentType: "application/json;charset=utf-8",
+          description: "Local preview entry",
+          downloadUrl: "maps/CAfAAv.json",
+          fileName: "CAfAAv.json",
+          id: "CAfAAv.json",
+          mapHash: "CAfAAv",
+          name: "Preview community map",
+          sizeBytes: 2524,
+          updatedUtc: "2026-09-14T16:34:14.0330000Z"
+        }
+      ]
+    };
 
     const manifestEl = document.getElementById("manifest");
     const summaryEl = document.getElementById("summary");
@@ -1233,6 +1248,41 @@
       return entries.filter(entry => filter === "public" ? hasPublicEditAccess(entry) : !hasPublicEditAccess(entry));
     }
 
+    function emptyEntryHtml(title, detail) {
+      return `
+        <div class="entry empty-entry" aria-live="polite">
+          <div class="entry-top">
+            <div class="entry-copy">
+              <div class="entry-title-line">
+                <h2>${escapeHtml(title)}</h2>
+              </div>
+              <div class="meta">${escapeHtml(detail)}</div>
+            </div>
+          </div>
+          <div class="entry-blurb">
+            <div><strong>Community catalogue</strong></div>
+            <div>There is nothing to show here yet, but this space is ready for shared TileStorm maps.</div>
+          </div>
+        </div>
+      `;
+    }
+
+    async function renderFallbackManifest(message, loadId) {
+      currentManifest = previewManifest;
+      loadingMapLaunchCounts = false;
+      loadingMapDetails = true;
+      mapLaunchCounts = new Map();
+      mapDetails = new Map();
+      setFreshnessStatus("");
+      render(previewManifest.entries, previewManifest.repositoryName, previewManifest.generatedUtc);
+      sortStatusEl.innerHTML = `<span class="warning">${escapeHtml(message)} Showing local preview data.</span>`;
+      await loadMapDetails(previewManifest.entries, loadId);
+      if (loadId === manifestLoadId && currentManifest === previewManifest) {
+        render(previewManifest.entries, previewManifest.repositoryName, previewManifest.generatedUtc);
+        sortStatusEl.innerHTML = `<span class="warning">${escapeHtml(message)} Showing local preview data.</span>`;
+      }
+    }
+
     function updateNewsTicker(entries) {
       const liveEntries = Array.isArray(entries) ? entries.filter(Boolean) : [];
       const messages = ["Eggbot has news..."];
@@ -1353,7 +1403,7 @@
     function render(entries, repositoryName, generatedUtc) {
       sortStatusEl.textContent = "";
       if (!entries || entries.length === 0) {
-        manifestEl.innerHTML = '<div class="empty">No maps have been uploaded yet.</div>';
+        manifestEl.innerHTML = emptyEntryHtml("No community maps yet", "Once maps are uploaded, they will appear in this list.");
         summaryEl.textContent = repositoryName ? `${repositoryName} | ${generatedUtc || "unknown time"}` : "";
         updateNewsTicker([]);
         return;
@@ -1375,7 +1425,7 @@
       summaryEl.textContent = `${repositoryName || "TileStorm Shared Maps"} | ${visibleEntries.length} of ${entries.length} map(s) | ${generatedUtc || "unknown time"}`;
       updateNewsTicker(entries);
       if (visibleEntries.length === 0) {
-        manifestEl.innerHTML = '<div class="empty">No maps match this filter.</div>';
+        manifestEl.innerHTML = emptyEntryHtml("No maps match this filter", "Try All, Public, or Restricted to see a different slice of the catalogue.");
         return;
       }
       manifestEl.innerHTML = sortEntries(visibleEntries).map(entry => {
@@ -1395,7 +1445,7 @@
         return `
           <div class="entry" role="link" tabindex="0" data-launch-map="${escapeHtml(launchId)}" aria-label="Open ${escapeHtml(entry.name || fileName || entry.id || "map")} in TileStorm">
             <div class="entry-top">
-              ${thumbUrl ? `<div class="entry-thumb-wrap"><a class="entry-thumb-link" href="${escapeHtml(openUrl)}" data-launch-map="${escapeHtml(launchId)}" aria-label="Open ${escapeHtml(entry.name || fileName || entry.id || "map")} in TileStorm"><img class="entry-thumb" src="${escapeHtml(thumbUrl)}" alt="${escapeHtml(entry.name || fileName || entry.id || "Untitled")} thumbnail"></a>${adminToken ? `<a class="admin-thumb-link" href="${escapeHtml(thumbUrl)}" aria-label="Open thumbnail image" title="Open thumbnail image"></a>` : ""}</div>` : ""}
+              ${thumbUrl ? `<div class="entry-thumb-wrap"><a class="entry-thumb-link" href="${escapeHtml(openUrl)}" data-launch-map="${escapeHtml(launchId)}" aria-label="Open ${escapeHtml(entry.name || fileName || entry.id || "map")} in TileStorm"><img class="entry-thumb" src="${escapeHtml(thumbUrl)}" alt="${escapeHtml(entry.name || fileName || entry.id || "Untitled")} thumbnail"></a><a class="admin-thumb-link" href="${escapeHtml(thumbUrl)}" aria-label="Open thumbnail image" title="Open thumbnail image"></a></div>` : ""}
               <div class="entry-copy">
                 <div class="entry-title-line">
                   <h2>${escapeHtml(entry.name || fileName || entry.id || "Untitled")}</h2>
@@ -1440,8 +1490,7 @@
           return;
         }
         if (!response.ok) {
-          summaryEl.innerHTML = `<span class="error">Failed to load manifest: HTTP ${response.status}</span>`;
-          manifestEl.innerHTML = "";
+          await renderFallbackManifest(`Failed to load manifest: HTTP ${response.status}.`, loadId);
           return;
         }
         const manifest = await response.json();
@@ -1462,8 +1511,7 @@
         if (loadId !== manifestLoadId) {
           return;
         }
-        summaryEl.innerHTML = `<span class="error">Failed to load manifest: ${escapeHtml(error.message || error)}</span>`;
-        manifestEl.innerHTML = "";
+        await renderFallbackManifest(`Failed to load manifest: ${error.message || error}.`, loadId);
       }
     }
 
