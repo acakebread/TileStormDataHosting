@@ -1,6 +1,19 @@
 {
 	"entries": [
 		{
+			"contentType": "application/json;charset=utf-8",
+			"description": "",
+			"downloadUrl": "maps/4i3rjK.json",
+			"fileName": "4i3rjK.json",
+			"id": "4i3rjK.json",
+			"mapHash": "4i3rjK",
+			"name": "eggbot's pipe test",
+			"sizeBytes": 814,
+			"updatedUtc": "2026-09-27T15:09:15.4274247Z",
+			"utc": "9DEnK1",
+			"visibility": "private"
+		},
+		{
 			"contentType": "application/zip",
 			"description": "",
 			"downloadUrl": "maps/CwnEy7.zip",
@@ -93,6 +106,6 @@
 			"updatedUtc": "2026-05-29T10:46:19.0438084Z"
 		}
 	],
-	"generatedUtc": "2026-09-25T09:38:34.8645782Z",
+	"generatedUtc": "2026-09-27T15:09:15.4274247Z",
 	"repositoryName": "TileStorm Shared Maps"
 }
