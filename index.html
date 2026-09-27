@@ -1080,6 +1080,14 @@
       return hash ? `thumbs/${encodeURIComponent(hash)}.png` : "";
     }
 
+    function getThumbPreviewUrl(entry) {
+      const thumbUrl = getThumbUrl(entry);
+      const hash = getMapHash(entry);
+      return thumbUrl
+        ? `thumbnail-preview.html?file=${encodeURIComponent(thumbUrl)}&name=${encodeURIComponent(`${hash || "thumbnail"}.png`)}`
+        : "";
+    }
+
     function getAccessFilter() {
       return accessFilterEls.find(input => input.checked)?.value || "all";
     }
@@ -1437,6 +1445,7 @@
         const launchId = getMapHash(entry) || fileName;
         const openUrl = `${gameUrl}?map=${encodeURIComponent(launchId)}`;
         const thumbUrl = getThumbUrl(entry);
+        const thumbPreviewUrl = getThumbPreviewUrl(entry);
         const launchCount = mapLaunchCounts.get(launchId);
         const detail = getMapDetail(entry);
         const author = normaliseAuthor(detail?.author);
@@ -1447,7 +1456,7 @@
         return `
           <div class="entry" role="link" tabindex="0" data-launch-map="${escapeHtml(launchId)}" aria-label="Open ${escapeHtml(entry.name || fileName || entry.id || "map")} in TileStorm">
             <div class="entry-top">
-              ${thumbUrl ? `<div class="entry-thumb-wrap"><a class="entry-thumb-link" href="${escapeHtml(openUrl)}" data-launch-map="${escapeHtml(launchId)}" aria-label="Open ${escapeHtml(entry.name || fileName || entry.id || "map")} in TileStorm"><img class="entry-thumb" src="${escapeHtml(thumbUrl)}" alt="${escapeHtml(entry.name || fileName || entry.id || "Untitled")} thumbnail"></a><a class="admin-thumb-link" href="${escapeHtml(thumbUrl)}" aria-label="Open thumbnail image" title="Open thumbnail image"></a></div>` : ""}
+              ${thumbUrl ? `<div class="entry-thumb-wrap"><a class="entry-thumb-link" href="${escapeHtml(openUrl)}" data-launch-map="${escapeHtml(launchId)}" aria-label="Open ${escapeHtml(entry.name || fileName || entry.id || "map")} in TileStorm"><img class="entry-thumb" src="${escapeHtml(thumbUrl)}" alt="${escapeHtml(entry.name || fileName || entry.id || "Untitled")} thumbnail"></a><a class="admin-thumb-link" href="${escapeHtml(thumbPreviewUrl)}" aria-label="Preview thumbnail image" title="Preview thumbnail image"></a></div>` : ""}
               <div class="entry-copy">
                 <div class="entry-title-line">
                   <h2>${escapeHtml(entry.name || fileName || entry.id || "Untitled")}</h2>
