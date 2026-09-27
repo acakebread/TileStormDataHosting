@@ -489,6 +489,7 @@
       align-items: flex-start;
     }
 
+    .entry-thumb-wrap,
     .entry-thumb-link {
       position: relative;
       display: block;
@@ -575,24 +576,37 @@
       position: absolute;
       right: 8px;
       bottom: 8px;
-      width: 30px;
-      height: 30px;
+      width: 28px;
+      height: 24px;
       border: 1px solid rgba(140, 235, 237, 0.55);
       border-radius: 6px;
       background: rgba(8, 16, 22, 0.84);
       box-shadow: 0 8px 18px rgba(0, 0, 0, 0.30);
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
     }
 
-    .admin-thumb-link img {
-      width: 20px;
-      height: 20px;
-      object-fit: contain;
-      display: block;
-      filter: invert(1) brightness(1.25);
-      opacity: 0.92;
+    .admin-thumb-link:hover {
+      background: rgba(8, 16, 22, 0.94);
+      border-color: var(--tile-azure);
+      text-decoration: none;
+    }
+
+    .admin-thumb-link::before {
+      content: "";
+      position: absolute;
+      inset: 5px;
+      border: 2px solid var(--tile-azure);
+      border-radius: 3px;
+    }
+
+    .admin-thumb-link::after {
+      content: "";
+      position: absolute;
+      left: 9px;
+      right: 7px;
+      bottom: 7px;
+      height: 6px;
+      background: linear-gradient(135deg, transparent 47%, var(--tile-community) 48%);
+      clip-path: polygon(0 100%, 38% 42%, 58% 70%, 74% 48%, 100% 100%);
     }
 
     .meta {
@@ -842,6 +856,7 @@
         justify-content: flex-start;
       }
 
+      .entry-thumb-wrap,
       .entry-thumb-link,
       .entry-thumb {
         width: 100%;
@@ -1380,7 +1395,7 @@
         return `
           <div class="entry" role="link" tabindex="0" data-launch-map="${escapeHtml(launchId)}" aria-label="Open ${escapeHtml(entry.name || fileName || entry.id || "map")} in TileStorm">
             <div class="entry-top">
-              ${thumbUrl ? `<a class="entry-thumb-link" href="${escapeHtml(openUrl)}" data-launch-map="${escapeHtml(launchId)}" aria-label="Open ${escapeHtml(entry.name || fileName || entry.id || "map")} in TileStorm"><img class="entry-thumb" src="${escapeHtml(thumbUrl)}" alt="${escapeHtml(entry.name || fileName || entry.id || "Untitled")} thumbnail">${adminToken ? `<span class="admin-thumb-link" title="Thumbnail" aria-hidden="true"><img src="./thumbnail%20icon.png" alt=""></span>` : ""}</a>` : ""}
+              ${thumbUrl ? `<div class="entry-thumb-wrap"><a class="entry-thumb-link" href="${escapeHtml(openUrl)}" data-launch-map="${escapeHtml(launchId)}" aria-label="Open ${escapeHtml(entry.name || fileName || entry.id || "map")} in TileStorm"><img class="entry-thumb" src="${escapeHtml(thumbUrl)}" alt="${escapeHtml(entry.name || fileName || entry.id || "Untitled")} thumbnail"></a>${adminToken ? `<a class="admin-thumb-link" href="${escapeHtml(thumbUrl)}" aria-label="Open thumbnail image" title="Open thumbnail image"></a>` : ""}</div>` : ""}
               <div class="entry-copy">
                 <div class="entry-title-line">
                   <h2>${escapeHtml(entry.name || fileName || entry.id || "Untitled")}</h2>
