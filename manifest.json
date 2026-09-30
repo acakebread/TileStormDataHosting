@@ -8,10 +8,10 @@
 			"id": "A0eN6p.json",
 			"mapHash": "A0eN6p",
 			"name": "Little Egypt",
-			"sizeBytes": 438,
-			"updatedUtc": "2026-09-30T11:32:04.2190000Z",
-			"utc": "8MHJnw",
-			"visibility": "private"
+			"sizeBytes": 454,
+			"updatedUtc": "2026-09-30T11:42:44.5090000Z",
+			"utc": "7AEXH6",
+			"visibility": "public"
 		},
 		{
 			"contentType": "application/json;charset=utf-8",
@@ -119,6 +119,6 @@
 			"updatedUtc": "2026-05-29T10:46:19.0438084Z"
 		}
 	],
-	"generatedUtc": "2026-09-30T11:32:04.2180000Z",
+	"generatedUtc": "2026-09-30T11:42:44.5090000Z",
 	"repositoryName": "TileStorm Shared Maps"
 }
