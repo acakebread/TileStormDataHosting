@@ -3,6 +3,19 @@
 		{
 			"contentType": "application/json;charset=utf-8",
 			"description": "",
+			"downloadUrl": "maps/6yarpw.json",
+			"fileName": "6yarpw.json",
+			"id": "6yarpw.json",
+			"mapHash": "6yarpw",
+			"name": "Medieval test",
+			"sizeBytes": 3599,
+			"updatedUtc": "2026-10-05T05:43:56.3652597Z",
+			"utc": "5uqMmE",
+			"visibility": "private"
+		},
+		{
+			"contentType": "application/json;charset=utf-8",
+			"description": "",
 			"downloadUrl": "maps/CAfAAv.json",
 			"fileName": "CAfAAv.json",
 			"id": "CAfAAv.json",
@@ -94,17 +107,6 @@
 		{
 			"contentType": "application/json;charset=utf-8",
 			"description": "",
-			"downloadUrl": "maps/6yarpw.json",
-			"fileName": "6yarpw.json",
-			"id": "6yarpw.json",
-			"mapHash": "6yarpw",
-			"name": "Medieval test",
-			"sizeBytes": 3568,
-			"updatedUtc": "2026-09-19T19:47:25.2125426Z"
-		},
-		{
-			"contentType": "application/json;charset=utf-8",
-			"description": "",
 			"downloadUrl": "maps/2NqYCC.json",
 			"fileName": "2NqYCC.json",
 			"id": "2NqYCC.json",
@@ -136,6 +138,6 @@
 			"updatedUtc": "2026-05-29T10:46:19.0438084Z"
 		}
 	],
-	"generatedUtc": "2026-10-05T05:43:41.1828541Z",
+	"generatedUtc": "2026-10-05T05:43:56.3652597Z",
 	"repositoryName": "TileStorm Shared Maps"
 }
