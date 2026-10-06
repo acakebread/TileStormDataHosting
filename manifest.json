@@ -3,6 +3,19 @@
 		{
 			"contentType": "application/json;charset=utf-8",
 			"description": "",
+			"downloadUrl": "maps/9A7ju3.json",
+			"fileName": "9A7ju3.json",
+			"id": "9A7ju3.json",
+			"mapHash": "9A7ju3",
+			"name": "feudal test",
+			"sizeBytes": 841,
+			"updatedUtc": "2026-10-06T06:23:26.3250000Z",
+			"utc": "0Hek9Y",
+			"visibility": "private"
+		},
+		{
+			"contentType": "application/json;charset=utf-8",
+			"description": "",
 			"downloadUrl": "maps/CAfAAv.json",
 			"fileName": "CAfAAv.json",
 			"id": "CAfAAv.json",
@@ -138,6 +151,6 @@
 			"updatedUtc": "2026-05-29T10:46:19.0438084Z"
 		}
 	],
-	"generatedUtc": "2026-10-05T05:44:08.1780383Z",
+	"generatedUtc": "2026-10-06T06:23:26.3250000Z",
 	"repositoryName": "TileStorm Shared Maps"
 }
