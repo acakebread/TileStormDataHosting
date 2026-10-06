@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hot Sands &#8212; TileStorm Evolution</title>
+  <link rel="canonical" href="https://www.massivehadron.com/shares/ad1cfd476b534b119081f25a4a6df441/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="TileStorm Evolution">
+  <meta property="og:url" content="https://www.massivehadron.com/shares/ad1cfd476b534b119081f25a4a6df441/">
+  <meta property="og:title" content="Hot Sands &#8212; TileStorm Evolution">
+  <meta property="og:description" content="Play Hot Sands in TileStorm Evolution. Create and share your own levels.">
+  <meta property="og:image" content="https://www.massivehadron.com/shares/ad1cfd476b534b119081f25a4a6df441/preview.jpg">
+  <meta property="og:image:secure_url" content="https://www.massivehadron.com/shares/ad1cfd476b534b119081f25a4a6df441/preview.jpg">
+  <meta property="og:image:type" content="image/jpeg">
+  <meta property="og:image:width" content="968">
+  <meta property="og:image:height" content="560">
+  <meta property="og:image:alt" content="Hot Sands &#8212; TileStorm Evolution">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://www.massivehadron.com/shares/ad1cfd476b534b119081f25a4a6df441/preview.jpg">
+  <!-- TileStormShare:ad1cfd476b534b119081f25a4a6df441 -->
+  <style>
+    :root { color-scheme: dark; font: 16px/1.5 system-ui, sans-serif; background: #101724; color: #e7edf5; }
+    body { max-width: 968px; margin: 32px auto; padding: 0 20px; }
+    a { color: #3ae0ec; }
+    img { display: block; width: 100%; height: auto; border-radius: 8px; }
+    .play { display: inline-block; padding: 12px 20px; background: #3ae0ec; color: #101724; border-radius: 6px; text-decoration: none; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>Hot Sands</h1>
+  <p>Opening TileStorm Evolution…</p>
+  <p><a id="play" class="play" href="https://acakebread.github.io/TileStormEvo/?backup=https%3A%2F%2Fwww.massivehadron.com%2Fshares%2Fad1cfd476b534b119081f25a4a6df441%2Fmap.json">Play Hot Sands</a></p>
+  <a href="https://acakebread.github.io/TileStormEvo/?backup=https%3A%2F%2Fwww.massivehadron.com%2Fshares%2Fad1cfd476b534b119081f25a4a6df441%2Fmap.json"><img src="https://www.massivehadron.com/shares/ad1cfd476b534b119081f25a4a6df441/preview.jpg" width="968" height="560" alt="Hot Sands &#8212; TileStorm Evolution"></a>
+  <script>
+    const play = document.getElementById('play');
+    const image = new URLSearchParams(window.location.search).get('image');
+    if (image) {
+      try {
+        const candidate = new URL(image);
+        if (candidate.protocol === 'http:' || candidate.protocol === 'https:') {
+          const launch = new URL(play.href);
+          launch.searchParams.set('image', image);
+          play.href = launch.href;
+        }
+      } catch (error) {}
+    }
+    window.location.replace(play.href);
+  </script>
+</body>
+</html>
