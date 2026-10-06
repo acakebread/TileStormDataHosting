@@ -9,8 +9,10 @@ These notes are for maintainers and tooling work. They are intentionally separat
 - `manifest.json`: catalogue consumed by the game and portal.
 - `maps/`: published map packages.
 - `thumbs/`: preview thumbnails.
-- `shares/<unique-id>/social.png`: original encoded social images.
-- `shares/<unique-id>/index.html`: static Open Graph share pages that launch the app with an image URL payload.
+- `shares/<unique-id>/preview.jpg`: compact display preview for new link posts.
+- `shares/<unique-id>/map.json` or `map.zip`: direct social map backup, separate from the community catalogue.
+- `shares/<unique-id>/index.html`: static Open Graph share page that launches the current app.
+- Older shares retain their original `social.png` and image launch URL.
 
 ## Naming
 
@@ -28,8 +30,23 @@ The portal also cross-checks its deployed `manifest.json` against the canonical 
 
 ## Facebook Social Images
 
-The Unity **Share to Facebook** command creates an immutable image and page under a fresh `shares/` ID using the existing publisher. It waits for the public page and original image bytes before opening Facebook's composer. These uploads do not change the shared map manifest.
+The Unity app's main Facebook option now prepares an ordinary photo and a
+caption with a versioned invisible map payload, without publishing files here.
+Public Facebook post launches use `?facebook=<encoded-post-permalink>` and
+import caption data rather than image pixels. The Editor/native app retrieves
+post text directly; public WebGL requires a stateless relay or explicit caption
+paste because Facebook's iframe HTML lacks CORS permission. No relay is deployed.
 
-The page exposes the hosted image through static Open Graph metadata. Human browsers follow its JavaScript redirect to the configured stable app entry point with `?image=<encoded-image-url>`; a Play link provides a fallback. Retain the original PNG and page for as long as their posts should work. The game downloads that original PNG, rather than Facebook's resized preview, to decode the embedded map.
+The previous hosted-card publisher remains a clearly labelled **Hosted link
+fallback**, which creates an unencoded preview and JSON/ZIP here. The details
+below describe that fallback and existing shares. Implementation and the
+verified versioned photo-post result are in `Docs/FacebookSocialSharing.md`
+in the Unity repository.
+
+The Unity **Share to Facebook** command creates a JPEG preview, a raw JSON/ZIP map backup and a page under a fresh `shares/` ID using the existing publisher. It verifies the public page and both files before opening Facebook's composer. These uploads do not change the shared map manifest or create catalogue entries.
+
+The page exposes the JPEG through static Open Graph metadata for display. Ordinary link posts launch with `?backup=<encoded-map-url>` and import the data directly. Supplying `?image=<encoded-Facebook-photo-url>` to the share page adds the primary image to its app launch URL while retaining the backup. The app always tries a supplied image first and downloads the backup only after image failure. A visible Play link provides the default launch when JavaScript is disabled.
+
+The game's **Tools > Admin Log** records the actual source as `EMBEDDED IMAGE`, `HOSTED JSON BACKUP`, `HOSTED ZIP BACKUP`, `COMMUNITY MAP` or `DEFAULT`. Image-only links remain supported and require no backup file. Automatic Facebook photo submission/retrieval is a separate integration from the current link composer.
 
 Implementation and live test instructions are in the Unity project's `Docs/FacebookSocialSharing.md`. No manual changes to the portal are needed for each new share.
