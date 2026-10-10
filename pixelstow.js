@@ -1078,6 +1078,24 @@
     return new Blob([png], { type: "image/png" });
   }
 
+  async function writeJpeg(pixels, width, height) {
+    assertImage(pixels, width, height);
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    const view = new Uint8ClampedArray(pixels.length);
+    view.set(pixels);
+    context.putImageData(new ImageData(view, width, height), 0, 0);
+    const blob = await new Promise((resolve, reject) => {
+      canvas.toBlob((result) => {
+        if (result) resolve(result);
+        else reject(new Error("The JPEG could not be saved."));
+      }, "image/jpeg", 0.92);
+    });
+    return blob;
+  }
+
   async function decodeWithCanvas(file) {
     if (typeof createImageBitmap !== "function") throw new Error("Could not read that image. Use a PNG or JPEG.");
     const bitmap = await createImageBitmap(file);
@@ -1110,13 +1128,89 @@
     return decodeWithCanvas(file);
   }
 
+  function clampRange(value, minimum, maximum) {
+    if (value < minimum) return minimum;
+    if (value > maximum) return maximum;
+    return value;
+  }
+
+  function clampChannel(value) {
+    const rounded = roundHalfToEven(value);
+    if (rounded < 0) return 0;
+    if (rounded > 255) return 255;
+    return rounded;
+  }
+
+  async function extractCarrier(pixels, width, height, strength) {
+    assertImage(pixels, width, height);
+    strength = Math.max(1, Math.min(32, strength | 0));
+    const common = new Float64Array(16);
+    const difference = new Float64Array(16);
+    let mean = 0;
+    for (let y = 0; y < 4; y++) {
+      for (let x = 0; x < 4; x++) {
+        const i = x + y * 4;
+        const one = scaleWeight(strength, WAVELET[x - y + 3]);
+        const zero = scaleWeight(strength, WAVELET[x + y]);
+        common[i] = (one + zero) / 2;
+        difference[i] = one - zero;
+        mean += common[i] / 16;
+      }
+    }
+    let commonEnergy = 0;
+    let differenceEnergy = 0;
+    for (let i = 0; i < 16; i++) {
+      common[i] -= mean;
+      commonEnergy += common[i] * common[i];
+      differenceEnergy += difference[i] * difference[i];
+    }
+    if (commonEnergy === 0 || differenceEnergy === 0) {
+      throw new Error("The source image could not be recovered.");
+    }
+    const carrier = pixels.slice();
+    const columns = Math.floor(width / BLOCK);
+    const rows = Math.floor(height / BLOCK);
+    for (let row = 0; row < rows; row++) {
+      if ((row & 15) === 15) await yieldNow();
+      for (let column = 0; column < columns; column++) {
+        let marker = 0;
+        let bit = 0;
+        for (let y = 0; y < 4; y++) {
+          for (let x = 0; x < 4; x++) {
+            const pixel = (column * BLOCK + x + (row * BLOCK + y) * width) * 4;
+            const brightness = (pixels[pixel] + pixels[pixel + 1] + pixels[pixel + 2]) / 3;
+            const k = x + y * 4;
+            marker += brightness * common[k];
+            bit += brightness * difference[k];
+          }
+        }
+        marker = clampRange(marker / commonEnergy, 0, 1);
+        bit = clampRange(bit / differenceEnergy, -0.5, 0.5);
+        for (let y = 0; y < 4; y++) {
+          for (let x = 0; x < 4; x++) {
+            const k = x + y * 4;
+            const signal = marker * common[k] + bit * difference[k];
+            const pixel = (column * BLOCK + x + (row * BLOCK + y) * width) * 4;
+            carrier[pixel] = clampChannel(pixels[pixel] - signal);
+            carrier[pixel + 1] = clampChannel(pixels[pixel + 1] - signal);
+            carrier[pixel + 2] = clampChannel(pixels[pixel + 2] - signal);
+            carrier[pixel + 3] = pixels[pixel + 3];
+          }
+        }
+      }
+    }
+    return carrier;
+  }
+
   window.PixelStow = {
     estimateBytes,
     inspect,
     decode,
     encode,
+    extractCarrier,
     readImageFile,
     decodePng,
-    writePng
+    writePng,
+    writeJpeg
   };
 })();

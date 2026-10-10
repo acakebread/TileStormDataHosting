@@ -203,6 +203,10 @@
       margin-top: 18px;
     }
 
+    [hidden] {
+      display: none !important;
+    }
+
     button,
     .button-link {
       display: inline-flex;
@@ -292,7 +296,7 @@
           <input id="file" class="file-input" type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg">
           <label class="choose button-link" for="file">Choose image</label>
         </div>
-        <p class="hint" id="capacity">Choose a PNG or JPEG. A fingerprint is saved as a new PNG, so the original file stays as it is.</p>
+        <p class="hint" id="capacity">Choose a PNG or JPEG. A fingerprint is saved as a new PNG or JPEG, so the original file stays as it is.</p>
         <div class="preview" id="preview" hidden></div>
       </div>
 
@@ -307,9 +311,13 @@
       <input id="confirm" type="password" autocomplete="off" spellcheck="false">
 
       <div class="actions">
-        <button id="encode" type="button" disabled>Encode into a new PNG</button>
+        <button id="encode" type="button" disabled>Encode into a new image</button>
         <button id="decode" type="button" disabled>Decode image</button>
         <a class="button-link" id="download" href="#" hidden>Download encoded PNG</a>
+        <button id="save-encoded-jpeg" type="button" hidden>Download encoded JPEG</button>
+        <button id="save-message" type="button" hidden>Download message</button>
+        <button id="save-source" type="button" hidden>Download source PNG</button>
+        <button id="save-source-jpeg" type="button" hidden>Download source JPEG</button>
       </div>
       <p class="status" id="status" role="status"></p>
 
@@ -334,10 +342,15 @@
     const encodeButton = document.querySelector("#encode");
     const decodeButton = document.querySelector("#decode");
     const downloadLink = document.querySelector("#download");
+    const saveEncodedJpegButton = document.querySelector("#save-encoded-jpeg");
+    const saveMessageButton = document.querySelector("#save-message");
+    const saveSourceButton = document.querySelector("#save-source");
+    const saveSourceJpegButton = document.querySelector("#save-source-jpeg");
     const status = document.querySelector("#status");
     const readout = document.querySelector("#readout");
     let current = null;
     let downloadUrl = "";
+    let encodedJpeg = null;
     let busy = false;
 
     function setStatus(text, isError) {
@@ -348,16 +361,49 @@
     function clearDownload() {
       if (downloadUrl) URL.revokeObjectURL(downloadUrl);
       downloadUrl = "";
+      encodedJpeg = null;
       downloadLink.hidden = true;
       downloadLink.removeAttribute("href");
+      saveEncodedJpegButton.hidden = true;
     }
 
     function setBusy(value) {
       busy = value;
       const hasImage = Boolean(current);
+      const hasMessage = Boolean(current && current.decodedText);
       encodeButton.disabled = busy || !hasImage || current.hasFingerprint;
       decodeButton.disabled = busy || !hasImage;
       fileInput.disabled = busy;
+      saveEncodedJpegButton.disabled = busy;
+      saveMessageButton.hidden = !hasMessage;
+      saveSourceButton.hidden = !hasMessage;
+      saveSourceJpegButton.hidden = !hasMessage;
+      saveMessageButton.disabled = busy;
+      saveSourceButton.disabled = busy;
+      saveSourceJpegButton.disabled = busy;
+    }
+
+    function fileBase() {
+      const name = current && current.file && current.file.name ? current.file.name : "image";
+      return name.replace(/\.[^.]+$/, "");
+    }
+
+    function saveBlob(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    function rememberMessage(pixels, text, strength) {
+      current.recoverPixels = pixels;
+      current.decodedText = text;
+      current.strength = strength;
+      setBusy(busy);
     }
 
     function showPreview(pixels, width, height) {
@@ -404,6 +450,7 @@
           if (decoded.status === "success") {
             readout.value = decoded.text;
             message.value = decoded.text;
+            rememberMessage(image.pixels, decoded.text, decoded.strength);
             setStatus("This image already has a public fingerprint, so it cannot be encoded again.");
           } else {
             setStatus("A fingerprint was found, but its text could not be read.", true);
@@ -415,7 +462,7 @@
         current = null;
         preview.hidden = true;
         preview.replaceChildren();
-        capacity.textContent = "Choose a PNG or JPEG. A fingerprint is saved as a new PNG, so the original file stays as it is.";
+        capacity.textContent = "Choose a PNG or JPEG. A fingerprint is saved as a new PNG or JPEG, so the original file stays as it is.";
         setStatus(error && error.message ? error.message : "Could not read that image.", true);
       } finally {
         setBusy(false);
@@ -476,9 +523,26 @@
         downloadLink.href = downloadUrl;
         downloadLink.download = base + "-pixelstow.png";
         downloadLink.hidden = false;
+        let jpegNote = "";
+        try {
+          const jpeg = await PixelStow.writeJpeg(encoded.pixels, encoded.width, encoded.height);
+          const jpegFile = new File([jpeg], base + "-pixelstow.jpg", { type: "image/jpeg" });
+          const jpegImage = await PixelStow.readImageFile(jpegFile);
+          const jpegText = await PixelStow.decode(jpegImage.pixels, jpegImage.width, jpegImage.height, password.value);
+          if (jpegText.status === "success" && jpegText.text === message.value) {
+            encodedJpeg = jpeg;
+            saveEncodedJpegButton.hidden = false;
+          } else {
+            jpegNote = " A JPEG of this image did not keep the message, so only the PNG is ready.";
+          }
+        } catch (jpegError) {
+          jpegNote = " The JPEG could not be saved, so only the PNG is ready.";
+        }
         readout.value = message.value;
+        rememberMessage(encoded.pixels, message.value, encoded.strength);
         const lock = encoded.passwordProtected ? "Password-locked" : "Public";
-        setStatus(lock + " fingerprint encoded. Download the new PNG. The original file was not changed.");
+        const formats = encodedJpeg ? "PNG or JPEG" : "PNG";
+        setStatus(lock + " fingerprint encoded. Download the new " + formats + ". The original file was not changed." + jpegNote);
         password.value = "";
         confirmPassword.value = "";
       } catch (error) {
@@ -497,6 +561,7 @@
         if (decoded.status === "success") {
           readout.value = decoded.text;
           message.value = decoded.text;
+          rememberMessage(current.pixels, decoded.text, decoded.strength);
           const lock = decoded.passwordProtected ? "Unlocked" : "Read";
           setStatus(lock + " the fingerprint from this image.");
           password.value = "";
@@ -516,6 +581,39 @@
         setBusy(false);
       }
     });
+
+    saveMessageButton.addEventListener("click", () => {
+      if (!current || !current.decodedText || busy) return;
+      const bytes = new TextEncoder().encode(current.decodedText);
+      saveBlob(new Blob([bytes], { type: "text/plain;charset=utf-8" }), fileBase() + "-fingerprint.txt");
+    });
+
+    saveEncodedJpegButton.addEventListener("click", () => {
+      if (!encodedJpeg || busy) return;
+      saveBlob(encodedJpeg, fileBase() + "-pixelstow.jpg");
+    });
+
+    async function saveSource(kind) {
+      if (!current || !current.recoverPixels || busy) return;
+      setBusy(true);
+      setStatus("Preparing the source image…");
+      try {
+        const carrier = await PixelStow.extractCarrier(current.recoverPixels, current.width, current.height, current.strength);
+        if (kind === "jpeg") {
+          saveBlob(await PixelStow.writeJpeg(carrier, current.width, current.height), fileBase() + "-source.jpg");
+        } else {
+          saveBlob(await PixelStow.writePng(carrier, current.width, current.height), fileBase() + "-source.png");
+        }
+        setStatus("Source image ready. The original file was not changed.");
+      } catch (error) {
+        setStatus(error && error.message ? error.message : "The source image could not be recovered.", true);
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    saveSourceButton.addEventListener("click", () => saveSource("png"));
+    saveSourceJpegButton.addEventListener("click", () => saveSource("jpeg"));
   </script>
 </body>
 </html>
