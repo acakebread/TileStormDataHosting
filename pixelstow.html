@@ -192,14 +192,121 @@
       margin-top: 14px;
     }
 
-    .preview img,
-    .preview canvas {
+    .compare {
+      position: relative;
+      display: inline-block;
+      max-width: 100%;
+      line-height: 0;
+    }
+
+    .compare canvas {
+      display: block;
       max-width: 100%;
       max-height: 420px;
+      width: auto;
       height: auto;
       border-radius: 12px;
       background: rgba(0, 0, 0, 0.28);
     }
+
+    #preview-source {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      max-width: none;
+      max-height: none;
+    }
+
+    .compare-ui {
+      position: absolute;
+      inset: 0;
+      border-radius: 12px;
+    }
+
+    .compare-ui input {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      background: transparent;
+      appearance: none;
+      cursor: ew-resize;
+    }
+
+    .compare-ui input::-webkit-slider-runnable-track {
+      height: 100%;
+      background: transparent;
+    }
+
+    .compare-ui input::-webkit-slider-thumb {
+      appearance: none;
+      width: 28px;
+      height: 44px;
+      opacity: 0;
+    }
+
+    .compare-ui input::-moz-range-track {
+      height: 100%;
+      background: transparent;
+      border: 0;
+    }
+
+    .compare-ui input::-moz-range-thumb {
+      width: 28px;
+      height: 44px;
+      border: 0;
+      opacity: 0;
+    }
+
+    .split-line {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      margin-left: -1px;
+      background: #69dccb;
+      box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.65);
+      pointer-events: none;
+    }
+
+    .split-line::after {
+      content: "↔";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 28px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transform: translate(-50%, -50%);
+      border-radius: 8px;
+      background: #69dccb;
+      color: #102028;
+      font: 700 16px/1 "Segoe UI", sans-serif;
+      box-shadow: 0 0 0 1px #111;
+    }
+
+    .compare-tag {
+      position: absolute;
+      top: 10px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      background: rgba(15, 21, 30, 0.82);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      line-height: 1.4;
+      pointer-events: none;
+    }
+
+    .compare-tag.left { left: 10px; }
+    .compare-tag.right { right: 10px; }
+
+    .compare-note { margin-top: 10px; }
 
     .actions,
     .links {
@@ -303,7 +410,19 @@
           <label class="choose button-link" for="file">Choose image</label>
         </div>
         <p class="hint" id="capacity">Choose a PNG or JPEG. A fingerprint is saved as a new PNG or JPEG, so the original file stays as it is.</p>
-        <div class="preview" id="preview" hidden></div>
+        <div class="preview" id="preview" hidden>
+          <div class="compare" id="compare">
+            <canvas id="preview-encoded"></canvas>
+            <canvas id="preview-source" hidden></canvas>
+            <div class="compare-ui" id="compare-ui" hidden>
+              <span class="compare-tag left" id="tag-encoded">Encoded</span>
+              <span class="compare-tag right" id="tag-source">Source</span>
+              <div class="split-line" id="split-line"></div>
+              <input id="split" type="range" min="0" max="1000" value="500" aria-label="Comparison divider. Encoded image on the left, recovered source on the right.">
+            </div>
+          </div>
+        </div>
+        <p class="hint compare-note" id="compare-note" hidden>Drag the divider. The encoded image is on the left and the recovered source is on the right.</p>
       </div>
 
       <label for="message">Message <span class="byte-count" id="message-bytes">(0 bytes)</span></label>
@@ -341,6 +460,14 @@
     const fileInput = document.querySelector("#file");
     const drop = document.querySelector("#drop");
     const preview = document.querySelector("#preview");
+    const previewEncoded = document.querySelector("#preview-encoded");
+    const previewSource = document.querySelector("#preview-source");
+    const compareUi = document.querySelector("#compare-ui");
+    const compareNote = document.querySelector("#compare-note");
+    const split = document.querySelector("#split");
+    const splitLine = document.querySelector("#split-line");
+    const tagEncoded = document.querySelector("#tag-encoded");
+    const tagSource = document.querySelector("#tag-source");
     const capacity = document.querySelector("#capacity");
     const message = document.querySelector("#message");
     const password = document.querySelector("#password");
@@ -360,6 +487,7 @@
     let downloadUrl = "";
     let encodedJpeg = null;
     let busy = false;
+    let previewGeneration = 0;
 
     function byteLabel(text) {
       const count = new TextEncoder().encode(text || "").length;
@@ -422,18 +550,73 @@
       current.recoverPixels = pixels;
       current.decodedText = text;
       current.strength = strength;
+      current.carrierPromise = null;
       setBusy(busy);
+      startComparison();
     }
 
-    function showPreview(pixels, width, height) {
-      const canvas = document.createElement("canvas");
+    function paintCanvas(canvas, pixels, width, height) {
       canvas.width = width;
       canvas.height = height;
       const context = canvas.getContext("2d");
-      const view = new Uint8ClampedArray(pixels);
+      const view = new Uint8ClampedArray(pixels.length);
+      view.set(pixels);
       context.putImageData(new ImageData(view, width, height), 0, 0);
-      preview.replaceChildren(canvas);
+    }
+
+    function setSplit(value) {
+      const ratio = Math.max(0, Math.min(1, Number(value) / 1000));
+      previewSource.style.clipPath = "inset(0 0 0 " + (ratio * 100) + "%)";
+      splitLine.style.left = (ratio * 100) + "%";
+      const width = previewEncoded.clientWidth;
+      tagEncoded.hidden = width * ratio < 78;
+      tagSource.hidden = width * (1 - ratio) < 78;
+    }
+
+    function hideComparison() {
+      previewGeneration += 1;
+      previewSource.hidden = true;
+      compareUi.hidden = true;
+      compareNote.hidden = true;
+    }
+
+    function showPreview(pixels, width, height) {
+      hideComparison();
+      paintCanvas(previewEncoded, pixels, width, height);
       preview.hidden = false;
+    }
+
+    function carrierFor(job) {
+      if (!job.carrierPromise) {
+        job.carrierPromise = PixelStow.extractCarrier(job.recoverPixels, job.width, job.height, job.strength).catch((error) => {
+          job.carrierPromise = null;
+          throw error;
+        });
+      }
+      return job.carrierPromise;
+    }
+
+    async function startComparison() {
+      const job = current;
+      if (!job || !job.recoverPixels) return;
+      const generation = ++previewGeneration;
+      try {
+        const carrier = await carrierFor(job);
+        if (generation !== previewGeneration || current !== job) return;
+        paintCanvas(previewEncoded, job.recoverPixels, job.width, job.height);
+        paintCanvas(previewSource, carrier, job.width, job.height);
+        split.value = "500";
+        setSplit(500);
+        previewSource.hidden = false;
+        compareUi.hidden = false;
+        compareNote.hidden = false;
+        preview.hidden = false;
+      } catch (error) {
+        if (generation !== previewGeneration || current !== job) return;
+        previewSource.hidden = true;
+        compareUi.hidden = true;
+        compareNote.hidden = true;
+      }
     }
 
     async function useFile(file) {
@@ -480,7 +663,7 @@
       } catch (error) {
         current = null;
         preview.hidden = true;
-        preview.replaceChildren();
+        hideComparison();
         capacity.textContent = "Choose a PNG or JPEG. A fingerprint is saved as a new PNG or JPEG, so the original file stays as it is.";
         setStatus(error && error.message ? error.message : "Could not read that image.", true);
       } finally {
@@ -488,6 +671,8 @@
         updateByteCounts();
       }
     }
+
+    split.addEventListener("input", () => setSplit(split.value));
 
     message.addEventListener("input", updateByteCounts);
 
@@ -622,7 +807,7 @@
       setBusy(true);
       setStatus("Preparing the source image…");
       try {
-        const carrier = await PixelStow.extractCarrier(current.recoverPixels, current.width, current.height, current.strength);
+        const carrier = await carrierFor(current);
         if (kind === "jpeg") {
           saveBlob(await PixelStow.writeJpeg(carrier, current.width, current.height), fileBase() + "-source.jpg");
         } else {
