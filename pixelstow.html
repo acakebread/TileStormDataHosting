@@ -1,0 +1,521 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PixelStow</title>
+  <link rel="canonical" href="https://www.massivehadron.com/pixelstow.html">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #081016;
+      --text: #f2f6fb;
+      --muted: #a8b7c8;
+      --border: #2a394a;
+      --tile-azure: #8cebed;
+      --tile-community: #f5e69e;
+    }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font: 16px/1.5 "Segoe UI", "Trebuchet MS", system-ui, sans-serif;
+    }
+
+    .video-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      overflow: hidden;
+      pointer-events: none;
+      background: url("./web_portal_background.png") center top / cover no-repeat;
+    }
+
+    .video-backdrop video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      filter: brightness(0.74) saturate(1.04);
+    }
+
+    .video-backdrop::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(7, 12, 18, 0.48), rgba(7, 12, 18, 0.84));
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .video-backdrop video {
+        display: none;
+      }
+    }
+
+    .wrap {
+      position: relative;
+      z-index: 1;
+      box-sizing: border-box;
+      max-width: 1040px;
+      margin: 6vh auto;
+      padding: 28px;
+    }
+
+    .card {
+      background: rgba(18, 25, 35, 0.92);
+      backdrop-filter: blur(10px) saturate(1.08);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 32px;
+      box-shadow: 0 28px 80px rgba(0, 0, 0, 0.45);
+    }
+
+    .masthead {
+      display: grid;
+      grid-template-columns: 136px minmax(0, 1fr);
+      gap: 24px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .studio-mark {
+      width: 136px;
+      height: 136px;
+      object-fit: contain;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(2.2rem, 5vw, 3.5rem);
+      line-height: 1;
+      letter-spacing: 0;
+      color: var(--tile-azure);
+      text-shadow: 0 0 18px rgba(140, 235, 237, 0.22);
+    }
+
+    h2 {
+      margin: 22px 0 8px;
+      color: var(--tile-community);
+      font-size: 1.22rem;
+    }
+
+    p,
+    .hint {
+      margin: 0 0 14px;
+      color: var(--muted);
+    }
+
+    a {
+      color: var(--tile-azure);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    label {
+      display: block;
+      margin: 14px 0 6px;
+      font-weight: 700;
+    }
+
+    input[type="text"],
+    input[type="password"],
+    textarea {
+      box-sizing: border-box;
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      background: rgba(7, 16, 24, 0.78);
+      color: var(--text);
+      font: inherit;
+    }
+
+    textarea {
+      min-height: 110px;
+      resize: vertical;
+    }
+
+    .drop {
+      margin-top: 18px;
+      padding: 16px;
+      border: 1px dashed rgba(140, 235, 237, 0.45);
+      border-radius: 14px;
+      background: rgba(8, 15, 22, 0.48);
+    }
+
+    .drop.dragover {
+      border-color: var(--tile-azure);
+      background: rgba(140, 235, 237, 0.08);
+    }
+
+    .file-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .file-input {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    label.choose {
+      flex: 0 0 auto;
+      width: fit-content;
+      margin: 0;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+
+    .preview {
+      display: flex;
+      justify-content: center;
+      margin-top: 14px;
+    }
+
+    .preview img,
+    .preview canvas {
+      max-width: 100%;
+      max-height: 420px;
+      height: auto;
+      border-radius: 12px;
+      background: rgba(0, 0, 0, 0.28);
+    }
+
+    .actions,
+    .links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    button,
+    .button-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 38px;
+      padding: 0 14px;
+      border: 1px solid rgba(140, 235, 237, 0.55);
+      border-radius: 8px;
+      background: rgba(7, 16, 24, 0.78);
+      color: var(--text);
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    button:hover,
+    .button-link:hover {
+      filter: brightness(1.08);
+      text-decoration: none;
+    }
+
+    button:disabled {
+      opacity: 0.45;
+      cursor: default;
+      filter: none;
+    }
+
+    .status {
+      min-height: 1.5em;
+      margin: 16px 0 0;
+      color: var(--text);
+    }
+
+    .status.error {
+      color: #ffb4b4;
+    }
+
+    .readout {
+      margin-top: 8px;
+    }
+
+    @media (max-width: 620px) {
+      .wrap {
+        margin: 0;
+        padding: 14px;
+      }
+
+      .card {
+        padding: 22px;
+        border-radius: 18px;
+      }
+
+      .masthead {
+        grid-template-columns: 1fr;
+      }
+
+      .studio-mark {
+        width: 108px;
+        height: 108px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="video-backdrop" aria-hidden="true">
+    <video autoplay muted loop playsinline poster="./web_portal_background.png">
+      <source src="./preview.webm" type="video/webm">
+      <source src="./preview.mkv" type="video/x-matroska">
+    </video>
+  </div>
+  <main class="wrap">
+    <section class="card">
+      <div class="masthead">
+        <a href="./tech.html" aria-label="Back to technology">
+          <img class="studio-mark" src="./massive%20hadron%20logo.png" alt="Massive Hadron">
+        </a>
+        <div>
+          <h1>PixelStow</h1>
+          <p>Encode a short message into an image, or read one back. The picture is processed in this browser and is not uploaded. Older Unity pictures still open in the PixelStow app.</p>
+        </div>
+      </div>
+
+      <div class="drop" id="drop">
+        <label for="file">Image</label>
+        <div class="file-row">
+          <input id="file" class="file-input" type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg">
+          <label class="choose button-link" for="file">Choose image</label>
+        </div>
+        <p class="hint" id="capacity">Choose a PNG or JPEG. A fingerprint is saved as a new PNG, so the original file stays as it is.</p>
+        <div class="preview" id="preview" hidden></div>
+      </div>
+
+      <label for="message">Message</label>
+      <textarea id="message" maxlength="16384" spellcheck="true"></textarea>
+
+      <label for="password">Password</label>
+      <input id="password" type="password" autocomplete="off" spellcheck="false">
+      <p class="hint">Leave this blank for a public message. A password locks the text. It is not stored in the image.</p>
+
+      <label for="confirm">Confirm password</label>
+      <input id="confirm" type="password" autocomplete="off" spellcheck="false">
+
+      <div class="actions">
+        <button id="encode" type="button" disabled>Encode into a new PNG</button>
+        <button id="decode" type="button" disabled>Decode image</button>
+        <a class="button-link" id="download" href="#" hidden>Download encoded PNG</a>
+      </div>
+      <p class="status" id="status" role="status"></p>
+
+      <h2>Read message</h2>
+      <textarea class="readout" id="readout" readonly placeholder="A decoded message will appear here."></textarea>
+
+      <div class="links">
+        <a class="button-link" href="./tech.html">Back to technology</a>
+        <a class="button-link" href="./massive-hadron.html">Massive Hadron</a>
+      </div>
+    </section>
+  </main>
+  <script src="./pixelstow.js"></script>
+  <script>
+    const fileInput = document.querySelector("#file");
+    const drop = document.querySelector("#drop");
+    const preview = document.querySelector("#preview");
+    const capacity = document.querySelector("#capacity");
+    const message = document.querySelector("#message");
+    const password = document.querySelector("#password");
+    const confirmPassword = document.querySelector("#confirm");
+    const encodeButton = document.querySelector("#encode");
+    const decodeButton = document.querySelector("#decode");
+    const downloadLink = document.querySelector("#download");
+    const status = document.querySelector("#status");
+    const readout = document.querySelector("#readout");
+    let current = null;
+    let downloadUrl = "";
+    let busy = false;
+
+    function setStatus(text, isError) {
+      status.textContent = text || "";
+      status.classList.toggle("error", Boolean(isError));
+    }
+
+    function clearDownload() {
+      if (downloadUrl) URL.revokeObjectURL(downloadUrl);
+      downloadUrl = "";
+      downloadLink.hidden = true;
+      downloadLink.removeAttribute("href");
+    }
+
+    function setBusy(value) {
+      busy = value;
+      const hasImage = Boolean(current);
+      encodeButton.disabled = busy || !hasImage || current.hasFingerprint;
+      decodeButton.disabled = busy || !hasImage;
+      fileInput.disabled = busy;
+    }
+
+    function showPreview(pixels, width, height) {
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext("2d");
+      const view = new Uint8ClampedArray(pixels);
+      context.putImageData(new ImageData(view, width, height), 0, 0);
+      preview.replaceChildren(canvas);
+      preview.hidden = false;
+    }
+
+    async function useFile(file) {
+      if (!file || busy) return;
+      clearDownload();
+      readout.value = "";
+      message.value = "";
+      password.value = "";
+      confirmPassword.value = "";
+      current = null;
+      setBusy(true);
+      setStatus("Reading the image…");
+      try {
+        const image = await PixelStow.readImageFile(file);
+        const found = await PixelStow.inspect(image.pixels, image.width, image.height);
+        current = {
+          file,
+          pixels: image.pixels,
+          width: image.width,
+          height: image.height,
+          exact: image.exact,
+          hasFingerprint: found.found,
+          passwordProtected: found.passwordProtected
+        };
+        showPreview(image.pixels, image.width, image.height);
+        const room = PixelStow.estimateBytes(image.width, image.height);
+        const exactNote = image.exact ? "" : " Browser colour conversion was used, so an existing fingerprint may not read.";
+        capacity.textContent = image.width + " × " + image.height + " pixels. About " + room + " bytes of text will fit." + exactNote;
+        if (found.found && found.passwordProtected) {
+          setStatus("This image has a locked fingerprint. Enter its password and choose Decode.");
+        } else if (found.found) {
+          const decoded = await PixelStow.decode(image.pixels, image.width, image.height, "");
+          if (decoded.status === "success") {
+            readout.value = decoded.text;
+            message.value = decoded.text;
+            setStatus("This image already has a public fingerprint, so it cannot be encoded again.");
+          } else {
+            setStatus("A fingerprint was found, but its text could not be read.", true);
+          }
+        } else {
+          setStatus("No fingerprint found. Enter a message to encode one.");
+        }
+      } catch (error) {
+        current = null;
+        preview.hidden = true;
+        preview.replaceChildren();
+        capacity.textContent = "Choose a PNG or JPEG. A fingerprint is saved as a new PNG, so the original file stays as it is.";
+        setStatus(error && error.message ? error.message : "Could not read that image.", true);
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    fileInput.addEventListener("change", () => {
+      const file = fileInput.files && fileInput.files[0];
+      if (file) useFile(file);
+    });
+
+    ["dragenter", "dragover"].forEach((name) => {
+      drop.addEventListener(name, (event) => {
+        event.preventDefault();
+        drop.classList.add("dragover");
+      });
+    });
+    ["dragleave", "drop"].forEach((name) => {
+      drop.addEventListener(name, (event) => {
+        event.preventDefault();
+        drop.classList.remove("dragover");
+      });
+    });
+    drop.addEventListener("drop", (event) => {
+      const file = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0];
+      if (file) useFile(file);
+    });
+
+    encodeButton.addEventListener("click", async () => {
+      if (!current || busy) return;
+      if (password.value !== confirmPassword.value) {
+        setStatus("Passwords do not match. No image was written.", true);
+        return;
+      }
+      clearDownload();
+      setBusy(true);
+      setStatus("Encoding…");
+      try {
+        const encoded = await PixelStow.encode(current.pixels, current.width, current.height, message.value, password.value);
+        const png = await PixelStow.writePng(encoded.pixels, encoded.width, encoded.height);
+        const check = await PixelStow.decodePng(new Uint8Array(await png.arrayBuffer()));
+        let mismatch = check.width !== encoded.width || check.height !== encoded.height || check.pixels.length !== encoded.pixels.length;
+        if (!mismatch) {
+          for (let i = 0; i < encoded.pixels.length; i++) {
+            if (check.pixels[i] !== encoded.pixels[i]) {
+              mismatch = true;
+              break;
+            }
+          }
+        }
+        if (mismatch) throw new Error("The PNG could not be checked. No image was offered for download.");
+        const verified = await PixelStow.decode(check.pixels, check.width, check.height, password.value);
+        if (verified.status !== "success" || verified.text !== message.value) {
+          throw new Error("The encoded image could not be read back. No image was offered for download.");
+        }
+        downloadUrl = URL.createObjectURL(png);
+        const base = (current.file.name || "image").replace(/\.[^.]+$/, "");
+        downloadLink.href = downloadUrl;
+        downloadLink.download = base + "-pixelstow.png";
+        downloadLink.hidden = false;
+        readout.value = message.value;
+        const lock = encoded.passwordProtected ? "Password-locked" : "Public";
+        setStatus(lock + " fingerprint encoded. Download the new PNG. The original file was not changed.");
+        password.value = "";
+        confirmPassword.value = "";
+      } catch (error) {
+        setStatus(error && error.message ? error.message : "The image could not be encoded.", true);
+      } finally {
+        setBusy(false);
+      }
+    });
+
+    decodeButton.addEventListener("click", async () => {
+      if (!current || busy) return;
+      setBusy(true);
+      setStatus("Decoding…");
+      try {
+        const decoded = await PixelStow.decode(current.pixels, current.width, current.height, password.value);
+        if (decoded.status === "success") {
+          readout.value = decoded.text;
+          message.value = decoded.text;
+          const lock = decoded.passwordProtected ? "Unlocked" : "Read";
+          setStatus(lock + " the fingerprint from this image.");
+          password.value = "";
+          confirmPassword.value = "";
+        } else if (decoded.status === "password") {
+          readout.value = "";
+          setStatus("This image has a locked fingerprint. Enter its password and choose Decode.");
+        } else if (decoded.status === "incorrect") {
+          setStatus("The password is incorrect, or the locked message is damaged.", true);
+        } else {
+          readout.value = "";
+          setStatus("No fingerprint was found in this image.", true);
+        }
+      } catch (error) {
+        setStatus(error && error.message ? error.message : "The image could not be decoded.", true);
+      } finally {
+        setBusy(false);
+      }
+    });
+  </script>
+</body>
+</html>
