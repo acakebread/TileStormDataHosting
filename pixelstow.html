@@ -311,6 +311,18 @@
 
     .compare-note { margin-top: 10px; }
 
+    .removal-switch {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .removal-switch button[aria-pressed="true"] {
+      background: #69dccb;
+      color: #102028;
+    }
+
     .actions,
     .links {
       display: flex;
@@ -458,6 +470,12 @@
         </div>
         <p class="hint preview-note" id="preview-note" hidden>Scroll over the picture to zoom. Hold the right mouse button to pan.</p>
         <p class="hint compare-note" id="compare-note" hidden>Drag the divider with the left button. The encoded image is on the left and the recovered source is on the right.</p>
+        <div class="removal-switch" id="removal-switch" hidden>
+          <button type="button" id="removal-guided" aria-pressed="true">Known diagonal</button>
+          <button type="button" id="removal-previous" aria-pressed="false">Previous removal</button>
+          <button type="button" id="removal-highlight" aria-pressed="false">Highlight changes</button>
+        </div>
+        <p class="hint" id="removal-detail" hidden></p>
       </div>
 
       <label for="message">Message <span class="byte-count" id="message-bytes">(0 bytes)</span></label>
@@ -497,7 +515,7 @@
       </div>
     </section>
   </main>
-  <script src="./pixelstow.js"></script>
+  <script src="./pixelstow.js?20261010-known-diagonal"></script>
   <script>
     const fileInput = document.querySelector("#file");
     const drop = document.querySelector("#drop");
@@ -509,6 +527,11 @@
     const compareUi = document.querySelector("#compare-ui");
     const previewNote = document.querySelector("#preview-note");
     const compareNote = document.querySelector("#compare-note");
+    const removalSwitch = document.querySelector("#removal-switch");
+    const removalGuided = document.querySelector("#removal-guided");
+    const removalPrevious = document.querySelector("#removal-previous");
+    const removalHighlight = document.querySelector("#removal-highlight");
+    const removalDetail = document.querySelector("#removal-detail");
     const split = document.querySelector("#split");
     const splitLine = document.querySelector("#split-line");
     const tagEncoded = document.querySelector("#tag-encoded");
@@ -540,6 +563,9 @@
     let panning = false;
     let panX = 0;
     let panY = 0;
+    let guidedRemoval = true;
+    let showDifference = false;
+    let sourceToken = 0;
 
     function byteLabel(text) {
       const count = new TextEncoder().encode(text || "").length;
@@ -598,11 +624,17 @@
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
 
-    function rememberMessage(pixels, text, strength) {
+    function rememberMessage(pixels, text, strength, framed, parityBits) {
       current.recoverPixels = pixels;
       current.decodedText = text;
       current.strength = strength;
-      current.carrierPromise = null;
+      current.framed = framed ? framed.slice() : null;
+      current.parityBits = parityBits;
+      current.guidedPromise = null;
+      current.blindPromise = null;
+      current.difference = null;
+      current.differencePromise = null;
+      showDifference = false;
       setBusy(busy);
       startComparison();
     }
@@ -711,9 +743,111 @@
 
     function hideComparison() {
       previewGeneration += 1;
+      sourceToken += 1;
       previewSource.hidden = true;
       compareUi.hidden = true;
       compareNote.hidden = true;
+      removalSwitch.hidden = true;
+      removalDetail.hidden = true;
+    }
+
+    function updateRemovalButtons() {
+      removalGuided.setAttribute("aria-pressed", guidedRemoval ? "true" : "false");
+      removalPrevious.setAttribute("aria-pressed", guidedRemoval ? "false" : "true");
+    }
+
+    function carrierFor(job, guided) {
+      const key = guided ? "guidedPromise" : "blindPromise";
+      if (!job[key]) {
+        job[key] = PixelStow.extractCarrier(
+          job.recoverPixels,
+          job.width,
+          job.height,
+          job.strength,
+          guided ? job.framed : null,
+          job.parityBits,
+          guided
+        ).catch((error) => {
+          job[key] = null;
+          throw error;
+        });
+      }
+      return job[key];
+    }
+
+    function showRecovered(result) {
+      tagEncoded.textContent = "Encoded";
+      tagSource.textContent = result.guided ? "Guided" : "Previous";
+      removalSwitch.hidden = false;
+      updateRemovalButtons();
+      removalHighlight.setAttribute("aria-pressed", "false");
+      compareNote.textContent = "Drag the divider with the left button. The encoded image is on the left and the recovered source is on the right.";
+    }
+
+    function buildDifference(guided, blind) {
+      const diff = new Uint8Array(guided.length);
+      let changedPixels = 0;
+      let max = 0;
+      let absSum = 0;
+      let channels = 0;
+      for (let i = 0; i < guided.length; i += 4) {
+        let changed = false;
+        for (let c = 0; c < 3; c++) {
+          const delta = guided[i + c] - blind[i + c];
+          const magnitude = Math.abs(delta);
+          if (magnitude) changed = true;
+          if (magnitude > max) max = magnitude;
+          absSum += magnitude;
+          channels++;
+          let shown = 128 + delta * 8;
+          if (shown < 0) shown = 0;
+          if (shown > 255) shown = 255;
+          diff[i + c] = shown;
+        }
+        diff[i + 3] = 255;
+        if (changed) changedPixels++;
+      }
+      return {
+        pixels: diff,
+        changedPixels,
+        pixelCount: guided.length / 4,
+        max,
+        meanAbs: channels ? absSum / channels : 0
+      };
+    }
+
+    function differenceText(difference) {
+      if (!difference.max) return "The known diagonal matches the previous removal on every pixel of this image.";
+      const average = difference.meanAbs.toLocaleString("en-GB", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+      const changed = difference.changedPixels.toLocaleString("en-GB");
+      const total = difference.pixelCount.toLocaleString("en-GB");
+      return "The known diagonal changes " + changed + " of " + total + " pixels. The average change is " + average + " levels and the largest is " + difference.max + ". Highlight changes boosts that difference eight times.";
+    }
+
+    function measureDifference(job) {
+      if (job.difference) return Promise.resolve(job.difference);
+      if (!job.differencePromise) {
+        job.differencePromise = Promise.all([carrierFor(job, true), carrierFor(job, false)]).then((pair) => {
+          job.difference = buildDifference(pair[0].pixels, pair[1].pixels);
+          job.differencePromise = null;
+          return job.difference;
+        }).catch((error) => {
+          job.differencePromise = null;
+          throw error;
+        });
+      }
+      return job.differencePromise;
+    }
+
+    function publishDifference(job) {
+      measureDifference(job).then((difference) => {
+        if (current !== job) return;
+        removalDetail.hidden = false;
+        removalDetail.textContent = differenceText(difference);
+      }).catch(() => {
+        if (current !== job) return;
+        removalDetail.hidden = true;
+      });
     }
 
     function showPreview(pixels, width, height) {
@@ -724,37 +858,72 @@
       resetView();
     }
 
-    function carrierFor(job) {
-      if (!job.carrierPromise) {
-        job.carrierPromise = PixelStow.extractCarrier(job.recoverPixels, job.width, job.height, job.strength).catch((error) => {
-          job.carrierPromise = null;
-          throw error;
-        });
-      }
-      return job.carrierPromise;
-    }
-
     async function startComparison() {
       const job = current;
       if (!job || !job.recoverPixels) return;
       const generation = ++previewGeneration;
+      const token = ++sourceToken;
+      const guided = guidedRemoval;
       try {
-        const carrier = await carrierFor(job);
-        if (generation !== previewGeneration || current !== job) return;
+        const carrier = await carrierFor(job, guided);
+        if (generation !== previewGeneration || token !== sourceToken || current !== job) return;
         paintCanvas(previewEncoded, job.recoverPixels, job.width, job.height);
-        paintCanvas(previewSource, carrier, job.width, job.height);
+        paintCanvas(previewSource, carrier.pixels, job.width, job.height);
         split.value = "500";
         previewSource.hidden = false;
         compareUi.hidden = false;
         compareNote.hidden = false;
         preview.hidden = false;
         previewNote.hidden = false;
+        showRecovered(carrier);
         resetView();
+        publishDifference(job);
+        if (guided && !carrier.guided) {
+          setStatus("The known diagonal could not be rebuilt, so the previous removal is showing.", true);
+        }
       } catch (error) {
-        if (generation !== previewGeneration || current !== job) return;
+        if (generation !== previewGeneration || token !== sourceToken || current !== job) return;
         previewSource.hidden = true;
         compareUi.hidden = true;
         compareNote.hidden = true;
+        removalSwitch.hidden = true;
+        removalDetail.hidden = true;
+      }
+    }
+
+    async function refreshRemoval() {
+      const job = current;
+      if (!job || !job.recoverPixels || compareUi.hidden) return;
+      const generation = previewGeneration;
+      const token = ++sourceToken;
+      const guided = guidedRemoval;
+      updateRemovalButtons();
+      try {
+        if (showDifference) {
+          const difference = await measureDifference(job);
+          if (generation !== previewGeneration || token !== sourceToken || current !== job) return;
+          paintCanvas(previewEncoded, difference.pixels, job.width, job.height);
+          paintCanvas(previewSource, difference.pixels, job.width, job.height);
+          tagEncoded.textContent = "Changes";
+          tagSource.textContent = "Changes";
+          removalHighlight.setAttribute("aria-pressed", "true");
+          compareNote.textContent = "Grey means the two recoveries match. Light and dark are the changed pixels, boosted eight times.";
+          removalDetail.hidden = false;
+          removalDetail.textContent = differenceText(difference);
+          applyView();
+          return;
+        }
+        const carrier = await carrierFor(job, guided);
+        if (generation !== previewGeneration || token !== sourceToken || current !== job) return;
+        paintCanvas(previewSource, carrier.pixels, job.width, job.height);
+        showRecovered(carrier);
+        applyView();
+        if (guided && !carrier.guided) {
+          setStatus("The known diagonal could not be rebuilt, so the previous removal is showing.", true);
+        }
+      } catch (error) {
+        if (generation !== previewGeneration || token !== sourceToken || current !== job) return;
+        setStatus(error && error.message ? error.message : "The source image could not be recovered.", true);
       }
     }
 
@@ -791,7 +960,7 @@
           if (decoded.status === "success") {
             readout.value = decoded.text;
             message.value = decoded.text;
-            rememberMessage(image.pixels, decoded.text, decoded.strength);
+            rememberMessage(image.pixels, decoded.text, decoded.strength, decoded.framed, decoded.parityBits);
             setStatus("This image already has a public fingerprint, so it cannot be encoded again.");
           } else {
             setStatus("A fingerprint was found, but its text could not be read.", true);
@@ -931,7 +1100,7 @@
           jpegNote = " The JPEG could not be saved, so only the PNG is ready.";
         }
         readout.value = message.value;
-        rememberMessage(encoded.pixels, message.value, encoded.strength);
+        rememberMessage(encoded.pixels, message.value, encoded.strength, encoded.framed, encoded.parityBits);
         const lock = encoded.passwordProtected ? "Password-locked" : "Public";
         const formats = encodedJpeg ? "PNG or JPEG" : "PNG";
         setStatus(lock + " fingerprint encoded. Download the new " + formats + ". The original file was not changed." + jpegNote);
@@ -954,7 +1123,7 @@
         if (decoded.status === "success") {
           readout.value = decoded.text;
           message.value = decoded.text;
-          rememberMessage(current.pixels, decoded.text, decoded.strength);
+          rememberMessage(current.pixels, decoded.text, decoded.strength, decoded.framed, decoded.parityBits);
           const lock = decoded.passwordProtected ? "Unlocked" : "Read";
           setStatus(lock + " the fingerprint from this image.");
           password.value = "";
@@ -992,11 +1161,11 @@
       setBusy(true);
       setStatus("Preparing the source image…");
       try {
-        const carrier = await carrierFor(current);
+        const carrier = await carrierFor(current, guidedRemoval);
         if (kind === "jpeg") {
-          saveBlob(await PixelStow.writeJpeg(carrier, current.width, current.height), fileBase() + "-source.jpg");
+          saveBlob(await PixelStow.writeJpeg(carrier.pixels, current.width, current.height), fileBase() + "-source.jpg");
         } else {
-          saveBlob(await PixelStow.writePng(carrier, current.width, current.height), fileBase() + "-source.png");
+          saveBlob(await PixelStow.writePng(carrier.pixels, current.width, current.height), fileBase() + "-source.png");
         }
         setStatus("Source image ready. The original file was not changed.");
       } catch (error) {
@@ -1008,6 +1177,22 @@
 
     saveSourceButton.addEventListener("click", () => saveSource("png"));
     saveSourceJpegButton.addEventListener("click", () => saveSource("jpeg"));
+    removalGuided.addEventListener("click", () => {
+      showDifference = false;
+      if (guidedRemoval && removalHighlight.getAttribute("aria-pressed") !== "true") return;
+      guidedRemoval = true;
+      refreshRemoval();
+    });
+    removalPrevious.addEventListener("click", () => {
+      showDifference = false;
+      if (!guidedRemoval && removalHighlight.getAttribute("aria-pressed") !== "true") return;
+      guidedRemoval = false;
+      refreshRemoval();
+    });
+    removalHighlight.addEventListener("click", () => {
+      showDifference = removalHighlight.getAttribute("aria-pressed") !== "true";
+      refreshRemoval();
+    });
   </script>
 </body>
 </html>

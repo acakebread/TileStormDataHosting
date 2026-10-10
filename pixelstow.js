@@ -729,6 +729,7 @@
       const unpacked = await unpackFrame(framed.bytes);
       return {
         payload: unpacked.payload,
+        framed: framed.bytes,
         strength: unpacked.strength,
         corrections: framed.corrections,
         copies: framed.copies,
@@ -792,7 +793,9 @@
         status: "success",
         text: decodeUtf8(textBytes),
         passwordProtected: recovery.passwordProtected,
-        strength: recovery.strength
+        strength: recovery.strength,
+        framed: recovery.framed,
+        parityBits: recovery.parityBits
       };
     } catch (error) {
       if (error && error.code === "incorrect") return { status: "incorrect" };
@@ -827,7 +830,8 @@
       strength,
       copies: written.copies,
       parityBits: written.parityBits,
-      passwordProtected
+      passwordProtected,
+      framed
     };
   }
 
@@ -856,7 +860,8 @@
           strength: encoded.strength,
           copies: encoded.copies,
           parityBits: encoded.parityBits,
-          passwordProtected: locked
+          passwordProtected: locked,
+          framed: encoded.framed
         };
       }
       let next = 0;
@@ -1141,9 +1146,114 @@
     return rounded;
   }
 
-  async function extractCarrier(pixels, width, height, strength) {
+  function writtenSymbols(width, height, framed, parityBits) {
+    const columns = Math.floor(width / BLOCK);
+    const rows = Math.floor(height / BLOCK);
+    const symbols = new Int8Array(columns * rows);
+    symbols.fill(-1);
+    const bitsPerByte = parityBits === 1 ? 9 : 12;
+    if (!framed || framed.length === 0 || symbols.length <= PREAMBLE_BLOCKS) return symbols;
+    const payloadBlocks = symbols.length - PREAMBLE_BLOCKS;
+    if (payloadBlocks < framed.length * bitsPerByte) return symbols;
+    const preamble = new Uint8Array(9);
+    preamble[0] = MAGIC;
+    preamble[1] = 1;
+    preamble[2] = FLAGS | (parityBits === 1 ? ONE_PARITY : 0);
+    writeU32(preamble, 3, framed.length);
+    const crc = crc32(preamble, 0, 7) & 0xFFFF;
+    preamble[7] = crc & 0xFF;
+    preamble[8] = (crc >> 8) & 0xFF;
+    const preambleOrder = scatterOrder(PREAMBLE_BLOCKS, SEED);
+    for (let slot = 0; slot < PREAMBLE_BLOCKS; slot++) {
+      const bitIndex = slot % 72;
+      symbols[preambleOrder[slot]] = (preamble[bitIndex >> 3] >> (7 - (bitIndex & 7))) & 1;
+    }
+    const codedBits = framed.length * bitsPerByte;
+    const payloadOrder = scatterOrder(payloadBlocks, SEED);
+    for (let slot = 0; slot < payloadBlocks; slot++) {
+      symbols[PREAMBLE_BLOCKS + payloadOrder[slot]] = codedBit(framed, slot % codedBits, bitsPerByte);
+    }
+    return symbols;
+  }
+
+  function removalGain(projection, energy) {
+    const gain = projection / energy;
+    if (gain < 0) return 0;
+    if (gain > 1) return 1;
+    return gain;
+  }
+
+  async function extractGuided(pixels, width, height, strength, framed, parityBits) {
+    const symbols = writtenSymbols(width, height, framed, parityBits);
+    for (let i = 0; i < symbols.length; i++) {
+      if (symbols[i] < 0) return null;
+    }
+    const one = new Float64Array(16);
+    const zero = new Float64Array(16);
+    for (let y = 0; y < 4; y++) {
+      for (let x = 0; x < 4; x++) {
+        const i = x + y * 4;
+        one[i] = scaleWeight(strength, WAVELET[x - y + 3]);
+        zero[i] = scaleWeight(strength, WAVELET[x + y]);
+      }
+    }
+    let oneEnergy = 0;
+    let zeroEnergy = 0;
+    for (let i = 0; i < 16; i++) {
+      oneEnergy += one[i] * one[i];
+      zeroEnergy += zero[i] * zero[i];
+    }
+    if (oneEnergy === 0 || zeroEnergy === 0) return null;
+    const carrier = pixels.slice();
+    const columns = Math.floor(width / BLOCK);
+    const rows = Math.floor(height / BLOCK);
+    for (let row = 0; row < rows; row++) {
+      if ((row & 15) === 15) await yieldNow();
+      for (let column = 0; column < columns; column++) {
+        const symbol = symbols[column + row * columns];
+        const template = symbol === 1 ? one : zero;
+        const energy = symbol === 1 ? oneEnergy : zeroEnergy;
+        let red = 0;
+        let green = 0;
+        let blue = 0;
+        for (let y = 0; y < 4; y++) {
+          for (let x = 0; x < 4; x++) {
+            const pixel = (column * BLOCK + x + (row * BLOCK + y) * width) * 4;
+            const weight = template[x + y * 4];
+            red += pixels[pixel] * weight;
+            green += pixels[pixel + 1] * weight;
+            blue += pixels[pixel + 2] * weight;
+          }
+        }
+        const redGain = removalGain(red, energy);
+        const greenGain = removalGain(green, energy);
+        const blueGain = removalGain(blue, energy);
+        for (let y = 0; y < 4; y++) {
+          for (let x = 0; x < 4; x++) {
+            const pixel = (column * BLOCK + x + (row * BLOCK + y) * width) * 4;
+            const weight = template[x + y * 4];
+            carrier[pixel] = clampChannel(pixels[pixel] - redGain * weight);
+            carrier[pixel + 1] = clampChannel(pixels[pixel + 1] - greenGain * weight);
+            carrier[pixel + 2] = clampChannel(pixels[pixel + 2] - blueGain * weight);
+            carrier[pixel + 3] = pixels[pixel + 3];
+          }
+        }
+      }
+    }
+    return carrier;
+  }
+
+  async function extractCarrier(pixels, width, height, strength, framed, parityBits, guided) {
     assertImage(pixels, width, height);
     strength = Math.max(1, Math.min(32, strength | 0));
+    if (guided && framed) {
+      const carrier = await extractGuided(pixels, width, height, strength, framed, parityBits);
+      if (carrier) return { pixels: carrier, guided: true };
+    }
+    return { pixels: await extractBlind(pixels, width, height, strength), guided: false };
+  }
+
+  async function extractBlind(pixels, width, height, strength) {
     const common = new Float64Array(16);
     const difference = new Float64Array(16);
     let mean = 0;
