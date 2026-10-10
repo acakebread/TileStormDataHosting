@@ -187,41 +187,44 @@
     }
 
     .preview {
-      display: flex;
-      justify-content: center;
       margin-top: 14px;
     }
 
-    .compare {
+    .viewport {
       position: relative;
-      display: inline-block;
-      max-width: 100%;
+      width: 100%;
+      overflow: hidden;
+      border-radius: 12px;
+      background: rgba(0, 0, 0, 0.28);
+    }
+
+    .viewport.panning,
+    .viewport.panning * {
+      cursor: grabbing !important;
+    }
+
+    .compare {
+      position: absolute;
+      top: 0;
+      left: 0;
+      transform-origin: 0 0;
       line-height: 0;
     }
 
     .compare canvas {
       display: block;
-      max-width: 100%;
-      max-height: 420px;
-      width: auto;
-      height: auto;
-      border-radius: 12px;
-      background: rgba(0, 0, 0, 0.28);
+      width: 100%;
+      height: 100%;
+      background: transparent;
     }
 
     #preview-source {
       position: absolute;
       inset: 0;
-      width: 100%;
-      height: 100%;
-      max-width: none;
-      max-height: none;
     }
 
     .compare-ui {
       position: absolute;
-      inset: 0;
-      border-radius: 12px;
     }
 
     .compare-ui input {
@@ -440,9 +443,11 @@
         </div>
         <p class="hint" id="capacity">Choose a PNG or JPEG. A fingerprint is saved as a new PNG or JPEG, so the original file stays as it is.</p>
         <div class="preview" id="preview" hidden>
-          <div class="compare" id="compare">
-            <canvas id="preview-encoded"></canvas>
-            <canvas id="preview-source" hidden></canvas>
+          <div class="viewport" id="viewport">
+            <div class="compare" id="compare">
+              <canvas id="preview-encoded"></canvas>
+              <canvas id="preview-source" hidden></canvas>
+            </div>
             <div class="compare-ui" id="compare-ui" hidden>
               <span class="compare-tag left" id="tag-encoded">Encoded</span>
               <span class="compare-tag right" id="tag-source">Source</span>
@@ -451,7 +456,8 @@
             </div>
           </div>
         </div>
-        <p class="hint compare-note" id="compare-note" hidden>Drag the divider. The encoded image is on the left and the recovered source is on the right.</p>
+        <p class="hint preview-note" id="preview-note" hidden>Scroll over the picture to zoom. Hold the right mouse button to pan.</p>
+        <p class="hint compare-note" id="compare-note" hidden>Drag the divider with the left button. The encoded image is on the left and the recovered source is on the right.</p>
       </div>
 
       <label for="message">Message <span class="byte-count" id="message-bytes">(0 bytes)</span></label>
@@ -496,9 +502,12 @@
     const fileInput = document.querySelector("#file");
     const drop = document.querySelector("#drop");
     const preview = document.querySelector("#preview");
+    const viewport = document.querySelector("#viewport");
+    const compare = document.querySelector("#compare");
     const previewEncoded = document.querySelector("#preview-encoded");
     const previewSource = document.querySelector("#preview-source");
     const compareUi = document.querySelector("#compare-ui");
+    const previewNote = document.querySelector("#preview-note");
     const compareNote = document.querySelector("#compare-note");
     const split = document.querySelector("#split");
     const splitLine = document.querySelector("#split-line");
@@ -524,6 +533,13 @@
     let encodedJpeg = null;
     let busy = false;
     let previewGeneration = 0;
+    let fitMode = true;
+    let viewScale = 1;
+    let originX = 0;
+    let originY = 0;
+    let panning = false;
+    let panX = 0;
+    let panY = 0;
 
     function byteLabel(text) {
       const count = new TextEncoder().encode(text || "").length;
@@ -604,9 +620,93 @@
       const ratio = Math.max(0, Math.min(1, Number(value) / 1000));
       previewSource.style.clipPath = "inset(0 0 0 " + (ratio * 100) + "%)";
       splitLine.style.left = (ratio * 100) + "%";
-      const width = previewEncoded.clientWidth;
+      const width = compareUi.clientWidth;
       tagEncoded.hidden = width * ratio < 78;
       tagSource.hidden = width * (1 - ratio) < 78;
+    }
+
+    function imagePixels() {
+      return { w: previewEncoded.width, h: previewEncoded.height };
+    }
+
+    function viewBox() {
+      return { w: viewport.clientWidth, h: viewport.clientHeight };
+    }
+
+    function fittedScale(img, box) {
+      if (!img.w || !img.h || !box.w || !box.h) return 1;
+      return Math.min(box.w / img.w, box.h / img.h);
+    }
+
+    function clampScale(value, img, box) {
+      const fit = fittedScale(img, box);
+      const max = Math.max(fit * 16, 16 / (window.devicePixelRatio || 1));
+      return Math.max(fit, Math.min(max, value));
+    }
+
+    function clampOrigin(img, box) {
+      const width = img.w * viewScale;
+      const height = img.h * viewScale;
+      if (width <= box.w) originX = (box.w - width) / 2;
+      else originX = Math.min(0, Math.max(box.w - width, originX));
+      if (height <= box.h) originY = (box.h - height) / 2;
+      else originY = Math.min(0, Math.max(box.h - height, originY));
+    }
+
+    function applyView() {
+      const img = imagePixels();
+      const box = viewBox();
+      if (!img.w || !img.h || !box.w || !box.h) return;
+      if (fitMode) {
+        viewScale = fittedScale(img, box);
+        originX = (box.w - img.w * viewScale) / 2;
+        originY = (box.h - img.h * viewScale) / 2;
+      } else {
+        viewScale = clampScale(viewScale, img, box);
+        clampOrigin(img, box);
+      }
+      compare.style.width = img.w + "px";
+      compare.style.height = img.h + "px";
+      compare.style.transform = "translate(" + originX + "px," + originY + "px) scale(" + viewScale + ")";
+      if (!compareUi.hidden) {
+        compareUi.style.left = originX + "px";
+        compareUi.style.top = originY + "px";
+        compareUi.style.width = (img.w * viewScale) + "px";
+        compareUi.style.height = (img.h * viewScale) + "px";
+        setSplit(split.value);
+      }
+    }
+
+    function sizeViewport() {
+      const img = imagePixels();
+      const width = viewport.clientWidth;
+      if (!img.w || !img.h || !width) return;
+      const height = Math.max(120, Math.min(420, width * img.h / img.w));
+      const next = height + "px";
+      if (viewport.style.height !== next) viewport.style.height = next;
+      applyView();
+    }
+
+    function resetView() {
+      fitMode = true;
+      sizeViewport();
+    }
+
+    function zoomAt(clientX, clientY, factor) {
+      const img = imagePixels();
+      const box = viewBox();
+      if (!img.w || !box.w || !box.h) return;
+      const rect = viewport.getBoundingClientRect();
+      const px = clientX - rect.left;
+      const py = clientY - rect.top;
+      const imageX = (px - originX) / viewScale;
+      const imageY = (py - originY) / viewScale;
+      fitMode = false;
+      viewScale = clampScale(viewScale * factor, img, box);
+      originX = px - imageX * viewScale;
+      originY = py - imageY * viewScale;
+      clampOrigin(img, box);
+      applyView();
     }
 
     function hideComparison() {
@@ -620,6 +720,8 @@
       hideComparison();
       paintCanvas(previewEncoded, pixels, width, height);
       preview.hidden = false;
+      previewNote.hidden = false;
+      resetView();
     }
 
     function carrierFor(job) {
@@ -642,11 +744,12 @@
         paintCanvas(previewEncoded, job.recoverPixels, job.width, job.height);
         paintCanvas(previewSource, carrier, job.width, job.height);
         split.value = "500";
-        setSplit(500);
         previewSource.hidden = false;
         compareUi.hidden = false;
         compareNote.hidden = false;
         preview.hidden = false;
+        previewNote.hidden = false;
+        resetView();
       } catch (error) {
         if (generation !== previewGeneration || current !== job) return;
         previewSource.hidden = true;
@@ -699,6 +802,7 @@
       } catch (error) {
         current = null;
         preview.hidden = true;
+        previewNote.hidden = true;
         hideComparison();
         capacity.textContent = "Choose a PNG or JPEG. A fingerprint is saved as a new PNG or JPEG, so the original file stays as it is.";
         setStatus(error && error.message ? error.message : "Could not read that image.", true);
@@ -709,6 +813,51 @@
     }
 
     split.addEventListener("input", () => setSplit(split.value));
+
+    viewport.addEventListener("wheel", (event) => {
+      if (!event.deltaY || event.ctrlKey || !imagePixels().w) return;
+      event.preventDefault();
+      const delta = event.deltaMode === 1 ? event.deltaY * 16 : event.deltaY;
+      zoomAt(event.clientX, event.clientY, Math.pow(1.0015, -delta));
+    }, { passive: false });
+
+    viewport.addEventListener("pointerdown", (event) => {
+      if (event.button !== 2 || !imagePixels().w) return;
+      event.preventDefault();
+      event.stopPropagation();
+      panning = true;
+      panX = event.clientX;
+      panY = event.clientY;
+      viewport.classList.add("panning");
+      viewport.setPointerCapture(event.pointerId);
+    }, true);
+
+    viewport.addEventListener("pointermove", (event) => {
+      if (!panning) return;
+      const img = imagePixels();
+      const box = viewBox();
+      originX += event.clientX - panX;
+      originY += event.clientY - panY;
+      panX = event.clientX;
+      panY = event.clientY;
+      fitMode = false;
+      clampOrigin(img, box);
+      applyView();
+    });
+
+    function endPan(event) {
+      if (!panning) return;
+      panning = false;
+      viewport.classList.remove("panning");
+      if (viewport.hasPointerCapture(event.pointerId)) viewport.releasePointerCapture(event.pointerId);
+    }
+
+    viewport.addEventListener("pointerup", endPan);
+    viewport.addEventListener("pointercancel", endPan);
+    viewport.addEventListener("contextmenu", (event) => event.preventDefault());
+    new ResizeObserver(() => {
+      if (!preview.hidden) sizeViewport();
+    }).observe(viewport);
 
     message.addEventListener("input", updateByteCounts);
 
