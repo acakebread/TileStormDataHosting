@@ -316,6 +316,35 @@
       margin-top: 18px;
     }
 
+    .support {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px 20px;
+      align-items: center;
+      margin-top: 28px;
+    }
+
+    .support p {
+      margin: 0;
+      flex: 1 1 16rem;
+    }
+
+    a.coffee {
+      flex: 0 0 auto;
+      line-height: 0;
+    }
+
+    a.coffee img {
+      display: block;
+      height: 52px;
+      width: auto;
+    }
+
+    a.coffee:hover {
+      filter: brightness(1.06);
+      text-decoration: none;
+    }
+
     [hidden] {
       display: none !important;
     }
@@ -452,6 +481,13 @@
       <div class="links">
         <a class="button-link" href="./tech.html">Back to technology</a>
         <a class="button-link" href="./massive-hadron.html">Massive Hadron</a>
+      </div>
+
+      <div class="support">
+        <a class="coffee" href="https://www.buymeacoffee.com/acakebread" target="_blank" rel="noopener noreferrer">
+          <img src="./buymeacoffee.png" alt="Buy me a coffee">
+        </a>
+        <p>If you want to use this utility in your application, please contact me at <a href="mailto:acakebread@massivehadron.com">acakebread@massivehadron.com</a> and I will grant access to the repo.</p>
       </div>
     </section>
   </main>
