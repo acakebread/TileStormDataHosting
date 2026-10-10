@@ -122,6 +122,12 @@
       font-weight: 700;
     }
 
+    .byte-count {
+      font-weight: 600;
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+
     input[type="text"],
     input[type="password"],
     textarea {
@@ -300,7 +306,7 @@
         <div class="preview" id="preview" hidden></div>
       </div>
 
-      <label for="message">Message</label>
+      <label for="message">Message <span class="byte-count" id="message-bytes">(0 bytes)</span></label>
       <textarea id="message" maxlength="16384" spellcheck="true"></textarea>
 
       <label for="password">Password</label>
@@ -321,7 +327,7 @@
       </div>
       <p class="status" id="status" role="status"></p>
 
-      <h2>Read message</h2>
+      <h2>Read message <span class="byte-count" id="readout-bytes">(0 bytes)</span></h2>
       <textarea class="readout" id="readout" readonly placeholder="A decoded message will appear here."></textarea>
 
       <div class="links">
@@ -348,10 +354,23 @@
     const saveSourceJpegButton = document.querySelector("#save-source-jpeg");
     const status = document.querySelector("#status");
     const readout = document.querySelector("#readout");
+    const messageBytes = document.querySelector("#message-bytes");
+    const readoutBytes = document.querySelector("#readout-bytes");
     let current = null;
     let downloadUrl = "";
     let encodedJpeg = null;
     let busy = false;
+
+    function byteLabel(text) {
+      const count = new TextEncoder().encode(text || "").length;
+      const formatted = count.toLocaleString("en-GB");
+      return "(" + formatted + (count === 1 ? " byte)" : " bytes)");
+    }
+
+    function updateByteCounts() {
+      messageBytes.textContent = byteLabel(message.value);
+      readoutBytes.textContent = byteLabel(readout.value);
+    }
 
     function setStatus(text, isError) {
       status.textContent = text || "";
@@ -466,8 +485,11 @@
         setStatus(error && error.message ? error.message : "Could not read that image.", true);
       } finally {
         setBusy(false);
+        updateByteCounts();
       }
     }
+
+    message.addEventListener("input", updateByteCounts);
 
     fileInput.addEventListener("change", () => {
       const file = fileInput.files && fileInput.files[0];
@@ -549,6 +571,7 @@
         setStatus(error && error.message ? error.message : "The image could not be encoded.", true);
       } finally {
         setBusy(false);
+        updateByteCounts();
       }
     });
 
@@ -579,6 +602,7 @@
         setStatus(error && error.message ? error.message : "The image could not be decoded.", true);
       } finally {
         setBusy(false);
+        updateByteCounts();
       }
     });
 
