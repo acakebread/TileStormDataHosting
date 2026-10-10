@@ -198,20 +198,31 @@
     return crc32(checked, 0, checked.length);
   }
 
-  function packFrame(payload, strength, passwordProtected) {
+  async function packFrame(payload, strength, passwordProtected) {
     const max = passwordProtected ? ENVELOPE + MAX_TEXT : MAX_TEXT;
     if (payload.length < 1 || payload.length > max) throw new Error("The message is too long to encode.");
     if (passwordProtected) validateEnvelope(payload);
-    const frame = new Uint8Array(HEADER + payload.length);
+    // Public text is DEFLATE-compressed when that is smaller, matching the desktop writer.
+    // The checksum and declared length always cover the uncompressed bytes.
+    let body = payload;
+    let compressed = 0;
+    if (!passwordProtected) {
+      const deflated = await deflateRaw(payload);
+      if (deflated.length > 0 && deflated.length < payload.length) {
+        body = deflated;
+        compressed = 1;
+      }
+    }
+    const frame = new Uint8Array(HEADER + body.length);
     frame.set([0x50, 0x43, 0x46, 0x31], 0);
     frame[4] = passwordProtected ? 2 : 1;
     frame[5] = passwordProtected ? 2 : 1;
-    frame[6] = 0;
+    frame[6] = compressed;
     frame[7] = strength;
     writeU32(frame, 8, payload.length);
-    writeU32(frame, 12, payload.length);
+    writeU32(frame, 12, body.length);
     writeU32(frame, 16, frameChecksum(frame, payload));
-    frame.set(payload, HEADER);
+    frame.set(body, HEADER);
     scramble(frame, SEED);
     return frame;
   }
@@ -284,12 +295,19 @@
   }
 
   async function encryptEnvelope(textBytes, password) {
-    const envelope = new Uint8Array(ENVELOPE + textBytes.length);
+    let body = textBytes;
+    let storedCompressed = 0;
+    const deflated = await deflateRaw(textBytes);
+    if (deflated.length > 0 && deflated.length < textBytes.length) {
+      body = deflated;
+      storedCompressed = 1;
+    }
+    const envelope = new Uint8Array(ENVELOPE + body.length);
     envelope.set([0x50, 0x53, 0x50, 0x31], 0);
     envelope[4] = 1;
     envelope[5] = 1;
     envelope[6] = 1;
-    envelope[7] = 0;
+    envelope[7] = storedCompressed;
     writeU32(envelope, 8, ITERATIONS);
     writeU32(envelope, 12, textBytes.length);
     crypto.getRandomValues(envelope.subarray(16, 32));
@@ -302,7 +320,7 @@
         iv: envelope.subarray(32, 44),
         additionalData: envelope.subarray(0, 44),
         tagLength: 128
-      }, aes, textBytes));
+      }, aes, body));
       envelope.set(sealed.subarray(0, sealed.length - 16), ENVELOPE);
       envelope.set(sealed.subarray(sealed.length - 16), 44);
       return envelope;
@@ -785,7 +803,7 @@
 
   async function encodeAt(reference, width, height, payload, passwordProtected, strength, adaptive) {
     strength = Math.max(1, Math.min(32, strength));
-    const probe = packFrame(payload, 8, passwordProtected);
+    const probe = await packFrame(payload, 8, passwordProtected);
     const columns = Math.floor(width / BLOCK);
     const blockCount = columns * Math.floor(height / BLOCK);
     if (adaptive) {
@@ -801,7 +819,7 @@
       const adjusted = Math.min(32, Math.max(strength, roundHalfToEven(strength * multiplier)));
       if (adjusted !== strength) strength = adjusted;
     }
-    const framed = packFrame(payload, strength, passwordProtected);
+    const framed = await packFrame(payload, strength, passwordProtected);
     const pixels = reference.slice();
     const written = await writeSignal(reference, pixels, width, height, framed, strength);
     return {
