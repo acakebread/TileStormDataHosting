@@ -206,7 +206,11 @@
       <div class="topics">
         <article class="topic">
           <h2>PixelStow</h2>
-          <p>PixelStow writes a short piece of text into an image as a fingerprint, then reads that text back from the image alone. A password can lock the message. With no password, the text stays public. TileStorm Evolution can read these images, and PixelStow can also write and open them on its own, outside the game.</p>
+          <p>PixelStow writes text into an ordinary image, then reads that text back from the image alone. The picture is the carrier. There is no extra file to send with it. A password can lock the text. With no password, the text stays public.</p>
+          <p>In TileStorm Evolution it is used mainly to store level data in the media cards players share with each other. Someone can pass the picture on directly, and the game reads the level back out of it.</p>
+          <p>It has been tested on social media. The point of the signal is that it survives the recompression those services apply, so a posted or forwarded picture can still be read. The same property makes it a fingerprint as well as a way to carry data.</p>
+          <p>On a small or low-resolution image the change can be visible. On a high-resolution photo the encoded picture looks ostensibly the same.</p>
+          <p>PixelStow can also recover an almost exact copy of the original photo from the encoded image. In tests, a JPEG of about 200 KB can carry around 10 KB of text.</p>
           <p class="coming"><a href="./pixelstow.html">Encode or decode an image</a> in the browser. The picture stays on this computer and is not uploaded. A link to the PixelStow repository will be added here.</p>
         </article>
       </div>
