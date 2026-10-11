@@ -22,3 +22,5 @@ attachments and short voice recordings locally into a new image. See
 `node tests/pixelstow-checks.mjs` for codec checks, then serve this directory on
 localhost and open `tests/pixelstow-browser.html` for the browser and real
 MediaRecorder checks; those use a synthetic tone and never access the microphone.
+The browser checks also cover separate encoding/unlocking passwords, the visible
+contents summary, relocking, and context-menu suppression during image panning.
