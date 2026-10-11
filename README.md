@@ -15,3 +15,10 @@ Useful links:
 - Portal: `index.html`
 - Authoring guide: `content-authoring-guide.html`
 - Technical notes: `technical-notes.md`
+
+PixelStow's browser utility is `pixelstow.html`. It encodes optional text, file
+attachments and short voice recordings locally into a new image. See
+[payload format and rollout](docs/PixelStowPayloads.md). Run
+`node tests/pixelstow-checks.mjs` for codec checks, then serve this directory on
+localhost and open `tests/pixelstow-browser.html` for the browser and real
+MediaRecorder checks; those use a synthetic tone and never access the microphone.
