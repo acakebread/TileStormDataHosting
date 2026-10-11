@@ -4,8 +4,8 @@
   const shareText = "There is a message inside this photo! Open it in PixelStow: " + openingUrl + "\nSave the original image to Files and choose it there, or copy the photo and tap Paste image.";
 
   class Sharing {
-    constructor({ importImage, save, report, working, setBusy, hasImage, imageForClipboard }) {
-      Object.assign(this, { importImage, save, report, working, setBusy, hasImage, imageForClipboard, file: null });
+    constructor({ importImage, save, report, working, setBusy, hasImage, imageForClipboard, jpegForClipboard }) {
+      Object.assign(this, { importImage, save, report, working, setBusy, hasImage, imageForClipboard, jpegForClipboard, file: null });
       this.copyButton = document.querySelector("#copy-image");
       this.pasteButton = document.querySelector("#paste-image");
       this.pasteDialog = document.querySelector("#paste-dialog");
@@ -85,13 +85,16 @@
         return;
       }
       try {
-        // Safari needs write() inside the tap. Pass a promise for PNG creation
+        // Safari needs write() inside the tap. Pass a promise for image creation
         // instead of awaiting it and losing the user activation.
-        const png = Promise.resolve(this.imageForClipboard());
-        const copying = navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
+        const jpeg = typeof ClipboardItem.supports === "function" && ClipboardItem.supports("image/jpeg")
+          ? this.jpegForClipboard?.() : null;
+        const type = jpeg ? "image/jpeg" : "image/png";
+        const image = Promise.resolve(jpeg || this.imageForClipboard());
+        const copying = navigator.clipboard.write([new ClipboardItem({ [type]: image })]);
         this.setBusy(true);
         await copying;
-        this.report("Image copied to clipboard. Paste it into your message; choose an original file / document when available to preserve its contents.");
+        this.report("Image copied to clipboard as " + (jpeg ? "JPEG" : "PNG") + ". Paste it into your message; choose an original file / document when available to preserve its contents.");
       } catch (_) {
         this.report("The browser could not copy the image. Allow clipboard access and try again, or download the PNG instead.", true);
       } finally {

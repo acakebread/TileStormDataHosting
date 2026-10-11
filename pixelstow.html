@@ -565,7 +565,7 @@
         <button id="share-image" type="button" hidden>Send via WhatsApp / Share</button>
         <button id="share-message" type="button" hidden>Opening link / WhatsApp message</button>
       </div>
-      <p class="hint" id="share-help" hidden>Choose WhatsApp in the share menu. Include the opening link; send the PNG as a Document / original file if WhatsApp offers that option. Photo sharing can resize it and lose its contents.</p>
+      <p class="hint" id="share-help" hidden>Share uses the smaller JPEG when its contents have been verified, otherwise PNG. Choose WhatsApp in the share menu and send as a Document / original file if available. Photo sharing can resize it and lose its contents. Safari's clipboard uses PNG; use Share or Download encoded JPEG for a smaller file.</p>
 
       <section class="more-info" id="more-info" aria-labelledby="more-info-title">
         <h2 id="more-info-title">About PixelStow</h2>
@@ -622,10 +622,10 @@
       </div>
     </form>
   </dialog>
-  <script src="./pixelstow.js?v=20261011-binary-v3"></script>
+  <script src="./pixelstow.js?v=20261011-smaller-png"></script>
   <script src="./pixelstow-export.js?v=20261011-exports"></script>
   <script src="./pixelstow-media.js?v=20261011-mobile-compatible-voice"></script>
-  <script src="./pixelstow-sharing.js?v=20261011-copy-image"></script>
+  <script src="./pixelstow-sharing.js?v=20261011-smaller-images"></script>
   <script>
     const fileInput = document.querySelector("#file");
     const drop = document.querySelector("#drop");
@@ -700,7 +700,8 @@
     const sharing = new PixelStowSharing({
       importImage: useFile, save: saveBlob, report: setStatus, working: () => busy || media.active, setBusy,
       hasImage: () => Boolean(current),
-      imageForClipboard: () => encodedPng || PixelStow.writePng(current.decodePixels || current.pixels, current.width, current.height)
+      imageForClipboard: () => encodedPng || PixelStow.writePng(current.decodePixels || current.pixels, current.width, current.height),
+      jpegForClipboard: () => encodedJpeg || (!encodedPng && current?.file?.type === "image/jpeg" ? current.file : null)
     });
 
     function byteLabel(text) {
@@ -814,6 +815,17 @@
       }
     }
 
+    function updateShareFile() {
+      const image = encodedJpeg || encodedPng;
+      if (image) {
+        const jpeg = Boolean(encodedJpeg);
+        const name = downloadLink.download.replace(/\.(png|jpe?g)$/i, jpeg ? ".jpg" : ".png");
+        sharing.setFile(new File([image], name, { type: jpeg ? "image/jpeg" : "image/png" }));
+      } else {
+        sharing.setFile(current?.hasFingerprint ? current.file : null);
+      }
+    }
+
     function rememberMessage(pixels, decoded, autoplay = true) {
       current.recoverPixels = pixels;
       current.decodePixels = pixels;
@@ -823,7 +835,7 @@
       current.decodedAttachments = decoded.attachments;
       current.strength = decoded.strength;
       media.showDecoded(decoded.attachments, autoplay);
-      sharing.setFile(encodedPng ? new File([encodedPng], downloadLink.download, { type: "image/png" }) : current.hasFingerprint ? current.file : null);
+      updateShareFile();
       current.carrierPromise = null;
       setBusy(busy);
       startComparison();
@@ -1312,7 +1324,7 @@
       const filename = await saveBlob(encodedPng, downloadLink.download);
       if (filename) {
         downloadLink.download = filename;
-        sharing.setFile(new File([encodedPng], filename, { type: "image/png" }));
+        updateShareFile();
       }
     });
 
