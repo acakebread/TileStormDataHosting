@@ -26,6 +26,9 @@
       this.recordStatus = document.querySelector("#record-status");
       this.recordQuality = document.querySelector("#record-quality");
       this.recordEstimate = document.querySelector("#record-estimate");
+      const mobile = navigator.userAgentData?.mobile || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+        (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+      this.recordQuality.value = mobile ? "compatible" : "compact";
       this.recordQuality.addEventListener("change", () => this.updateRecordingEstimate());
       this.audioAction = document.querySelector("#audio-action");
       this.voiceButton = document.querySelector("#play-voice");
