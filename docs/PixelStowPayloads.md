@@ -125,9 +125,11 @@ upload or host a copy, use Cloudflare, or include passwords/decoded contents in
 the caption.
 
 PNG export now uses the reversible Paeth filter before DEFLATE to improve photo
-compression while retaining exact RGBA bytes. Clipboard writing uses a verified
-JPEG only when the browser advertises JPEG support; otherwise it uses PNG.
-Safari's PNG clipboard path remains available independently of photo sharing.
+compression while retaining exact RGBA bytes. Copy image to clipboard always
+writes PNG, including on mobile, to avoid introducing a JPEG conversion before
+pasting into another app. This allows a comparison with the earlier JPEG path;
+it does not establish the cause of Facebook import failures. JPEG downloads and
+native photo sharing retain their separate verified-JPEG option.
 
 ## Local mobile checks
 

@@ -558,7 +558,7 @@
         <button id="share-message" type="button" hidden>Opening link / WhatsApp message</button>
         <button id="post-facebook" type="button" hidden>Post to Facebook</button>
       </div>
-      <p class="hint" id="share-help" hidden>Share uses the smaller JPEG when its contents have been verified, otherwise PNG. Choose WhatsApp in the share menu and send as a Document / original file if available. Photo sharing can resize it and lose its contents. Safari's clipboard uses PNG; use Share or Download encoded JPEG for a smaller file.</p>
+      <p class="hint" id="share-help" hidden>Share uses the smaller JPEG when its contents have been verified, otherwise PNG. Choose WhatsApp in the share menu and send as a Document / original file if available. Photo sharing can resize it and lose its contents. Copy image to clipboard always uses PNG.</p>
 
       <section class="more-info" id="more-info" aria-labelledby="more-info-title">
         <h2 id="more-info-title">About PixelStow</h2>
@@ -637,7 +637,7 @@
   <script src="./pixelstow.js?v=20261011-smaller-png"></script>
   <script src="./pixelstow-export.js?v=20261011-exports"></script>
   <script src="./pixelstow-media.js?v=20261011-iphone-m4a-voice"></script>
-  <script src="./pixelstow-sharing.js?v=20261011-facebook-post"></script>
+  <script src="./pixelstow-sharing.js?v=20261011-png-clipboard"></script>
   <script>
     const fileInput = document.querySelector("#file");
     const drop = document.querySelector("#drop");
@@ -712,8 +712,7 @@
     const sharing = new PixelStowSharing({
       importImage: useFile, save: saveBlob, report: setStatus, working: () => busy || media.active, setBusy,
       hasImage: () => Boolean(current),
-      imageForClipboard: () => encodedPng || PixelStow.writePng(current.decodePixels || current.pixels, current.width, current.height),
-      jpegForClipboard: () => encodedJpeg || (!encodedPng && current?.file?.type === "image/jpeg" ? current.file : null)
+      imageForClipboard: () => encodedPng || PixelStow.writePng(current.decodePixels || current.pixels, current.width, current.height)
     });
 
     function byteLabel(text) {

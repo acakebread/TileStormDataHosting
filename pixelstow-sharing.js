@@ -6,8 +6,8 @@
     "\n\nOpen the photo on Facebook and save/download the photo itself (not a screenshot). Open the PixelStow link above, tap Choose image and select the saved photo. Or copy the actual photo and tap Paste image.\n\nIf it is locked, enter the password. For audio, tap Play voice message.";
 
   class Sharing {
-    constructor({ importImage, save, report, working, setBusy, hasImage, imageForClipboard, jpegForClipboard }) {
-      Object.assign(this, { importImage, save, report, working, setBusy, hasImage, imageForClipboard, jpegForClipboard, file: null });
+    constructor({ importImage, save, report, working, setBusy, hasImage, imageForClipboard }) {
+      Object.assign(this, { importImage, save, report, working, setBusy, hasImage, imageForClipboard, file: null });
       this.copyButton = document.querySelector("#copy-image");
       this.pasteButton = document.querySelector("#paste-image");
       this.pasteDialog = document.querySelector("#paste-dialog");
@@ -151,14 +151,12 @@
       try {
         // Safari needs write() inside the tap. Pass a promise for image creation
         // instead of awaiting it and losing the user activation.
-        const jpeg = typeof ClipboardItem.supports === "function" && ClipboardItem.supports("image/jpeg")
-          ? this.jpegForClipboard?.() : null;
-        const type = jpeg ? "image/jpeg" : "image/png";
-        const image = Promise.resolve(jpeg || this.imageForClipboard());
-        const copying = navigator.clipboard.write([new ClipboardItem({ [type]: image })]);
+        // Always copy the lossless PNG so clipboard posting adds no JPEG step.
+        const image = Promise.resolve(this.imageForClipboard());
+        const copying = navigator.clipboard.write([new ClipboardItem({ "image/png": image })]);
         this.setBusy(true);
         await copying;
-        this.report("Image copied to clipboard as " + (jpeg ? "JPEG" : "PNG") + ". Paste it into your message; choose an original file / document when available to preserve its contents.");
+        this.report("Image copied to clipboard as PNG. Paste it into your message; choose an original file / document when available to preserve its contents.");
       } catch (_) {
         this.report("The browser could not copy the image. Allow clipboard access and try again, or download the PNG instead.", true);
       } finally {
