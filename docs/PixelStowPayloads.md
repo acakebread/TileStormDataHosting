@@ -98,6 +98,9 @@ actual image file. Pasted links/HTML are not fetched or inserted. Clipboard imag
 conversion can also change a carrier; choosing the original file is preferable.
 
 Comparison offers a visible native slider and a pointer-captured touch handle.
+Left-clicking or dragging anywhere on the comparison image moves the divider,
+including after zooming or panning it offscreen. Right-button dragging pans;
+touch gestures outside the divider handle remain available for page scrolling.
 The header keeps the larger logo beside the title, with the shortened introduction
 across the full width below. Technical notes are at the bottom of the page.
 

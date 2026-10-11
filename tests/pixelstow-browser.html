@@ -323,6 +323,45 @@
         touch("pointercancel", 0.75); touch("pointermove", 0.1);
         check(!handleCaptured && element("split").value === "750", "Cancelled touch dragging releases capture and stops moving the divider");
       } finally { [handle.setPointerCapture, handle.hasPointerCapture, handle.releasePointerCapture] = handleCapture; }
+      [viewport.setPointerCapture, viewport.hasPointerCapture, viewport.releasePointerCapture] = [() => { captured = true; }, () => captured, () => { captured = false; }];
+      const mouse = (target, name, x, y, button = 0) => target.dispatchEvent(new app.PointerEvent(name, {
+        bubbles: true, cancelable: true, pointerId: 43, pointerType: "mouse", button,
+        buttons: name === "pointerup" ? 0 : button === 2 ? 2 : 1, clientX: x, clientY: y
+      }));
+      try {
+        const y = comparisonRect.top + comparisonRect.height / 2;
+        const x = (ratio) => comparisonRect.left + comparisonRect.width * ratio;
+        mouse(canvas, "pointerdown", x(0.25), y);
+        check(element("split").value === "250" && element("preview-source").style.clipPath.includes("25%") && captured && !viewport.classList.contains("panning"), "Left-clicking the picture moves the divider immediately and captures the comparison gesture");
+        mouse(viewport, "pointerup", x(0.25), y); mouse(viewport, "pointermove", x(0.75), y);
+        check(!captured && element("split").value === "250", "Releasing a picture click stops comparison movement");
+        mouse(element("preview-source"), "pointerdown", x(0.8), y); mouse(viewport, "pointermove", x(0.6), y);
+        check(element("split").value === "600" && element("split-line").style.left === "60%", "Left dragging from the recovered source moves both comparison controls");
+        mouse(viewport, "pointermove", x(-0.1), y);
+        check(element("split").value === "0", "A captured picture drag clamps the divider at the left image edge");
+        mouse(viewport, "pointermove", x(1.1), y);
+        check(element("split").value === "1000", "A captured picture drag clamps the divider at the right image edge");
+        mouse(viewport, "pointercancel", x(1.1), y); mouse(viewport, "pointermove", x(0.5), y);
+        check(!captured && element("split").value === "1000", "Cancelling a picture drag releases capture and stops moving the divider");
+        const touchOnPicture = new app.PointerEvent("pointerdown", { bubbles: true, cancelable: true, pointerId: 44, pointerType: "touch", button: 0, clientX: x(0.5), clientY: y });
+        check(canvas.dispatchEvent(touchOnPicture) && !captured && element("split").value === "1000", "Touching the picture outside the handle preserves ordinary page scrolling");
+        input("split", "500");
+        const visible = viewport.getBoundingClientRect();
+        const clickX = visible.left + visible.width * 0.65, clickY = visible.top + visible.height / 2;
+        viewport.dispatchEvent(new app.WheelEvent("wheel", { bubbles: true, cancelable: true, deltaY: -1200, clientX: clickX, clientY: clickY }));
+        const zoomed = element("compare-ui").getBoundingClientRect();
+        mouse(canvas, "pointerdown", clickX, clickY, 2);
+        mouse(viewport, "pointermove", clickX - zoomed.width, clickY, 2);
+        mouse(viewport, "pointerup", clickX - zoomed.width, clickY, 2);
+        check(element("split").value === "500" && handle.getBoundingClientRect().right < visible.left && !viewport.classList.contains("panning"), "Right-button panning can move the divider offscreen without changing its comparison position");
+        const panned = element("compare-ui").getBoundingClientRect();
+        const transform = element("compare").style.transform;
+        const expected = String(Math.round(1000 * (clickX - panned.left) / panned.width));
+        mouse(element("preview-source"), "pointerdown", clickX, clickY);
+        mouse(viewport, "pointerup", clickX, clickY);
+        check(element("split").value === expected && Math.abs(element("split-line").getBoundingClientRect().left - clickX) < 2 && element("compare").style.transform === transform, "Clicking the zoomed, panned picture brings an offscreen divider back to the clicked position without moving the image");
+        viewport.dispatchEvent(new app.WheelEvent("wheel", { bubbles: true, cancelable: true, deltaY: 10000, clientX: clickX, clientY: clickY }));
+      } finally { [viewport.setPointerCapture, viewport.hasPointerCapture, viewport.releasePointerCapture] = captureMethods; }
       check(element("unlock-form").hidden && !element("decoded-content").hidden && element("composition").hidden, "Imported contents replace the password prompt while encoding controls remain hidden");
       app.HTMLMediaElement.prototype.play = play;
       files("file", [clean]);
