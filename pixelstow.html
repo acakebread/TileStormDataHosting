@@ -253,6 +253,7 @@
     .paste-target { min-height: 100px; padding: 16px; border: 2px dashed var(--tile-azure); border-radius: 8px; }
     .paste-target:empty::before { content: "Touch and hold here, then choose Paste"; color: var(--muted); pointer-events: none; }
     #share-link { min-height: 72px; }
+    #facebook-message { min-height: 200px; }
     .open-card-note { color: var(--text); padding: 12px; border: 1px solid var(--tile-community); border-radius: 8px; }
 
     .split-line {
@@ -564,14 +565,16 @@
         <button id="copy-image" type="button" hidden>Copy image to clipboard</button>
         <button id="share-image" type="button" hidden>Send via WhatsApp / Share</button>
         <button id="share-message" type="button" hidden>Opening link / WhatsApp message</button>
+        <button id="post-facebook" type="button" hidden>Post to Facebook</button>
       </div>
       <p class="hint" id="share-help" hidden>Share uses the smaller JPEG when its contents have been verified, otherwise PNG. Choose WhatsApp in the share menu and send as a Document / original file if available. Photo sharing can resize it and lose its contents. Safari's clipboard uses PNG; use Share or Download encoded JPEG for a smaller file.</p>
 
       <section class="more-info" id="more-info" aria-labelledby="more-info-title">
         <h2 id="more-info-title">About PixelStow</h2>
-        <p>Everything is processed in this browser and is not uploaded. Encoding saves a new image. Text-only images remain compatible with TileStorm Evolution; attachments need a reader that supports binary payloads.</p>
+        <p>Encoding and decoding run in this browser. PixelStow does not upload your photo; sharing hands it to the app you choose. Encoding saves a new image. Text-only images remain compatible with TileStorm Evolution; attachments need a reader that supports binary payloads.</p>
         <p>This is a prototype. Short recordings and small attachments work best; heavy payloads can give variable results. Download the verified PNG and keep the original file. Sharing apps may resize or recompress photos, especially large images over about 2,000 pixels, and the hidden contents can disappear. That size is a guideline, not a guaranteed safe limit.</p>
         <p>For WhatsApp, send the image as a Document / original file where possible and include the PixelStow opening link. The recipient can save it to Files and use Choose image, or copy it and use Paste image. A link opens this page but cannot automatically read a WhatsApp attachment. Screenshots, resized copies and ordinary photo sharing may not keep the payload.</p>
+        <p>Post to Facebook prepares your encoded photo and a message with the PixelStow link and instructions. Choose Facebook in the share sheet if available, or download the photo and attach it in Facebook. Paste the message into the caption or a comment if it was not included. Recipients save or copy the Facebook photo and open it here.</p>
         <p>On iPhone, allow Safari's Paste prompt after tapping Paste image. If needed, use the touch-and-hold paste box. Safari may require a tap on Play voice message before sound is allowed; the full audio player is also available under Attached files. Audio format support varies by browser. Resize and print/photo recovery are still research work.</p>
       </section>
 
@@ -608,6 +611,24 @@
     </div>
     <p class="hint" id="share-status" role="status">The WhatsApp link includes the message only. Attach the original image separately.</p>
   </dialog>
+  <dialog class="export-dialog" id="facebook-dialog" aria-labelledby="facebook-title">
+    <h2 id="facebook-title">Post to Facebook</h2>
+    <p>Post the encoded photo on Facebook with the message below in its caption or a comment. If you use the share sheet, choose Facebook and paste the message if it is not included. Finish posting in Facebook.</p>
+    <p class="hint" id="facebook-file"></p>
+    <label for="facebook-message">Message to put under the photo</label>
+    <textarea id="facebook-message" readonly></textarea>
+    <div class="actions">
+      <button id="copy-facebook-message" type="button">Copy Facebook message</button>
+      <button id="share-facebook-photo" type="button" hidden>Share photo (choose Facebook)</button>
+    </div>
+    <p>If Facebook is not in the share sheet, download the photo, open Facebook and create a Photo/Video post. Attach the downloaded photo and paste the message.</p>
+    <div class="actions">
+      <button id="download-facebook-photo" type="button">Download photo to post</button>
+      <a class="button-link" href="https://www.facebook.com/" target="_blank" rel="noopener noreferrer">Open Facebook</a>
+      <button id="facebook-close" type="button">Close</button>
+    </div>
+    <p class="hint" id="facebook-status" role="status"></p>
+  </dialog>
   <dialog class="export-dialog" id="export-dialog" aria-labelledby="export-title" aria-describedby="export-description">
     <form id="export-form">
       <h2 id="export-title">Save file</h2>
@@ -625,7 +646,7 @@
   <script src="./pixelstow.js?v=20261011-smaller-png"></script>
   <script src="./pixelstow-export.js?v=20261011-exports"></script>
   <script src="./pixelstow-media.js?v=20261011-mobile-compatible-voice"></script>
-  <script src="./pixelstow-sharing.js?v=20261011-smaller-images"></script>
+  <script src="./pixelstow-sharing.js?v=20261011-facebook-post"></script>
   <script>
     const fileInput = document.querySelector("#file");
     const drop = document.querySelector("#drop");

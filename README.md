@@ -26,3 +26,8 @@ The browser checks also cover separate encoding/unlocking passwords, the visible
 contents summary, relocking, and context-menu suppression during image panning.
 Every export offers a filename dialog before downloading, including recovered
 attachments. The image picker identifies the loaded file or a clipboard paste.
+
+**Post to Facebook** prepares the encoded photo and a message with the PixelStow
+link and save/paste instructions. Choose Facebook in the native share sheet when
+available, or download the photo and attach it in Facebook with the copied
+message. Finish posting in Facebook. PixelStow needs no upload/hosting service.

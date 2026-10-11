@@ -105,13 +105,29 @@ The header keeps the larger logo beside the title, with the shortened introducti
 across the full width below. Technical notes are at the bottom of the page.
 
 Image sharing uses the native share sheet when `navigator.canShare({files})`
-allows it. A verified PNG is prepared before the tap so asynchronous encoding does
-not lose Safari's user activation. Select WhatsApp in the sheet; whether the app
-keeps the accompanying text or treats the PNG as a photo depends on the recipient
+allows it. A verified JPEG is preferred when available, otherwise PNG. The file
+is prepared before the tap so asynchronous encoding does not lose Safari's user
+activation. Select WhatsApp in the sheet; whether the app keeps the accompanying
+text or treats the image as a photo depends on the recipient
 app. Send as a Document/original file where possible. The fallback offers a
 copyable opening message and a WhatsApp text link; it clearly requires attaching
 the image separately. No passwords or decoded payload text are included in this
 message. A static opening link cannot read the recipient's WhatsApp attachment.
+
+**Post to Facebook** offers the prepared encoded photo and a copyable caption
+containing the PixelStow opening link and save/paste/unlock/audio instructions.
+When file sharing is available, the user chooses Facebook in the native share
+sheet; the same caption is passed as text. The copy button remains available
+because a receiving app may omit that text. Otherwise, download the photo, open
+Facebook, attach it and paste the caption or add it as a comment. Facebook handles
+the final Post action. No Facebook photo URL is needed, and PixelStow does not
+upload or host a copy, use Cloudflare, or include passwords/decoded contents in
+the caption.
+
+PNG export now uses the reversible Paeth filter before DEFLATE to improve photo
+compression while retaining exact RGBA bytes. Clipboard writing uses a verified
+JPEG only when the browser advertises JPEG support; otherwise it uses PNG.
+Safari's PNG clipboard path remains available independently of photo sharing.
 
 ## Local mobile checks
 

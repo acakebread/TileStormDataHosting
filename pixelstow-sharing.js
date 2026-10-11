@@ -2,6 +2,8 @@
 (function () {
   const openingUrl = "https://www.massivehadron.com/pixelstow.html#open-card";
   const shareText = "There is a message inside this photo! Open it in PixelStow: " + openingUrl + "\nSave the original image to Files and choose it there, or copy the photo and tap Paste image.";
+  const facebookText = "There is a message, file or voice recording inside this photo! Open it in PixelStow:\n" + openingUrl +
+    "\n\nOpen the photo on Facebook and save/download the photo itself (not a screenshot). Open the PixelStow link above, tap Choose image and select the saved photo. Or copy the actual photo and tap Paste image.\n\nIf it is locked, enter the password. For audio, tap Play voice message.";
 
   class Sharing {
     constructor({ importImage, save, report, working, setBusy, hasImage, imageForClipboard, jpegForClipboard }) {
@@ -17,7 +19,16 @@
       this.shareDialog = document.querySelector("#share-dialog");
       this.shareLink = document.querySelector("#share-link");
       this.shareStatus = document.querySelector("#share-status");
+      this.facebookButton = document.querySelector("#post-facebook");
+      this.facebookDialog = document.querySelector("#facebook-dialog");
+      this.facebookMessage = document.querySelector("#facebook-message");
+      this.facebookStatus = document.querySelector("#facebook-status");
+      this.facebookFile = document.querySelector("#facebook-file");
+      this.facebookShareButton = document.querySelector("#share-facebook-photo");
+      this.facebookCopyButton = document.querySelector("#copy-facebook-message");
+      this.facebookDownloadButton = document.querySelector("#download-facebook-photo");
       this.shareLink.value = shareText;
+      this.facebookMessage.value = facebookText;
       document.querySelector("#whatsapp-link").href = "https://wa.me/?text=" + encodeURIComponent(shareText);
       this.pasteButton.addEventListener("click", () => this.paste());
       this.copyButton.addEventListener("click", () => this.copyImage());
@@ -53,6 +64,11 @@
         this.save(file, file.name || "pixelstow-card.png");
       });
       document.querySelector("#copy-share-link").addEventListener("click", () => this.copyMessage());
+      this.facebookButton.addEventListener("click", () => this.showFacebook());
+      this.facebookShareButton.addEventListener("click", () => this.shareFacebook());
+      this.facebookCopyButton.addEventListener("click", () => this.copyMessage(facebookText, this.facebookMessage, this.facebookStatus, "Facebook message copied. Paste it into the photo's caption or a comment."));
+      this.facebookDownloadButton.addEventListener("click", () => this.downloadFacebookPhoto());
+      document.querySelector("#facebook-close").addEventListener("click", () => this.facebookDialog.close());
       const showOpeningNote = () => { document.querySelector("#open-card-note").hidden = location.hash !== "#open-card"; };
       window.addEventListener("hashchange", showOpeningNote);
       showOpeningNote();
@@ -76,6 +92,54 @@
       this.shareButton.hidden = !this.file;
       this.messageButton.hidden = !this.file;
       this.shareHelp.hidden = !this.file;
+      this.facebookButton.hidden = !this.file;
+      this.facebookButton.disabled = this.working();
+      this.facebookShareButton.hidden = !this.canShareFile();
+      this.facebookShareButton.disabled = this.facebookCopyButton.disabled = this.facebookDownloadButton.disabled = this.working() || !this.file;
+      this.facebookFile.textContent = this.file ? "Photo to post: " + this.file.name : "";
+      if (!this.file && this.facebookDialog.open) this.facebookDialog.close();
+    }
+
+    canShareFile() {
+      try { return Boolean(this.file && navigator.share && navigator.canShare?.({ files: [this.file] })); }
+      catch (_) { return false; }
+    }
+
+    showFacebook() {
+      if (this.working() || !this.file) return;
+      this.facebookStatus.textContent = this.canShareFile()
+        ? "Copy the message first, then share the photo and choose Facebook."
+        : "Copy the message, download the photo, then open Facebook to attach it and paste the message.";
+      if (!this.facebookDialog.open) this.facebookDialog.showModal();
+    }
+
+    async downloadFacebookPhoto() {
+      if (this.working() || !this.file) return;
+      const file = this.file;
+      this.facebookDialog.close();
+      const filename = await this.save(file, file.name || "pixelstow-card.png");
+      this.showFacebook();
+      this.facebookStatus.textContent = filename
+        ? "Download requested: " + filename + ". Attach this photo in Facebook, paste the message and finish posting."
+        : "The photo was not downloaded. Try Download photo to post again, or use the share sheet.";
+    }
+
+    async shareFacebook() {
+      if (this.working() || !this.file) return;
+      if (!this.canShareFile()) { this.showFacebook(); return; }
+      try {
+        this.facebookStatus.textContent = "Choose Facebook in the share sheet. Paste the message into the caption or a comment if needed.";
+        // Use the prepared photo directly from the tap to retain Safari activation.
+        const sharing = navigator.share({ files: [this.file], title: "PixelStow photo card", text: facebookText });
+        this.setBusy(true);
+        await sharing;
+        this.facebookStatus.textContent = "Photo handed to the selected app. Include the message and finish posting in Facebook.";
+        this.report("Photo handed to the sharing app. Finish the post in Facebook; the opening message is available under Post to Facebook.");
+      } catch (error) {
+        this.facebookStatus.textContent = error.name === "AbortError"
+          ? "Sharing cancelled. The photo and message are still ready."
+          : "The photo could not be shared directly. Download it, open Facebook, attach the photo and paste the message.";
+      } finally { this.setBusy(false); }
     }
 
     async copyImage() {
@@ -164,15 +228,15 @@
       }
     }
 
-    async copyMessage() {
+    async copyMessage(text = shareText, field = this.shareLink, status = this.shareStatus, success = "Opening message copied. Attach the original image too.") {
       try {
         if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
-        await navigator.clipboard.writeText(shareText);
-        this.shareStatus.textContent = "Opening message copied. Attach the original image too.";
+        await navigator.clipboard.writeText(text);
+        status.textContent = success;
       } catch (_) {
-        this.shareLink.focus();
-        this.shareLink.select();
-        this.shareStatus.textContent = "Touch and hold the selected message and choose Copy, or press Ctrl / Cmd + C.";
+        field.focus();
+        field.select();
+        status.textContent = "Touch and hold the selected message and choose Copy, or press Ctrl / Cmd + C.";
       }
     }
   }
