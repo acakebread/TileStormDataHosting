@@ -441,7 +441,7 @@
           <input id="file" class="file-input" type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg">
           <label class="choose button-link" for="file">Choose image</label>
         </div>
-        <p class="hint" id="capacity">Choose a PNG or JPEG. A fingerprint is saved as a new PNG or JPEG, so the original file stays as it is.</p>
+        <p class="hint" id="capacity">Choose a PNG or JPEG, or paste an image. A fingerprint is saved as a new PNG or JPEG, so the original file stays as it is.</p>
         <div class="preview" id="preview" hidden>
           <div class="viewport" id="viewport">
             <div class="compare" id="compare">
@@ -804,7 +804,7 @@
         preview.hidden = true;
         previewNote.hidden = true;
         hideComparison();
-        capacity.textContent = "Choose a PNG or JPEG. A fingerprint is saved as a new PNG or JPEG, so the original file stays as it is.";
+        capacity.textContent = "Choose a PNG or JPEG, or paste an image. A fingerprint is saved as a new PNG or JPEG, so the original file stays as it is.";
         setStatus(error && error.message ? error.message : "Could not read that image.", true);
       } finally {
         setBusy(false);
@@ -881,6 +881,34 @@
     drop.addEventListener("drop", (event) => {
       const file = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0];
       if (file) useFile(file);
+    });
+
+    function clipboardImage(data) {
+      if (!data) return null;
+      const items = data.items;
+      if (items) {
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          if (item.kind === "file" && item.type.indexOf("image/") === 0) {
+            const file = item.getAsFile();
+            if (file) return file;
+          }
+        }
+      }
+      const files = data.files;
+      if (files) {
+        for (let i = 0; i < files.length; i++) {
+          if (files[i] && files[i].type.indexOf("image/") === 0) return files[i];
+        }
+      }
+      return null;
+    }
+
+    document.addEventListener("paste", (event) => {
+      const file = clipboardImage(event.clipboardData);
+      if (!file) return;
+      event.preventDefault();
+      useFile(file);
     });
 
     encodeButton.addEventListener("click", async () => {
