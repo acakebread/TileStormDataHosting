@@ -540,6 +540,7 @@
     let panning = false;
     let panX = 0;
     let panY = 0;
+    let blockPanMenu = false;
 
     function byteLabel(text) {
       const count = new TextEncoder().encode(text || "").length;
@@ -826,6 +827,7 @@
       event.preventDefault();
       event.stopPropagation();
       panning = true;
+      blockPanMenu = true;
       panX = event.clientX;
       panY = event.clientY;
       viewport.classList.add("panning");
@@ -850,11 +852,19 @@
       panning = false;
       viewport.classList.remove("panning");
       if (viewport.hasPointerCapture(event.pointerId)) viewport.releasePointerCapture(event.pointerId);
+      if (!blockPanMenu) return;
+      setTimeout(() => {
+        blockPanMenu = false;
+      }, 0);
     }
 
     viewport.addEventListener("pointerup", endPan);
     viewport.addEventListener("pointercancel", endPan);
-    viewport.addEventListener("contextmenu", (event) => event.preventDefault());
+    document.addEventListener("contextmenu", (event) => {
+      if (!blockPanMenu) return;
+      blockPanMenu = false;
+      event.preventDefault();
+    }, true);
     new ResizeObserver(() => {
       if (!preview.hidden) sizeViewport();
     }).observe(viewport);
