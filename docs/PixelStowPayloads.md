@@ -57,15 +57,18 @@ detect a locked image without decrypting; it cannot be used for re-encoding.
 ## Browser use and limits
 
 Choose a photo, add optional text and files, or record a voice message. The
-recorder requests mono audio at 16 kbit/s when supported, chooses a supported
-WebM/Opus, Ogg/Opus or MP4 format, and stops at 30 seconds or near the available
+recorder requests mono audio at 16 kbit/s when supported, prefers MP4/AAC for
+iPhone playback and falls back to WebM/Opus or Ogg/Opus, and stops at 30 seconds or near the available
 byte budget. The browser may choose a different actual bitrate. Container
 overhead and the last recorder chunk can exceed the estimate; the codec still
 checks actual capacity and refuses an export that cannot be verified.
 
 Recording needs HTTPS or localhost, browser microphone permission and
 MediaRecorder support. Playback is attempted on import/unlock, with ordinary
-audio controls when autoplay is blocked. Unsupported audio formats can still be
+audio controls and a prominent Play button when autoplay is blocked. Phones also
+have a Play audio button on the preview, without scrolling to the file list. The button
+calls play directly from the tap and reuses the loaded player; iOS can refuse
+audible autoplay after asynchronous import/decryption. Unsupported formats can still be
 downloaded. Only the first audio attachment autoplays, so clips do not overlap.
 Loading another image, discarding a recording or locking again stops playback,
 releases microphone tracks and revokes object URLs. Passwords clear after success.
@@ -73,6 +76,39 @@ releases microphone tracks and revokes object URLs. Passwords clear after succes
 The PNG is lossless and verified byte for byte. A JPEG is offered only when
 decoding that exact JPEG preserves the text and every attachment byte. This does
 not promise recovery after social-media processing, resize, crop or photography.
+
+The Paste image button calls the async Clipboard API directly from the tap.
+Safari can show a native Paste confirmation. When access is unavailable, denied,
+or the clipboard has no image, a focused touch-and-hold paste target accepts an
+actual image file. Pasted links/HTML are not fetched or inserted. Clipboard image
+conversion can also change a carrier; choosing the original file is preferable.
+
+Comparison offers a visible native slider and a pointer-captured touch handle.
+The header keeps the larger logo beside the title, with the shortened introduction
+across the full width below. Technical notes are at the bottom of the page.
+
+Image sharing uses the native share sheet when `navigator.canShare({files})`
+allows it. A verified PNG is prepared before the tap so asynchronous encoding does
+not lose Safari's user activation. Select WhatsApp in the sheet; whether the app
+keeps the accompanying text or treats the PNG as a photo depends on the recipient
+app. Send as a Document/original file where possible. The fallback offers a
+copyable opening message and a WhatsApp text link; it clearly requires attaching
+the image separately. No passwords or decoded payload text are included in this
+message. A static opening link cannot read the recipient's WhatsApp attachment.
+
+## Local mobile checks
+
+Serve this checkout with a static HTTP server and open `pixelstow.html` on the
+computer, or its LAN address on a phone on the same network. HTTP on a LAN IP
+can test layout, choosing files, manual paste, decoding and tap-to-play audio.
+Direct clipboard reads, microphone recording and native sharing require HTTPS
+(localhost is a browser exception on the same device). Test those permissions
+in iPhone Safari on an HTTPS preview; desktop viewport checks do not emulate
+Safari's actual clipboard, media policies or WhatsApp integration.
+
+`tests/pixelstow-browser.html` exercises the real UI, with generated public
+images, synthetic microphone audio and mocked clipboard/share permissions. It
+does not read the user's clipboard, microphone or send any WhatsApp messages.
 
 ## Staged rollout
 

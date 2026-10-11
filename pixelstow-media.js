@@ -23,6 +23,21 @@
       this.stopButton = document.querySelector("#stop-audio");
       this.cancelButton = document.querySelector("#cancel-audio");
       this.recordStatus = document.querySelector("#record-status");
+      this.audioAction = document.querySelector("#audio-action");
+      this.voiceButton = document.querySelector("#play-voice");
+      this.previewVoiceButton = document.querySelector("#preview-audio");
+      this.voiceStatus = document.querySelector("#voice-status");
+      this.voiceAudio = null;
+      const toggleVoice = () => {
+        if (this.busy || !this.voiceAudio) return;
+        if (!this.voiceAudio.audio.paused) this.voiceAudio.audio.pause();
+        else {
+          if (this.voiceAudio.audio.ended) this.voiceAudio.audio.currentTime = 0;
+          this.playVoice(this.voiceAudio);
+        }
+      };
+      this.voiceButton.addEventListener("click", toggleVoice);
+      this.previewVoiceButton.addEventListener("click", toggleVoice);
       this.kind.addEventListener("change", () => {
         this.input.accept = {
           all: "", audio: "audio/*,.mp3,.wav,.ogg,.webm,.m4a,.aac,.flac",
@@ -52,6 +67,8 @@
       this.stopButton.hidden = !this.recording;
       this.cancelButton.hidden = !this.recording && !this.requestingMic;
       this.list.querySelectorAll("button").forEach((button) => { button.disabled = disabled; });
+      this.voiceButton.disabled = this.busy || !this.voiceAudio;
+      this.previewVoiceButton.disabled = this.voiceButton.disabled;
       if (!supported && !this.active) this.recordStatus.textContent = "Microphone recording needs a supported browser on HTTPS or localhost. You can still attach an audio file.";
     }
 
@@ -91,6 +108,14 @@
     }
 
     clearUrls(group, container) {
+      if (group === "decoded") {
+        this.voiceAudio = null;
+        this.audioAction.hidden = true;
+        this.previewVoiceButton.hidden = true;
+        this.voiceStatus.textContent = "";
+        this.voiceButton.textContent = "Play voice message";
+        this.previewVoiceButton.textContent = "Play audio";
+      }
       container.querySelectorAll("audio").forEach((audio) => {
         audio.pause();
         audio.removeAttribute("src");
@@ -145,27 +170,66 @@
           this.urls[group].push(url);
           const audio = document.createElement("audio");
           audio.controls = true;
-          audio.preload = "metadata";
+          audio.preload = group === "decoded" ? "auto" : "metadata";
+          audio.muted = false;
+          audio.volume = 1;
           audio.src = url;
           audio.setAttribute("aria-label", "Play " + file.name);
           row.appendChild(audio);
           const hint = document.createElement("p");
           hint.className = "hint";
+          const voice = { audio, hint, name: file.name };
           audio.addEventListener("error", () => {
             hint.textContent = "This browser cannot play this audio format. Download the file to listen in another player.";
+            if (this.voiceAudio === voice) this.voiceStatus.textContent = hint.textContent;
           });
+          if (group === "decoded") {
+            audio.addEventListener("play", () => {
+              if (!this.decoded.contains(audio)) return;
+              this.decoded.querySelectorAll("audio").forEach((other) => { if (other !== audio) other.pause(); });
+              this.voiceAudio = voice;
+              this.voiceButton.textContent = "Pause voice message";
+              this.previewVoiceButton.textContent = "Pause audio";
+              this.voiceStatus.textContent = "Playing " + file.name;
+              hint.textContent = "";
+            });
+            ["pause", "ended"].forEach((event) => audio.addEventListener(event, () => {
+              if (this.voiceAudio !== voice) return;
+              this.voiceButton.textContent = "Play voice message";
+              this.previewVoiceButton.textContent = "Play audio";
+              this.voiceStatus.textContent = audio.ended ? "Message finished. Tap Play to hear it again." : "Message paused.";
+            }));
+          }
           row.appendChild(hint);
-          if (!firstAudio) firstAudio = { audio, hint };
+          if (!firstAudio) firstAudio = voice;
         }
         container.appendChild(row);
       });
-      if (autoplay && firstAudio) {
-        firstAudio.audio.play().catch(() => {
-          if (firstAudio.audio.error) return;
-          firstAudio.hint.textContent = "Press Play to hear the message. Your browser did not start playback automatically.";
-        });
+      if (group === "decoded" && firstAudio) {
+        this.voiceAudio = firstAudio;
+        this.audioAction.hidden = false;
+        this.previewVoiceButton.hidden = false;
+        this.voiceStatus.textContent = "Audio attached. Tap Play voice message to listen.";
+        if (autoplay) this.playVoice(firstAudio);
       }
       this.sync();
+    }
+
+    playVoice(voice) {
+      // Keep play in the tap handler: awaiting anything first loses iOS permission
+      // to start audible media. Reuse the loaded player rather than replacing it.
+      voice.audio.muted = false;
+      voice.audio.volume = 1;
+      voice.audio.play().catch((error) => {
+        if (this.voiceAudio !== voice) return;
+        this.voiceButton.textContent = "Play voice message";
+        this.previewVoiceButton.textContent = "Play audio";
+        const hint = voice.audio.error || error.name === "NotSupportedError"
+          ? "This browser cannot play this audio format. Download the file to listen in another player."
+          : "Press Play to hear the message. Your browser did not start playback automatically.";
+        voice.hint.textContent = hint;
+        this.voiceStatus.textContent = hint;
+      });
     }
 
     showDecoded(files, autoplay = true) {
@@ -222,7 +286,8 @@
           stream.getTracks().forEach((track) => track.stop());
           return;
         }
-        const mimeType = ["audio/webm;codecs=opus", "audio/ogg;codecs=opus", "audio/mp4"].find((type) => MediaRecorder.isTypeSupported(type));
+        // AAC in MP4 plays on older iPhones too; use Opus when MP4 recording is unavailable.
+        const mimeType = ["audio/mp4", "audio/webm;codecs=opus", "audio/ogg;codecs=opus"].find((type) => MediaRecorder.isTypeSupported(type));
         const options = { audioBitsPerSecond: 16000 };
         if (mimeType) options.mimeType = mimeType;
         const recorder = new MediaRecorder(stream, options);

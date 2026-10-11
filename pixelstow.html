@@ -7,8 +7,9 @@
   <link rel="canonical" href="https://www.massivehadron.com/pixelstow.html">
   <style>
     .attachment-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 12px 0; padding: 12px; border: 1px solid #2a394a; border-radius: 8px; }
-    .attachment-row > span { flex: 1 1 240px; overflow-wrap: anywhere; }
-    .attachment-row audio { width: 100%; }
+    .attachment-row > span { flex: 1 1 240px; min-width: 0; overflow-wrap: anywhere; }
+    .attachment-row audio { width: 100%; min-width: 0; }
+    .attachment-controls input { max-width: 100%; min-width: 0; }
     .attachment-row .hint { width: 100%; margin: 0; }
     .attachment-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
     .attachment-controls select { padding: 8px; background: #081016; color: #f2f6fb; border: 1px solid #2a394a; border-radius: 6px; }
@@ -65,7 +66,7 @@
       z-index: 1;
       box-sizing: border-box;
       max-width: 1040px;
-      margin: 6vh auto;
+      margin: 2vh auto;
       padding: 28px;
     }
 
@@ -81,19 +82,20 @@
     .masthead {
       display: grid;
       grid-template-columns: 136px minmax(0, 1fr);
-      gap: 24px;
+      gap: 8px 24px;
       align-items: center;
       margin-bottom: 8px;
     }
 
     .studio-mark {
+      display: block;
       width: 136px;
       height: 136px;
       object-fit: contain;
     }
 
     h1 {
-      margin: 0 0 10px;
+      margin: 0;
       font-size: clamp(2.2rem, 5vw, 3.5rem);
       line-height: 1;
       letter-spacing: 0;
@@ -231,43 +233,27 @@
 
     .compare-ui {
       position: absolute;
+      pointer-events: none;
     }
 
-    .compare-ui input {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      margin: 0;
-      background: transparent;
-      appearance: none;
-      cursor: ew-resize;
+    .comparison-control { display: flex; align-items: center; gap: 10px; font-size: 0.82rem; }
+    .comparison-control input { flex: 1; min-width: 0; min-height: 44px; margin: 0; accent-color: #69dccb; }
+    .split-handle {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: 44px; height: 44px; padding: 0; background: #69dccb; color: #102028;
+      pointer-events: auto; touch-action: none; cursor: ew-resize;
     }
-
-    .compare-ui input::-webkit-slider-runnable-track {
-      height: 100%;
-      background: transparent;
-    }
-
-    .compare-ui input::-webkit-slider-thumb {
-      appearance: none;
-      width: 28px;
-      height: 44px;
-      opacity: 0;
-    }
-
-    .compare-ui input::-moz-range-track {
-      height: 100%;
-      background: transparent;
-      border: 0;
-    }
-
-    .compare-ui input::-moz-range-thumb {
-      width: 28px;
-      height: 44px;
-      border: 0;
-      opacity: 0;
-    }
+    .intro { grid-column: 1 / -1; margin: 0; font-size: 0.95rem; }
+    .more-info { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border); }
+    .more-info p:last-child { margin-bottom: 0; }
+    .audio-action { margin: 0 0 14px; }
+    .audio-action button { background: #8cebed; color: #081016; }
+    .audio-action p { margin: 6px 0 0; }
+    .preview-audio { display: none; position: absolute; left: 10px; bottom: 10px; z-index: 1; background: #8cebed; color: #081016; }
+    .paste-target { min-height: 100px; padding: 16px; border: 2px dashed var(--tile-azure); border-radius: 8px; }
+    .paste-target:empty::before { content: "Touch and hold here, then choose Paste"; color: var(--muted); pointer-events: none; }
+    #share-link { min-height: 72px; }
+    .open-card-note { color: var(--text); padding: 12px; border: 1px solid var(--tile-community); border-radius: 8px; }
 
     .split-line {
       position: absolute;
@@ -278,24 +264,6 @@
       background: #69dccb;
       box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.65);
       pointer-events: none;
-    }
-
-    .split-line::after {
-      content: "↔";
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      width: 28px;
-      height: 40px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transform: translate(-50%, -50%);
-      border-radius: 8px;
-      background: #69dccb;
-      color: #102028;
-      font: 700 16px/1 "Segoe UI", sans-serif;
-      box-shadow: 0 0 0 1px #111;
     }
 
     .compare-tag {
@@ -314,8 +282,6 @@
 
     .compare-tag.left { left: 10px; }
     .compare-tag.right { right: 10px; }
-
-    .compare-note { margin-top: 10px; }
 
     .payload-panel {
       margin: 18px 0;
@@ -388,7 +354,8 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      min-height: 38px;
+      box-sizing: border-box;
+      min-height: 44px;
       padding: 0 14px;
       border: 1px solid rgba(140, 235, 237, 0.55);
       border-radius: 8px;
@@ -428,22 +395,34 @@
     @media (max-width: 620px) {
       .wrap {
         margin: 0;
-        padding: 14px;
+        padding: 8px;
       }
 
       .card {
-        padding: 22px;
-        border-radius: 18px;
+        padding: 14px;
+        border-radius: 14px;
       }
 
       .masthead {
-        grid-template-columns: 1fr;
+        grid-template-columns: 108px minmax(0, 1fr);
+        gap: 6px 12px;
       }
 
       .studio-mark {
         width: 108px;
         height: 108px;
       }
+      h1 { font-size: clamp(1.7rem, 8vw, 2.2rem); }
+      .intro { grid-column: 1 / -1; font-size: 0.9rem; }
+      .drop { margin-top: 12px; padding: 10px; }
+      .drop > label { margin-top: 0; }
+      .payload-panel { padding: 12px; margin: 12px 0; }
+      .loaded-image { font-size: 0.85rem; margin: 8px 0 4px; }
+      #capacity { font-size: 0.8rem; margin-bottom: 0; }
+      .status { margin-top: 8px; font-size: 0.9rem; }
+      .preview-note { display: none; }
+      .preview-audio { display: inline-flex; }
+      .attachment-row { padding: 10px; }
     }
   </style>
 </head>
@@ -460,21 +439,22 @@
         <a href="./tech.html" aria-label="Back to technology">
           <img class="studio-mark" src="./massive%20hadron%20logo.png" alt="Massive Hadron">
         </a>
-        <div>
-          <h1>PixelStow</h1>
-          <p>Put a message, files or a short voice recording inside a photo. Send the encoded image as a birthday card, then open it here to read the message and hear the audio. Everything is processed in this browser and is not uploaded. Text-only images remain compatible with TileStorm Evolution. Use the verified PNG for sharing; resizing and recompression may lose the payload.</p>
-        </div>
+        <h1>PixelStow</h1>
+        <p class="intro">Put a message, files or a short voice recording inside a photo. Send the encoded image as a birthday card, then open it here to read the message and hear the audio. <a href="#more-info">More info at the bottom</a>.</p>
       </div>
 
       <div class="drop" id="drop">
+        <div id="open-card" tabindex="-1">
+          <p class="open-card-note" id="open-card-note" hidden>Opening a photo card? Choose the original image from Files, or copy the photo and tap Paste image. If it is locked, enter its password below the preview.</p>
+        </div>
         <label for="file">Image</label>
         <div class="file-row">
           <input id="file" class="file-input" type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg">
           <label class="choose button-link" for="file">Choose image</label>
+          <button id="paste-image" type="button">Paste image</button>
         </div>
         <p class="loaded-image" id="loaded-image" hidden></p>
-        <p class="hint" id="capacity">Choose a PNG or JPEG, or paste an image. A fingerprint is saved as a new PNG or JPEG, so the original file stays as it is.</p>
-        <p class="status" id="status" role="status"></p>
+        <p class="hint" id="capacity">Choose or paste a PNG or JPEG. Your original stays unchanged.</p>
         <div class="preview" id="preview" hidden>
           <div class="viewport" id="viewport">
             <div class="compare" id="compare">
@@ -484,12 +464,16 @@
             <div class="compare-ui" id="compare-ui" hidden>
               <span class="compare-tag left" id="tag-encoded">Encoded</span>
               <span class="compare-tag right" id="tag-source">Source</span>
-              <div class="split-line" id="split-line"></div>
-              <input id="split" type="range" min="0" max="1000" value="500" aria-label="Comparison divider. Encoded image on the left, recovered source on the right.">
+              <div class="split-line" id="split-line"><button class="split-handle" id="split-handle" type="button" tabindex="-1" aria-label="Drag comparison divider">↔</button></div>
             </div>
+            <button class="preview-audio" id="preview-audio" type="button" hidden>Play audio</button>
+          </div>
+          <div class="comparison-control" id="comparison-control" hidden>
+            <span>Encoded</span>
+            <input id="split" type="range" min="0" max="1000" value="500" aria-label="Comparison divider. Encoded image on the left, recovered source on the right.">
+            <span>Source</span>
           </div>
           <p class="hint preview-note" id="preview-note" hidden>Scroll over the picture to zoom. Hold the right mouse button to pan.</p>
-          <p class="hint compare-note" id="compare-note" hidden>Drag the divider with the left button. The encoded image is on the left and the recovered source is on the right.</p>
         </div>
         <section class="payload-panel" id="payload-panel" hidden aria-label="Embedded image contents">
           <form id="unlock-form" hidden>
@@ -505,6 +489,10 @@
           <div id="decoded-content" hidden>
             <h2>Image contents</h2>
             <p id="contents-summary" role="status" tabindex="-1"></p>
+            <div class="audio-action" id="audio-action" hidden>
+              <button id="play-voice" type="button">Play voice message</button>
+              <p class="hint" id="voice-status" role="status"></p>
+            </div>
             <div id="decoded-message" hidden>
               <label for="readout">Message <span class="byte-count" id="readout-bytes">(0 bytes)</span></label>
               <textarea class="readout" id="readout" readonly></textarea>
@@ -518,6 +506,7 @@
             </div>
           </div>
         </section>
+        <p class="status" id="status" role="status"></p>
       </div>
 
       <section id="composition">
@@ -563,7 +552,18 @@
         <button id="save-message" type="button" hidden>Download message</button>
         <button id="save-source" type="button" hidden>Download source PNG</button>
         <button id="save-source-jpeg" type="button" hidden>Download source JPEG</button>
+        <button id="share-image" type="button" hidden>Send via WhatsApp / Share</button>
+        <button id="share-message" type="button" hidden>Opening link / WhatsApp message</button>
       </div>
+      <p class="hint" id="share-help" hidden>Choose WhatsApp in the share menu. Include the opening link; send the PNG as a Document / original file if WhatsApp offers that option. Photo sharing can resize it and lose its contents.</p>
+
+      <section class="more-info" id="more-info" aria-labelledby="more-info-title">
+        <h2 id="more-info-title">About PixelStow</h2>
+        <p>Everything is processed in this browser and is not uploaded. Encoding saves a new image. Text-only images remain compatible with TileStorm Evolution; attachments need a reader that supports binary payloads.</p>
+        <p>This is a prototype. Short recordings and small attachments work best; heavy payloads can give variable results. Download the verified PNG and keep the original file. Sharing apps may resize or recompress photos, especially large images over about 2,000 pixels, and the hidden contents can disappear. That size is a guideline, not a guaranteed safe limit.</p>
+        <p>For WhatsApp, send the image as a Document / original file where possible and include the PixelStow opening link. The recipient can save it to Files and use Choose image, or copy it and use Paste image. A link opens this page but cannot automatically read a WhatsApp attachment. Screenshots, resized copies and ordinary photo sharing may not keep the payload.</p>
+        <p>On iPhone, allow Safari's Paste prompt after tapping Paste image. If needed, use the touch-and-hold paste box. Safari may require a tap on Play voice message before sound is allowed; the full audio player is also available under Attached files. Audio format support varies by browser. Resize and print/photo recovery are still research work.</p>
+      </section>
 
       <div class="links">
         <a class="button-link" href="./tech.html">Back to technology</a>
@@ -578,6 +578,26 @@
       </div>
     </section>
   </main>
+  <dialog class="export-dialog" id="paste-dialog" aria-labelledby="paste-title">
+    <h2 id="paste-title">Paste a photo</h2>
+    <p id="paste-help">Copy the actual photo first. Touch and hold in the box, then choose Paste (or press Ctrl / Cmd + V).</p>
+    <div class="paste-target" id="paste-target" contenteditable="true" role="textbox" aria-label="Paste image here" aria-describedby="paste-help" inputmode="none" spellcheck="false"></div>
+    <p class="hint">If only a link or text was copied, save the original image to Files and use Choose image.</p>
+    <div class="actions"><button id="paste-close" type="button">Close</button></div>
+  </dialog>
+  <dialog class="export-dialog" id="share-dialog" aria-labelledby="share-title">
+    <h2 id="share-title">Share your photo card</h2>
+    <p id="share-description">Download a copy of the original image, attach it in WhatsApp as a Document / original file, and include this opening link.</p>
+    <label for="share-link">Message to include</label>
+    <textarea id="share-link" readonly></textarea>
+    <div class="actions">
+      <button id="download-share-image" type="button">Download image to send</button>
+      <button id="copy-share-link" type="button">Copy message</button>
+      <a class="button-link" id="whatsapp-link" target="_blank" rel="noopener noreferrer">Open WhatsApp with this message</a>
+      <button id="share-close" type="button">Close</button>
+    </div>
+    <p class="hint" id="share-status" role="status">The WhatsApp link includes the message only. Attach the original image separately.</p>
+  </dialog>
   <dialog class="export-dialog" id="export-dialog" aria-labelledby="export-title" aria-describedby="export-description">
     <form id="export-form">
       <h2 id="export-title">Save file</h2>
@@ -594,7 +614,8 @@
   </dialog>
   <script src="./pixelstow.js?v=20261011-binary-v3"></script>
   <script src="./pixelstow-export.js?v=20261011-exports"></script>
-  <script src="./pixelstow-media.js?v=20261011-exports"></script>
+  <script src="./pixelstow-media.js?v=20261011-mobile"></script>
+  <script src="./pixelstow-sharing.js?v=20261011-mobile"></script>
   <script>
     const fileInput = document.querySelector("#file");
     const drop = document.querySelector("#drop");
@@ -605,7 +626,8 @@
     const previewSource = document.querySelector("#preview-source");
     const compareUi = document.querySelector("#compare-ui");
     const previewNote = document.querySelector("#preview-note");
-    const compareNote = document.querySelector("#compare-note");
+    const comparisonControl = document.querySelector("#comparison-control");
+    const splitHandle = document.querySelector("#split-handle");
     const split = document.querySelector("#split");
     const splitLine = document.querySelector("#split-line");
     const tagEncoded = document.querySelector("#tag-encoded");
@@ -665,6 +687,7 @@
       }
     });
     media.setState(false, true);
+    const sharing = new PixelStowSharing({ importImage: useFile, save: saveBlob, report: setStatus, working: () => busy || media.active, setBusy });
 
     function byteLabel(text) {
       const count = new TextEncoder().encode(text || "").length;
@@ -701,6 +724,7 @@
       downloadLink.hidden = true;
       downloadLink.removeAttribute("href");
       saveEncodedJpegButton.hidden = true;
+      sharing.setFile(null);
     }
 
     function setBusy(value) {
@@ -740,6 +764,7 @@
       password.disabled = working || encodingPasswords.hidden;
       confirmPassword.disabled = working || encodingPasswords.hidden;
       media.setState(busy, !canEncode);
+      sharing.sync();
       saveEncodedJpegButton.disabled = working;
       downloadLink.setAttribute("aria-disabled", String(working));
       saveMessageButton.hidden = !hasMessage;
@@ -783,6 +808,7 @@
       current.decodedAttachments = decoded.attachments;
       current.strength = decoded.strength;
       media.showDecoded(decoded.attachments, autoplay);
+      sharing.setFile(encodedPng ? new File([encodedPng], downloadLink.download, { type: "image/png" }) : current.hasFingerprint ? current.file : null);
       current.carrierPromise = null;
       setBusy(busy);
       startComparison();
@@ -862,7 +888,8 @@
       const img = imagePixels();
       const width = viewport.clientWidth;
       if (!img.w || !img.h || !width) return;
-      const height = Math.max(120, Math.min(420, width * img.h / img.w));
+      const maxHeight = window.matchMedia("(max-width: 620px)").matches ? Math.min(360, window.innerHeight * 0.42) : 420;
+      const height = Math.max(120, Math.min(maxHeight, width * img.h / img.w));
       const next = height + "px";
       if (viewport.style.height !== next) viewport.style.height = next;
       applyView();
@@ -894,7 +921,7 @@
       previewGeneration += 1;
       previewSource.hidden = true;
       compareUi.hidden = true;
-      compareNote.hidden = true;
+      comparisonControl.hidden = true;
     }
 
     function showPreview(pixels, width, height) {
@@ -927,7 +954,7 @@
         split.value = "500";
         previewSource.hidden = false;
         compareUi.hidden = false;
-        compareNote.hidden = false;
+        comparisonControl.hidden = false;
         preview.hidden = false;
         previewNote.hidden = false;
         resetView();
@@ -935,7 +962,7 @@
         if (generation !== previewGeneration || current !== job) return;
         previewSource.hidden = true;
         compareUi.hidden = true;
-        compareNote.hidden = true;
+        comparisonControl.hidden = true;
       }
     }
 
@@ -971,7 +998,7 @@
         showPreview(image.pixels, image.width, image.height);
         const room = PixelStow.estimatePayloadBytes(image.width, image.height);
         const exactNote = image.exact ? "" : " Browser colour conversion was used, so an existing fingerprint may not read.";
-        capacity.textContent = image.width + " × " + image.height + " pixels. About " + room.toLocaleString("en-GB") + " payload bytes will fit before compression." + exactNote;
+        capacity.textContent = image.width + " × " + image.height + " · about " + room.toLocaleString("en-GB") + " payload bytes before compression." + exactNote;
         if (found.found && found.passwordProtected) {
           setStatus("This image is password protected. Please enter the password to unlock it.");
         } else if (found.found) {
@@ -994,7 +1021,7 @@
         preview.hidden = true;
         previewNote.hidden = true;
         hideComparison();
-        capacity.textContent = "Choose a PNG or JPEG, or paste an image. A fingerprint is saved as a new PNG or JPEG, so the original file stays as it is.";
+        capacity.textContent = "Choose or paste a PNG or JPEG. Your original stays unchanged.";
         setStatus(error && error.message ? error.message : "Could not read that image.", true);
       } finally {
         setBusy(false);
@@ -1004,6 +1031,29 @@
     }
 
     split.addEventListener("input", () => setSplit(split.value));
+    let splitPointer = null;
+    function dragSplit(event) {
+      const rect = compareUi.getBoundingClientRect();
+      if (!rect.width) return;
+      split.value = String(Math.round(1000 * Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width))));
+      setSplit(split.value);
+    }
+    splitHandle.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      splitPointer = event.pointerId;
+      splitHandle.setPointerCapture(event.pointerId);
+      dragSplit(event);
+    });
+    splitHandle.addEventListener("pointermove", (event) => {
+      if (event.pointerId === splitPointer) dragSplit(event);
+    });
+    ["pointerup", "pointercancel", "lostpointercapture"].forEach((name) => splitHandle.addEventListener(name, (event) => {
+      if (event.pointerId !== splitPointer) return;
+      splitPointer = null;
+      if (splitHandle.hasPointerCapture(event.pointerId)) splitHandle.releasePointerCapture(event.pointerId);
+    }));
+    window.addEventListener("resize", () => { if (!preview.hidden) sizeViewport(); });
 
     viewport.addEventListener("wheel", (event) => {
       if (!event.deltaY || event.ctrlKey || !imagePixels().w) return;
@@ -1083,34 +1133,6 @@
     drop.addEventListener("drop", (event) => {
       const file = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0];
       if (file) useFile(file);
-    });
-
-    function clipboardImage(data) {
-      if (!data) return null;
-      const items = data.items;
-      if (items) {
-        for (let i = 0; i < items.length; i++) {
-          const item = items[i];
-          if (item.kind === "file" && item.type.indexOf("image/") === 0) {
-            const file = item.getAsFile();
-            if (file) return file;
-          }
-        }
-      }
-      const files = data.files;
-      if (files) {
-        for (let i = 0; i < files.length; i++) {
-          if (files[i] && files[i].type.indexOf("image/") === 0) return files[i];
-        }
-      }
-      return null;
-    }
-
-    document.addEventListener("paste", (event) => {
-      const file = clipboardImage(event.clipboardData);
-      if (!file) return;
-      event.preventDefault();
-      useFile(file, "clipboard");
     });
 
     encodeButton.addEventListener("click", async () => {
@@ -1229,6 +1251,7 @@
       readout.value = "";
       message.value = "";
       media.reset();
+      sharing.setFile(null);
       if (current) {
         current.decodedText = "";
         current.decodedAttachments = [];
@@ -1264,7 +1287,10 @@
       event.preventDefault();
       if (!encodedPng) return;
       const filename = await saveBlob(encodedPng, downloadLink.download);
-      if (filename) downloadLink.download = filename;
+      if (filename) {
+        downloadLink.download = filename;
+        sharing.setFile(new File([encodedPng], filename, { type: "image/png" }));
+      }
     });
 
     saveEncodedJpegButton.addEventListener("click", () => {

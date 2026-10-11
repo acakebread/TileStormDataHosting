@@ -31,9 +31,19 @@
     results.textContent = "Running…\n";
     let audioContext;
     let restoreDownloads;
+    let restoreBrowserApis;
     try {
       const app = frame.contentWindow, doc = frame.contentDocument;
-      await until(() => app.PixelStow && app.PixelStowMediaPanel && app.PixelStowExportDialog, "app loaded");
+      await until(() => app.PixelStow && app.PixelStowMediaPanel && app.PixelStowExportDialog && app.PixelStowSharing, "app loaded");
+      const apiDescriptors = ["share", "canShare", "clipboard"].map((name) => [name, Object.getOwnPropertyDescriptor(app.navigator, name)]);
+      const originalPlay = app.HTMLMediaElement.prototype.play;
+      restoreBrowserApis = () => {
+        for (const [name, descriptor] of apiDescriptors) {
+          if (descriptor) Object.defineProperty(app.navigator, name, descriptor);
+          else delete app.navigator[name];
+        }
+        app.HTMLMediaElement.prototype.play = originalPlay;
+      };
       const element = (id) => doc.querySelector("#" + id);
       const input = (id, value) => {
         element(id).value = value;
@@ -63,7 +73,9 @@
         await until(() => downloads.length > before && !element("decode").disabled, "export completed");
         return { name: downloads.at(-1).name, bytes: new app.Uint8Array(await downloads.at(-1).bytes) };
       };
-      const width = 1000, height = 800;
+      // MP4/AAC can have a larger minimum bitrate than the requested 16 kbit/s.
+      // Leave enough room for a real short recording plus the binary fixtures.
+      const width = 1600, height = 1200;
       const pixels = new app.Uint8Array(width * height * 4);
       for (let i = 0; i < pixels.length; i += 4) pixels.set([140, 140, 140, 255], i);
       const clean = new app.File([await app.PixelStow.writePng(pixels, width, height)], "public-photo.png", { type: "image/png" });
@@ -72,6 +84,20 @@
       check(!element("attachment-file").disabled, "Clean image enables attachment input");
       check(element("loaded-image").textContent === "Loaded file: public-photo.png", "The loaded image's filename is shown beside the image picker");
       check(!element("encoding-passwords").hidden && element("unlock-form").hidden, "Encoding offers a password and confirmation without an unlock prompt");
+      const frameSize = { width: frame.style.width, height: frame.style.height };
+      for (const phoneWidth of [390, 320]) {
+        frame.style.width = phoneWidth + "px"; frame.style.height = "844px";
+        await until(() => app.innerWidth === phoneWidth && element("viewport").clientWidth < phoneWidth, "phone layout resize");
+        await new Promise((resolve) => app.requestAnimationFrame(() => app.requestAnimationFrame(resolve)));
+        const logo = doc.querySelector(".studio-mark").getBoundingClientRect();
+        const heading = doc.querySelector("h1").getBoundingClientRect();
+        const picture = element("viewport").getBoundingClientRect();
+        check(heading.left >= logo.right && Math.abs((heading.top + heading.bottom - logo.top - logo.bottom) / 2) < 2, phoneWidth + "px phone header keeps the logo beside PixelStow");
+        check(doc.documentElement.scrollWidth <= app.innerWidth && picture.left >= 0 && picture.right <= app.innerWidth && picture.bottom < 800, phoneWidth + "px phone layout fits horizontally and shows the image in the first screen");
+        check(doc.querySelector(".intro").getBoundingClientRect().width === doc.querySelector(".masthead").getBoundingClientRect().width && logo.width === 108, phoneWidth + "px phone header keeps the larger logo and gives the introduction the full width");
+      }
+      frame.style.width = frameSize.width; frame.style.height = frameSize.height;
+      check(doc.querySelector('.intro a').getAttribute("href") === "#more-info" && element("more-info").textContent.includes("prototype"), "The compact introduction links to the prototype and sharing notes at the bottom");
       const viewport = element("viewport"), canvas = element("preview-encoded");
       const captureMethods = [viewport.setPointerCapture, viewport.hasPointerCapture, viewport.releasePointerCapture];
       let captured = false;
@@ -153,6 +179,34 @@
       const payload = await app.PixelStow.decode(decodedPng.pixels, width, height, publicPassword);
       check(payload.status === "success" && payload.attachments.length === 3 && payload.attachments[0].bytes.every((byte, i) => byte === i), "Downloaded PNG preserves binary and real recorded audio bytes");
       check(!element("save-source").hidden, "Verified binary payload enables source extraction");
+      check(!element("share-image").hidden && !element("share-message").hidden, "A verified encoded photo offers image sharing and a clickable opening message");
+      let sharedData;
+      Object.defineProperty(app.navigator, "canShare", { configurable: true, value: ({ files }) => files.length === 1 && files[0].type === "image/png" });
+      Object.defineProperty(app.navigator, "share", { configurable: true, value: (data) => { sharedData = data; return Promise.resolve(); } });
+      element("share-image").click();
+      check(sharedData?.files.length === 1 && sharedData.text.includes("https://www.massivehadron.com/pixelstow.html#open-card"), "Native sharing is called directly from the tap with a prepared PNG and public opening link");
+      await until(() => !element("decode").disabled, "native share completed");
+      const sharedBytes = new app.Uint8Array(await sharedData.files[0].arrayBuffer());
+      const verifiedBytes = new app.Uint8Array(await encodedPng.arrayBuffer());
+      check(sharedBytes.length === verifiedBytes.length && sharedBytes.every((byte, i) => byte === verifiedBytes[i]) && !sharedData.text.includes(publicPassword) && !sharedData.text.includes(payload.text), "Sharing preserves the verified PNG bytes and includes no password or decoded message in the link text");
+      Object.defineProperty(app.navigator, "share", { configurable: true, value: () => Promise.reject(new app.DOMException("Cancelled", "AbortError")) });
+      element("share-image").click();
+      await until(() => !element("decode").disabled, "cancelled share");
+      check(element("status").textContent.includes("cancelled") && !element("download").hidden && !element("share-dialog").open, "Cancelling native sharing preserves the card and does not open another share prompt");
+      Object.defineProperty(app.navigator, "canShare", { configurable: true, value: () => false });
+      element("share-image").click();
+      check(element("share-dialog").open && element("share-status").textContent.includes("separately"), "Unsupported file sharing offers an honest download-and-attach fallback");
+      const whatsapp = new URL(element("whatsapp-link").href);
+      check(whatsapp.hostname === "wa.me" && whatsapp.searchParams.get("text") === element("share-link").value, "The WhatsApp message link contains the clickable PixelStow link without pretending to attach a file");
+      let copiedMessage;
+      Object.defineProperty(app.navigator, "clipboard", { configurable: true, value: { writeText: (text) => { copiedMessage = text; return Promise.resolve(); } } });
+      element("copy-share-link").click();
+      await until(() => element("share-status").textContent.includes("copied"), "opening message copy");
+      check(copiedMessage === element("share-link").value, "The opening message can be copied independently of the image share sheet");
+      await openExport(element("download-share-image"));
+      check(!element("share-dialog").open, "Downloading a share copy closes the share dialog before requesting its filename");
+      const sharedCopy = await saveExport("Photo card to send");
+      check(sharedCopy.name === "Photo card to send.png" && sharedCopy.bytes.every((byte, i) => byte === verifiedBytes[i]), "The WhatsApp fallback can download the exact original carrier with a chosen filename");
       const recoveredFile = element("decoded-attachments").querySelector("a");
       const downloadedBytes = new app.Uint8Array(await (await fetch(recoveredFile.href)).arrayBuffer());
       check(downloadedBytes.length === 256 && downloadedBytes.every((byte, i) => byte === i), "Recovered-file download contains exact original bytes");
@@ -170,6 +224,11 @@
       const namedPng = await saveExport("Birthday card 🎂");
       const originalPngBytes = new app.Uint8Array(await encodedPng.arrayBuffer());
       check(namedPng.name === "Birthday card 🎂.png" && namedPng.bytes.length === originalPngBytes.length && namedPng.bytes.every((byte, i) => byte === originalPngBytes[i]), "Renaming an encoded PNG preserves its verified bytes exactly");
+      Object.defineProperty(app.navigator, "canShare", { configurable: true, value: () => true });
+      Object.defineProperty(app.navigator, "share", { configurable: true, value: (data) => { sharedData = data; return Promise.resolve(); } });
+      element("share-image").click();
+      await until(() => !element("decode").disabled, "renamed PNG share");
+      check(sharedData.files[0].name === "Birthday card 🎂.png", "Image sharing uses the filename chosen for the encoded PNG export");
       await openExport(element("save-message"));
       const namedMessage = await saveExport("Birthday message.txt");
       check(namedMessage.name === "Birthday message.txt" && new app.TextDecoder().decode(namedMessage.bytes) === payload.text, "Message export uses the chosen filename and preserves the complete UTF-8 message");
@@ -194,6 +253,7 @@
       element("relock").click();
       check(!element("readout").value && element("decoded-files").hidden && element("save-source").hidden && !element("attachment-list").children.length, "Lock again removes plaintext, attachments, players and source extraction");
       check(!element("unlock-form").hidden && element("decoded-content").hidden && element("encoding-passwords").hidden && element("decode").hidden, "Relocking replaces contents with one password field and a dedicated Unlock button");
+      check(element("audio-action").hidden && element("preview-audio").hidden && element("share-image").hidden, "Relocking also removes the prominent players and outgoing image share controls");
       input("unlock-password", "incorrect"); element("unlock").click();
       await until(() => !element("unlock").disabled, "wrong-password result");
       check(element("status").textContent.includes("incorrect") && element("decoded-files").hidden, "Wrong password reveals no recovered file metadata");
@@ -213,17 +273,73 @@
       await until(() => !element("decode").disabled && element("decoded-attachments").children.length === 3, "independent unlock");
       await until(() => element("decoded-attachments").textContent.includes("Press Play"), "autoplay fallback");
       check(element("decoded-attachments").textContent.includes("Press Play"), "Autoplay refusal gives a visible Play fallback");
+      check(!element("audio-action").hidden && element("voice-status").textContent.includes("Press Play") && !element("play-voice").disabled, "Blocked autoplay offers an obvious playable control at the top of the contents");
+      const voice = element("decoded-attachments").querySelector("audio");
+      const voiceUrl = voice.src;
+      let tappedPlay = false;
+      app.HTMLMediaElement.prototype.play = function () {
+        tappedPlay = this === voice;
+        this.dispatchEvent(new app.Event("play"));
+        return Promise.resolve();
+      };
+      element("play-voice").click();
+      check(tappedPlay && voice.src === voiceUrl && !voice.muted && voice.volume === 1 && element("voice-status").textContent.startsWith("Playing"), "The prominent Play button synchronously reuses the unmuted loaded audio player");
+      tappedPlay = false; element("preview-audio").click();
+      check(tappedPlay && !element("preview-audio").hidden && voice.src === voiceUrl, "The phone preview's audio button plays the same loaded message without scrolling to the files");
+      app.HTMLMediaElement.prototype.play = function () { return Promise.reject(new app.DOMException("Unsupported audio", "NotSupportedError")); };
+      element("play-voice").click();
+      await until(() => element("voice-status").textContent.includes("format"), "unsupported audio explanation");
+      check(element("voice-status").textContent.includes("Download"), "Unsupported audio is explained beside Play with a file-download fallback");
+      await until(() => !element("comparison-control").hidden, "comparison ready");
+      input("split", "250");
+      check(element("preview-source").style.clipPath.includes("25%") && element("split-line").style.left === "25%", "The visible native comparison slider updates the image divider");
+      const handle = element("split-handle");
+      const handleCapture = [handle.setPointerCapture, handle.hasPointerCapture, handle.releasePointerCapture];
+      let handleCaptured = false;
+      handle.setPointerCapture = () => { handleCaptured = true; };
+      handle.hasPointerCapture = () => handleCaptured;
+      handle.releasePointerCapture = () => { handleCaptured = false; };
+      const comparisonRect = element("compare-ui").getBoundingClientRect();
+      const touch = (name, ratio) => handle.dispatchEvent(new app.PointerEvent(name, { bubbles: true, cancelable: true, pointerId: 42, pointerType: "touch", button: 0, clientX: comparisonRect.left + comparisonRect.width * ratio }));
+      try {
+        touch("pointerdown", 0.25); touch("pointermove", 0.75);
+        check(element("split").value === "750" && element("preview-source").style.clipPath.includes("75%") && handleCaptured && !element("viewport").classList.contains("panning"), "Touch dragging captures the divider and moves both comparison controls without starting a pan");
+        touch("pointercancel", 0.75); touch("pointermove", 0.1);
+        check(!handleCaptured && element("split").value === "750", "Cancelled touch dragging releases capture and stops moving the divider");
+      } finally { [handle.setPointerCapture, handle.hasPointerCapture, handle.releasePointerCapture] = handleCapture; }
       check(element("unlock-form").hidden && !element("decoded-content").hidden && element("composition").hidden, "Imported contents replace the password prompt while encoding controls remain hidden");
       app.HTMLMediaElement.prototype.play = play;
       files("file", [clean]);
       await until(() => !element("encode").disabled, "new clean carrier");
       check(element("decoded-files").hidden && !element("readout").value && !element("attachment-list").children.length, "New image clears previous text, recovered files and composition");
       check(element("payload-panel").hidden && !element("encoding-passwords").hidden, "A new clean carrier restores the encoding password and confirmation");
+      check(element("audio-action").hidden && element("preview-audio").hidden && !element("voice-status").textContent && element("share-image").hidden, "Importing another photo clears the prominent playback and sharing state");
+      Object.defineProperty(app.navigator, "clipboard", { configurable: true, value: { read: () => Promise.resolve([{ types: ["image/png"], getType: async () => clean }]) } });
+      element("paste-image").click();
+      await until(() => !element("encode").disabled && element("loaded-image").textContent === "Pasted from clipboard", "Paste button clipboard image");
+      check(element("loaded-image").textContent === "Pasted from clipboard" && !element("paste-dialog").open, "The Paste image button reads a clipboard image and labels its origin");
+      Object.defineProperty(app.navigator, "clipboard", { configurable: true, value: { read: () => Promise.reject(new app.DOMException("Denied", "NotAllowedError")) } });
+      element("paste-image").click();
+      await until(() => element("paste-dialog").open && !element("file").disabled, "denied direct paste fallback");
+      check(doc.activeElement === element("paste-target") && element("paste-help").textContent.includes("Touch and hold"), "Clipboard denial restores controls and opens a focused iPhone paste target");
+      const pastedText = new app.DataTransfer(); pastedText.setData("text/plain", "https://example.invalid/photo.png");
+      element("paste-target").dispatchEvent(new app.ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData: pastedText }));
+      check(element("paste-dialog").open && !element("paste-target").textContent && element("paste-help").textContent.includes("No image"), "Pasting a link into the fallback does not fetch or insert remote content");
       const pastedImage = new app.DataTransfer();
       pastedImage.items.add(clean);
       doc.dispatchEvent(new app.ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData: pastedImage }));
       await until(() => !element("encode").disabled && element("loaded-image").textContent === "Pasted from clipboard", "clipboard image import");
       check(element("loaded-image").textContent === "Pasted from clipboard", "Pasting an image shows its clipboard origin instead of a synthetic filename");
+      check(!element("paste-dialog").open, "Pasting an actual image closes the fallback dialog and imports it");
+      Object.defineProperty(app.navigator, "clipboard", { configurable: true, value: undefined });
+      element("paste-image").click();
+      check(element("paste-dialog").open, "Browsers without the async Clipboard API still offer touch-and-hold paste");
+      element("paste-close").click();
+      Object.defineProperty(app.navigator, "clipboard", { configurable: true, value: { read: () => Promise.resolve([{ types: ["text/plain"] }]) } });
+      element("paste-image").click();
+      await until(() => element("paste-dialog").open && !element("file").disabled, "non-image clipboard fallback");
+      check(element("paste-help").textContent.includes("did not contain an image"), "A text-only clipboard gives useful instructions instead of pretending paste succeeded");
+      element("paste-close").click();
       audioContext = new app.AudioContext();
       const discardStream = audioContext.createMediaStreamDestination().stream;
       Object.defineProperty(app.navigator.mediaDevices, "getUserMedia", { configurable: true, value: async () => discardStream });
@@ -282,6 +398,7 @@
       results.textContent += "FAIL: " + (error.stack || error.message) + "\n";
     } finally {
       if (restoreDownloads) restoreDownloads();
+      if (restoreBrowserApis) restoreBrowserApis();
       if (audioContext) await audioContext.close();
       run.disabled = false;
     }
