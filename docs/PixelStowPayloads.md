@@ -56,18 +56,26 @@ detect a locked image without decrypting; it cannot be used for re-encoding.
 
 ## Browser use and limits
 
-Choose a photo, add optional text and files, or record a voice message. The
-recorder requests mono audio at 16 kbit/s when supported, prefers WebM/Opus or
-Ogg/Opus and falls back to MP4/AAC, and stops at 30 seconds
-or near the available byte budget. The browser may choose a different actual
-bitrate. Container
-overhead and the last recorder chunk can exceed the estimate; the codec still
-checks actual capacity and refuses an export that cannot be verified.
+Choose a photo, add optional text and files, or record a voice message. Desktop
+recording keeps the original mono, 16 kbit/s WebM/Opus or Ogg/Opus preference.
+iPhone/iPad recording uses the pre-compact MP4/AAC (M4A) format. Its microphone
+input is mixed to mono at 16 kHz through Web Audio before the 16 kbit/s recorder;
+a microphone constraint alone does not ensure the actual input sample rate.
 
-The original Opus-first recording path from `25bc30d` has been restored, before
-the AAC-first, compact-quality/default and sample-rate changes. The recording
-status shows the selected format and actual byte count. The later playback retry
-fix remains. AAC can be much larger when a browser falls back to it.
+M4A is saved as one completed file without short timeslice fragments. Its
+duration is bounded by the estimated byte budget (including 1,536 bytes reserved
+for overhead) and 30 seconds, rather than stopping on the first container chunk.
+Opus retains the original byte-budget cutoff and 30-second limit. On a normal
+Stop the input remains alive until the recorder's final data/stop events, then
+microphone tracks and the audio context are released. Cancel releases them
+immediately. The recording status identifies the format and final actual byte
+count. There is no compact-quality mode or automatic switch to it.
+
+The browser may choose a different actual bitrate, and container overhead can
+exceed the estimate. This is not a fixed output-size guarantee. The codec still
+checks actual capacity and refuses an export that cannot be verified. These
+iPhone recorder changes require device verification; the desktop playback retry
+fix remains.
 
 Recording needs HTTPS or localhost, browser microphone permission and
 MediaRecorder support. Playback is attempted on import/unlock, with ordinary

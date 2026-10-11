@@ -65,6 +65,7 @@
       const supported = Boolean(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
       this.recordButton.disabled = disabled || this.files.length >= 8 || !supported;
       this.stopButton.hidden = !this.recording;
+      this.stopButton.disabled = Boolean(this.recording?.finishing);
       this.cancelButton.hidden = !this.recording && !this.requestingMic;
       this.list.querySelectorAll("button").forEach((button) => { button.disabled = disabled; });
       this.voiceButton.disabled = this.busy || !this.voiceAudio;
@@ -278,8 +279,24 @@
       }
       job.cancelled ||= cancel;
       clearInterval(job.timer);
-      if (job.recorder.state !== "inactive") job.recorder.stop();
-      job.stream.getTracks().forEach((track) => track.stop());
+      if (!job.finishing) {
+        job.finishing = true;
+        if (job.recorder.state !== "inactive") job.recorder.stop();
+        if (!job.cancelled) this.recordStatus.textContent = "Finishing voice recording…";
+        this.sync();
+      }
+      // On a normal stop, leave the input alive until the final data/stop events.
+      // Cancelling or leaving the page can release the microphone immediately.
+      if (job.cancelled) this.releaseRecording(job);
+    }
+
+    releaseRecording(job) {
+      if (job.release) return job.release;
+      job.stream?.getTracks().forEach((track) => track.stop());
+      if (job.recordStream !== job.stream) job.recordStream?.getTracks().forEach((track) => track.stop());
+      job.source?.disconnect();
+      job.release = job.context && job.context.state !== "closed" ? job.context.close().catch(() => {}) : Promise.resolve();
+      return job.release;
     }
 
     async startRecording() {
@@ -293,25 +310,55 @@
       this.requestingMic = true;
       this.changed();
       this.recordStatus.textContent = "Requesting microphone access…";
-      let stream = null;
+      const appleMobile = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+      const inputs = { stream: null, recordStream: null, source: null, context: null };
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1 }, video: false });
+        // Retain the pre-compact M4A format on iPhones; desktop keeps its Opus path.
+        const formats = appleMobile ? ["audio/mp4;codecs=mp4a.40.2", "audio/mp4"]
+          : ["audio/webm;codecs=opus", "audio/ogg;codecs=opus", "audio/mp4"];
+        const mimeType = formats.find((type) => MediaRecorder.isTypeSupported(type));
+        if (appleMobile && !mimeType) throw new Error("This browser cannot record M4A audio. You can still attach an audio file.");
+        if (appleMobile) {
+          // Supply a real mono speech-rate input; microphone hints can be ignored.
+          // Resume in the Record tap before awaiting permission, for iOS activation.
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          inputs.context = new AudioContextClass({ sampleRate: 16000 });
+          inputs.context.resume().catch(() => {});
+        }
+        if (generation !== this.generation) { await this.releaseRecording(inputs); return; }
+        inputs.stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1 }, video: false });
         if (generation !== this.generation) {
-          stream.getTracks().forEach((track) => track.stop());
+          await this.releaseRecording(inputs);
           return;
         }
-        // Restore the original Opus-first recorder; AAC is only a fallback.
-        const mimeType = ["audio/webm;codecs=opus", "audio/ogg;codecs=opus", "audio/mp4"].find((type) => MediaRecorder.isTypeSupported(type));
+        inputs.recordStream = inputs.stream;
+        if (inputs.context) {
+          const destination = inputs.context.createMediaStreamDestination();
+          destination.channelCount = 1;
+          destination.channelCountMode = "explicit";
+          inputs.source = inputs.context.createMediaStreamSource(inputs.stream);
+          inputs.source.connect(destination);
+          inputs.recordStream = destination.stream;
+          await inputs.context.resume();
+          if (generation !== this.generation) { await this.releaseRecording(inputs); return; }
+          if (inputs.context.state !== "running") throw new Error("The microphone audio did not start. Tap Record to try again.");
+        }
         const options = { audioBitsPerSecond: 16000 };
         if (mimeType) options.mimeType = mimeType;
-        const recorder = new MediaRecorder(stream, options);
+        const recorder = new MediaRecorder(inputs.recordStream, options);
         this.requestingMic = false;
-        const job = { recorder, stream, chunks: [], size: 0, started: performance.now(), cancelled: false, timer: null };
+        const singleClip = mimeType?.includes("mp4") || recorder.mimeType.includes("mp4");
+        const maxSeconds = singleClip ? Math.min(30, Math.max(1, (budget - 1536) * 8 / 16000)) : 30;
+        const job = { ...inputs, recorder, chunks: [], size: 0, started: performance.now(), cancelled: false, finishing: false, timer: null };
         this.recording = job;
         const update = () => {
+          if (job.finishing) return;
           const seconds = (performance.now() - job.started) / 1000;
-          this.recordStatus.textContent = "Recording: " + seconds.toFixed(1) + " s · " + job.size.toLocaleString("en-GB") + " / about " + budget.toLocaleString("en-GB") + " bytes · " + (mimeType?.includes("opus") ? "Opus" : "M4A/AAC") + ". Maximum 30 seconds.";
-          if (seconds >= 30 || job.size >= Math.max(1024, budget - 1024)) this.stopRecording();
+          this.recordStatus.textContent = "Recording: " + seconds.toFixed(1) + " s · " + (singleClip
+            ? "M4A/AAC. Estimated room for " + maxSeconds.toFixed(1) + " seconds; file size shown after Stop."
+            : job.size.toLocaleString("en-GB") + " / about " + budget.toLocaleString("en-GB") + " bytes · Opus. Maximum 30 seconds.");
+          // M4A container chunks are not a reliable measure of speech bytes.
+          if (seconds >= maxSeconds || (!singleClip && job.size >= Math.max(1024, budget - 1024))) this.stopRecording();
         };
         recorder.addEventListener("dataavailable", (event) => {
           if (event.data.size) { job.chunks.push(event.data); job.size += event.data.size; }
@@ -324,8 +371,8 @@
         });
         recorder.addEventListener("stop", async () => {
           clearInterval(job.timer);
-          stream.getTracks().forEach((track) => track.stop());
           try {
+            await this.releaseRecording(job);
             if (!job.cancelled && generation === this.generation) {
               const type = recorder.mimeType || mimeType || "audio/webm";
               const blob = new Blob(job.chunks, { type });
@@ -350,15 +397,22 @@
             this.changed();
           }
         });
-        recorder.start(250);
+        // Write one finished M4A file, without repeated short container fragments.
+        if (singleClip) recorder.start();
+        else recorder.start(250);
         job.timer = setInterval(update, 250);
         update();
       } catch (error) {
-        if (stream) stream.getTracks().forEach((track) => track.stop());
+        if (this.recording && generation === this.generation) {
+          this.recording.cancelled = true;
+          clearInterval(this.recording.timer);
+          await this.releaseRecording(this.recording);
+        } else await this.releaseRecording(inputs);
         if (generation !== this.generation) return;
         this.recording = null;
         this.recordStatus.textContent = "";
-        this.report(error.name === "NotAllowedError" ? "Microphone access was denied. Allow it in your browser to record, or attach an audio file." : "Could not start the microphone. Check it is connected, or attach an audio file.", true);
+        this.report(error.name === "NotAllowedError" ? "Microphone access was denied. Allow it in your browser to record, or attach an audio file."
+          : error.name === "Error" ? error.message : "Could not start the microphone. Check it is connected, or attach an audio file.", true);
       } finally {
         if (generation === this.generation) {
           this.pending = false;
