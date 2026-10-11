@@ -57,11 +57,18 @@ detect a locked image without decrypting; it cannot be used for re-encoding.
 ## Browser use and limits
 
 Choose a photo, add optional text and files, or record a voice message. The
-default Compact voice mode requests mono speech at 6 kbit/s in WebM/Opus or
+desktop default Compact voice mode requests mono speech at 6 kbit/s in WebM/Opus or
 Ogg/Opus where recording is supported. It falls back to MP4/AAC at 8 kbit/s.
-Compatible voice favours MP4/AAC at 16 kbit/s for older phones, with Opus as a
-fallback. Microphone constraints request mono and a lower sample rate when
-available. Recording stops at 30 seconds or near the available byte budget.
+Compatible voice is the phone/tablet default and favours MP4/AAC at 16 kbit/s,
+with Opus as a fallback. Microphone constraints request mono and a lower sample
+rate when available. Recording stops at 30 seconds. Opus also stops near the
+available byte budget. M4A uses `start()` without a timeslice and waits for the
+completed recording; it does not auto-stop on the first MP4 chunk's size. Press
+Stop when finished. The microphone is released after the recorder's stop event
+so the last audio can finish; discarding releases it immediately. The actual
+completed file size is checked before encoding, and a clip may need a larger
+photo. This avoids the abrupt roughly one-second stop on small photos without
+promising that an arbitrarily long recording will fit.
 The quality picker shows a target duration estimate; completed recordings show
 their measured elapsed time and file size. The browser may choose a different
 actual bitrate. AAC may ignore low bitrate requests, so switching to Opus can

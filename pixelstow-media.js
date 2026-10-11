@@ -103,7 +103,10 @@
       const bitrate = this.recordingBitrates.get(profile.type + ":" + profile.bitrate) || profile.bitrate;
       const reserve = profile.type?.includes("opus") ? 512 : 1024;
       const seconds = Math.min(30, Math.max(0, (budget - reserve) * 8 / bitrate));
-      this.recordEstimate.textContent = "About " + seconds.toFixed(1) + " seconds may fit at this quality. The browser's actual file size can differ; recording stops near the photo's limit.";
+      this.recordEstimate.textContent = "About " + seconds.toFixed(1) + " seconds may fit at this quality. " +
+        (profile.type?.includes("mp4")
+          ? "M4A records until you press Stop or reach 30 seconds; the finished file may need a larger photo."
+          : "The browser's actual file size can differ; recording stops near the photo's limit.");
     }
 
     async addFiles(files) {
@@ -308,7 +311,9 @@
       job.stoppedAt ||= performance.now();
       clearInterval(job.timer);
       if (job.recorder.state !== "inactive") job.recorder.stop();
-      job.stream.getTracks().forEach((track) => track.stop());
+      // Let the recorder finish its last audio before releasing the microphone.
+      // Discarding can release it immediately; saved clips release it on "stop".
+      if (job.cancelled) job.stream.getTracks().forEach((track) => track.stop());
     }
 
     async startRecording() {
@@ -336,15 +341,20 @@
         const options = { audioBitsPerSecond: profile.bitrate };
         if (mimeType) options.mimeType = mimeType;
         const recorder = new MediaRecorder(stream, options);
+        const mp4 = (recorder.mimeType || mimeType || "").includes("mp4");
         if (recorder.audioBitsPerSecond > 0) this.recordingBitrates.set(profile.type + ":" + profile.bitrate, recorder.audioBitsPerSecond);
         this.requestingMic = false;
         const job = { recorder, stream, chunks: [], size: 0, started: performance.now(), cancelled: false, timer: null };
         this.recording = job;
         const update = () => {
           const seconds = (performance.now() - job.started) / 1000;
-          this.recordStatus.textContent = "Recording: " + seconds.toFixed(1) + " s · " + job.size.toLocaleString("en-GB") + " / about " + budget.toLocaleString("en-GB") + " bytes. Maximum 30 seconds.";
+          this.recordStatus.textContent = mp4
+            ? "Recording: " + seconds.toFixed(1) + " s. Press Stop when finished. Maximum 30 seconds; file size is checked afterwards."
+            : "Recording: " + seconds.toFixed(1) + " s · " + job.size.toLocaleString("en-GB") + " / about " + budget.toLocaleString("en-GB") + " bytes. Maximum 30 seconds.";
           const reserve = mimeType?.includes("opus") ? 512 : 1024;
-          if (seconds >= 30 || job.size >= Math.max(1024, budget - reserve)) this.stopRecording();
+          // AAC bitrate and MP4 chunk overhead can exhaust a small photo's budget
+          // on the first chunk. Check the completed file instead of cutting speech.
+          if (seconds >= 30 || (!mp4 && job.size >= Math.max(1024, budget - reserve))) this.stopRecording();
         };
         recorder.addEventListener("dataavailable", (event) => {
           if (event.data.size) { job.chunks.push(event.data); job.size += event.data.size; }
@@ -384,7 +394,9 @@
             this.changed();
           }
         });
-        recorder.start(250);
+        // Safari's M4A path uses one completed blob, avoiding short MP4 slices.
+        if (mp4) recorder.start();
+        else recorder.start(250);
         job.timer = setInterval(update, 250);
         update();
       } catch (error) {
