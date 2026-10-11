@@ -6,6 +6,12 @@
   <title>PixelStow</title>
   <link rel="canonical" href="https://www.massivehadron.com/pixelstow.html">
   <style>
+    .attachment-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 12px 0; padding: 12px; border: 1px solid #2a394a; border-radius: 8px; }
+    .attachment-row > span { flex: 1 1 240px; overflow-wrap: anywhere; }
+    .attachment-row audio { width: 100%; }
+    .attachment-row .hint { width: 100%; margin: 0; }
+    .attachment-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+    .attachment-controls select { padding: 8px; background: #081016; color: #f2f6fb; border: 1px solid #2a394a; border-radius: 6px; }
     :root {
       color-scheme: dark;
       --bg: #081016;
@@ -431,7 +437,7 @@
         </a>
         <div>
           <h1>PixelStow</h1>
-          <p>Encode text into an image, or read it back. TileStorm Evolution uses the same idea to store level data in the media cards players share. The signal is made to survive social-media recompression. A high-resolution photo looks ostensibly the same; on a small image the change can be visible. The picture is processed in this browser and is not uploaded.</p>
+          <p>Put a message, files or a short voice recording inside a photo. Send the encoded image as a birthday card, then open it here to read the message and hear the audio. Everything is processed in this browser and is not uploaded. Text-only images remain compatible with TileStorm Evolution. Use the verified PNG for sharing; resizing and recompression may lose the payload.</p>
         </div>
       </div>
 
@@ -463,9 +469,30 @@
       <label for="message">Message <span class="byte-count" id="message-bytes">(0 bytes)</span></label>
       <textarea id="message" maxlength="16384" spellcheck="true"></textarea>
 
+      <h2>Attachments <span class="byte-count" id="attachment-bytes">(0 bytes)</span></h2>
+      <div class="attachment-controls">
+        <label for="attachment-kind">File type</label>
+        <select id="attachment-kind">
+          <option value="all">Any file</option>
+          <option value="audio">Audio</option>
+          <option value="image">Image</option>
+          <option value="document">Document</option>
+        </select>
+        <input id="attachment-file" type="file" multiple aria-label="Attach files">
+      </div>
+      <p class="hint">Attach up to eight files, with or without a text message. Audio gets a player when decoded; other files can be downloaded. The photo's capacity is the limit.</p>
+      <div id="attachment-list" aria-label="Files to encode"></div>
+      <div class="actions">
+        <button id="record-audio" type="button" disabled>Record voice message</button>
+        <button id="stop-audio" type="button" hidden>Stop and attach recording</button>
+        <button id="cancel-audio" type="button" hidden>Discard recording</button>
+      </div>
+      <p class="hint" id="record-status" role="status"></p>
+      <p class="hint" id="payload-budget" role="status">Choose a photo to see how much it can hold.</p>
+
       <label for="password">Password</label>
       <input id="password" type="password" autocomplete="off" spellcheck="false">
-      <p class="hint">Leave this blank for a public message. A password locks the text. It is not stored in the image.</p>
+      <p class="hint">Leave this blank for a public message. A password locks the text and every attachment, including filenames. It is not stored in the image.</p>
 
       <label for="confirm">Confirm password</label>
       <input id="confirm" type="password" autocomplete="off" spellcheck="false">
@@ -473,6 +500,7 @@
       <div class="actions">
         <button id="encode" type="button" disabled>Encode into a new image</button>
         <button id="decode" type="button" disabled>Decode image</button>
+        <button id="relock" type="button" hidden>Lock again</button>
         <a class="button-link" id="download" href="#" hidden>Download encoded PNG</a>
         <button id="save-encoded-jpeg" type="button" hidden>Download encoded JPEG</button>
         <button id="save-message" type="button" hidden>Download message</button>
@@ -483,6 +511,11 @@
 
       <h2>Read message <span class="byte-count" id="readout-bytes">(0 bytes)</span></h2>
       <textarea class="readout" id="readout" readonly placeholder="A decoded message will appear here."></textarea>
+
+      <section id="decoded-files" hidden>
+        <h2>Recovered files</h2>
+        <div id="decoded-attachments"></div>
+      </section>
 
       <div class="links">
         <a class="button-link" href="./tech.html">Back to technology</a>
@@ -497,7 +530,8 @@
       </div>
     </section>
   </main>
-  <script src="./pixelstow.js"></script>
+  <script src="./pixelstow.js?v=20261011-binary-v3"></script>
+  <script src="./pixelstow-media.js?v=20261011-binary-v3"></script>
   <script>
     const fileInput = document.querySelector("#file");
     const drop = document.querySelector("#drop");
@@ -519,6 +553,9 @@
     const confirmPassword = document.querySelector("#confirm");
     const encodeButton = document.querySelector("#encode");
     const decodeButton = document.querySelector("#decode");
+    const relockButton = document.querySelector("#relock");
+    const payloadBudget = document.querySelector("#payload-budget");
+    const attachmentBytes = document.querySelector("#attachment-bytes");
     const downloadLink = document.querySelector("#download");
     const saveEncodedJpegButton = document.querySelector("#save-encoded-jpeg");
     const saveMessageButton = document.querySelector("#save-message");
@@ -541,6 +578,17 @@
     let panX = 0;
     let panY = 0;
     let blockPanMenu = false;
+    const media = new PixelStowMediaPanel({
+      changed: () => { setBusy(busy); updateByteCounts(); },
+      report: setStatus,
+      remaining: () => {
+        if (!current) return 0;
+        const room = PixelStow.estimatePayloadBytes(current.width, current.height, Boolean(password.value));
+        // Reserve the bundle header and the future recording entry's metadata.
+        return Math.max(0, room - PixelStow.payloadSize(message.value, media.files) - (media.files.length ? 0 : 12) - 100);
+      }
+    });
+    media.setState(false, true);
 
     function byteLabel(text) {
       const count = new TextEncoder().encode(text || "").length;
@@ -551,6 +599,17 @@
     function updateByteCounts() {
       messageBytes.textContent = byteLabel(message.value);
       readoutBytes.textContent = byteLabel(readout.value);
+      attachmentBytes.textContent = "(" + media.files.reduce((sum, file) => sum + file.bytes.length, 0).toLocaleString("en-GB") + " bytes)";
+      if (!current) { payloadBudget.textContent = "Choose a photo to see how much it can hold."; return; }
+      try {
+        const used = PixelStow.payloadSize(message.value, media.files);
+        const room = PixelStow.estimatePayloadBytes(current.width, current.height, Boolean(password.value));
+        payloadBudget.textContent = used.toLocaleString("en-GB") + " payload bytes / about " + room.toLocaleString("en-GB") + " bytes available before compression. Shorter audio and larger photos give more room.";
+        payloadBudget.classList.toggle("error", used > room);
+      } catch (error) {
+        payloadBudget.textContent = error.message;
+        payloadBudget.classList.add("error");
+      }
     }
 
     function setStatus(text, isError) {
@@ -571,16 +630,24 @@
       busy = value;
       const hasImage = Boolean(current);
       const hasMessage = Boolean(current && current.decodedText);
-      encodeButton.disabled = busy || !hasImage || current.hasFingerprint;
-      decodeButton.disabled = busy || !hasImage;
-      fileInput.disabled = busy;
-      saveEncodedJpegButton.disabled = busy;
+      const hasDecoded = Boolean(current && current.recoverPixels);
+      const working = busy || media.active;
+      encodeButton.disabled = working || !hasImage || current.hasFingerprint;
+      decodeButton.disabled = working || !hasImage;
+      relockButton.hidden = !(hasDecoded && current.decodedProtected);
+      relockButton.disabled = working;
+      fileInput.disabled = working;
+      message.disabled = working || Boolean(current && current.hasFingerprint);
+      password.disabled = working;
+      confirmPassword.disabled = working;
+      media.setState(busy, !hasImage || current.hasFingerprint);
+      saveEncodedJpegButton.disabled = working;
       saveMessageButton.hidden = !hasMessage;
-      saveSourceButton.hidden = !hasMessage;
-      saveSourceJpegButton.hidden = !hasMessage;
-      saveMessageButton.disabled = busy;
-      saveSourceButton.disabled = busy;
-      saveSourceJpegButton.disabled = busy;
+      saveSourceButton.hidden = !hasDecoded;
+      saveSourceJpegButton.hidden = !hasDecoded;
+      saveMessageButton.disabled = working;
+      saveSourceButton.disabled = working;
+      saveSourceJpegButton.disabled = working;
     }
 
     function fileBase() {
@@ -599,10 +666,13 @@
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
 
-    function rememberMessage(pixels, text, strength) {
+    function rememberMessage(pixels, decoded, autoplay = true) {
       current.recoverPixels = pixels;
-      current.decodedText = text;
-      current.strength = strength;
+      current.decodePixels = pixels;
+      current.decodedText = decoded.text;
+      current.decodedProtected = decoded.passwordProtected;
+      current.strength = decoded.strength;
+      media.showDecoded(decoded.attachments, autoplay);
       current.carrierPromise = null;
       setBusy(busy);
       startComparison();
@@ -760,7 +830,8 @@
     }
 
     async function useFile(file) {
-      if (!file || busy) return;
+      if (!file || busy || media.active) return;
+      media.reset();
       clearDownload();
       readout.value = "";
       message.value = "";
@@ -782,9 +853,9 @@
           passwordProtected: found.passwordProtected
         };
         showPreview(image.pixels, image.width, image.height);
-        const room = PixelStow.estimateBytes(image.width, image.height);
+        const room = PixelStow.estimatePayloadBytes(image.width, image.height);
         const exactNote = image.exact ? "" : " Browser colour conversion was used, so an existing fingerprint may not read.";
-        capacity.textContent = image.width + " × " + image.height + " pixels. About " + room + " bytes of text will fit." + exactNote;
+        capacity.textContent = image.width + " × " + image.height + " pixels. About " + room.toLocaleString("en-GB") + " payload bytes will fit before compression." + exactNote;
         if (found.found && found.passwordProtected) {
           setStatus("This image has a locked fingerprint. Enter its password and choose Decode.");
         } else if (found.found) {
@@ -792,13 +863,13 @@
           if (decoded.status === "success") {
             readout.value = decoded.text;
             message.value = decoded.text;
-            rememberMessage(image.pixels, decoded.text, decoded.strength);
+            rememberMessage(image.pixels, decoded);
             setStatus("This image already has a public fingerprint, so it cannot be encoded again.");
           } else {
             setStatus("A fingerprint was found, but its text could not be read.", true);
           }
         } else {
-          setStatus("No fingerprint found. Enter a message to encode one.");
+          setStatus("No fingerprint found. Enter a message, attach a file or record some audio.");
         }
       } catch (error) {
         current = null;
@@ -922,7 +993,7 @@
     });
 
     encodeButton.addEventListener("click", async () => {
-      if (!current || busy) return;
+      if (!current || busy || media.active) return;
       if (password.value !== confirmPassword.value) {
         setStatus("Passwords do not match. No image was written.", true);
         return;
@@ -931,7 +1002,8 @@
       setBusy(true);
       setStatus("Encoding…");
       try {
-        const encoded = await PixelStow.encode(current.pixels, current.width, current.height, message.value, password.value);
+        const content = { text: message.value, attachments: media.files };
+        const encoded = await PixelStow.encodePayload(current.pixels, current.width, current.height, content, password.value);
         const png = await PixelStow.writePng(encoded.pixels, encoded.width, encoded.height);
         const check = await PixelStow.decodePng(new Uint8Array(await png.arrayBuffer()));
         let mismatch = check.width !== encoded.width || check.height !== encoded.height || check.pixels.length !== encoded.pixels.length;
@@ -945,7 +1017,7 @@
         }
         if (mismatch) throw new Error("The PNG could not be checked. No image was offered for download.");
         const verified = await PixelStow.decode(check.pixels, check.width, check.height, password.value);
-        if (verified.status !== "success" || verified.text !== message.value) {
+        if (verified.status !== "success" || !PixelStow.payloadsEqual(verified, content)) {
           throw new Error("The encoded image could not be read back. No image was offered for download.");
         }
         downloadUrl = URL.createObjectURL(png);
@@ -959,17 +1031,17 @@
           const jpegFile = new File([jpeg], base + "-pixelstow.jpg", { type: "image/jpeg" });
           const jpegImage = await PixelStow.readImageFile(jpegFile);
           const jpegText = await PixelStow.decode(jpegImage.pixels, jpegImage.width, jpegImage.height, password.value);
-          if (jpegText.status === "success" && jpegText.text === message.value) {
+          if (jpegText.status === "success" && PixelStow.payloadsEqual(jpegText, content)) {
             encodedJpeg = jpeg;
             saveEncodedJpegButton.hidden = false;
           } else {
-            jpegNote = " A JPEG of this image did not keep the message, so only the PNG is ready.";
+            jpegNote = " A JPEG of this image did not keep the complete payload, so only the PNG is ready.";
           }
         } catch (jpegError) {
           jpegNote = " The JPEG could not be saved, so only the PNG is ready.";
         }
         readout.value = message.value;
-        rememberMessage(encoded.pixels, message.value, encoded.strength);
+        rememberMessage(encoded.pixels, verified, false);
         const lock = encoded.passwordProtected ? "Password-locked" : "Public";
         const formats = encodedJpeg ? "PNG or JPEG" : "PNG";
         setStatus(lock + " fingerprint encoded. Download the new " + formats + ". The original file was not changed." + jpegNote);
@@ -984,35 +1056,64 @@
     });
 
     decodeButton.addEventListener("click", async () => {
-      if (!current || busy) return;
+      if (!current || busy || media.active) return;
       setBusy(true);
       setStatus("Decoding…");
       try {
-        const decoded = await PixelStow.decode(current.pixels, current.width, current.height, password.value);
+        const target = current.decodePixels || current.pixels;
+        const decoded = await PixelStow.decode(target, current.width, current.height, password.value);
         if (decoded.status === "success") {
           readout.value = decoded.text;
           message.value = decoded.text;
-          rememberMessage(current.pixels, decoded.text, decoded.strength);
+          rememberMessage(target, decoded);
           const lock = decoded.passwordProtected ? "Unlocked" : "Read";
           setStatus(lock + " the fingerprint from this image.");
           password.value = "";
           confirmPassword.value = "";
         } else if (decoded.status === "password") {
-          readout.value = "";
+          clearDecoded();
           setStatus("This image has a locked fingerprint. Enter its password and choose Decode.");
         } else if (decoded.status === "incorrect") {
+          clearDecoded();
           setStatus("The password is incorrect, or the locked message is damaged.", true);
         } else {
-          readout.value = "";
+          clearDecoded();
           setStatus("No fingerprint was found in this image.", true);
         }
       } catch (error) {
+        clearDecoded();
         setStatus(error && error.message ? error.message : "The image could not be decoded.", true);
       } finally {
         setBusy(false);
         updateByteCounts();
       }
     });
+
+    function clearDecoded() {
+      readout.value = "";
+      message.value = "";
+      media.reset();
+      if (current) {
+        current.decodedText = "";
+        current.decodedProtected = false;
+        current.recoverPixels = null;
+        current.carrierPromise = null;
+      }
+      hideComparison();
+      updateByteCounts();
+    }
+
+    relockButton.addEventListener("click", () => {
+      if (!current || busy || media.active) return;
+      clearDecoded();
+      clearDownload();
+      password.value = "";
+      confirmPassword.value = "";
+      setBusy(false);
+      setStatus("Locked again. Enter the password to read the message and files.");
+    });
+
+    password.addEventListener("input", updateByteCounts);
 
     saveMessageButton.addEventListener("click", () => {
       if (!current || !current.decodedText || busy) return;

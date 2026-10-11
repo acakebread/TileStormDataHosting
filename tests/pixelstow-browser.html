@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>PixelStow browser checks</title>
+<style>
+  body { margin: 20px; font: 16px/1.5 system-ui; background: #081016; color: #f2f6fb; }
+  button { padding: 10px 18px; } iframe { width: 100%; height: 1100px; border: 1px solid #52687a; }
+</style>
+<h1>PixelStow browser checks</h1>
+<p>Tests use public generated files and a synthetic audio tone. No microphone is accessed.</p>
+<button id="run">Run browser checks</button>
+<pre id="results" role="status">Ready.</pre>
+<iframe id="app" src="../pixelstow.html" title="PixelStow under test"></iframe>
+<script>
+  const frame = document.querySelector("#app");
+  const results = document.querySelector("#results");
+  const run = document.querySelector("#run");
+  function check(condition, label) {
+    if (!condition) throw new Error(label);
+    results.textContent += "PASS: " + label + "\n";
+  }
+  async function until(condition, label, timeout = 30000) {
+    const started = performance.now();
+    while (!condition()) {
+      if (performance.now() - started > timeout) throw new Error("Timed out: " + label);
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    }
+  }
+  run.addEventListener("click", async () => {
+    run.disabled = true;
+    results.textContent = "Running…\n";
+    let audioContext;
+    try {
+      const app = frame.contentWindow, doc = frame.contentDocument;
+      await until(() => app.PixelStow && app.PixelStowMediaPanel, "app loaded");
+      const element = (id) => doc.querySelector("#" + id);
+      const input = (id, value) => {
+        element(id).value = value;
+        element(id).dispatchEvent(new app.Event("input", { bubbles: true }));
+      };
+      const files = (id, items) => {
+        const transfer = new app.DataTransfer();
+        for (const item of items) transfer.items.add(item);
+        element(id).files = transfer.files;
+        element(id).dispatchEvent(new app.Event("change", { bubbles: true }));
+      };
+      const width = 1000, height = 800;
+      const pixels = new app.Uint8Array(width * height * 4);
+      for (let i = 0; i < pixels.length; i += 4) pixels.set([140, 140, 140, 255], i);
+      const clean = new app.File([await app.PixelStow.writePng(pixels, width, height)], "public-photo.png", { type: "image/png" });
+      files("file", [clean]);
+      await until(() => !element("encode").disabled, "clean image import");
+      check(!element("attachment-file").disabled, "Clean image enables attachment input");
+      const binary = new app.Uint8Array(Array.from({ length: 256 }, (_, i) => i));
+      files("attachment-file", [new app.File([binary], "public-🎂.bin"), new app.File([], "empty.txt", { type: "text/plain" })]);
+      await until(() => element("attachment-list").children.length === 2 && !element("encode").disabled, "attachment import");
+      input("message", "Happy birthday! café 🎂\n  ");
+      const publicPassword = "Public browser test key 🎂";
+      input("password", publicPassword); input("confirm", publicPassword);
+      // Exercise the real browser MediaRecorder using an oscillator stream instead of a device.
+      audioContext = new app.AudioContext();
+      await audioContext.resume();
+      const oscillator = audioContext.createOscillator();
+      const destination = audioContext.createMediaStreamDestination();
+      oscillator.frequency.value = 440;
+      oscillator.connect(destination); oscillator.start();
+      Object.defineProperty(app.navigator.mediaDevices, "getUserMedia", {
+        configurable: true, value: async () => destination.stream
+      });
+      element("record-audio").click();
+      await until(() => !element("stop-audio").hidden, "recording start");
+      check(element("encode").disabled && element("file").disabled, "Recording freezes encode and import controls");
+      await new Promise((resolve) => setTimeout(resolve, 900));
+      element("stop-audio").click();
+      await until(() => element("attachment-list").children.length === 3 && !element("encode").disabled, "recording attached");
+      check(destination.stream.getTracks().every((track) => track.readyState === "ended"), "Stopping recording releases every audio track");
+      check(element("attachment-list").querySelector("audio"), "Recorded audio has a preview player");
+      await until(() => element("attachment-list").querySelector("audio").readyState >= 1, "recorded audio metadata");
+      check(!element("attachment-list").querySelector("audio").error, "The browser can read its recorded audio format");
+      oscillator.stop(); await audioContext.close(); audioContext = null;
+      element("encode").click();
+      await until(() => !element("download").hidden && !element("decode").disabled, "encoded PNG download");
+      check(!element("password").value && !element("confirm").value, "Successful encoding clears passwords");
+      check(element("decoded-attachments").children.length === 3, "Encoding verifies and displays all recovered files");
+      const encodedPng = await (await fetch(element("download").href)).blob();
+      const decodedPng = await app.PixelStow.decodePng(new app.Uint8Array(await encodedPng.arrayBuffer()));
+      const payload = await app.PixelStow.decode(decodedPng.pixels, width, height, publicPassword);
+      check(payload.status === "success" && payload.attachments.length === 3 && payload.attachments[0].bytes.every((byte, i) => byte === i), "Downloaded PNG preserves binary and real recorded audio bytes");
+      check(!element("save-source").hidden, "Verified binary payload enables source extraction");
+      const recoveredFile = element("decoded-attachments").querySelector("a");
+      const downloadedBytes = new app.Uint8Array(await (await fetch(recoveredFile.href)).arrayBuffer());
+      check(downloadedBytes.length === 256 && downloadedBytes.every((byte, i) => byte === i), "Recovered-file download contains exact original bytes");
+      element("relock").click();
+      check(!element("readout").value && element("decoded-files").hidden && element("save-source").hidden && !element("attachment-list").children.length, "Lock again removes plaintext, attachments, players and source extraction");
+      input("password", "incorrect"); element("decode").click();
+      await until(() => !element("decode").disabled, "wrong-password result");
+      check(element("status").textContent.includes("incorrect") && element("decoded-files").hidden, "Wrong password reveals no recovered file metadata");
+      input("password", publicPassword); element("decode").click();
+      await until(() => !element("decode").disabled && !element("decoded-files").hidden, "result unlock");
+      check(element("readout").value === payload.text, "An encoded result can be unlocked independently of its original clean carrier");
+      const play = app.HTMLMediaElement.prototype.play;
+      app.HTMLMediaElement.prototype.play = function () { return Promise.reject(new app.DOMException("Test autoplay blocked", "NotAllowedError")); };
+      files("file", [new app.File([encodedPng], "birthday-card.png", { type: "image/png" })]);
+      await until(() => !element("decode").disabled, "independent locked import");
+      check(element("decoded-files").hidden && element("encode").disabled && element("attachment-file").disabled, "Locked import disables re-encoding without exposing files");
+      input("password", publicPassword); element("decode").click();
+      await until(() => !element("decode").disabled && element("decoded-attachments").children.length === 3, "independent unlock");
+      await until(() => element("decoded-attachments").textContent.includes("Press Play"), "autoplay fallback");
+      check(element("decoded-attachments").textContent.includes("Press Play"), "Autoplay refusal gives a visible Play fallback");
+      app.HTMLMediaElement.prototype.play = play;
+      files("file", [clean]);
+      await until(() => !element("encode").disabled, "new clean carrier");
+      check(element("decoded-files").hidden && !element("readout").value && !element("attachment-list").children.length, "New image clears previous text, recovered files and composition");
+      audioContext = new app.AudioContext();
+      const discardStream = audioContext.createMediaStreamDestination().stream;
+      Object.defineProperty(app.navigator.mediaDevices, "getUserMedia", { configurable: true, value: async () => discardStream });
+      element("record-audio").click();
+      await until(() => !element("stop-audio").hidden, "discard recording start");
+      element("cancel-audio").click();
+      await until(() => !element("encode").disabled, "discard recording end");
+      check(!element("attachment-list").children.length && discardStream.getTracks().every((track) => track.readyState === "ended"), "Discarding a recording attaches nothing and releases the audio tracks");
+      await audioContext.close(); audioContext = null;
+      let resolveMicrophone;
+      Object.defineProperty(app.navigator.mediaDevices, "getUserMedia", {
+        configurable: true, value: () => new Promise((resolve) => { resolveMicrophone = resolve; })
+      });
+      element("record-audio").click();
+      await until(() => !element("cancel-audio").hidden, "pending microphone request");
+      element("cancel-audio").click();
+      check(!element("encode").disabled && !element("file").disabled, "A pending microphone request can be cancelled without freezing the page");
+      audioContext = new app.AudioContext();
+      const lateStream = audioContext.createMediaStreamDestination().stream;
+      resolveMicrophone(lateStream);
+      await until(() => lateStream.getTracks().every((track) => track.readyState === "ended"), "late microphone cleanup");
+      check(!element("attachment-list").children.length && element("stop-audio").hidden, "Late microphone permission releases the unused stream after cancellation");
+      await audioContext.close(); audioContext = null;
+      Object.defineProperty(app.navigator.mediaDevices, "getUserMedia", {
+        configurable: true, value: async () => { throw new app.DOMException("Test denied", "NotAllowedError"); }
+      });
+      element("record-audio").click();
+      await until(() => !element("encode").disabled, "permission denial");
+      check(element("status").textContent.includes("denied") && element("stop-audio").hidden, "Microphone denial restores responsive controls with an explanation");
+      files("attachment-file", [new app.File([binary], "binary-only.bin")]);
+      await until(() => element("attachment-list").children.length === 1 && !element("encode").disabled, "binary-only attachment");
+      element("encode").click();
+      await until(() => !element("download").hidden && !element("decode").disabled, "binary-only encode");
+      check(!element("readout").value && !element("save-source").hidden && !element("decoded-files").hidden, "Binary-only payload works without text and still supports source extraction");
+      files("file", [clean]);
+      await until(() => !element("encode").disabled, "automatic-stop carrier");
+      audioContext = new app.AudioContext();
+      await audioContext.resume();
+      const autoOscillator = audioContext.createOscillator();
+      const autoDestination = audioContext.createMediaStreamDestination();
+      autoOscillator.connect(autoDestination); autoOscillator.start();
+      Object.defineProperty(app.navigator.mediaDevices, "getUserMedia", { configurable: true, value: async () => autoDestination.stream });
+      element("record-audio").click();
+      await until(() => !element("stop-audio").hidden, "automatic recording start");
+      await until(() => !element("encode").disabled && element("attachment-list").children.length === 1, "automatic byte-budget stop", 35000);
+      check(autoDestination.stream.getTracks().every((track) => track.readyState === "ended"), "Recording automatically stops near the photo budget and releases the stream");
+      autoOscillator.stop(); await audioContext.close(); audioContext = null;
+      results.textContent += "ALL BROWSER CHECKS PASSED.\n";
+    } catch (error) {
+      results.textContent += "FAIL: " + (error.stack || error.message) + "\n";
+    } finally {
+      if (audioContext) await audioContext.close();
+      run.disabled = false;
+    }
+  });
+</script>
+</html>

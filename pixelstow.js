@@ -1,10 +1,12 @@
 // Browser PCF1 encode/decode. The byte layout matches PixelStow's PictureCodec.Core.
-// Public frames are stored uncompressed. Compressed frames from the desktop app are still read.
+// Text keeps v1/v2 compatibility. Attachment bundles use the v3 envelope.
 (function () {
   const BLOCK = 4;
   const PREAMBLE_BLOCKS = 72 * 7;
   const MAX_TEXT = 16 * 1024;
-  const MAX_FRAMED = 20 * 1024;
+  const MAX_BUNDLE = 1024 * 1024;
+  const MAX_FILES = 8;
+  const MAX_FRAMED = MAX_BUNDLE + 80;
   const MAX_BLOCKS = 8 * 1024 * 1024;
   const MAX_PIXELS = 24000000;
   const HEADER = 20;
@@ -17,7 +19,7 @@
   const FLAGS = 1;
   const ONE_PARITY = 2;
   const encoder = new TextEncoder();
-  const decoder = new TextDecoder("utf-8", { fatal: true });
+  const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 
   const CRC_TABLE = (() => {
     const table = new Uint32Array(256);
@@ -183,12 +185,108 @@
   }
 
   function estimateBytes(width, height) {
+    return Math.min(MAX_TEXT, estimatePayloadBytes(width, height));
+  }
+
+  function estimatePayloadBytes(width, height, passwordProtected = false) {
     if (width < BLOCK || height < BLOCK || width * height > MAX_PIXELS) return 0;
     const blocks = Math.floor(width / BLOCK) * Math.floor(height / BLOCK);
     if (blocks <= PREAMBLE_BLOCKS || blocks > MAX_BLOCKS) return 0;
     let framed = Math.floor((blocks - PREAMBLE_BLOCKS) / 9);
     if (framed > MAX_FRAMED) framed = MAX_FRAMED;
-    return Math.max(0, Math.min(MAX_TEXT, framed - HEADER));
+    return Math.max(0, Math.min(MAX_BUNDLE, framed - HEADER - (passwordProtected ? ENVELOPE : 0)));
+  }
+
+  function attachmentMetadata(name, type) {
+    const nameBytes = strictUtf8(name);
+    const typeBytes = strictUtf8(type);
+    if (!nameBytes.length || nameBytes.length > 255 || /[\x00-\x1f\x7f/\\:]/.test(name) || name === "." || name === "..") {
+      throw frameError("Attachment names must be simple filenames of at most 255 UTF-8 bytes.");
+    }
+    if (!typeBytes.length || typeBytes.length > 127 || !/^[a-z0-9!#$&^_.+\-]+\/[a-z0-9!#$&^_.+\-]+(?:;[ -~]*)?$/i.test(type)) {
+      throw frameError("Invalid attachment media type.");
+    }
+    return { nameBytes, typeBytes };
+  }
+
+  // PSB1: magic, version, reserved flags, uint16 count, uint32 text length,
+  // then UTF-8 text and entries (uint16 name/type lengths, uint32 data length, bytes).
+  function packBundle(text, attachments) {
+    const textBytes = strictUtf8(text);
+    if (textBytes.length > MAX_TEXT) throw new Error("The message is longer than 16 KiB.");
+    if (!Array.isArray(attachments) || attachments.length < 1 || attachments.length > MAX_FILES) {
+      throw new Error("Add between one and eight attachments.");
+    }
+    let size = 12 + textBytes.length;
+    const entries = attachments.map((file) => {
+      if (!(file.bytes instanceof Uint8Array)) throw new Error("Attachment data must be bytes.");
+      const metadata = attachmentMetadata(file.name, file.type || "application/octet-stream");
+      size += 8 + metadata.nameBytes.length + metadata.typeBytes.length + file.bytes.length;
+      return { ...metadata, bytes: file.bytes };
+    });
+    if (size > MAX_BUNDLE) throw new Error("The message and attachments exceed the 1 MiB payload limit.");
+    const bundle = new Uint8Array(size);
+    const view = new DataView(bundle.buffer);
+    bundle.set([0x50, 0x53, 0x42, 0x31, 1, 0]);
+    view.setUint16(6, entries.length, true);
+    view.setUint32(8, textBytes.length, true);
+    bundle.set(textBytes, 12);
+    let cursor = 12 + textBytes.length;
+    for (const file of entries) {
+      view.setUint16(cursor, file.nameBytes.length, true);
+      view.setUint16(cursor + 2, file.typeBytes.length, true);
+      view.setUint32(cursor + 4, file.bytes.length, true);
+      cursor += 8;
+      for (const bytes of [file.nameBytes, file.typeBytes, file.bytes]) {
+        bundle.set(bytes, cursor);
+        cursor += bytes.length;
+      }
+    }
+    return bundle;
+  }
+
+  function unpackBundle(bundle) {
+    if (bundle.length < 12 || bundle.length > MAX_BUNDLE ||
+      !bytesEqual(bundle.subarray(0, 6), new Uint8Array([0x50, 0x53, 0x42, 0x31, 1, 0]))) {
+      throw frameError("Unsupported attachment bundle.");
+    }
+    const view = new DataView(bundle.buffer, bundle.byteOffset, bundle.byteLength);
+    const count = view.getUint16(6, true);
+    const textLength = view.getUint32(8, true);
+    if (count < 1 || count > MAX_FILES || textLength > MAX_TEXT || 12 + textLength > bundle.length) {
+      throw frameError("Invalid attachment bundle lengths.");
+    }
+    const text = decodeUtf8(bundle.subarray(12, 12 + textLength));
+    let cursor = 12 + textLength;
+    const attachments = [];
+    for (let i = 0; i < count; i++) {
+      if (cursor + 8 > bundle.length) throw frameError("Truncated attachment header.");
+      const nameLength = view.getUint16(cursor, true);
+      const typeLength = view.getUint16(cursor + 2, true);
+      const dataLength = view.getUint32(cursor + 4, true);
+      cursor += 8;
+      if (nameLength < 1 || nameLength > 255 || typeLength < 1 || typeLength > 127 ||
+        cursor + nameLength + typeLength + dataLength > bundle.length) {
+        throw frameError("Invalid attachment lengths.");
+      }
+      const name = decodeUtf8(bundle.subarray(cursor, cursor += nameLength));
+      const type = decodeUtf8(bundle.subarray(cursor, cursor += typeLength));
+      attachmentMetadata(name, type);
+      const bytes = bundle.slice(cursor, cursor += dataLength);
+      attachments.push({ name, type, bytes });
+    }
+    if (cursor !== bundle.length) throw frameError("Unexpected attachment bundle data.");
+    return { text, attachments };
+  }
+
+  function payloadSize(text, attachments = []) {
+    return attachments.length ? packBundle(text, attachments).length : strictUtf8(text).length;
+  }
+
+  function payloadsEqual(left, right) {
+    if (left.text !== right.text || left.attachments.length !== right.attachments.length) return false;
+    return left.attachments.every((file, i) => file.name === right.attachments[i].name &&
+      file.type === right.attachments[i].type && bytesEqual(file.bytes, right.attachments[i].bytes));
   }
 
   function frameChecksum(header, payload) {
@@ -198,10 +296,11 @@
     return crc32(checked, 0, checked.length);
   }
 
-  async function packFrame(payload, strength, passwordProtected) {
-    const max = passwordProtected ? ENVELOPE + MAX_TEXT : MAX_TEXT;
+  async function packFrame(payload, strength, passwordProtected, bundle = false) {
+    const limit = bundle ? MAX_BUNDLE : MAX_TEXT;
+    const max = passwordProtected ? ENVELOPE + limit : limit;
     if (payload.length < 1 || payload.length > max) throw new Error("The message is too long to encode.");
-    if (passwordProtected) validateEnvelope(payload);
+    if (passwordProtected) validateEnvelope(payload, bundle);
     // Public text is DEFLATE-compressed when that is smaller, matching the desktop writer.
     // The checksum and declared length always cover the uncompressed bytes.
     let body = payload;
@@ -215,8 +314,8 @@
     }
     const frame = new Uint8Array(HEADER + body.length);
     frame.set([0x50, 0x43, 0x46, 0x31], 0);
-    frame[4] = passwordProtected ? 2 : 1;
-    frame[5] = passwordProtected ? 2 : 1;
+    frame[4] = bundle ? 3 : passwordProtected ? 2 : 1;
+    frame[5] = bundle ? (passwordProtected ? 4 : 3) : passwordProtected ? 2 : 1;
     frame[6] = compressed;
     frame[7] = strength;
     writeU32(frame, 8, payload.length);
@@ -233,9 +332,21 @@
     }
     try {
       const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
-      const bytes = new Uint8Array(await new Response(stream).arrayBuffer());
-      if (bytes.length !== expectedLength) throw frameError("Truncated fingerprint.");
-      return bytes;
+      // Stop expansion at the declared length, before allocating an unbounded result.
+      const reader = stream.getReader();
+      const bytes = new Uint8Array(expectedLength);
+      let cursor = 0;
+      try {
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          if (cursor + value.length > expectedLength) throw frameError("Fingerprint exceeds its declared length.");
+          bytes.set(value, cursor);
+          cursor += value.length;
+        }
+        if (cursor !== expectedLength) throw frameError("Truncated fingerprint.");
+        return bytes;
+      } finally { await reader.cancel().catch(() => {}); }
     } catch (error) {
       if (error && error.code === "frame") throw error;
       throw frameError("Truncated fingerprint.");
@@ -246,15 +357,17 @@
     if (packed.length < HEADER) throw frameError("Incomplete fingerprint frame.");
     const frame = packed.slice();
     scramble(frame, SEED);
-    const passwordProtected = frame[4] === 2 && frame[5] === 2;
+    const bundle = frame[4] === 3 && (frame[5] === 3 || frame[5] === 4);
+    const passwordProtected = (frame[4] === 2 && frame[5] === 2) || (bundle && frame[5] === 4);
     const magic = frame[0] === 0x50 && frame[1] === 0x43 && frame[2] === 0x46 && frame[3] === 0x31;
-    if (!magic || !((frame[4] === 1 && frame[5] === 1) || passwordProtected) ||
+    if (!magic || !((frame[4] === 1 && frame[5] === 1) || (frame[4] === 2 && frame[5] === 2) || bundle) ||
       frame[6] > 1 || (passwordProtected && frame[6] !== 0) || frame[7] < 1 || frame[7] > 32) {
       throw frameError("Unsupported fingerprint frame.");
     }
     const rawLength = readU32(frame, 8);
     const bodyLength = readU32(frame, 12);
-    const max = passwordProtected ? ENVELOPE + MAX_TEXT : MAX_TEXT;
+    const limit = bundle ? MAX_BUNDLE : MAX_TEXT;
+    const max = passwordProtected ? ENVELOPE + limit : limit;
     if (rawLength < 1 || rawLength > max || bodyLength < 1 || bodyLength !== frame.length - HEADER) {
       throw frameError("Invalid fingerprint lengths.");
     }
@@ -264,18 +377,20 @@
     if (payload.length !== rawLength || frameChecksum(frame, payload) !== readU32(frame, 16)) {
       throw frameError("Fingerprint checksum failed.");
     }
-    if (passwordProtected) validateEnvelope(payload);
-    return { payload, strength: frame[7], passwordProtected };
+    if (passwordProtected) validateEnvelope(payload, bundle);
+    else if (bundle) unpackBundle(payload);
+    return { payload, strength: frame[7], passwordProtected, bundle, formatVersion: frame[4] };
   }
 
-  function validateEnvelope(envelope) {
+  function validateEnvelope(envelope, bundle = false) {
+    const limit = bundle ? MAX_BUNDLE : MAX_TEXT;
     const psp1 = envelope.length > ENVELOPE &&
       envelope[0] === 0x50 && envelope[1] === 0x53 && envelope[2] === 0x50 && envelope[3] === 0x31 &&
-      envelope[4] === 1 && envelope[5] === 1 && envelope[6] === 1 && envelope[7] <= 1 &&
+      envelope[4] === (bundle ? 2 : 1) && envelope[5] === 1 && envelope[6] === 1 && envelope[7] <= 1 &&
       readU32(envelope, 8) === ITERATIONS;
     const textLength = psp1 ? readU32(envelope, 12) : 0;
     const stored = envelope.length - ENVELOPE;
-    if (!psp1 || envelope.length > ENVELOPE + MAX_TEXT || textLength < 1 || textLength > MAX_TEXT ||
+    if (!psp1 || envelope.length > ENVELOPE + limit || textLength < 1 || textLength > limit ||
       (envelope[7] === 0 ? stored !== textLength : stored >= textLength)) {
       throw frameError("Unsupported password-protected payload.");
     }
@@ -294,7 +409,7 @@
     return new Uint8Array(bits);
   }
 
-  async function encryptEnvelope(textBytes, password) {
+  async function encryptEnvelope(textBytes, password, bundle = false) {
     let body = textBytes;
     let storedCompressed = 0;
     const deflated = await deflateRaw(textBytes);
@@ -304,7 +419,7 @@
     }
     const envelope = new Uint8Array(ENVELOPE + body.length);
     envelope.set([0x50, 0x53, 0x50, 0x31], 0);
-    envelope[4] = 1;
+    envelope[4] = bundle ? 2 : 1;
     envelope[5] = 1;
     envelope[6] = 1;
     envelope[7] = storedCompressed;
@@ -329,8 +444,8 @@
     }
   }
 
-  async function decryptEnvelope(envelope, password) {
-    validateEnvelope(envelope);
+  async function decryptEnvelope(envelope, password, bundle = false) {
+    validateEnvelope(envelope, bundle);
     const key = await deriveKey(password, envelope.subarray(16, 32));
     try {
       const aes = await crypto.subtle.importKey("raw", key, { name: "AES-GCM" }, false, ["decrypt"]);
@@ -354,7 +469,8 @@
         throw error;
       }
       if (envelope[7] === 0) return plain;
-      return inflateRaw(plain, readU32(envelope, 12));
+      try { return await inflateRaw(plain, readU32(envelope, 12)); }
+      finally { plain.fill(0); }
     } finally {
       key.fill(0);
     }
@@ -733,7 +849,9 @@
         corrections: framed.corrections,
         copies: framed.copies,
         parityBits: framed.parityBits,
-        passwordProtected: unpacked.passwordProtected
+        passwordProtected: unpacked.passwordProtected,
+        bundle: unpacked.bundle,
+        formatVersion: unpacked.formatVersion
       };
     } catch (error) {
       if (error && error.code === "frame") return null;
@@ -766,7 +884,8 @@
     const recovery = await recover(pixels, width, height);
     if (!recovery) return { found: false };
     try {
-      if (recovery.passwordProtected) validateEnvelope(recovery.payload);
+      if (recovery.passwordProtected) validateEnvelope(recovery.payload, recovery.bundle);
+      else if (recovery.bundle) unpackBundle(recovery.payload);
       else decodeUtf8(recovery.payload);
     } catch {
       return { found: false };
@@ -774,6 +893,8 @@
     return {
       found: true,
       passwordProtected: recovery.passwordProtected,
+      formatVersion: recovery.formatVersion,
+      hasAttachments: recovery.bundle,
       strength: recovery.strength
     };
   }
@@ -786,14 +907,18 @@
     }
     try {
       const textBytes = recovery.passwordProtected
-        ? await decryptEnvelope(recovery.payload, password)
+        ? await decryptEnvelope(recovery.payload, password, recovery.bundle)
         : recovery.payload;
-      return {
-        status: "success",
-        text: decodeUtf8(textBytes),
-        passwordProtected: recovery.passwordProtected,
-        strength: recovery.strength
-      };
+      try {
+        const content = recovery.bundle ? unpackBundle(textBytes) : { text: decodeUtf8(textBytes), attachments: [] };
+        return {
+          status: "success",
+          ...content,
+          formatVersion: recovery.formatVersion,
+          passwordProtected: recovery.passwordProtected,
+          strength: recovery.strength
+        };
+      } finally { textBytes.fill(0); }
     } catch (error) {
       if (error && error.code === "incorrect") return { status: "incorrect" };
       if (error && error.code === "frame") return { status: "none" };
@@ -801,9 +926,9 @@
     }
   }
 
-  async function encodeAt(reference, width, height, payload, passwordProtected, strength, adaptive) {
+  async function encodeAt(reference, width, height, payload, passwordProtected, strength, adaptive, bundle) {
     strength = Math.max(1, Math.min(32, strength));
-    const probe = await packFrame(payload, 8, passwordProtected);
+    const probe = await packFrame(payload, 8, passwordProtected, bundle);
     const columns = Math.floor(width / BLOCK);
     const blockCount = columns * Math.floor(height / BLOCK);
     if (adaptive) {
@@ -812,14 +937,14 @@
       if (probe.length * 12 <= available) bitsPerByte = 12;
       else if (probe.length * 9 <= available) bitsPerByte = 9;
       if (available <= 0 || bitsPerByte === 0) {
-        throw new Error("This image is too small for that message. Use a larger picture or a shorter message.");
+        throw new Error("This image is too small for this payload. Use a larger picture, smaller files or a shorter recording.");
       }
       const copies = Math.max(1, Math.floor(available / (probe.length * bitsPerByte)));
       const multiplier = copies >= 4 ? 1 : copies === 3 ? 1.5 : copies === 2 ? 2 : 4;
       const adjusted = Math.min(32, Math.max(strength, roundHalfToEven(strength * multiplier)));
       if (adjusted !== strength) strength = adjusted;
     }
-    const framed = await packFrame(payload, strength, passwordProtected);
+    const framed = await packFrame(payload, strength, passwordProtected, bundle);
     const pixels = reference.slice();
     const written = await writeSignal(reference, pixels, width, height, framed, strength);
     return {
@@ -832,45 +957,54 @@
   }
 
   async function encode(pixels, width, height, text, password) {
-    assertImage(pixels, width, height);
-    await yieldNow();
-    const existing = await inspect(pixels, width, height);
-    if (existing.found) {
-      throw new Error("This image already contains a fingerprint. Choose a picture that does not have one.");
+    return encodePayload(pixels, width, height, { text, attachments: [] }, password);
+  }
+
+  async function encodePayload(pixels, width, height, content, password) {
+    const { text = "", attachments = [] } = content;
+    const bundle = attachments.length > 0;
+    const plain = bundle ? packBundle(text, attachments) : strictUtf8(text);
+    if (!bundle && (plain.length < 1 || plain.length > MAX_TEXT)) {
+      throw new Error(plain.length < 1 ? "Enter a message or add an attachment to encode." : "The message is longer than 16 KiB.");
     }
-    const textBytes = strictUtf8(text);
-    if (textBytes.length < 1 || textBytes.length > MAX_TEXT) {
-      throw new Error(textBytes.length < 1 ? "Enter a message to encode." : "The message is longer than 16 KiB.");
-    }
-    const locked = typeof password === "string" && password.length > 0;
-    const payload = locked ? await encryptEnvelope(textBytes, password) : textBytes.slice();
-    textBytes.fill(0);
-    let encoded = await encodeAt(pixels, width, height, payload, locked, STRENGTHS[0], true);
-    for (;;) {
-      const recovery = await tryReadAt(encoded.pixels, width, height, encoded.strength);
-      if (recovery && bytesEqual(recovery.payload, payload)) {
-        return {
-          pixels: encoded.pixels,
-          width,
-          height,
-          strength: encoded.strength,
-          copies: encoded.copies,
-          parityBits: encoded.parityBits,
-          passwordProtected: locked
-        };
+    try {
+      assertImage(pixels, width, height);
+      await yieldNow();
+      const existing = await inspect(pixels, width, height);
+      if (existing.found) {
+        throw new Error("This image already contains a fingerprint. Choose a picture that does not have one.");
       }
-      let next = 0;
-      for (let i = 0; i < STRENGTHS.length; i++) {
-        if (STRENGTHS[i] > encoded.strength) {
-          next = STRENGTHS[i];
-          break;
+      const locked = typeof password === "string" && password.length > 0;
+      const payload = locked ? await encryptEnvelope(plain, password, bundle) : plain.slice();
+      try {
+        let encoded = await encodeAt(pixels, width, height, payload, locked, STRENGTHS[0], true, bundle);
+        for (;;) {
+          const recovery = await tryReadAt(encoded.pixels, width, height, encoded.strength);
+          if (recovery && recovery.bundle === bundle && recovery.passwordProtected === locked && bytesEqual(recovery.payload, payload)) {
+            return {
+              pixels: encoded.pixels,
+              width,
+              height,
+              strength: encoded.strength,
+              copies: encoded.copies,
+              parityBits: encoded.parityBits,
+              passwordProtected: locked
+            };
+          }
+          let next = 0;
+          for (let i = 0; i < STRENGTHS.length; i++) {
+            if (STRENGTHS[i] > encoded.strength) {
+              next = STRENGTHS[i];
+              break;
+            }
+          }
+          if (next === 0) {
+            throw new Error("The message could not be verified in this image. Try another picture or a shorter message.");
+          }
+          encoded = await encodeAt(pixels, width, height, payload, locked, next, false, bundle);
         }
-      }
-      if (next === 0) {
-        throw new Error("The message could not be verified in this image. Try another picture or a shorter message.");
-      }
-      encoded = await encodeAt(pixels, width, height, payload, locked, next, false);
-    }
+      } finally { payload.fill(0); }
+    } finally { plain.fill(0); }
   }
 
   function paeth(left, up, upLeft) {
@@ -984,7 +1118,10 @@
 
   async function deflateRaw(data) {
     if (typeof CompressionStream !== "function") return deflateStored(data);
-    const stream = new Blob([data]).stream().pipeThrough(new CompressionStream("deflate-raw"));
+    let compressor;
+    try { compressor = new CompressionStream("deflate-raw"); }
+    catch { return deflateStored(data); }
+    const stream = new Blob([data]).stream().pipeThrough(compressor);
     return new Uint8Array(await new Response(stream).arrayBuffer());
   }
 
@@ -1204,9 +1341,13 @@
 
   window.PixelStow = {
     estimateBytes,
+    estimatePayloadBytes,
+    payloadSize,
+    payloadsEqual,
     inspect,
     decode,
     encode,
+    encodePayload,
     extractCarrier,
     readImageFile,
     decodePng,

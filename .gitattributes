@@ -1,0 +1,2 @@
+# Compatibility text must match the exact bytes stored in its frozen PNG.
+tests/fixtures/*.txt -text
