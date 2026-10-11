@@ -57,15 +57,17 @@ detect a locked image without decrypting; it cannot be used for re-encoding.
 ## Browser use and limits
 
 Choose a photo, add optional text and files, or record a voice message. The
-recorder requests mono audio at 16 kbit/s when supported, prefers MP4/AAC for
-iPhone playback and falls back to WebM/Opus or Ogg/Opus, and stops at 30 seconds
+recorder requests mono audio at 16 kbit/s when supported, prefers WebM/Opus or
+Ogg/Opus and falls back to MP4/AAC, and stops at 30 seconds
 or near the available byte budget. The browser may choose a different actual
 bitrate. Container
 overhead and the last recorder chunk can exceed the estimate; the codec still
 checks actual capacity and refuses an export that cannot be verified.
 
-The original recording path from `e582ba7` has been restored, before the compact
-quality/default and sample-rate changes. The later playback retry fix remains.
+The original Opus-first recording path from `25bc30d` has been restored, before
+the AAC-first, compact-quality/default and sample-rate changes. The recording
+status shows the selected format and actual byte count. The later playback retry
+fix remains. AAC can be much larger when a browser falls back to it.
 
 Recording needs HTTPS or localhost, browser microphone permission and
 MediaRecorder support. Playback is attempted on import/unlock, with ordinary

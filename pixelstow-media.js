@@ -300,8 +300,8 @@
           stream.getTracks().forEach((track) => track.stop());
           return;
         }
-        // AAC in MP4 plays on older iPhones too; use Opus when MP4 recording is unavailable.
-        const mimeType = ["audio/mp4", "audio/webm;codecs=opus", "audio/ogg;codecs=opus"].find((type) => MediaRecorder.isTypeSupported(type));
+        // Restore the original Opus-first recorder; AAC is only a fallback.
+        const mimeType = ["audio/webm;codecs=opus", "audio/ogg;codecs=opus", "audio/mp4"].find((type) => MediaRecorder.isTypeSupported(type));
         const options = { audioBitsPerSecond: 16000 };
         if (mimeType) options.mimeType = mimeType;
         const recorder = new MediaRecorder(stream, options);
@@ -310,7 +310,7 @@
         this.recording = job;
         const update = () => {
           const seconds = (performance.now() - job.started) / 1000;
-          this.recordStatus.textContent = "Recording: " + seconds.toFixed(1) + " s · " + job.size.toLocaleString("en-GB") + " / about " + budget.toLocaleString("en-GB") + " bytes. Maximum 30 seconds.";
+          this.recordStatus.textContent = "Recording: " + seconds.toFixed(1) + " s · " + job.size.toLocaleString("en-GB") + " / about " + budget.toLocaleString("en-GB") + " bytes · " + (mimeType?.includes("opus") ? "Opus" : "M4A/AAC") + ". Maximum 30 seconds.";
           if (seconds >= 30 || job.size >= Math.max(1024, budget - 1024)) this.stopRecording();
         };
         recorder.addEventListener("dataavailable", (event) => {
@@ -337,7 +337,7 @@
               PixelStow.payloadSize("", [...this.files, attachment]);
               this.files.push(attachment);
               this.render(this.list, this.files, "compose", false);
-              this.recordStatus.textContent = "Recording attached. Listen before encoding; remove it to record again.";
+              this.recordStatus.textContent = "Recording attached: " + blob.size.toLocaleString("en-GB") + " bytes · " + (type.includes("opus") || type.includes("webm") || type.includes("ogg") ? "Opus" : "M4A/AAC") + ". Listen before encoding; remove it to record again.";
               this.report(blob.size > budget ? "The recording may be too large for this photo. Use a larger image or make a shorter recording." : "Voice message attached. You can encode it with or without text.", blob.size > budget);
             } else if (generation === this.generation && !job.failed) {
               this.recordStatus.textContent = "Recording discarded.";
