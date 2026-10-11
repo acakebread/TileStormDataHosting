@@ -317,6 +317,17 @@
 
     .compare-note { margin-top: 10px; }
 
+    .payload-panel {
+      margin: 18px 0;
+      padding: 20px;
+      border: 2px solid var(--tile-community);
+      border-radius: 12px;
+      background: rgba(8, 16, 22, 0.92);
+    }
+
+    .payload-panel h2:first-child { margin-top: 0; }
+    #unlock-prompt, #contents-summary { color: var(--text); font-weight: 600; }
+
     .actions,
     .links {
       display: flex;
@@ -448,6 +459,34 @@
           <label class="choose button-link" for="file">Choose image</label>
         </div>
         <p class="hint" id="capacity">Choose a PNG or JPEG, or paste an image. A fingerprint is saved as a new PNG or JPEG, so the original file stays as it is.</p>
+        <p class="status" id="status" role="status"></p>
+        <section class="payload-panel" id="payload-panel" hidden aria-label="Embedded image contents">
+          <form id="unlock-form" hidden>
+            <h2>Password protected image</h2>
+            <p id="unlock-prompt">This image is password protected. Please enter the password to read the message and any attached files.</p>
+            <label for="unlock-password">Password</label>
+            <input id="unlock-password" type="password" autocomplete="off" spellcheck="false" aria-describedby="unlock-prompt" required>
+            <div class="actions">
+              <button id="unlock" type="submit">Unlock image</button>
+            </div>
+            <p class="hint">Press Enter or choose Unlock image.</p>
+          </form>
+          <div id="decoded-content" hidden>
+            <h2>Image contents</h2>
+            <p id="contents-summary" role="status" tabindex="-1"></p>
+            <div id="decoded-message" hidden>
+              <label for="readout">Message <span class="byte-count" id="readout-bytes">(0 bytes)</span></label>
+              <textarea class="readout" id="readout" readonly></textarea>
+            </div>
+            <section id="decoded-files" hidden>
+              <h2>Attached files</h2>
+              <div id="decoded-attachments"></div>
+            </section>
+            <div class="actions">
+              <button id="relock" type="button" hidden>Lock again</button>
+            </div>
+          </div>
+        </section>
         <div class="preview" id="preview" hidden>
           <div class="viewport" id="viewport">
             <div class="compare" id="compare">
@@ -466,6 +505,7 @@
         <p class="hint compare-note" id="compare-note" hidden>Drag the divider with the left button. The encoded image is on the left and the recovered source is on the right.</p>
       </div>
 
+      <section id="composition">
       <label for="message">Message <span class="byte-count" id="message-bytes">(0 bytes)</span></label>
       <textarea id="message" maxlength="16384" spellcheck="true"></textarea>
 
@@ -490,32 +530,25 @@
       <p class="hint" id="record-status" role="status"></p>
       <p class="hint" id="payload-budget" role="status">Choose a photo to see how much it can hold.</p>
 
-      <label for="password">Password</label>
-      <input id="password" type="password" autocomplete="off" spellcheck="false">
-      <p class="hint">Leave this blank for a public message. A password locks the text and every attachment, including filenames. It is not stored in the image.</p>
+      <div id="encoding-passwords">
+        <label for="password">Password for encoding</label>
+        <input id="password" type="password" autocomplete="off" spellcheck="false">
+        <p class="hint">Leave this blank for a public message. A password locks the text and every attachment, including filenames. It is not stored in the image.</p>
 
-      <label for="confirm">Confirm password</label>
-      <input id="confirm" type="password" autocomplete="off" spellcheck="false">
+        <label for="confirm">Confirm password</label>
+        <input id="confirm" type="password" autocomplete="off" spellcheck="false">
+      </div>
+      </section>
 
       <div class="actions">
         <button id="encode" type="button" disabled>Encode into a new image</button>
         <button id="decode" type="button" disabled>Decode image</button>
-        <button id="relock" type="button" hidden>Lock again</button>
         <a class="button-link" id="download" href="#" hidden>Download encoded PNG</a>
         <button id="save-encoded-jpeg" type="button" hidden>Download encoded JPEG</button>
         <button id="save-message" type="button" hidden>Download message</button>
         <button id="save-source" type="button" hidden>Download source PNG</button>
         <button id="save-source-jpeg" type="button" hidden>Download source JPEG</button>
       </div>
-      <p class="status" id="status" role="status"></p>
-
-      <h2>Read message <span class="byte-count" id="readout-bytes">(0 bytes)</span></h2>
-      <textarea class="readout" id="readout" readonly placeholder="A decoded message will appear here."></textarea>
-
-      <section id="decoded-files" hidden>
-        <h2>Recovered files</h2>
-        <div id="decoded-attachments"></div>
-      </section>
 
       <div class="links">
         <a class="button-link" href="./tech.html">Back to technology</a>
@@ -551,6 +584,15 @@
     const message = document.querySelector("#message");
     const password = document.querySelector("#password");
     const confirmPassword = document.querySelector("#confirm");
+    const composition = document.querySelector("#composition");
+    const payloadPanel = document.querySelector("#payload-panel");
+    const decodedContent = document.querySelector("#decoded-content");
+    const decodedMessage = document.querySelector("#decoded-message");
+    const contentsSummary = document.querySelector("#contents-summary");
+    const encodingPasswords = document.querySelector("#encoding-passwords");
+    const unlockForm = document.querySelector("#unlock-form");
+    const unlockPassword = document.querySelector("#unlock-password");
+    const unlockButton = document.querySelector("#unlock");
     const encodeButton = document.querySelector("#encode");
     const decodeButton = document.querySelector("#decode");
     const relockButton = document.querySelector("#relock");
@@ -631,16 +673,38 @@
       const hasImage = Boolean(current);
       const hasMessage = Boolean(current && current.decodedText);
       const hasDecoded = Boolean(current && current.recoverPixels);
+      const protectedTarget = Boolean(current && (current.decodeProtected ?? current.passwordProtected));
+      const needsUnlock = protectedTarget && !hasDecoded;
+      const canEncode = hasImage && !current.hasFingerprint && !needsUnlock;
       const working = busy || media.active;
-      encodeButton.disabled = working || !hasImage || current.hasFingerprint;
+      encodeButton.disabled = working || !canEncode;
+      composition.hidden = Boolean(current && current.hasFingerprint) || needsUnlock;
+      encodeButton.hidden = composition.hidden;
+      decodeButton.hidden = protectedTarget || Boolean(current && current.hasFingerprint);
       decodeButton.disabled = working || !hasImage;
+      encodingPasswords.hidden = Boolean(current && current.hasFingerprint) || needsUnlock;
+      unlockForm.hidden = !needsUnlock;
+      unlockPassword.disabled = working || !needsUnlock;
+      unlockButton.disabled = working || !needsUnlock;
+      payloadPanel.hidden = !needsUnlock && !hasDecoded;
+      decodedContent.hidden = !hasDecoded;
+      decodedMessage.hidden = !hasMessage;
+      if (hasDecoded) {
+        const files = current.decodedAttachments || [];
+        const audioCount = files.filter((file) => file.type.startsWith("audio/")).length;
+        const fileLabel = files.length + (files.length === 1 ? " attached file" : " attached files");
+        const audioLabel = audioCount ? " (" + audioCount + (audioCount === 1 ? " audio file" : " audio files") + ")" : "";
+        contentsSummary.textContent = "This image contains " + (hasMessage ? "a message and " : "") + fileLabel + audioLabel + ".";
+      } else {
+        contentsSummary.textContent = "";
+      }
       relockButton.hidden = !(hasDecoded && current.decodedProtected);
       relockButton.disabled = working;
       fileInput.disabled = working;
-      message.disabled = working || Boolean(current && current.hasFingerprint);
-      password.disabled = working;
-      confirmPassword.disabled = working;
-      media.setState(busy, !hasImage || current.hasFingerprint);
+      message.disabled = working || !canEncode;
+      password.disabled = working || encodingPasswords.hidden;
+      confirmPassword.disabled = working || encodingPasswords.hidden;
+      media.setState(busy, !canEncode);
       saveEncodedJpegButton.disabled = working;
       saveMessageButton.hidden = !hasMessage;
       saveSourceButton.hidden = !hasDecoded;
@@ -671,6 +735,8 @@
       current.decodePixels = pixels;
       current.decodedText = decoded.text;
       current.decodedProtected = decoded.passwordProtected;
+      current.decodeProtected = decoded.passwordProtected;
+      current.decodedAttachments = decoded.attachments;
       current.strength = decoded.strength;
       media.showDecoded(decoded.attachments, autoplay);
       current.carrierPromise = null;
@@ -837,6 +903,7 @@
       message.value = "";
       password.value = "";
       confirmPassword.value = "";
+      unlockPassword.value = "";
       current = null;
       setBusy(true);
       setStatus("Reading the image…");
@@ -857,7 +924,7 @@
         const exactNote = image.exact ? "" : " Browser colour conversion was used, so an existing fingerprint may not read.";
         capacity.textContent = image.width + " × " + image.height + " pixels. About " + room.toLocaleString("en-GB") + " payload bytes will fit before compression." + exactNote;
         if (found.found && found.passwordProtected) {
-          setStatus("This image has a locked fingerprint. Enter its password and choose Decode.");
+          setStatus("This image is password protected. Please enter the password to unlock it.");
         } else if (found.found) {
           const decoded = await PixelStow.decode(image.pixels, image.width, image.height, "");
           if (decoded.status === "success") {
@@ -881,6 +948,7 @@
       } finally {
         setBusy(false);
         updateByteCounts();
+        if (!unlockForm.hidden) unlockPassword.focus();
       }
     }
 
@@ -893,12 +961,18 @@
       zoomAt(event.clientX, event.clientY, Math.pow(1.0015, -delta));
     }, { passive: false });
 
+    // A new gesture clears the previous pan's menu suppression. Keep it through
+    // release: browsers can send contextmenu before or after pointerup.
+    document.addEventListener("pointerdown", (event) => {
+      if (!panning) blockPanMenu = event.button === 2 && viewport.contains(event.target) && Boolean(imagePixels().w);
+    }, true);
+    document.addEventListener("keydown", () => { if (!panning) blockPanMenu = false; }, true);
+
     viewport.addEventListener("pointerdown", (event) => {
       if (event.button !== 2 || !imagePixels().w) return;
       event.preventDefault();
       event.stopPropagation();
       panning = true;
-      blockPanMenu = true;
       panX = event.clientX;
       panY = event.clientY;
       viewport.classList.add("panning");
@@ -923,17 +997,13 @@
       panning = false;
       viewport.classList.remove("panning");
       if (viewport.hasPointerCapture(event.pointerId)) viewport.releasePointerCapture(event.pointerId);
-      if (!blockPanMenu) return;
-      setTimeout(() => {
-        blockPanMenu = false;
-      }, 0);
     }
 
     viewport.addEventListener("pointerup", endPan);
     viewport.addEventListener("pointercancel", endPan);
+    viewport.addEventListener("lostpointercapture", endPan);
     document.addEventListener("contextmenu", (event) => {
-      if (!blockPanMenu) return;
-      blockPanMenu = false;
+      if (!viewport.contains(event.target) && !blockPanMenu) return;
       event.preventDefault();
     }, true);
     new ResizeObserver(() => {
@@ -993,7 +1063,7 @@
     });
 
     encodeButton.addEventListener("click", async () => {
-      if (!current || busy || media.active) return;
+      if (!current || busy || media.active || encodeButton.disabled) return;
       if (password.value !== confirmPassword.value) {
         setStatus("Passwords do not match. No image was written.", true);
         return;
@@ -1055,13 +1125,13 @@
       }
     });
 
-    decodeButton.addEventListener("click", async () => {
+    async function decodeImage(key = "") {
       if (!current || busy || media.active) return;
       setBusy(true);
       setStatus("Decoding…");
       try {
         const target = current.decodePixels || current.pixels;
-        const decoded = await PixelStow.decode(target, current.width, current.height, password.value);
+        const decoded = await PixelStow.decode(target, current.width, current.height, key);
         if (decoded.status === "success") {
           readout.value = decoded.text;
           message.value = decoded.text;
@@ -1070,9 +1140,11 @@
           setStatus(lock + " the fingerprint from this image.");
           password.value = "";
           confirmPassword.value = "";
+          unlockPassword.value = "";
         } else if (decoded.status === "password") {
           clearDecoded();
-          setStatus("This image has a locked fingerprint. Enter its password and choose Decode.");
+          current.decodeProtected = true;
+          setStatus("This image is password protected. Please enter the password to unlock it.");
         } else if (decoded.status === "incorrect") {
           clearDecoded();
           setStatus("The password is incorrect, or the locked message is damaged.", true);
@@ -1086,7 +1158,19 @@
       } finally {
         setBusy(false);
         updateByteCounts();
+        if (!unlockForm.hidden) {
+          unlockPassword.focus({ preventScroll: true });
+          unlockPassword.select();
+        } else if (key && current.recoverPixels) {
+          contentsSummary.focus({ preventScroll: true });
+        }
       }
+    }
+
+    decodeButton.addEventListener("click", () => decodeImage());
+    unlockForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      if (!unlockForm.hidden && !unlockButton.disabled) decodeImage(unlockPassword.value);
     });
 
     function clearDecoded() {
@@ -1095,6 +1179,7 @@
       media.reset();
       if (current) {
         current.decodedText = "";
+        current.decodedAttachments = [];
         current.decodedProtected = false;
         current.recoverPixels = null;
         current.carrierPromise = null;
@@ -1109,8 +1194,10 @@
       clearDownload();
       password.value = "";
       confirmPassword.value = "";
+      unlockPassword.value = "";
       setBusy(false);
       setStatus("Locked again. Enter the password to read the message and files.");
+      unlockPassword.focus({ preventScroll: true });
     });
 
     password.addEventListener("input", updateByteCounts);

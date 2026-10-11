@@ -51,12 +51,57 @@
       files("file", [clean]);
       await until(() => !element("encode").disabled, "clean image import");
       check(!element("attachment-file").disabled, "Clean image enables attachment input");
+      check(!element("encoding-passwords").hidden && element("unlock-form").hidden, "Encoding offers a password and confirmation without an unlock prompt");
+      const viewport = element("viewport"), canvas = element("preview-encoded");
+      const captureMethods = [viewport.setPointerCapture, viewport.hasPointerCapture, viewport.releasePointerCapture];
+      let captured = false;
+      // Synthetic pointer sequences let us exercise both browser event orders,
+      // including a contextmenu sent in a later task after capture is released.
+      viewport.setPointerCapture = () => { captured = true; };
+      viewport.hasPointerCapture = () => captured;
+      viewport.releasePointerCapture = () => { captured = false; };
+      const pointer = (target, name, button = 2, x = 100) => target.dispatchEvent(new app.PointerEvent(name, {
+        bubbles: true, cancelable: true, pointerId: 1, pointerType: "mouse", button,
+        buttons: name === "pointerup" ? 0 : button === 2 ? 2 : 1, clientX: x, clientY: 100
+      }));
+      const menu = (target) => target.dispatchEvent(new app.MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2 }));
+      try {
+        pointer(canvas, "pointerdown");
+        check(!menu(canvas), "Image context menu is blocked when sent on right-button press");
+        pointer(viewport, "pointermove", 2, 140);
+        check(viewport.classList.contains("panning"), "Right-button movement retains the image pan gesture");
+        doc.body.dispatchEvent(new app.KeyboardEvent("keydown", { bubbles: true, key: "Control" }));
+        check(!menu(doc.body), "Pressing a modifier while panning cannot enable the release context menu");
+        pointer(viewport, "pointerup");
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        check(!menu(canvas) && !viewport.classList.contains("panning"), "Delayed right-button release over the image cannot open a context menu");
+        check(!menu(doc.body), "A pan released outside the image also suppresses its context menu");
+        pointer(doc.body, "pointerdown"); pointer(doc.body, "pointerup");
+        check(menu(doc.body), "A new right click outside the image keeps the normal page context menu");
+        pointer(canvas, "pointerdown"); pointer(viewport, "pointercancel");
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        check(!menu(doc.body) && !viewport.classList.contains("panning"), "Cancelled pan retains release-menu suppression and clears the pan cursor");
+        doc.body.dispatchEvent(new app.KeyboardEvent("keydown", { bubbles: true, key: "ContextMenu" }));
+        check(menu(doc.body), "Keyboard context menus outside the image remain available");
+        pointer(canvas, "pointerdown", 0); pointer(viewport, "pointerup", 0);
+        check(!viewport.classList.contains("panning"), "Left-button image interaction does not start a pan");
+        check(!menu(canvas), "Context menus over the image are suppressed independently of pan event timing");
+        pointer(canvas, "pointerdown"); captured = false;
+        viewport.dispatchEvent(new app.PointerEvent("lostpointercapture", { bubbles: true, pointerId: 1 }));
+        check(!viewport.classList.contains("panning") && !menu(doc.body), "Lost pointer capture clears the pan cursor while retaining release-menu suppression");
+        pointer(doc.body, "pointerdown", 0); pointer(doc.body, "pointerup", 0);
+      } finally {
+        [viewport.setPointerCapture, viewport.hasPointerCapture, viewport.releasePointerCapture] = captureMethods;
+      }
       const binary = new app.Uint8Array(Array.from({ length: 256 }, (_, i) => i));
       files("attachment-file", [new app.File([binary], "public-🎂.bin"), new app.File([], "empty.txt", { type: "text/plain" })]);
       await until(() => element("attachment-list").children.length === 2 && !element("encode").disabled, "attachment import");
       input("message", "Happy birthday! café 🎂\n  ");
       const publicPassword = "Public browser test key 🎂";
-      input("password", publicPassword); input("confirm", publicPassword);
+      input("password", publicPassword); input("confirm", "mismatched public test value");
+      element("encode").click();
+      check(element("status").textContent.includes("do not match") && element("download").hidden, "Encoding still rejects a mismatched confirmation before writing an image");
+      input("confirm", publicPassword);
       // Exercise the real browser MediaRecorder using an oscillator stream instead of a device.
       audioContext = new app.AudioContext();
       await audioContext.resume();
@@ -82,6 +127,7 @@
       await until(() => !element("download").hidden && !element("decode").disabled, "encoded PNG download");
       check(!element("password").value && !element("confirm").value, "Successful encoding clears passwords");
       check(element("decoded-attachments").children.length === 3, "Encoding verifies and displays all recovered files");
+      check(!element("decoded-content").hidden && element("contents-summary").textContent.includes("a message and 3 attached files (1 audio file)"), "The contents summary identifies the message, file count and audio");
       const encodedPng = await (await fetch(element("download").href)).blob();
       const decodedPng = await app.PixelStow.decodePng(new app.Uint8Array(await encodedPng.arrayBuffer()));
       const payload = await app.PixelStow.decode(decodedPng.pixels, width, height, publicPassword);
@@ -92,25 +138,32 @@
       check(downloadedBytes.length === 256 && downloadedBytes.every((byte, i) => byte === i), "Recovered-file download contains exact original bytes");
       element("relock").click();
       check(!element("readout").value && element("decoded-files").hidden && element("save-source").hidden && !element("attachment-list").children.length, "Lock again removes plaintext, attachments, players and source extraction");
-      input("password", "incorrect"); element("decode").click();
-      await until(() => !element("decode").disabled, "wrong-password result");
+      check(!element("unlock-form").hidden && element("decoded-content").hidden && element("encoding-passwords").hidden && element("decode").hidden, "Relocking replaces contents with one password field and a dedicated Unlock button");
+      input("unlock-password", "incorrect"); element("unlock").click();
+      await until(() => !element("unlock").disabled, "wrong-password result");
       check(element("status").textContent.includes("incorrect") && element("decoded-files").hidden, "Wrong password reveals no recovered file metadata");
-      input("password", publicPassword); element("decode").click();
-      await until(() => !element("decode").disabled && !element("decoded-files").hidden, "result unlock");
+      check(!element("unlock-form").hidden && !element("contents-summary").textContent, "Incorrect password leaves the unlock prompt visible and the contents summary empty");
+      input("unlock-password", publicPassword); element("unlock-form").requestSubmit();
+      await until(() => !element("unlock").disabled || !element("decoded-files").hidden, "result unlock");
       check(element("readout").value === payload.text, "An encoded result can be unlocked independently of its original clean carrier");
+      check(element("unlock-form").hidden && !element("decoded-content").hidden && !element("unlock-password").value, "Submitting the unlock form replaces the prompt with contents and clears the password");
       const play = app.HTMLMediaElement.prototype.play;
       app.HTMLMediaElement.prototype.play = function () { return Promise.reject(new app.DOMException("Test autoplay blocked", "NotAllowedError")); };
       files("file", [new app.File([encodedPng], "birthday-card.png", { type: "image/png" })]);
       await until(() => !element("decode").disabled, "independent locked import");
       check(element("decoded-files").hidden && element("encode").disabled && element("attachment-file").disabled, "Locked import disables re-encoding without exposing files");
-      input("password", publicPassword); element("decode").click();
+      check(!element("payload-panel").hidden && !element("unlock-form").hidden && element("unlock-prompt").textContent.includes("password") && Boolean(element("payload-panel").compareDocumentPosition(element("preview")) & app.Node.DOCUMENT_POSITION_FOLLOWING), "A locked import prominently requests its password above the image viewer");
+      check(element("composition").hidden && element("unlock-form").querySelectorAll('input[type="password"]').length === 1, "An imported locked image offers exactly one visible password input");
+      input("unlock-password", publicPassword); element("unlock").click();
       await until(() => !element("decode").disabled && element("decoded-attachments").children.length === 3, "independent unlock");
       await until(() => element("decoded-attachments").textContent.includes("Press Play"), "autoplay fallback");
       check(element("decoded-attachments").textContent.includes("Press Play"), "Autoplay refusal gives a visible Play fallback");
+      check(element("unlock-form").hidden && !element("decoded-content").hidden && element("composition").hidden, "Imported contents replace the password prompt while encoding controls remain hidden");
       app.HTMLMediaElement.prototype.play = play;
       files("file", [clean]);
       await until(() => !element("encode").disabled, "new clean carrier");
       check(element("decoded-files").hidden && !element("readout").value && !element("attachment-list").children.length, "New image clears previous text, recovered files and composition");
+      check(element("payload-panel").hidden && !element("encoding-passwords").hidden, "A new clean carrier restores the encoding password and confirmation");
       audioContext = new app.AudioContext();
       const discardStream = audioContext.createMediaStreamDestination().stream;
       Object.defineProperty(app.navigator.mediaDevices, "getUserMedia", { configurable: true, value: async () => discardStream });
@@ -145,6 +198,7 @@
       element("encode").click();
       await until(() => !element("download").hidden && !element("decode").disabled, "binary-only encode");
       check(!element("readout").value && !element("save-source").hidden && !element("decoded-files").hidden, "Binary-only payload works without text and still supports source extraction");
+      check(element("decoded-message").hidden && element("contents-summary").textContent === "This image contains 1 attached file.", "Binary-only contents show a clear file summary without an empty message box");
       files("file", [clean]);
       await until(() => !element("encode").disabled, "automatic-stop carrier");
       audioContext = new app.AudioContext();
