@@ -1,5 +1,149 @@
 // Browser attachment and recording UI. Payload serialization belongs to pixelstow.js.
 (function () {
+  // MediaRecorder's streaming WebM can omit Info/Duration. Native players then
+  // keep increasing their duration estimate while playing, distorting the bar.
+  // Finalize the single-track, unlaced Opus stream emitted by the browser, using
+  // its packet timestamps. Audio packet bytes are copied without re-encoding.
+  // Matroska: https://www.matroska.org/technical/elements.html
+  // Opus packet duration: https://www.rfc-editor.org/rfc/rfc6716.html#section-3.1
+  function finalizeWebmAudio(bytes) {
+    try {
+      const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      const vint = (offset, limit, isId = false) => {
+        if (offset >= limit || !bytes[offset]) throw new Error("Invalid WebM integer");
+        let width = 1, marker = 0x80;
+        while (!(bytes[offset] & marker)) { width++; marker >>= 1; }
+        if (width > (isId ? 4 : 8) || offset + width > limit) throw new Error("Invalid WebM integer");
+        let value = isId ? bytes[offset] : bytes[offset] & (marker - 1);
+        let unknown = !isId && value === marker - 1;
+        for (let i = 1; i < width; i++) {
+          value = value * 256 + bytes[offset + i];
+          unknown &&= bytes[offset + i] === 255;
+        }
+        if (!unknown && !Number.isSafeInteger(value)) throw new Error("Oversized WebM integer");
+        return { width, value, unknown };
+      };
+      const element = (offset, limit) => {
+        const id = vint(offset, limit, true);
+        const size = vint(offset + id.width, limit);
+        const data = offset + id.width + size.width;
+        const end = size.unknown ? limit : data + size.value;
+        if (end > limit) throw new Error("Truncated WebM element");
+        return { id: id.value, start: offset, data, end, idWidth: id.width, sizeWidth: size.width, unknown: size.unknown };
+      };
+      const children = (parent) => {
+        const result = [];
+        for (let offset = parent.data; offset < parent.end;) {
+          const child = element(offset, parent.end);
+          if (child.unknown) throw new Error("Unexpected open WebM element");
+          result.push(child);
+          offset = child.end;
+        }
+        return result;
+      };
+      const uint = (field) => {
+        let value = 0;
+        if (field.end - field.data > 8) throw new Error("Oversized WebM integer");
+        for (let i = field.data; i < field.end; i++) value = value * 256 + bytes[i];
+        if (!Number.isSafeInteger(value)) throw new Error("Oversized WebM integer");
+        return value;
+      };
+      const float = (field) => field.end - field.data === 4 ? view.getFloat32(field.data)
+        : field.end - field.data === 8 ? view.getFloat64(field.data) : NaN;
+      const header = element(0, bytes.length);
+      if (header.id !== 0x1a45dfa3 || header.unknown) return bytes;
+      const segment = element(header.end, bytes.length);
+      // Inserting into an indexed, finished file could invalidate byte offsets.
+      if (segment.id !== 0x18538067 || !segment.unknown) return bytes;
+      let info = null, duration = null, scale = 1000000, trackNumber = null, codecDelay = 0, endSeconds = 0;
+      for (let offset = segment.data; offset < segment.end;) {
+        const item = element(offset, segment.end);
+        offset = item.end;
+        if (item.id === 0x1549a966) {
+          if (info || item.unknown) return bytes;
+          info = item;
+          for (const field of children(info)) {
+            if (field.id === 0xbf) return bytes; // Preserve checksummed metadata.
+            if (field.id === 0x2ad7b1) scale = uint(field);
+            if (field.id === 0x4489) duration = field;
+          }
+          if (!(scale > 0) || (duration && Number.isFinite(float(duration)) && float(duration) > 0)) return bytes;
+        } else if (item.id === 0x1654ae6b) {
+          const tracks = children(item).filter((field) => field.id === 0xae);
+          if (trackNumber !== null || tracks.length !== 1) return bytes;
+          const fields = children(tracks[0]);
+          const number = fields.find((field) => field.id === 0xd7);
+          const type = fields.find((field) => field.id === 0x83);
+          const codec = fields.find((field) => field.id === 0x86);
+          const trackScale = fields.find((field) => field.id === 0x23314f);
+          const delay = fields.find((field) => field.id === 0x56aa);
+          if (!number || !type || !codec || uint(type) !== 2 ||
+            new TextDecoder().decode(bytes.subarray(codec.data, codec.end)) !== "A_OPUS" ||
+            (trackScale && float(trackScale) !== 1)) return bytes;
+          trackNumber = uint(number);
+          if (delay) codecDelay = uint(delay) / 1000000000;
+        } else if (item.id === 0x1f43b675) {
+          if (!info || trackNumber === null) return bytes;
+          let timestamp = null, position = item.data;
+          for (; position < item.end;) {
+            const block = element(position, item.end);
+            // An open cluster ends when the following cluster starts.
+            if (item.unknown && block.id === 0x1f43b675) break;
+            if (block.unknown) return bytes;
+            position = block.end;
+            if (block.id === 0xe7) timestamp = uint(block);
+            else if (block.id === 0xa3) {
+              const track = vint(block.data, block.end);
+              const time = block.data + track.width;
+              const packet = time + 3;
+              if (timestamp === null || track.value !== trackNumber || packet >= block.end || (bytes[time + 2] & 6)) return bytes;
+              const toc = bytes[packet], config = toc >> 3, code = toc & 3;
+              const frameMs = config < 12 ? [10, 20, 40, 60][config & 3]
+                : config < 16 ? [10, 20][config & 1] : [2.5, 5, 10, 20][config & 3];
+              if (code === 3 && packet + 1 >= block.end) return bytes;
+              const count = code === 0 ? 1 : code === 3 ? bytes[packet + 1] & 63 : 2;
+              if (!count || count * frameMs > 120) return bytes;
+              const seconds = (timestamp + view.getInt16(time)) * scale / 1000000000 + count * frameMs / 1000 - codecDelay;
+              endSeconds = Math.max(endSeconds, seconds);
+            } else if (block.id !== 0xec && block.id !== 0xbf) return bytes;
+          }
+          offset = position;
+        } else if (item.id !== 0xec) return bytes; // Leave indexed/other WebM variants intact.
+      }
+      if (!info || !(endSeconds > 0)) return bytes;
+      const ticks = endSeconds * 1000000000 / scale;
+      if (duration) {
+        const repaired = bytes.slice();
+        const output = new DataView(repaired.buffer);
+        if (duration.end - duration.data === 4) output.setFloat32(duration.data, ticks);
+        else if (duration.end - duration.data === 8) output.setFloat64(duration.data, ticks);
+        else return bytes;
+        return repaired;
+      }
+      const added = new Uint8Array(11);
+      added.set([0x44, 0x89, 0x88]); // Duration, eight-byte big-endian float.
+      new DataView(added.buffer).setFloat64(3, ticks);
+      const size = info.end - info.data + added.length;
+      let width = info.sizeWidth;
+      while (size >= 2 ** (7 * width) - 1) width++;
+      const sizeBytes = new Uint8Array(width);
+      let remaining = size;
+      for (let i = width - 1; i >= 0; i--) { sizeBytes[i] = remaining % 256; remaining = Math.floor(remaining / 256); }
+      sizeBytes[0] |= 1 << (8 - width);
+      const repaired = new Uint8Array(bytes.length + added.length + width - info.sizeWidth);
+      const sizeOffset = info.start + info.idWidth;
+      repaired.set(bytes.subarray(0, sizeOffset));
+      repaired.set(sizeBytes, sizeOffset);
+      const dataOffset = sizeOffset + width;
+      repaired.set(bytes.subarray(info.data, info.end), dataOffset);
+      repaired.set(added, dataOffset + info.end - info.data);
+      repaired.set(bytes.subarray(info.end), dataOffset + size);
+      return repaired;
+    } catch (_) {
+      return bytes; // An unfamiliar container must not prevent audio playback.
+    }
+  }
+
   class MediaPanel {
     constructor({ changed, report, remaining, save }) {
       this.changed = changed;
@@ -167,7 +311,10 @@
           row.appendChild(link);
         }
         if (/^audio\//i.test(file.type)) {
-          const url = URL.createObjectURL(new Blob([file.bytes], { type: file.type }));
+          // Repair older streamed recordings only in the playback copy. Imported
+          // attachment bytes and downloads remain exactly as supplied.
+          const playbackBytes = /webm/i.test(file.type) ? finalizeWebmAudio(file.bytes) : file.bytes;
+          const url = URL.createObjectURL(new Blob([playbackBytes], { type: file.type }));
           this.urls[group].push(url);
           const audio = document.createElement("audio");
           audio.controls = true;
@@ -379,13 +526,15 @@
               if (!blob.size) throw new Error("The recording was empty. Try recording again.");
               const extension = type.includes("mp4") ? "m4a" : type.includes("ogg") ? "ogg" : type.includes("wav") ? "wav" : "webm";
               const name = "voice-message-" + (this.files.length + 1) + "." + extension;
-              const attachment = { name, type, bytes: new Uint8Array(await blob.arrayBuffer()) };
+              const bytes = new Uint8Array(await blob.arrayBuffer());
+              const attachment = { name, type, bytes: /webm/i.test(type) ? finalizeWebmAudio(bytes) : bytes };
               if (generation !== this.generation) return;
               PixelStow.payloadSize("", [...this.files, attachment]);
               this.files.push(attachment);
               this.render(this.list, this.files, "compose", false);
-              this.recordStatus.textContent = "Recording attached: " + blob.size.toLocaleString("en-GB") + " bytes · " + (type.includes("opus") || type.includes("webm") || type.includes("ogg") ? "Opus" : "M4A/AAC") + ". Listen before encoding; remove it to record again.";
-              this.report(blob.size > budget ? "The recording may be too large for this photo. Use a larger image or make a shorter recording." : "Voice message attached. You can encode it with or without text.", blob.size > budget);
+              const size = attachment.bytes.length;
+              this.recordStatus.textContent = "Recording attached: " + size.toLocaleString("en-GB") + " bytes · " + (type.includes("opus") || type.includes("webm") || type.includes("ogg") ? "Opus" : "M4A/AAC") + ". Listen before encoding; remove it to record again.";
+              this.report(size > budget ? "The recording may be too large for this photo. Use a larger image or make a shorter recording." : "Voice message attached. You can encode it with or without text.", size > budget);
             } else if (generation === this.generation && !job.failed) {
               this.recordStatus.textContent = "Recording discarded.";
             }

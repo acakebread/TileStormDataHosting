@@ -77,6 +77,14 @@ checks actual capacity and refuses an export that cannot be verified. These
 iPhone recorder changes require device verification; the desktop playback retry
 fix remains.
 
+Browser WebM/Opus recordings receive a final Matroska `Info/Duration`, calculated
+from cluster/block timestamps and Opus packet durations. This gives the native
+player a fixed total time before playback, instead of a growing duration estimate
+that distorts seek-bar movement. Only the single-track, unlaced, unindexed stream
+layout is finalized; the encoded audio packets are unchanged. Existing streamed
+WebM attachments get this repair in their playback copy, while their original
+attachment/download bytes remain untouched. M4A recording is unaffected.
+
 Recording needs HTTPS or localhost, browser microphone permission and
 MediaRecorder support. Playback is attempted on import/unlock, with ordinary
 audio controls and a prominent Play button when autoplay is blocked. Phones also
