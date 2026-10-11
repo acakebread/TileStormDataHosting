@@ -57,32 +57,15 @@ detect a locked image without decrypting; it cannot be used for re-encoding.
 ## Browser use and limits
 
 Choose a photo, add optional text and files, or record a voice message. The
-desktop default Compact voice mode requests mono speech at 6 kbit/s in WebM/Opus or
-Ogg/Opus where recording is supported. It falls back to MP4/AAC at 8 kbit/s.
-Compatible voice is the phone/tablet default and favours MP4/AAC at 16 kbit/s,
-with Opus as a fallback. Microphone constraints request mono and a lower sample
-rate when available. Recording stops at 30 seconds. Opus also stops near the
-available byte budget. M4A uses `start()` without a timeslice and waits for the
-completed recording; it does not auto-stop on the first MP4 chunk's size. Press
-Stop when finished. The microphone is released after the recorder's stop event
-so the last audio can finish; discarding releases it immediately. The actual
-completed file size is checked before encoding, and a clip may need a larger
-photo. This avoids the abrupt roughly one-second stop on small photos without
-promising that an arbitrarily long recording will fit.
-The quality picker shows a target duration estimate; completed recordings show
-their measured elapsed time and file size. The browser may choose a different
-actual bitrate. AAC may ignore low bitrate requests, so switching to Opus can
-save more space than just lowering the request. Known encoder-reported bitrate
-limits update the estimate after starting a recording. Container
+recorder requests mono audio at 16 kbit/s when supported, prefers MP4/AAC for
+iPhone playback and falls back to WebM/Opus or Ogg/Opus, and stops at 30 seconds
+or near the available byte budget. The browser may choose a different actual
+bitrate. Container
 overhead and the last recorder chunk can exceed the estimate; the codec still
 checks actual capacity and refuses an export that cannot be verified.
 
-Opus recording is supported by [Safari 18.4 and later](https://webkit.org/blog/16574/webkit-features-in-safari-18-4/)
-and other browsers that advertise the format. Older Safari versions can use the
-AAC fallback/compatible mode. A local generated spoken birthday sample recorded
-for six seconds produced 4,615 bytes in Compact voice; this is a measured sample,
-not a guaranteed size for every voice or browser. The recorder's bitrate setting
-is a [hint to the encoder](https://www.w3.org/TR/mediastream-recording/).
+The original recording path from `e582ba7` has been restored, before the compact
+quality/default and sample-rate changes. The later playback retry fix remains.
 
 Recording needs HTTPS or localhost, browser microphone permission and
 MediaRecorder support. Playback is attempted on import/unlock, with ordinary

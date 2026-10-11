@@ -527,15 +527,6 @@
       </div>
       <p class="hint">Attach up to eight files, with or without a text message. Audio gets a player when decoded; other files can be downloaded. The photo's capacity is the limit.</p>
       <div id="attachment-list" aria-label="Files to encode"></div>
-      <div class="attachment-controls">
-        <label for="record-quality">Recording quality</label>
-        <select id="record-quality" aria-describedby="record-quality-hint record-estimate">
-          <option value="compact">Compact voice — longer recording</option>
-          <option value="compatible">Compatible voice — shorter recording</option>
-        </select>
-      </div>
-      <p class="hint" id="record-quality-hint">Phones and tablets default to Compatible voice, which favours M4A and fits less speech. For M4A, press Stop when finished; the file size is checked afterwards. Compact voice fits longer recordings and remains selectable; it is the desktop default.</p>
-      <p class="hint" id="record-estimate" role="status"></p>
       <div class="actions">
         <button id="record-audio" type="button" disabled>Record voice message</button>
         <button id="stop-audio" type="button" hidden>Stop and attach recording</button>
@@ -645,7 +636,7 @@
   </dialog>
   <script src="./pixelstow.js?v=20261011-smaller-png"></script>
   <script src="./pixelstow-export.js?v=20261011-exports"></script>
-  <script src="./pixelstow-media.js?v=20261011-m4a-recording-cutoff"></script>
+  <script src="./pixelstow-media.js?v=20261011-original-recording-restored"></script>
   <script src="./pixelstow-sharing.js?v=20261011-facebook-post"></script>
   <script>
     const fileInput = document.querySelector("#file");
@@ -735,7 +726,6 @@
       messageBytes.textContent = byteLabel(message.value);
       readoutBytes.textContent = byteLabel(readout.value);
       attachmentBytes.textContent = "(" + media.files.reduce((sum, file) => sum + file.bytes.length, 0).toLocaleString("en-GB") + " bytes)";
-      media.updateRecordingEstimate();
       if (!current) { payloadBudget.textContent = "Choose a photo to see how much it can hold."; return; }
       try {
         const used = PixelStow.payloadSize(message.value, media.files);
