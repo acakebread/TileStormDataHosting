@@ -558,14 +558,13 @@
         <button id="share-message" type="button" hidden>Opening link / WhatsApp message</button>
         <button id="post-facebook" type="button" hidden>Post to Facebook</button>
       </div>
-      <p class="hint" id="share-help" hidden>Share uses the smaller JPEG when its contents have been verified, otherwise PNG. Choose WhatsApp in the share menu and send as a Document / original file if available. Photo sharing can resize it and lose its contents. Copy image to clipboard always uses PNG.</p>
+      <p class="hint" id="share-help" hidden>Choose WhatsApp in the share menu. Include the opening link; send the PNG as a Document / original file if WhatsApp offers that option. Photo sharing can resize it and lose its contents.</p>
 
       <section class="more-info" id="more-info" aria-labelledby="more-info-title">
         <h2 id="more-info-title">About PixelStow</h2>
-        <p>Encoding and decoding run in this browser. PixelStow does not upload your photo; sharing hands it to the app you choose. Encoding saves a new image. Text-only images remain compatible with TileStorm Evolution; attachments need a reader that supports binary payloads.</p>
+        <p>Everything is processed in this browser and is not uploaded. Encoding saves a new image. Text-only images remain compatible with TileStorm Evolution; attachments need a reader that supports binary payloads.</p>
         <p>This is a prototype. Short recordings and small attachments work best; heavy payloads can give variable results. Download the verified PNG and keep the original file. Sharing apps may resize or recompress photos, especially large images over about 2,000 pixels, and the hidden contents can disappear. That size is a guideline, not a guaranteed safe limit.</p>
         <p>For WhatsApp, send the image as a Document / original file where possible and include the PixelStow opening link. The recipient can save it to Files and use Choose image, or copy it and use Paste image. A link opens this page but cannot automatically read a WhatsApp attachment. Screenshots, resized copies and ordinary photo sharing may not keep the payload.</p>
-        <p>Post to Facebook prepares your encoded photo and a message with the PixelStow link and instructions. Choose Facebook in the share sheet if available, or download the photo and attach it in Facebook. Paste the message into the caption or a comment if it was not included. Recipients save or copy the Facebook photo and open it here.</p>
         <p>On iPhone, allow Safari's Paste prompt after tapping Paste image. If needed, use the touch-and-hold paste box. Safari may require a tap on Play voice message before sound is allowed; the full audio player is also available under Attached files. Audio format support varies by browser. Resize and print/photo recovery are still research work.</p>
       </section>
 
@@ -634,7 +633,7 @@
       </div>
     </form>
   </dialog>
-  <script src="./pixelstow.js?v=20261011-smaller-png"></script>
+  <script src="./pixelstow.js?v=20261011-binary-v3"></script>
   <script src="./pixelstow-export.js?v=20261011-exports"></script>
   <script src="./pixelstow-media.js?v=20261011-webm-duration"></script>
   <script src="./pixelstow-sharing.js?v=20261011-png-clipboard"></script>
@@ -825,17 +824,6 @@
       }
     }
 
-    function updateShareFile() {
-      const image = encodedJpeg || encodedPng;
-      if (image) {
-        const jpeg = Boolean(encodedJpeg);
-        const name = downloadLink.download.replace(/\.(png|jpe?g)$/i, jpeg ? ".jpg" : ".png");
-        sharing.setFile(new File([image], name, { type: jpeg ? "image/jpeg" : "image/png" }));
-      } else {
-        sharing.setFile(current?.hasFingerprint ? current.file : null);
-      }
-    }
-
     function rememberMessage(pixels, decoded, autoplay = true) {
       current.recoverPixels = pixels;
       current.decodePixels = pixels;
@@ -845,7 +833,7 @@
       current.decodedAttachments = decoded.attachments;
       current.strength = decoded.strength;
       media.showDecoded(decoded.attachments, autoplay);
-      updateShareFile();
+      sharing.setFile(encodedPng ? new File([encodedPng], downloadLink.download, { type: "image/png" }) : current.hasFingerprint ? current.file : null);
       current.carrierPromise = null;
       setBusy(busy);
       startComparison();
@@ -1334,7 +1322,7 @@
       const filename = await saveBlob(encodedPng, downloadLink.download);
       if (filename) {
         downloadLink.download = filename;
-        updateShareFile();
+        sharing.setFile(new File([encodedPng], filename, { type: "image/png" }));
       }
     });
 

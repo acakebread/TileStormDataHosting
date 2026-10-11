@@ -1189,16 +1189,8 @@
     const raw = new Uint8Array(height * (stride + 1));
     for (let y = 0; y < height; y++) {
       const dest = y * (stride + 1);
-      const source = y * stride;
-      // PNG's reversible Paeth filter compresses neighbouring photo pixels
-      // efficiently without changing the embedded payload or transparent pixels.
-      raw[dest] = 4;
-      for (let x = 0; x < stride; x++) {
-        const left = x >= 4 ? pixels[source + x - 4] : 0;
-        const up = y > 0 ? pixels[source + x - stride] : 0;
-        const upLeft = y > 0 && x >= 4 ? pixels[source + x - stride - 4] : 0;
-        raw[dest + 1 + x] = (pixels[source + x] - paeth(left, up, upLeft)) & 255;
-      }
+      raw[dest] = 0;
+      raw.set(pixels.subarray(y * stride, y * stride + stride), dest + 1);
     }
     const compressed = await deflateRaw(raw);
     const zlib = new Uint8Array(2 + compressed.length + 4);
