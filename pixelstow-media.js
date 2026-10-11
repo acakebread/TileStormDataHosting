@@ -203,14 +203,18 @@
           row.appendChild(audio);
           const hint = document.createElement("p");
           hint.className = "hint";
-          const voice = { audio, hint, name: file.name };
+          const voice = { audio, hint, name: file.name, playAttempt: 0 };
           audio.addEventListener("error", () => {
-            hint.textContent = "This browser cannot play this audio format. Download the file to listen in another player.";
+            if (!audio.error) return;
+            hint.textContent = audio.error.code === 3 || audio.error.code === 4
+              ? "This browser cannot play this audio format. Download the file to listen in another player."
+              : "Playback was interrupted. Press Play to try again.";
             if (this.voiceAudio === voice) this.voiceStatus.textContent = hint.textContent;
           });
           if (group === "decoded") {
             audio.addEventListener("play", () => {
               if (!this.decoded.contains(audio)) return;
+              voice.playAttempt++;
               this.decoded.querySelectorAll("audio").forEach((other) => { if (other !== audio) other.pause(); });
               this.voiceAudio = voice;
               this.voiceButton.textContent = "Pause voice message";
@@ -218,8 +222,13 @@
               this.voiceStatus.textContent = "Playing " + file.name;
               hint.textContent = "";
             });
+            audio.addEventListener("playing", () => {
+              hint.textContent = "";
+              if (this.voiceAudio === voice) this.voiceStatus.textContent = "Playing " + file.name;
+            });
             ["pause", "ended"].forEach((event) => audio.addEventListener(event, () => {
               if (this.voiceAudio !== voice) return;
+              voice.playAttempt++;
               this.voiceButton.textContent = "Play voice message";
               this.previewVoiceButton.textContent = "Play audio";
               this.voiceStatus.textContent = audio.ended ? "Message finished. Tap Play to hear it again." : "Message paused.";
@@ -245,12 +254,17 @@
       // to start audible media. Reuse the loaded player rather than replacing it.
       voice.audio.muted = false;
       voice.audio.volume = 1;
+      // Native controls can recover a failed load; give the shortcut the same retry.
+      if (voice.audio.error) voice.audio.load();
+      const attempt = ++voice.playAttempt;
+      voice.hint.textContent = "";
       voice.audio.play().catch((error) => {
-        if (this.voiceAudio !== voice) return;
+        if (this.voiceAudio !== voice || voice.playAttempt !== attempt || !voice.audio.paused) return;
         this.voiceButton.textContent = "Play voice message";
         this.previewVoiceButton.textContent = "Play audio";
-        const hint = voice.audio.error || error.name === "NotSupportedError"
+        const hint = voice.audio.error?.code === 3 || voice.audio.error?.code === 4 || error.name === "NotSupportedError"
           ? "This browser cannot play this audio format. Download the file to listen in another player."
+          : error.name === "AbortError" ? "Playback was interrupted. Press Play to try again."
           : "Press Play to hear the message. Your browser did not start playback automatically.";
         voice.hint.textContent = hint;
         this.voiceStatus.textContent = hint;
