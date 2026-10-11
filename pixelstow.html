@@ -475,6 +475,22 @@
         <p class="loaded-image" id="loaded-image" hidden></p>
         <p class="hint" id="capacity">Choose a PNG or JPEG, or paste an image. A fingerprint is saved as a new PNG or JPEG, so the original file stays as it is.</p>
         <p class="status" id="status" role="status"></p>
+        <div class="preview" id="preview" hidden>
+          <div class="viewport" id="viewport">
+            <div class="compare" id="compare">
+              <canvas id="preview-encoded"></canvas>
+              <canvas id="preview-source" hidden></canvas>
+            </div>
+            <div class="compare-ui" id="compare-ui" hidden>
+              <span class="compare-tag left" id="tag-encoded">Encoded</span>
+              <span class="compare-tag right" id="tag-source">Source</span>
+              <div class="split-line" id="split-line"></div>
+              <input id="split" type="range" min="0" max="1000" value="500" aria-label="Comparison divider. Encoded image on the left, recovered source on the right.">
+            </div>
+          </div>
+          <p class="hint preview-note" id="preview-note" hidden>Scroll over the picture to zoom. Hold the right mouse button to pan.</p>
+          <p class="hint compare-note" id="compare-note" hidden>Drag the divider with the left button. The encoded image is on the left and the recovered source is on the right.</p>
+        </div>
         <section class="payload-panel" id="payload-panel" hidden aria-label="Embedded image contents">
           <form id="unlock-form" hidden>
             <h2>Password protected image</h2>
@@ -502,22 +518,6 @@
             </div>
           </div>
         </section>
-        <div class="preview" id="preview" hidden>
-          <div class="viewport" id="viewport">
-            <div class="compare" id="compare">
-              <canvas id="preview-encoded"></canvas>
-              <canvas id="preview-source" hidden></canvas>
-            </div>
-            <div class="compare-ui" id="compare-ui" hidden>
-              <span class="compare-tag left" id="tag-encoded">Encoded</span>
-              <span class="compare-tag right" id="tag-source">Source</span>
-              <div class="split-line" id="split-line"></div>
-              <input id="split" type="range" min="0" max="1000" value="500" aria-label="Comparison divider. Encoded image on the left, recovered source on the right.">
-            </div>
-          </div>
-        </div>
-        <p class="hint preview-note" id="preview-note" hidden>Scroll over the picture to zoom. Hold the right mouse button to pan.</p>
-        <p class="hint compare-note" id="compare-note" hidden>Drag the divider with the left button. The encoded image is on the left and the recovered source is on the right.</p>
       </div>
 
       <section id="composition">
@@ -999,7 +999,7 @@
       } finally {
         setBusy(false);
         updateByteCounts();
-        if (!unlockForm.hidden) unlockPassword.focus();
+        if (!unlockForm.hidden) unlockPassword.focus({ preventScroll: true });
       }
     }
 

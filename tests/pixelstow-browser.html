@@ -207,7 +207,7 @@
       files("file", [new app.File([encodedPng], "birthday-card.png", { type: "image/png" })]);
       await until(() => !element("decode").disabled, "independent locked import");
       check(element("decoded-files").hidden && element("encode").disabled && element("attachment-file").disabled, "Locked import disables re-encoding without exposing files");
-      check(!element("payload-panel").hidden && !element("unlock-form").hidden && element("unlock-prompt").textContent.includes("password") && Boolean(element("payload-panel").compareDocumentPosition(element("preview")) & app.Node.DOCUMENT_POSITION_FOLLOWING), "A locked import prominently requests its password above the image viewer");
+      check(!element("payload-panel").hidden && !element("unlock-form").hidden && element("unlock-prompt").textContent.includes("password") && element("preview").nextElementSibling === element("payload-panel"), "The image preview comes first, followed immediately by the prominent password or contents panel");
       check(element("composition").hidden && element("unlock-form").querySelectorAll('input[type="password"]').length === 1, "An imported locked image offers exactly one visible password input");
       input("unlock-password", publicPassword); element("unlock").click();
       await until(() => !element("decode").disabled && element("decoded-attachments").children.length === 3, "independent unlock");
