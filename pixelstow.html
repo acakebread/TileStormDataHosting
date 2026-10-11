@@ -328,6 +328,20 @@
     .payload-panel h2:first-child { margin-top: 0; }
     #unlock-prompt, #contents-summary { color: var(--text); font-weight: 600; }
 
+    .loaded-image { margin: 12px 0; color: var(--text); font-weight: 600; overflow-wrap: anywhere; }
+    .export-dialog {
+      box-sizing: border-box;
+      width: min(520px, calc(100% - 32px));
+      padding: 24px;
+      border: 2px solid var(--tile-azure);
+      border-radius: 14px;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .export-dialog::backdrop { background: rgba(0, 0, 0, 0.72); }
+    .export-dialog h2 { margin-top: 0; }
+    #export-preview { overflow-wrap: anywhere; }
+
     .actions,
     .links {
       display: flex;
@@ -458,6 +472,7 @@
           <input id="file" class="file-input" type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg">
           <label class="choose button-link" for="file">Choose image</label>
         </div>
+        <p class="loaded-image" id="loaded-image" hidden></p>
         <p class="hint" id="capacity">Choose a PNG or JPEG, or paste an image. A fingerprint is saved as a new PNG or JPEG, so the original file stays as it is.</p>
         <p class="status" id="status" role="status"></p>
         <section class="payload-panel" id="payload-panel" hidden aria-label="Embedded image contents">
@@ -563,8 +578,23 @@
       </div>
     </section>
   </main>
+  <dialog class="export-dialog" id="export-dialog" aria-labelledby="export-title" aria-describedby="export-description">
+    <form id="export-form">
+      <h2 id="export-title">Save file</h2>
+      <p id="export-description">Choose the export filename. The file's extension is added if needed.</p>
+      <label for="export-name">Filename</label>
+      <input id="export-name" type="text" autocomplete="off" spellcheck="false" required aria-describedby="export-preview export-error">
+      <p class="hint" id="export-preview" role="status"></p>
+      <p class="status error" id="export-error" role="alert" hidden></p>
+      <div class="actions">
+        <button id="export-save" type="submit">Save file</button>
+        <button id="export-cancel" type="button">Cancel</button>
+      </div>
+    </form>
+  </dialog>
   <script src="./pixelstow.js?v=20261011-binary-v3"></script>
-  <script src="./pixelstow-media.js?v=20261011-binary-v3"></script>
+  <script src="./pixelstow-export.js?v=20261011-exports"></script>
+  <script src="./pixelstow-media.js?v=20261011-exports"></script>
   <script>
     const fileInput = document.querySelector("#file");
     const drop = document.querySelector("#drop");
@@ -581,6 +611,7 @@
     const tagEncoded = document.querySelector("#tag-encoded");
     const tagSource = document.querySelector("#tag-source");
     const capacity = document.querySelector("#capacity");
+    const loadedImage = document.querySelector("#loaded-image");
     const message = document.querySelector("#message");
     const password = document.querySelector("#password");
     const confirmPassword = document.querySelector("#confirm");
@@ -609,6 +640,7 @@
     const readoutBytes = document.querySelector("#readout-bytes");
     let current = null;
     let downloadUrl = "";
+    let encodedPng = null;
     let encodedJpeg = null;
     let busy = false;
     let previewGeneration = 0;
@@ -620,7 +652,9 @@
     let panX = 0;
     let panY = 0;
     let blockPanMenu = false;
+    const exports = new PixelStowExportDialog();
     const media = new PixelStowMediaPanel({
+      save: saveBlob,
       changed: () => { setBusy(busy); updateByteCounts(); },
       report: setStatus,
       remaining: () => {
@@ -662,6 +696,7 @@
     function clearDownload() {
       if (downloadUrl) URL.revokeObjectURL(downloadUrl);
       downloadUrl = "";
+      encodedPng = null;
       encodedJpeg = null;
       downloadLink.hidden = true;
       downloadLink.removeAttribute("href");
@@ -706,6 +741,7 @@
       confirmPassword.disabled = working || encodingPasswords.hidden;
       media.setState(busy, !canEncode);
       saveEncodedJpegButton.disabled = working;
+      downloadLink.setAttribute("aria-disabled", String(working));
       saveMessageButton.hidden = !hasMessage;
       saveSourceButton.hidden = !hasDecoded;
       saveSourceJpegButton.hidden = !hasDecoded;
@@ -715,19 +751,27 @@
     }
 
     function fileBase() {
-      const name = current && current.file && current.file.name ? current.file.name : "image";
-      return name.replace(/\.[^.]+$/, "");
+      const name = current && current.origin === "clipboard" ? "clipboard-image" : current && current.file && current.file.name ? current.file.name : "image";
+      return name.replace(/\.[^.]+$/, "") || "image";
     }
 
-    function saveBlob(blob, filename) {
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    async function saveBlob(blobOrFactory, suggestedName) {
+      if (busy || media.active) return null;
+      setBusy(true);
+      try {
+        const filename = await exports.chooseFilename(suggestedName);
+        if (!filename) return null;
+        setStatus("Preparing " + filename + "…");
+        const blob = typeof blobOrFactory === "function" ? await blobOrFactory() : blobOrFactory;
+        exports.download(blob, filename);
+        setStatus("Download requested: " + filename + ".");
+        return filename;
+      } catch (error) {
+        setStatus(error && error.message ? error.message : "The file could not be exported.", true);
+        return null;
+      } finally {
+        setBusy(false);
+      }
     }
 
     function rememberMessage(pixels, decoded, autoplay = true) {
@@ -895,7 +939,7 @@
       }
     }
 
-    async function useFile(file) {
+    async function useFile(file, origin = "file") {
       if (!file || busy || media.active) return;
       media.reset();
       clearDownload();
@@ -905,6 +949,8 @@
       confirmPassword.value = "";
       unlockPassword.value = "";
       current = null;
+      loadedImage.hidden = true;
+      loadedImage.textContent = "";
       setBusy(true);
       setStatus("Reading the image…");
       try {
@@ -912,6 +958,7 @@
         const found = await PixelStow.inspect(image.pixels, image.width, image.height);
         current = {
           file,
+          origin,
           pixels: image.pixels,
           width: image.width,
           height: image.height,
@@ -919,6 +966,8 @@
           hasFingerprint: found.found,
           passwordProtected: found.passwordProtected
         };
+        loadedImage.textContent = origin === "clipboard" ? "Pasted from clipboard" : file.name ? "Loaded file: " + file.name : "Loaded image";
+        loadedImage.hidden = false;
         showPreview(image.pixels, image.width, image.height);
         const room = PixelStow.estimatePayloadBytes(image.width, image.height);
         const exactNote = image.exact ? "" : " Browser colour conversion was used, so an existing fingerprint may not read.";
@@ -940,6 +989,8 @@
         }
       } catch (error) {
         current = null;
+        loadedImage.hidden = true;
+        loadedImage.textContent = "";
         preview.hidden = true;
         previewNote.hidden = true;
         hideComparison();
@@ -1059,7 +1110,7 @@
       const file = clipboardImage(event.clipboardData);
       if (!file) return;
       event.preventDefault();
-      useFile(file);
+      useFile(file, "clipboard");
     });
 
     encodeButton.addEventListener("click", async () => {
@@ -1091,7 +1142,8 @@
           throw new Error("The encoded image could not be read back. No image was offered for download.");
         }
         downloadUrl = URL.createObjectURL(png);
-        const base = (current.file.name || "image").replace(/\.[^.]+$/, "");
+        encodedPng = png;
+        const base = fileBase();
         downloadLink.href = downloadUrl;
         downloadLink.download = base + "-pixelstow.png";
         downloadLink.hidden = false;
@@ -1208,28 +1260,25 @@
       saveBlob(new Blob([bytes], { type: "text/plain;charset=utf-8" }), fileBase() + "-fingerprint.txt");
     });
 
+    downloadLink.addEventListener("click", async (event) => {
+      event.preventDefault();
+      if (!encodedPng) return;
+      const filename = await saveBlob(encodedPng, downloadLink.download);
+      if (filename) downloadLink.download = filename;
+    });
+
     saveEncodedJpegButton.addEventListener("click", () => {
       if (!encodedJpeg || busy) return;
       saveBlob(encodedJpeg, fileBase() + "-pixelstow.jpg");
     });
 
-    async function saveSource(kind) {
+    function saveSource(kind) {
       if (!current || !current.recoverPixels || busy) return;
-      setBusy(true);
-      setStatus("Preparing the source image…");
-      try {
-        const carrier = await carrierFor(current);
-        if (kind === "jpeg") {
-          saveBlob(await PixelStow.writeJpeg(carrier, current.width, current.height), fileBase() + "-source.jpg");
-        } else {
-          saveBlob(await PixelStow.writePng(carrier, current.width, current.height), fileBase() + "-source.png");
-        }
-        setStatus("Source image ready. The original file was not changed.");
-      } catch (error) {
-        setStatus(error && error.message ? error.message : "The source image could not be recovered.", true);
-      } finally {
-        setBusy(false);
-      }
+      const job = current;
+      saveBlob(async () => {
+        const carrier = await carrierFor(job);
+        return kind === "jpeg" ? PixelStow.writeJpeg(carrier, job.width, job.height) : PixelStow.writePng(carrier, job.width, job.height);
+      }, fileBase() + (kind === "jpeg" ? "-source.jpg" : "-source.png"));
     }
 
     saveSourceButton.addEventListener("click", () => saveSource("png"));

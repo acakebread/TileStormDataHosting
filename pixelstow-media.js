@@ -1,10 +1,11 @@
 // Browser attachment and recording UI. Payload serialization belongs to pixelstow.js.
 (function () {
   class MediaPanel {
-    constructor({ changed, report, remaining }) {
+    constructor({ changed, report, remaining, save }) {
       this.changed = changed;
       this.report = report;
       this.remaining = remaining;
+      this.save = save;
       this.files = [];
       this.urls = { compose: [], decoded: [] };
       this.busy = false;
@@ -123,13 +124,20 @@
           row.appendChild(remove);
         }
         {
-          const url = URL.createObjectURL(new Blob([file.bytes], { type: "application/octet-stream" }));
+          const blob = new Blob([file.bytes], { type: "application/octet-stream" });
+          const url = URL.createObjectURL(blob);
           this.urls[group].push(url);
           const link = document.createElement("a");
           link.className = "button-link";
           link.href = url;
           link.download = file.name;
           link.textContent = "Download file";
+          link.addEventListener("click", async (event) => {
+            event.preventDefault();
+            if (this.busy || this.active) return;
+            const filename = await this.save(blob, link.download);
+            if (filename) link.download = filename;
+          });
           row.appendChild(link);
         }
         if (/^audio\//i.test(file.type)) {

@@ -30,9 +30,10 @@
     run.disabled = true;
     results.textContent = "Running…\n";
     let audioContext;
+    let restoreDownloads;
     try {
       const app = frame.contentWindow, doc = frame.contentDocument;
-      await until(() => app.PixelStow && app.PixelStowMediaPanel, "app loaded");
+      await until(() => app.PixelStow && app.PixelStowMediaPanel && app.PixelStowExportDialog, "app loaded");
       const element = (id) => doc.querySelector("#" + id);
       const input = (id, value) => {
         element(id).value = value;
@@ -44,6 +45,24 @@
         element(id).files = transfer.files;
         element(id).dispatchEvent(new app.Event("change", { bubbles: true }));
       };
+      const downloads = [];
+      const anchorClick = app.HTMLAnchorElement.prototype.click;
+      restoreDownloads = () => { app.HTMLAnchorElement.prototype.click = anchorClick; };
+      app.HTMLAnchorElement.prototype.click = function () {
+        if (!this.hasAttribute("data-pixelstow-export")) return anchorClick.call(this);
+        downloads.push({ name: this.download, bytes: fetch(this.href).then((response) => response.arrayBuffer()) });
+      };
+      const openExport = async (control) => {
+        control.dispatchEvent(new app.MouseEvent("click", { bubbles: true, cancelable: true }));
+        await until(() => element("export-dialog").open, "export filename dialog");
+      };
+      const saveExport = async (name) => {
+        const before = downloads.length;
+        input("export-name", name);
+        element("export-form").requestSubmit();
+        await until(() => downloads.length > before && !element("decode").disabled, "export completed");
+        return { name: downloads.at(-1).name, bytes: new app.Uint8Array(await downloads.at(-1).bytes) };
+      };
       const width = 1000, height = 800;
       const pixels = new app.Uint8Array(width * height * 4);
       for (let i = 0; i < pixels.length; i += 4) pixels.set([140, 140, 140, 255], i);
@@ -51,6 +70,7 @@
       files("file", [clean]);
       await until(() => !element("encode").disabled, "clean image import");
       check(!element("attachment-file").disabled, "Clean image enables attachment input");
+      check(element("loaded-image").textContent === "Loaded file: public-photo.png", "The loaded image's filename is shown beside the image picker");
       check(!element("encoding-passwords").hidden && element("unlock-form").hidden, "Encoding offers a password and confirmation without an unlock prompt");
       const viewport = element("viewport"), canvas = element("preview-encoded");
       const captureMethods = [viewport.setPointerCapture, viewport.hasPointerCapture, viewport.releasePointerCapture];
@@ -136,6 +156,41 @@
       const recoveredFile = element("decoded-attachments").querySelector("a");
       const downloadedBytes = new app.Uint8Array(await (await fetch(recoveredFile.href)).arrayBuffer());
       check(downloadedBytes.length === 256 && downloadedBytes.every((byte, i) => byte === i), "Recovered-file download contains exact original bytes");
+      await openExport(element("download"));
+      check(element("export-name").value === "public-photo-pixelstow.png" && doc.activeElement === element("export-name") && element("file").disabled, "PNG export opens a focused filename dialog with a suggested name and freezes image import");
+      const beforeCancel = downloads.length;
+      element("export-cancel").click();
+      await until(() => !element("decode").disabled, "cancelled export");
+      check(downloads.length === beforeCancel && !element("download").hidden && element("readout").value === payload.text, "Cancelling export downloads nothing and preserves the verified result");
+      await openExport(element("download"));
+      input("export-name", "../birthday.png"); element("export-form").requestSubmit();
+      check(element("export-dialog").open && !element("export-error").hidden && downloads.length === beforeCancel, "The filename dialog rejects paths without starting a download");
+      input("export-name", "Birthday card 🎂");
+      check(element("export-preview").textContent === "Save as: Birthday card 🎂.png", "The filename preview clearly shows the export extension when omitted");
+      const namedPng = await saveExport("Birthday card 🎂");
+      const originalPngBytes = new app.Uint8Array(await encodedPng.arrayBuffer());
+      check(namedPng.name === "Birthday card 🎂.png" && namedPng.bytes.length === originalPngBytes.length && namedPng.bytes.every((byte, i) => byte === originalPngBytes[i]), "Renaming an encoded PNG preserves its verified bytes exactly");
+      await openExport(element("save-message"));
+      const namedMessage = await saveExport("Birthday message.txt");
+      check(namedMessage.name === "Birthday message.txt" && new app.TextDecoder().decode(namedMessage.bytes) === payload.text, "Message export uses the chosen filename and preserves the complete UTF-8 message");
+      await openExport(recoveredFile);
+      check(element("export-name").value === payload.attachments[0].name, "Attachment export suggests the original embedded filename");
+      const namedFile = await saveExport("renamed attachment");
+      check(namedFile.name === "renamed attachment.bin" && namedFile.bytes.length === 256 && namedFile.bytes.every((byte, i) => byte === i), "Attachment export renames the download without changing its binary contents");
+      await openExport(element("save-source"));
+      const namedSource = await saveExport("Recovered photo");
+      const sourcePng = await app.PixelStow.decodePng(namedSource.bytes);
+      const expectedCarrier = await app.PixelStow.extractCarrier(decodedPng.pixels, width, height, payload.strength);
+      check(namedSource.name === "Recovered photo.png" && sourcePng.pixels.every((byte, i) => byte === expectedCarrier[i]), "Source PNG export asks for a filename and writes the recovered source pixels");
+      await openExport(element("save-source-jpeg"));
+      const namedSourceJpeg = await saveExport("Recovered photo JPEG");
+      const sourceJpeg = await app.PixelStow.readImageFile(new app.File([namedSourceJpeg.bytes], namedSourceJpeg.name, { type: "image/jpeg" }));
+      check(namedSourceJpeg.name === "Recovered photo JPEG.jpg" && sourceJpeg.width === width && sourceJpeg.height === height && !(await app.PixelStow.inspect(sourceJpeg.pixels, width, height)).found, "Source JPEG export uses the chosen filename and contains a clean source image");
+      check(!element("save-encoded-jpeg").hidden, "The public test carrier produces a verified JPEG export");
+      await openExport(element("save-encoded-jpeg"));
+      const namedJpeg = await saveExport("Birthday JPEG.jpg");
+      const jpegImage = await app.PixelStow.readImageFile(new app.File([namedJpeg.bytes], namedJpeg.name, { type: "image/jpeg" }));
+      check(namedJpeg.name === "Birthday JPEG.jpg" && app.PixelStow.payloadsEqual(await app.PixelStow.decode(jpegImage.pixels, width, height, publicPassword), payload), "Encoded JPEG export uses the chosen filename and still recovers the entire locked payload");
       element("relock").click();
       check(!element("readout").value && element("decoded-files").hidden && element("save-source").hidden && !element("attachment-list").children.length, "Lock again removes plaintext, attachments, players and source extraction");
       check(!element("unlock-form").hidden && element("decoded-content").hidden && element("encoding-passwords").hidden && element("decode").hidden, "Relocking replaces contents with one password field and a dedicated Unlock button");
@@ -164,6 +219,11 @@
       await until(() => !element("encode").disabled, "new clean carrier");
       check(element("decoded-files").hidden && !element("readout").value && !element("attachment-list").children.length, "New image clears previous text, recovered files and composition");
       check(element("payload-panel").hidden && !element("encoding-passwords").hidden, "A new clean carrier restores the encoding password and confirmation");
+      const pastedImage = new app.DataTransfer();
+      pastedImage.items.add(clean);
+      doc.dispatchEvent(new app.ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData: pastedImage }));
+      await until(() => !element("encode").disabled && element("loaded-image").textContent === "Pasted from clipboard", "clipboard image import");
+      check(element("loaded-image").textContent === "Pasted from clipboard", "Pasting an image shows its clipboard origin instead of a synthetic filename");
       audioContext = new app.AudioContext();
       const discardStream = audioContext.createMediaStreamDestination().stream;
       Object.defineProperty(app.navigator.mediaDevices, "getUserMedia", { configurable: true, value: async () => discardStream });
@@ -199,8 +259,13 @@
       await until(() => !element("download").hidden && !element("decode").disabled, "binary-only encode");
       check(!element("readout").value && !element("save-source").hidden && !element("decoded-files").hidden, "Binary-only payload works without text and still supports source extraction");
       check(element("decoded-message").hidden && element("contents-summary").textContent === "This image contains 1 attached file.", "Binary-only contents show a clear file summary without an empty message box");
+      await openExport(element("download"));
+      check(element("export-name").value === "clipboard-image-pixelstow.png", "Clipboard image exports start with a useful clipboard-based filename");
+      element("export-cancel").click();
+      await until(() => !element("decode").disabled, "cancelled clipboard export");
       files("file", [clean]);
       await until(() => !element("encode").disabled, "automatic-stop carrier");
+      check(element("loaded-image").textContent === "Loaded file: public-photo.png", "Loading a file after a paste replaces the clipboard label with its filename");
       audioContext = new app.AudioContext();
       await audioContext.resume();
       const autoOscillator = audioContext.createOscillator();
@@ -216,6 +281,7 @@
     } catch (error) {
       results.textContent += "FAIL: " + (error.stack || error.message) + "\n";
     } finally {
+      if (restoreDownloads) restoreDownloads();
       if (audioContext) await audioContext.close();
       run.disabled = false;
     }

@@ -24,3 +24,5 @@ localhost and open `tests/pixelstow-browser.html` for the browser and real
 MediaRecorder checks; those use a synthetic tone and never access the microphone.
 The browser checks also cover separate encoding/unlocking passwords, the visible
 contents summary, relocking, and context-menu suppression during image panning.
+Every export offers a filename dialog before downloading, including recovered
+attachments. The image picker identifies the loaded file or a clipboard paste.
