@@ -561,6 +561,7 @@
         <button id="save-message" type="button" hidden>Download message</button>
         <button id="save-source" type="button" hidden>Download source PNG</button>
         <button id="save-source-jpeg" type="button" hidden>Download source JPEG</button>
+        <button id="copy-image" type="button" hidden>Copy image to clipboard</button>
         <button id="share-image" type="button" hidden>Send via WhatsApp / Share</button>
         <button id="share-message" type="button" hidden>Opening link / WhatsApp message</button>
       </div>
@@ -624,7 +625,7 @@
   <script src="./pixelstow.js?v=20261011-binary-v3"></script>
   <script src="./pixelstow-export.js?v=20261011-exports"></script>
   <script src="./pixelstow-media.js?v=20261011-compact-voice"></script>
-  <script src="./pixelstow-sharing.js?v=20261011-mobile"></script>
+  <script src="./pixelstow-sharing.js?v=20261011-copy-image"></script>
   <script>
     const fileInput = document.querySelector("#file");
     const drop = document.querySelector("#drop");
@@ -696,7 +697,11 @@
       }
     });
     media.setState(false, true);
-    const sharing = new PixelStowSharing({ importImage: useFile, save: saveBlob, report: setStatus, working: () => busy || media.active, setBusy });
+    const sharing = new PixelStowSharing({
+      importImage: useFile, save: saveBlob, report: setStatus, working: () => busy || media.active, setBusy,
+      hasImage: () => Boolean(current),
+      imageForClipboard: () => encodedPng || PixelStow.writePng(current.decodePixels || current.pixels, current.width, current.height)
+    });
 
     function byteLabel(text) {
       const count = new TextEncoder().encode(text || "").length;

@@ -205,6 +205,17 @@
       const sharedBytes = new app.Uint8Array(await sharedData.files[0].arrayBuffer());
       const verifiedBytes = new app.Uint8Array(await encodedPng.arrayBuffer());
       check(sharedBytes.length === verifiedBytes.length && sharedBytes.every((byte, i) => byte === verifiedBytes[i]) && !sharedData.text.includes(publicPassword) && !sharedData.text.includes(payload.text), "Sharing preserves the verified PNG bytes and includes no password or decoded message in the link text");
+      let copiedImage;
+      Object.defineProperty(app.navigator, "clipboard", { configurable: true, value: { write: (items) => { copiedImage = items[0]; return Promise.resolve(); } } });
+      element("copy-image").click();
+      check(copiedImage?.types.length === 1 && copiedImage.types[0] === "image/png", "Copy image calls the Clipboard API directly from the tap with only PNG data");
+      await until(() => !element("decode").disabled && element("status").textContent.includes("copied"), "image copied");
+      const clipboardPng = new app.Uint8Array(await (await copiedImage.getType("image/png")).arrayBuffer());
+      check(clipboardPng.length === verifiedBytes.length && clipboardPng.every((byte, i) => byte === verifiedBytes[i]), "Copy image uses the verified PNG without resizing or recompressing its pixels");
+      Object.defineProperty(app.navigator, "clipboard", { configurable: true, value: { write: () => Promise.reject(new app.DOMException("Denied", "NotAllowedError")) } });
+      element("copy-image").click();
+      await until(() => !element("decode").disabled && element("status").textContent.includes("could not copy"), "copy denied");
+      check(!element("download").hidden && element("status").textContent.includes("download"), "Clipboard denial keeps the card and offers PNG download");
       Object.defineProperty(app.navigator, "share", { configurable: true, value: () => Promise.reject(new app.DOMException("Cancelled", "AbortError")) });
       element("share-image").click();
       await until(() => !element("decode").disabled, "cancelled share");
@@ -269,6 +280,7 @@
       element("relock").click();
       check(!element("readout").value && element("decoded-files").hidden && element("save-source").hidden && !element("attachment-list").children.length, "Lock again removes plaintext, attachments, players and source extraction");
       check(!element("unlock-form").hidden && element("decoded-content").hidden && element("encoding-passwords").hidden && element("decode").hidden, "Relocking replaces contents with one password field and a dedicated Unlock button");
+      check(!element("copy-image").hidden && !element("copy-image").disabled, "A locked image can still be copied without unlocking or exposing its contents");
       check(element("audio-action").hidden && element("preview-audio").hidden && element("share-image").hidden, "Relocking also removes the prominent players and outgoing image share controls");
       input("unlock-password", "incorrect"); element("unlock").click();
       await until(() => !element("unlock").disabled, "wrong-password result");

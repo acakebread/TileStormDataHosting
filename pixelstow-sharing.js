@@ -4,8 +4,9 @@
   const shareText = "There is a message inside this photo! Open it in PixelStow: " + openingUrl + "\nSave the original image to Files and choose it there, or copy the photo and tap Paste image.";
 
   class Sharing {
-    constructor({ importImage, save, report, working, setBusy }) {
-      Object.assign(this, { importImage, save, report, working, setBusy, file: null });
+    constructor({ importImage, save, report, working, setBusy, hasImage, imageForClipboard }) {
+      Object.assign(this, { importImage, save, report, working, setBusy, hasImage, imageForClipboard, file: null });
+      this.copyButton = document.querySelector("#copy-image");
       this.pasteButton = document.querySelector("#paste-image");
       this.pasteDialog = document.querySelector("#paste-dialog");
       this.pasteTarget = document.querySelector("#paste-target");
@@ -19,6 +20,7 @@
       this.shareLink.value = shareText;
       document.querySelector("#whatsapp-link").href = "https://wa.me/?text=" + encodeURIComponent(shareText);
       this.pasteButton.addEventListener("click", () => this.paste());
+      this.copyButton.addEventListener("click", () => this.copyImage());
       this.shareButton.addEventListener("click", () => this.share());
       this.messageButton.addEventListener("click", () => {
         if (!this.working() && this.file) this.shareFallback("Include this clickable opening message with the original image. The WhatsApp link sends the message only; attach the photo separately.");
@@ -67,11 +69,34 @@
     }
     sync() {
       this.pasteButton.disabled = this.working();
+      this.copyButton.disabled = this.working();
+      this.copyButton.hidden = !this.hasImage();
       this.shareButton.disabled = this.working();
       this.messageButton.disabled = this.working();
       this.shareButton.hidden = !this.file;
       this.messageButton.hidden = !this.file;
       this.shareHelp.hidden = !this.file;
+    }
+
+    async copyImage() {
+      if (this.working() || !this.hasImage()) return;
+      if (!navigator.clipboard?.write || !window.ClipboardItem) {
+        this.report("This browser cannot copy an image directly. Use Download encoded PNG, or save the original image from Files.", true);
+        return;
+      }
+      try {
+        // Safari needs write() inside the tap. Pass a promise for PNG creation
+        // instead of awaiting it and losing the user activation.
+        const png = Promise.resolve(this.imageForClipboard());
+        const copying = navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
+        this.setBusy(true);
+        await copying;
+        this.report("Image copied to clipboard. Paste it into your message; choose an original file / document when available to preserve its contents.");
+      } catch (_) {
+        this.report("The browser could not copy the image. Allow clipboard access and try again, or download the PNG instead.", true);
+      } finally {
+        this.setBusy(false);
+      }
     }
 
     pasteFallback(message) {

@@ -105,8 +105,10 @@ const content = { text: "\uFEFF  Happy birthday! café 🎂\n\n  ", attachments:
 const publicResult = await roundTrip(content);
 await writeFile(join(output, "public-v3.png"), new Uint8Array(await publicResult.png.arrayBuffer()), { flag: "wx" });
 await writeFile(join(output, "public-v3-payload.bin"), bundle(content.text, files), { flag: "wx" });
-await roundTrip({ text: "", attachments: files });
+const binaryResult = await roundTrip({ text: "", attachments: files });
+await writeFile(join(output, "browser-binary-v3.png"), new Uint8Array(await binaryResult.png.arrayBuffer()), { flag: "wx" });
 const lockedResult = await roundTrip(content, "public check key 🎂");
+await writeFile(join(output, "browser-protected-v3.png"), new Uint8Array(await lockedResult.png.arrayBuffer()), { flag: "wx" });
 check((await codec.decode(lockedResult.reloaded.pixels, 512, 512, "")).status === "password", "Locked bundle exposes no text or files without a password");
 const wrong = await codec.decode(lockedResult.reloaded.pixels, 512, 512, "wrong");
 check(wrong.status === "incorrect" && !wrong.attachments && !wrong.text, "Incorrect password returns no bundle metadata or file bytes");
