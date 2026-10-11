@@ -37,12 +37,18 @@
       await until(() => app.PixelStow && app.PixelStowMediaPanel && app.PixelStowExportDialog && app.PixelStowSharing, "app loaded");
       const apiDescriptors = ["share", "canShare", "clipboard"].map((name) => [name, Object.getOwnPropertyDescriptor(app.navigator, name)]);
       const originalPlay = app.HTMLMediaElement.prototype.play;
+      const OriginalRecorder = app.MediaRecorder;
+      const recordingOptions = [];
+      app.MediaRecorder = class extends OriginalRecorder {
+        constructor(stream, options) { super(stream, options); recordingOptions.push(options); }
+      };
       restoreBrowserApis = () => {
         for (const [name, descriptor] of apiDescriptors) {
           if (descriptor) Object.defineProperty(app.navigator, name, descriptor);
           else delete app.navigator[name];
         }
         app.HTMLMediaElement.prototype.play = originalPlay;
+        app.MediaRecorder = OriginalRecorder;
       };
       const element = (id) => doc.querySelector("#" + id);
       const input = (id, value) => {
@@ -84,6 +90,12 @@
       check(!element("attachment-file").disabled, "Clean image enables attachment input");
       check(element("loaded-image").textContent === "Loaded file: public-photo.png", "The loaded image's filename is shown beside the image picker");
       check(!element("encoding-passwords").hidden && element("unlock-form").hidden, "Encoding offers a password and confirmation without an unlock prompt");
+      check(element("record-quality").value === "compact" && element("record-estimate").textContent.includes("seconds"), "Compact voice is the default and shows a duration estimate for the loaded photo");
+      const supportsType = app.MediaRecorder.isTypeSupported;
+      app.MediaRecorder.isTypeSupported = (type) => type === "audio/mp4";
+      const olderPhone = app.PixelStowMediaPanel.prototype.recordingProfile.call({ recordQuality: element("record-quality") });
+      check(olderPhone.type === "audio/mp4" && olderPhone.bitrate === 8000, "A browser without Opus recording falls back to lower-rate M4A for compact voice");
+      app.MediaRecorder.isTypeSupported = supportsType;
       const frameSize = { width: frame.style.width, height: frame.style.height };
       for (const phoneWidth of [390, 320]) {
         frame.style.width = phoneWidth + "px"; frame.style.height = "844px";
@@ -153,6 +165,7 @@
       await audioContext.resume();
       const oscillator = audioContext.createOscillator();
       const destination = audioContext.createMediaStreamDestination();
+      destination.channelCount = 1; destination.channelCountMode = "explicit";
       oscillator.frequency.value = 440;
       oscillator.connect(destination); oscillator.start();
       Object.defineProperty(app.navigator.mediaDevices, "getUserMedia", {
@@ -161,6 +174,8 @@
       element("record-audio").click();
       await until(() => !element("stop-audio").hidden, "recording start");
       check(element("encode").disabled && element("file").disabled, "Recording freezes encode and import controls");
+      const compactUsesOpus = OriginalRecorder.isTypeSupported("audio/webm;codecs=opus") || OriginalRecorder.isTypeSupported("audio/ogg;codecs=opus");
+      check(recordingOptions.at(-1).audioBitsPerSecond === (compactUsesOpus ? 6000 : 8000) && element("record-quality").disabled, "Compact voice requests the speech bitrate and freezes quality while recording");
       await new Promise((resolve) => setTimeout(resolve, 900));
       element("stop-audio").click();
       await until(() => element("attachment-list").children.length === 3 && !element("encode").disabled, "recording attached");
@@ -168,6 +183,7 @@
       check(element("attachment-list").querySelector("audio"), "Recorded audio has a preview player");
       await until(() => element("attachment-list").querySelector("audio").readyState >= 1, "recorded audio metadata");
       check(!element("attachment-list").querySelector("audio").error, "The browser can read its recorded audio format");
+      check(element("record-status").textContent.includes("bytes") && element("record-status").textContent.includes(" s"), "Completed recordings display their elapsed time and actual file size");
       oscillator.stop(); await audioContext.close(); audioContext = null;
       element("encode").click();
       await until(() => !element("download").hidden && !element("decode").disabled, "encoded PNG download");
@@ -343,11 +359,16 @@
       audioContext = new app.AudioContext();
       const discardStream = audioContext.createMediaStreamDestination().stream;
       Object.defineProperty(app.navigator.mediaDevices, "getUserMedia", { configurable: true, value: async () => discardStream });
+      element("record-quality").value = "compatible";
+      element("record-quality").dispatchEvent(new app.Event("change"));
       element("record-audio").click();
       await until(() => !element("stop-audio").hidden, "discard recording start");
+      check(recordingOptions.at(-1).audioBitsPerSecond === 16000 && (!OriginalRecorder.isTypeSupported("audio/mp4") || recordingOptions.at(-1).mimeType === "audio/mp4"), "Compatible voice retains M4A/AAC recording where available for older phones");
       element("cancel-audio").click();
       await until(() => !element("encode").disabled, "discard recording end");
       check(!element("attachment-list").children.length && discardStream.getTracks().every((track) => track.readyState === "ended"), "Discarding a recording attaches nothing and releases the audio tracks");
+      element("record-quality").value = "compact";
+      element("record-quality").dispatchEvent(new app.Event("change"));
       await audioContext.close(); audioContext = null;
       let resolveMicrophone;
       Object.defineProperty(app.navigator.mediaDevices, "getUserMedia", {
@@ -379,20 +400,40 @@
       check(element("export-name").value === "clipboard-image-pixelstow.png", "Clipboard image exports start with a useful clipboard-based filename");
       element("export-cancel").click();
       await until(() => !element("decode").disabled, "cancelled clipboard export");
-      files("file", [clean]);
+      const smallWidth = 1200, smallHeight = 720;
+      const smallPhoto = new app.File([await app.PixelStow.writePng(pixels.subarray(0, smallWidth * smallHeight * 4), smallWidth, smallHeight)], "public-photo.png", { type: "image/png" });
+      files("file", [smallPhoto]);
       await until(() => !element("encode").disabled, "automatic-stop carrier");
       check(element("loaded-image").textContent === "Loaded file: public-photo.png", "Loading a file after a paste replaces the clipboard label with its filename");
       audioContext = new app.AudioContext();
       await audioContext.resume();
-      const autoOscillator = audioContext.createOscillator();
+      const autoOscillator = audioContext.createBufferSource();
+      const speechBuffer = audioContext.createBuffer(1, audioContext.sampleRate * 30, audioContext.sampleRate);
+      const speechSamples = speechBuffer.getChannelData(0);
+      let speechSeed = 12345;
+      for (let i = 0; i < speechSamples.length; i++) {
+        const t = i / audioContext.sampleRate;
+        speechSeed = (Math.imul(speechSeed, 1664525) + 1013904223) >>> 0;
+        const syllable = 0.5 + 0.5 * Math.sin(2 * Math.PI * 3.2 * t);
+        const voiced = Math.sin(2 * Math.PI * (130 * t + 8 * Math.sin(2 * Math.PI * 0.8 * t))) + 0.3 * Math.sin(2 * Math.PI * 710 * t) + 0.15 * Math.sin(2 * Math.PI * 1800 * t);
+        speechSamples[i] = 0.15 * syllable * (voiced + 0.1 * (speechSeed / 2147483648 - 1));
+      }
+      autoOscillator.buffer = speechBuffer;
       const autoDestination = audioContext.createMediaStreamDestination();
+      autoDestination.channelCount = 1; autoDestination.channelCountMode = "explicit";
       autoOscillator.connect(autoDestination); autoOscillator.start();
       Object.defineProperty(app.navigator.mediaDevices, "getUserMedia", { configurable: true, value: async () => autoDestination.stream });
       element("record-audio").click();
       await until(() => !element("stop-audio").hidden, "automatic recording start");
       await until(() => !element("encode").disabled && element("attachment-list").children.length === 1, "automatic byte-budget stop", 35000);
       check(autoDestination.stream.getTracks().every((track) => track.readyState === "ended"), "Recording automatically stops near the photo budget and releases the stream");
+      const smallAudioBytes = await (await fetch(element("attachment-list").querySelector("audio").src)).arrayBuffer();
+      const smallAudio = await audioContext.decodeAudioData(smallAudioBytes.slice(0));
+      if (compactUsesOpus) check(smallAudioBytes.byteLength < 6000 && smallAudio.duration >= 5.5, "Compact voice fits at least 5.5 seconds of generated speech-like audio in a photo with less than 6 KB capacity");
       autoOscillator.stop(); await audioContext.close(); audioContext = null;
+      element("encode").click();
+      await until(() => !element("download").hidden && !element("decode").disabled, "small voice carrier encoding");
+      check(element("decoded-attachments").children.length === 1 && element("decoded-attachments").querySelector("audio"), "The automatically stopped compact recording fits the small photo and survives verified encoding");
       results.textContent += "ALL BROWSER CHECKS PASSED.\n";
     } catch (error) {
       results.textContent += "FAIL: " + (error.stack || error.message) + "\n";

@@ -57,11 +57,25 @@ detect a locked image without decrypting; it cannot be used for re-encoding.
 ## Browser use and limits
 
 Choose a photo, add optional text and files, or record a voice message. The
-recorder requests mono audio at 16 kbit/s when supported, prefers MP4/AAC for
-iPhone playback and falls back to WebM/Opus or Ogg/Opus, and stops at 30 seconds or near the available
-byte budget. The browser may choose a different actual bitrate. Container
+default Compact voice mode requests mono speech at 6 kbit/s in WebM/Opus or
+Ogg/Opus where recording is supported. It falls back to MP4/AAC at 8 kbit/s.
+Compatible voice favours MP4/AAC at 16 kbit/s for older phones, with Opus as a
+fallback. Microphone constraints request mono and a lower sample rate when
+available. Recording stops at 30 seconds or near the available byte budget.
+The quality picker shows a target duration estimate; completed recordings show
+their measured elapsed time and file size. The browser may choose a different
+actual bitrate. AAC may ignore low bitrate requests, so switching to Opus can
+save more space than just lowering the request. Known encoder-reported bitrate
+limits update the estimate after starting a recording. Container
 overhead and the last recorder chunk can exceed the estimate; the codec still
 checks actual capacity and refuses an export that cannot be verified.
+
+Opus recording is supported by [Safari 18.4 and later](https://webkit.org/blog/16574/webkit-features-in-safari-18-4/)
+and other browsers that advertise the format. Older Safari versions can use the
+AAC fallback/compatible mode. A local generated spoken birthday sample recorded
+for six seconds produced 4,615 bytes in Compact voice; this is a measured sample,
+not a guaranteed size for every voice or browser. The recorder's bitrate setting
+is a [hint to the encoder](https://www.w3.org/TR/mediastream-recording/).
 
 Recording needs HTTPS or localhost, browser microphone permission and
 MediaRecorder support. Playback is attempted on import/unlock, with ordinary

@@ -14,6 +14,7 @@
       this.pending = false;
       this.requestingMic = false;
       this.generation = 0;
+      this.recordingBitrates = new Map();
       this.input = document.querySelector("#attachment-file");
       this.kind = document.querySelector("#attachment-kind");
       this.list = document.querySelector("#attachment-list");
@@ -23,6 +24,9 @@
       this.stopButton = document.querySelector("#stop-audio");
       this.cancelButton = document.querySelector("#cancel-audio");
       this.recordStatus = document.querySelector("#record-status");
+      this.recordQuality = document.querySelector("#record-quality");
+      this.recordEstimate = document.querySelector("#record-estimate");
+      this.recordQuality.addEventListener("change", () => this.updateRecordingEstimate());
       this.audioAction = document.querySelector("#audio-action");
       this.voiceButton = document.querySelector("#play-voice");
       this.previewVoiceButton = document.querySelector("#preview-audio");
@@ -64,6 +68,7 @@
       this.kind.disabled = disabled;
       const supported = Boolean(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
       this.recordButton.disabled = disabled || this.files.length >= 8 || !supported;
+      this.recordQuality.disabled = disabled || !supported;
       this.stopButton.hidden = !this.recording;
       this.cancelButton.hidden = !this.recording && !this.requestingMic;
       this.list.querySelectorAll("button").forEach((button) => { button.disabled = disabled; });
@@ -76,6 +81,26 @@
       this.busy = busy;
       this.locked = locked;
       this.sync();
+    }
+
+    recordingProfile() {
+      const compact = this.recordQuality.value !== "compatible";
+      const candidates = compact
+        ? [{ type: "audio/webm;codecs=opus", bitrate: 6000 }, { type: "audio/ogg;codecs=opus", bitrate: 6000 }, { type: "audio/mp4", bitrate: 8000 }]
+        : [{ type: "audio/mp4", bitrate: 16000 }, { type: "audio/webm;codecs=opus", bitrate: 16000 }, { type: "audio/ogg;codecs=opus", bitrate: 16000 }];
+      const format = candidates.find(({ type }) => window.MediaRecorder && (typeof MediaRecorder.isTypeSupported === "function" ? MediaRecorder.isTypeSupported(type) : type === "audio/mp4"));
+      return { ...format, bitrate: format?.bitrate || (compact ? 8000 : 16000), compact };
+    }
+
+    updateRecordingEstimate() {
+      let budget = 0;
+      try { budget = this.remaining(); } catch (_) { /* The payload budget reports its own error. */ }
+      if (!budget) { this.recordEstimate.textContent = ""; return; }
+      const profile = this.recordingProfile();
+      const bitrate = this.recordingBitrates.get(profile.type + ":" + profile.bitrate) || profile.bitrate;
+      const reserve = profile.type?.includes("opus") ? 512 : 1024;
+      const seconds = Math.min(30, Math.max(0, (budget - reserve) * 8 / bitrate));
+      this.recordEstimate.textContent = "About " + seconds.toFixed(1) + " seconds may fit at this quality. The browser's actual file size can differ; recording stops near the photo's limit.";
     }
 
     async addFiles(files) {
@@ -263,6 +288,7 @@
         return;
       }
       job.cancelled ||= cancel;
+      job.stoppedAt ||= performance.now();
       clearInterval(job.timer);
       if (job.recorder.state !== "inactive") job.recorder.stop();
       job.stream.getTracks().forEach((track) => track.stop());
@@ -281,23 +307,27 @@
       this.recordStatus.textContent = "Requesting microphone access…";
       let stream = null;
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1 }, video: false });
+        const profile = this.recordingProfile();
+        stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: { ideal: 1 }, sampleRate: { ideal: profile.compact ? 16000 : 24000 } }, video: false });
         if (generation !== this.generation) {
           stream.getTracks().forEach((track) => track.stop());
           return;
         }
-        // AAC in MP4 plays on older iPhones too; use Opus when MP4 recording is unavailable.
-        const mimeType = ["audio/mp4", "audio/webm;codecs=opus", "audio/ogg;codecs=opus"].find((type) => MediaRecorder.isTypeSupported(type));
-        const options = { audioBitsPerSecond: 16000 };
+        // Opus is efficient at speech bitrates. Compatible mode retains M4A/AAC
+        // for older phones; unsupported Opus recording falls back to lower-rate AAC.
+        const mimeType = profile.type;
+        const options = { audioBitsPerSecond: profile.bitrate };
         if (mimeType) options.mimeType = mimeType;
         const recorder = new MediaRecorder(stream, options);
+        if (recorder.audioBitsPerSecond > 0) this.recordingBitrates.set(profile.type + ":" + profile.bitrate, recorder.audioBitsPerSecond);
         this.requestingMic = false;
         const job = { recorder, stream, chunks: [], size: 0, started: performance.now(), cancelled: false, timer: null };
         this.recording = job;
         const update = () => {
           const seconds = (performance.now() - job.started) / 1000;
           this.recordStatus.textContent = "Recording: " + seconds.toFixed(1) + " s · " + job.size.toLocaleString("en-GB") + " / about " + budget.toLocaleString("en-GB") + " bytes. Maximum 30 seconds.";
-          if (seconds >= 30 || job.size >= Math.max(1024, budget - 1024)) this.stopRecording();
+          const reserve = mimeType?.includes("opus") ? 512 : 1024;
+          if (seconds >= 30 || job.size >= Math.max(1024, budget - reserve)) this.stopRecording();
         };
         recorder.addEventListener("dataavailable", (event) => {
           if (event.data.size) { job.chunks.push(event.data); job.size += event.data.size; }
@@ -323,7 +353,8 @@
               PixelStow.payloadSize("", [...this.files, attachment]);
               this.files.push(attachment);
               this.render(this.list, this.files, "compose", false);
-              this.recordStatus.textContent = "Recording attached. Listen before encoding; remove it to record again.";
+              const seconds = ((job.stoppedAt || performance.now()) - job.started) / 1000;
+              this.recordStatus.textContent = "Recording attached: " + seconds.toFixed(1) + " s · " + blob.size.toLocaleString("en-GB") + " bytes. Listen before encoding; remove it to record again.";
               this.report(blob.size > budget ? "The recording may be too large for this photo. Use a larger image or make a shorter recording." : "Voice message attached. You can encode it with or without text.", blob.size > budget);
             } else if (generation === this.generation && !job.failed) {
               this.recordStatus.textContent = "Recording discarded.";
