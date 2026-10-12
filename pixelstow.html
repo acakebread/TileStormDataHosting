@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>PixelStow</title>
   <link rel="canonical" href="https://www.massivehadron.com/pixelstow.html">
   <style>
@@ -236,10 +236,42 @@
     }
 
     #transform-outline { position: absolute; inset: 0; pointer-events: none; }
-    .camera-panel { margin-top: 14px; }
-    .camera-view { position: relative; line-height: 0; background: #081016; border-radius: 12px; overflow: hidden; }
-    .camera-view video { display: block; width: 100%; max-height: 420px; max-height: min(50svh, 420px); object-fit: contain; }
-    .camera-controls { margin: 10px 0; }
+    html.camera-modal-open, body.camera-modal-open { overflow: hidden; overscroll-behavior: none; }
+    .camera-panel {
+      box-sizing: border-box; position: fixed; inset: 0; width: 100%; height: 100%; height: 100dvh;
+      max-width: none; max-height: none; margin: 0; border: 0; border-radius: 0;
+      padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right))
+        max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+      background: #081016; color: var(--text); overflow: hidden;
+    }
+    .camera-panel[open] { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 10px; }
+    .camera-panel::backdrop { background: #081016; }
+    .camera-header { display: flex; gap: 12px; align-items: center; justify-content: space-between; }
+    .camera-header h2 { margin: 0; font-size: 1.1rem; }
+    .camera-header .hint { margin: 3px 0 0; font-size: 0.82rem; }
+    .camera-header button { flex: 0 0 auto; }
+    .camera-view { position: relative; min-width: 0; min-height: 0; line-height: 0; background: #000; overflow: hidden; touch-action: none; }
+    .camera-view video { position: absolute; display: block; left: 50%; top: 50%; max-width: none; max-height: none; object-fit: contain; transform: translate(-50%, -50%); }
+    .camera-frame { position: absolute; box-sizing: border-box; border: 1px solid rgba(140, 235, 237, 0.65); pointer-events: none; }
+    .camera-target { position: absolute; inset: 6%; }
+    .camera-target span { position: absolute; width: 24px; height: 24px; border: 3px solid #8cebed; border-radius: 2px; }
+    .camera-target span:nth-child(1) { left: 0; top: 0; border-right: 0; border-bottom: 0; }
+    .camera-target span:nth-child(2) { right: 0; top: 0; border-left: 0; border-bottom: 0; }
+    .camera-target span:nth-child(3) { right: 0; bottom: 0; border-left: 0; border-top: 0; }
+    .camera-target span:nth-child(4) { left: 0; bottom: 0; border-right: 0; border-top: 0; }
+    .camera-frame-note { position: absolute; left: 8px; right: 8px; bottom: 5px; margin: 0; text-align: center; color: white; font-size: 0.75rem; line-height: 1.4; text-shadow: 0 1px 3px #000; }
+    .camera-footer { max-height: 38dvh; overflow: auto; overscroll-behavior: contain; }
+    .camera-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; }
+    .camera-controls button { margin: 0; padding: 9px 6px; }
+    .camera-controls .camera-shutter { color: #081016; background: var(--tile-azure); font-weight: 700; }
+    .camera-native-photo { grid-column: 1 / -1; }
+    .camera-footer > .hint { margin: 8px 0 0; font-size: 0.82rem; overflow-wrap: anywhere; }
+    .camera-footer > .hint:empty { display: none; }
+    @media (orientation: landscape) and (max-height: 600px) {
+      .camera-panel[open] { grid-template-columns: minmax(0, 1fr) minmax(190px, 260px); grid-template-rows: auto minmax(0, 1fr); }
+      .camera-header { grid-column: 1 / -1; }
+      .camera-footer { grid-column: 2; grid-row: 2; max-height: none; min-height: 0; }
+    }
     .camera-near-miss { margin-top: 12px; }
     .camera-near-miss summary { cursor: pointer; color: var(--tile-community); }
     .camera-still { position: relative; max-width: 480px; margin: 10px auto; line-height: 0; }
@@ -480,29 +512,42 @@
           <button id="take-photo" type="button">Take photo</button>
           <input id="camera-file" class="file-input" type="file" accept="image/*" capture="environment" aria-label="Take a photo with the camera">
         </div>
-        <section class="camera-panel" id="camera-panel" hidden aria-label="Camera image reader">
-          <div class="camera-view">
-            <video id="camera-video" autoplay muted playsinline aria-label="Live camera preview"></video>
-          </div>
-          <div class="file-row camera-controls">
-            <button id="capture-frame" type="button">Use this frame</button>
-            <button id="pause-camera" type="button">Pause scanning</button>
-            <button id="switch-camera" type="button">Switch camera</button>
-            <button id="close-camera" type="button">Close camera</button>
-          </div>
-          <p class="hint">Include all four corners, fill the view and hold steady. Scanning stops when readable contents are found. Take photo uses your phone's still camera if the live view lacks detail. Nothing is uploaded.</p>
-          <p class="hint" id="camera-progress" role="status"></p>
-          <p class="hint" id="camera-signature"></p>
-          <details class="camera-near-miss" id="camera-near-miss" hidden open>
-            <summary id="camera-near-summary">Markers found in an earlier capture</summary>
-            <div class="camera-still">
-              <canvas id="camera-still"></canvas>
-              <canvas id="camera-guides" aria-label="Markers detected in this captured frame"></canvas>
+        <dialog class="camera-panel" id="camera-panel" hidden aria-labelledby="camera-title">
+          <header class="camera-header">
+            <div>
+              <h2 id="camera-title">Camera scanner</h2>
+              <p class="hint">Keep all four picture corners inside the guides. Move closer and hold steady.</p>
             </div>
-            <p class="hint">These guides belong to the captured frame above. For the next attempt, keep every corner visible, move closer for more detail, keep sharp focus and avoid glare.</p>
-            <button id="use-camera-near-miss" type="button">Inspect this capture</button>
-          </details>
-        </section>
+            <button id="close-camera" type="button" autofocus>Close camera</button>
+          </header>
+          <div class="camera-view" id="camera-view">
+            <video id="camera-video" autoplay muted playsinline aria-label="Live camera preview"></video>
+            <div class="camera-frame" id="camera-frame" hidden aria-hidden="true">
+              <div class="camera-target"><span></span><span></span><span></span><span></span></div>
+              <p class="camera-frame-note">The whole outlined view is captured</p>
+            </div>
+          </div>
+          <div class="camera-footer">
+            <div class="file-row camera-controls">
+              <button class="camera-shutter" id="capture-frame" type="button">Capture and read</button>
+              <button id="pause-camera" type="button">Pause scanning</button>
+              <button id="switch-camera" type="button">Switch camera</button>
+              <button id="rotate-camera" type="button">Rotate view</button>
+              <button class="camera-native-photo" id="camera-take-photo" type="button">Take photo with phone camera</button>
+            </div>
+            <p class="hint" id="camera-progress" role="status"></p>
+            <p class="hint" id="camera-signature"></p>
+            <details class="camera-near-miss" id="camera-near-miss" hidden open>
+              <summary id="camera-near-summary">Markers found in an earlier capture</summary>
+              <div class="camera-still">
+                <canvas id="camera-still"></canvas>
+                <canvas id="camera-guides" aria-label="Markers detected in this captured frame"></canvas>
+              </div>
+              <p class="hint">These guides belong to the captured frame above. For the next attempt, keep every corner visible, move closer for more detail, keep sharp focus and avoid glare.</p>
+              <button id="use-camera-near-miss" type="button">Inspect this capture</button>
+            </details>
+          </div>
+        </dialog>
         <p class="loaded-image" id="loaded-image" hidden></p>
         <p class="hint" id="capacity">Choose or paste a PNG or JPEG, or open the camera. Your original stays unchanged.</p>
         <div class="preview" id="preview" hidden>
@@ -717,11 +762,11 @@
   </dialog>
   <script src="./pixelstow-spectrum.js?v=20261012-spectrum1"></script>
   <script src="./pixelstow-transform.js?v=20261012-photo-pyramid1"></script>
-  <script src="./pixelstow.js?v=20261012-photo-pyramid1"></script>
+  <script src="./pixelstow.js?v=20261012-encode-fast1"></script>
   <script src="./pixelstow-export.js?v=20261011-exports"></script>
   <script src="./pixelstow-media.js?v=20261011-webm-duration"></script>
   <script src="./pixelstow-sharing.js?v=20261011-png-clipboard"></script>
-  <script src="./pixelstow-camera.js?v=20261012-camera1"></script>
+  <script src="./pixelstow-camera.js?v=20261012-camera2"></script>
   <script>
     const fileInput = document.querySelector("#file");
     const drop = document.querySelector("#drop");
@@ -1150,8 +1195,8 @@
     function recoveryOptions(controller) {
       return {
         signal: controller.signal, forceSearch: transformForce.checked,
-        onSignature: (signature) => { transformSignature.textContent = signature.message; },
-        onProgress: (text) => { transformStatus.textContent = text; }
+        onSignature: (signature) => { if (!controller.signal.aborted) transformSignature.textContent = signature.message; },
+        onProgress: (text) => { if (!controller.signal.aborted) transformStatus.textContent = text; }
       };
     }
 
@@ -1192,7 +1237,7 @@
       try {
         const options = recoveryOptions(transformAbort);
         const result = transformMode.value === "auto"
-          ? await PixelStow.inspect(job.pixels, job.width, job.height, { ...options, automatic: true })
+          ? await PixelStow.inspect(job.pixels, job.width, job.height, { ...options, automatic: true, background: true })
           : await PixelStow.findVisualTransform(job.pixels, job.width, job.height, { ...options, mode: transformMode.value });
         if (current !== job) return;
         recordRecovery(job, result);
@@ -1206,7 +1251,7 @@
         if (result.passwordProtected) {
           setStatus("This image is password protected. Please enter the password to unlock it.");
         } else {
-          const decoded = await PixelStow.decode(job.pixels, job.width, job.height, "");
+          const decoded = await PixelStow.decode(job.pixels, job.width, job.height, "", { signal: transformAbort.signal });
           if (transformAbort.signal.aborted) throw new DOMException("Search cancelled.", "AbortError");
           if (decoded.status === "success") {
             readout.value = decoded.text; message.value = decoded.text;
@@ -1311,7 +1356,7 @@
         recoveryVisible = true;
         setBusy(true);
         const found = captured?.inspection || await PixelStow.inspect(image.pixels, image.width, image.height, {
-          ...recoveryOptions(transformAbort), automatic: true
+          ...recoveryOptions(transformAbort), automatic: true, background: true
         });
         if (found.signature) transformSignature.textContent = found.signature.message;
         recordRecovery(current, found);
@@ -1323,7 +1368,7 @@
         } else if (found.found && found.passwordProtected) {
           setStatus("This image is password protected. Please enter the password to unlock it.");
         } else if (found.found) {
-          const decoded = await PixelStow.decode(image.pixels, image.width, image.height, "");
+          const decoded = await PixelStow.decode(image.pixels, image.width, image.height, "", { signal: transformAbort.signal });
           if (transformAbort.signal.aborted) throw new DOMException("Search cancelled.", "AbortError");
           if (decoded.status === "success") {
             readout.value = decoded.text;
@@ -1545,6 +1590,10 @@
       try {
         const content = { text: message.value, attachments: media.files };
         const encoded = await PixelStow.encodePayload(current.pixels, current.width, current.height, content, password.value);
+        // The writer knows the exact grid and strength. Export verification must
+        // never search for a resized/photographed image or depend on marker fits.
+        const verification = { nativeOnly: true, carrierVersion: encoded.carrierVersion, strength: encoded.strength };
+        setStatus("Saving and checking the encoded PNG…");
         const png = await PixelStow.writePng(encoded.pixels, encoded.width, encoded.height);
         const check = await PixelStow.decodePng(new Uint8Array(await png.arrayBuffer()));
         let mismatch = check.width !== encoded.width || check.height !== encoded.height || check.pixels.length !== encoded.pixels.length;
@@ -1557,7 +1606,7 @@
           }
         }
         if (mismatch) throw new Error("The PNG could not be checked. No image was offered for download.");
-        const verified = await PixelStow.decode(check.pixels, check.width, check.height, password.value);
+        const verified = await PixelStow.decode(check.pixels, check.width, check.height, password.value, verification);
         if (verified.status !== "success" || !PixelStow.payloadsEqual(verified, content)) {
           throw new Error("The encoded image could not be read back. No image was offered for download.");
         }
@@ -1569,10 +1618,11 @@
         downloadLink.hidden = false;
         let jpegNote = "";
         try {
+          setStatus("PNG verified. Preparing and checking the JPEG…");
           const jpeg = await PixelStow.writeJpeg(encoded.pixels, encoded.width, encoded.height);
           const jpegFile = new File([jpeg], base + "-pixelstow.jpg", { type: "image/jpeg" });
           const jpegImage = await PixelStow.readImageFile(jpegFile);
-          const jpegText = await PixelStow.decode(jpegImage.pixels, jpegImage.width, jpegImage.height, password.value);
+          const jpegText = await PixelStow.decode(jpegImage.pixels, jpegImage.width, jpegImage.height, password.value, verification);
           if (jpegText.status === "success" && PixelStow.payloadsEqual(jpegText, content)) {
             encodedJpeg = jpeg;
             saveEncodedJpegButton.hidden = false;

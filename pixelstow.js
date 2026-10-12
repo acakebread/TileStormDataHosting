@@ -98,6 +98,10 @@
     return new Promise((resolve) => setTimeout(resolve, 0));
   }
 
+  function checkCancelled(signal) {
+    if (signal?.aborted) throw new DOMException("Search cancelled.", "AbortError");
+  }
+
   function roundHalfToEven(value) {
     const floor = Math.floor(value);
     const diff = value - floor;
@@ -648,17 +652,18 @@
       width * height <= MAX_PIXELS && 8 * LOCATOR_WIDTH * LOCATOR_HEIGHT <= width * height * 0.3;
   }
 
-  function locatorBlockMap(width, height) {
+  function locatorBlockMap(width, height, limit = Infinity) {
     const layout = locatorLayout(width, height);
     if (!layout) return null;
     const columns = Math.floor(width / BLOCK), rows = Math.floor(height / BLOCK);
-    const map = new Uint32Array(columns * rows - 8 * LOCATOR_WIDTH * LOCATOR_HEIGHT / 16);
+    const map = new Uint32Array(Math.min(limit, columns * rows - 8 * LOCATOR_WIDTH * LOCATOR_HEIGHT / 16));
     let count = 0;
     for (let row = 0; row < rows; row++) {
       for (let column = 0; column < columns; column++) {
         const x = column * BLOCK, y = row * BLOCK;
         if (!layout.some((patch) => x >= patch.x && x < patch.x + LOCATOR_WIDTH && y >= patch.y && y < patch.y + LOCATOR_HEIGHT)) {
           map[count++] = column + row * columns;
+          if (count === map.length) return map;
         }
       }
     }
@@ -865,7 +870,8 @@
     return null;
   }
 
-  async function scoreMapped(pixels, width, height, map, originalWidth, strength, fit, limit = map.length) {
+  async function scoreMapped(pixels, width, height, map, originalWidth, strength, fit, limit = map.length, signal = fit?.signal) {
+    checkCancelled(signal);
     const scores = new Int32Array(limit), bounded = new Int32Array(limit);
     const difference = buildShapes(strength).difference;
     const columns = Math.floor(originalWidth / BLOCK);
@@ -875,8 +881,8 @@
     const half = fit && !fit.matrix && Math.abs(fit.scaleX - 0.5) < 0.001 && Math.abs(fit.scaleY - 0.5) < 0.001;
     for (let i = 0; i < limit; i++) {
       if ((i & 8191) === 8191) {
-        if (fit?.signal?.aborted) throw new DOMException("Search cancelled.", "AbortError");
         await yieldNow();
+        checkCancelled(signal);
       }
       const x = (map[i] % columns) * BLOCK, y = Math.floor(map[i] / columns) * BLOCK;
       if (half) {
@@ -924,11 +930,11 @@
       if (signal?.aborted) throw new DOMException("Search cancelled.", "AbortError");
       const fit = native ? null : { scaleX, scaleY, phaseX: (scaleX - 1) / 2 + ox, phaseY: (scaleY - 1) / 2 + oy, signal };
       for (const strength of STRENGTHS) {
-        const probe = await scoreMapped(pixels, width, height, map, originalWidth, strength, fit, PREAMBLE_BLOCKS);
+        const probe = await scoreMapped(pixels, width, height, map, originalWidth, strength, fit, PREAMBLE_BLOCKS, signal);
         const preamble = tryReadPreamble(probe.scores) || tryReadPreamble(probe.bounded);
         if (!preamble || preamble.version !== CARRIER_V3) continue;
-        const scored = await scoreMapped(pixels, width, height, map, originalWidth, strength, fit);
-        const found = (await tryLayout(scored.scores)) || (await tryLayout(scored.bounded));
+        const scored = await scoreMapped(pixels, width, height, map, originalWidth, strength, fit, map.length, signal);
+        const found = (await tryLayout(scored.scores, signal)) || (await tryLayout(scored.bounded, signal));
         if (found && found.carrierVersion === CARRIER_V3) return {
           ...found, origWidth: originalWidth, origHeight: originalHeight,
           scaleX, scaleY, phaseX: fit?.phaseX || 0, phaseY: fit?.phaseY || 0
@@ -956,7 +962,7 @@
         const preamble = tryReadPreamble(probe.scores) || tryReadPreamble(probe.bounded);
         if (!preamble || preamble.version !== CARRIER_V3) continue;
         const scored = await scoreMapped(pixels, width, height, map, geometry.originalWidth, strength, fit);
-        const found = (await tryLayout(scored.scores)) || (await tryLayout(scored.bounded));
+        const found = (await tryLayout(scored.scores, signal)) || (await tryLayout(scored.bounded, signal));
         if (found && found.carrierVersion === CARRIER_V3) return {
           ...found, origWidth: geometry.originalWidth, origHeight: geometry.originalHeight,
           matrix, geometry: { ...geometry, matrix,
@@ -977,11 +983,18 @@
 
   function searchInWorker(pixels, width, height, options, operation = "geometry") {
     return new Promise((resolve, reject) => {
-      const url = new URL("pixelstow-transform-worker.js?v=20261012-photo-pyramid1", codecScriptUrl);
+      const url = new URL("pixelstow-transform-worker.js?v=20261012-encode-fast1", codecScriptUrl);
       const worker = new Worker(url);
-      const abort = () => { cleanup(); reject(new DOMException("Search cancelled.", "AbortError")); };
-      const cleanup = () => { worker.terminate(); options.signal?.removeEventListener("abort", abort); };
+      let finished = false;
+      const abort = () => { if (finished) return; cleanup(); reject(new DOMException("Search cancelled.", "AbortError")); };
+      const cleanup = () => {
+        finished = true;
+        worker.onmessage = worker.onerror = null;
+        worker.terminate();
+        options.signal?.removeEventListener("abort", abort);
+      };
       worker.onmessage = ({ data }) => {
+        if (finished) return;
         if (data.signature) { options.onSignature?.(data.signature); return; }
         if (data.progress) { options.onProgress?.(data.progress); return; }
         cleanup();
@@ -1001,6 +1014,7 @@
 
   async function findVisualTransform(pixels, width, height, options = {}) {
     assertImage(pixels, width, height);
+    checkCancelled(options.signal);
     if (!root.PixelStowTransform) throw new Error("The visual transform reader script is missing. Reload this page.");
     // A high-resolution camera image can enlarge the stored six-pixel symbols
     // beyond the local reader's scale range. Locate on smaller working rasters,
@@ -1374,10 +1388,9 @@
     return { bytes: output, corrections };
   }
 
-  function decodeSoft(scores, byteCount) {
+  function decodeSoftRange(scores, output, first, last) {
     let corrections = 0;
-    const output = new Uint8Array(byteCount);
-    for (let byteIndex = 0; byteIndex < byteCount; byteIndex++) {
+    for (let byteIndex = first; byteIndex < last; byteIndex++) {
       const start = byteIndex * 12;
       let bestValue = 0;
       let best = -Infinity;
@@ -1401,10 +1414,27 @@
       output[byteIndex] = bestValue;
       if (bestMisses > 0) corrections++;
     }
-    return { bytes: output, corrections };
+    return corrections;
   }
 
-  function readFramedScores(scores) {
+  function decodeSoft(scores, byteCount) {
+    const bytes = new Uint8Array(byteCount);
+    return { bytes, corrections: decodeSoftRange(scores, bytes, 0, byteCount) };
+  }
+
+  async function decodeSoftPayload(scores, byteCount, signal) {
+    const bytes = new Uint8Array(byteCount);
+    let corrections = 0;
+    for (let first = 0; first < byteCount; first += 1024) {
+      if (first) await yieldNow();
+      checkCancelled(signal);
+      corrections += decodeSoftRange(scores, bytes, first, Math.min(byteCount, first + 1024));
+    }
+    return { bytes, corrections };
+  }
+
+  async function readFramedScores(scores, signal) {
+    checkCancelled(signal);
     const preamble = tryReadPreamble(scores);
     if (!preamble) throw frameError("The image does not contain a matching carrier header.");
     if ((preamble.version !== CARRIER_V1 && preamble.version !== CARRIER_V3) ||
@@ -1420,8 +1450,9 @@
     const order = scatterOrder(payloadBlocks, SEED);
     const combined = combineScores(scores.subarray(PREAMBLE_BLOCKS), order, codedBits);
     const decoded = bitsPerByte === 12
-      ? decodeSoft(combined, preamble.framedLength)
+      ? await decodeSoftPayload(combined, preamble.framedLength, signal)
       : decodeOneParity(combined, preamble.framedLength);
+    checkCancelled(signal);
     return {
       bytes: decoded.bytes,
       corrections: decoded.corrections,
@@ -1449,14 +1480,15 @@
     return { difference, common };
   }
 
-  async function scoreBlocks(pixels, width, columns, rows, difference, common) {
+  async function scoreBlocks(pixels, width, columns, rows, difference, common, signal) {
+    checkCancelled(signal);
     let differenceEnergy = 0;
     for (let i = 0; i < 16; i++) differenceEnergy += difference[i] * difference[i];
     const scores = new Int32Array(columns * rows);
     const bounded = new Int32Array(scores.length);
     const block = new Float64Array(16);
     for (let row = 0; row < rows; row++) {
-      if ((row & 15) === 15) await yieldNow();
+      if ((row & 15) === 15) { await yieldNow(); checkCancelled(signal); }
       for (let column = 0; column < columns; column++) {
         let projection = 0;
         const originY = row * 4;
@@ -1485,10 +1517,11 @@
     return { scores, bounded };
   }
 
-  async function tryLayout(scores) {
+  async function tryLayout(scores, signal) {
     try {
-      const framed = readFramedScores(scores);
+      const framed = await readFramedScores(scores, signal);
       const unpacked = await unpackFrame(framed.bytes);
+      checkCancelled(signal);
       return {
         payload: unpacked.payload,
         strength: unpacked.strength,
@@ -1506,37 +1539,57 @@
     }
   }
 
-  async function tryReadAt(pixels, width, height, strength) {
+  async function tryReadAt(pixels, width, height, strength, signal) {
     const columns = Math.floor(width / BLOCK);
     const rows = Math.floor(height / BLOCK);
     const blockCount = columns * rows;
     if (blockCount <= PREAMBLE_BLOCKS || blockCount > MAX_BLOCKS) return null;
     strength = Math.max(1, Math.min(32, strength | 0));
     const shapes = buildShapes(strength);
-    const scored = await scoreBlocks(pixels, width, columns, rows, shapes.difference, shapes.common);
-    return (await tryLayout(scored.scores)) || (await tryLayout(scored.bounded));
+    const scored = await scoreBlocks(pixels, width, columns, rows, shapes.difference, shapes.common, signal);
+    return (await tryLayout(scored.scores, signal)) || (await tryLayout(scored.bounded, signal));
   }
 
-  async function recoverScan(pixels, width, height) {
+  async function readNative(pixels, width, height, version, strength, signal, map) {
+    checkCancelled(signal);
     if (!pixels || width < BLOCK || height < BLOCK || pixels.length !== width * height * 4) return null;
     if (width * height > MAX_PIXELS) throw new Error("This image is too large for the browser tool.");
-    if (Math.floor(width / BLOCK) * Math.floor(height / BLOCK) <= PREAMBLE_BLOCKS) return null;
-    const preambleMap = Uint32Array.from({ length: PREAMBLE_BLOCKS }, (_, i) => i);
-    for (let i = 0; i < STRENGTHS.length; i++) {
-      // Reject wrong grids on the small repeated header before scoring a whole
-      // photograph. This leaves the previous carrier's decoder unchanged.
-      const probe = await scoreMapped(pixels, width, height, preambleMap, width, STRENGTHS[i], null);
+    if (version === CARRIER_V3 && !locatorFits(width, height)) return null;
+    const preambleMap = version === CARRIER_V3
+      ? (map ? map.subarray(0, PREAMBLE_BLOCKS) : locatorBlockMap(width, height, PREAMBLE_BLOCKS))
+      : Uint32Array.from({ length: PREAMBLE_BLOCKS }, (_, i) => i);
+    if (Math.floor(width / BLOCK) * Math.floor(height / BLOCK) <= PREAMBLE_BLOCKS || preambleMap.length < PREAMBLE_BLOCKS) return null;
+    // Generated files already have a known pixel lattice. Check that carrier's
+    // repeated header directly, without requiring a marker fit or resize search.
+    // Only allocate/score the entire payload map after the header has passed CRC.
+    // The writer can reduce amplitude per block to avoid clipping. Start with
+    // its nominal strength, then retain the original reader's other templates.
+    const amplitudes = strength ? [strength, ...STRENGTHS.filter((value) => value !== strength)] : STRENGTHS;
+    for (const amplitude of amplitudes) {
+      const probe = await scoreMapped(pixels, width, height, preambleMap, width, amplitude, null, PREAMBLE_BLOCKS, signal);
       const preamble = tryReadPreamble(probe.scores) || tryReadPreamble(probe.bounded);
-      if (!preamble || preamble.version !== CARRIER_V1) continue;
-      const found = await tryReadAt(pixels, width, height, STRENGTHS[i]);
-      if (found) return found;
+      if (!preamble || preamble.version !== version) continue;
+      let found;
+      if (version === CARRIER_V3) {
+        map ||= locatorBlockMap(width, height);
+        const scored = await scoreMapped(pixels, width, height, map, width, amplitude, null, map.length, signal);
+        found = (await tryLayout(scored.scores, signal)) || (await tryLayout(scored.bounded, signal));
+      } else found = await tryReadAt(pixels, width, height, amplitude, signal);
+      if (found?.carrierVersion === version) return { ...found, origWidth: width, origHeight: height,
+        scaleX: 1, scaleY: 1, phaseX: 0, phaseY: 0 };
     }
     return null;
   }
 
   async function recover(pixels, width, height, options = {}) {
+    checkCancelled(options.signal);
     if (!pixels || pixels.length !== width * height * 4 || width < BLOCK || height < BLOCK) return null;
     if (width * height > MAX_PIXELS) throw new Error("This image is too large for the browser tool.");
+    if (options.nativeOnly) {
+      if (options.carrierVersion) return readNative(pixels, width, height, options.carrierVersion, options.strength, options.signal);
+      return (await readNative(pixels, width, height, CARRIER_V3, options.strength, options.signal)) ||
+        readNative(pixels, width, height, CARRIER_V1, options.strength, options.signal);
+    }
     const visual = visualMappings.get(pixels);
     if (visual && visual.width === width && visual.height === height) {
       if (visual.unreadable) return { locatorOnly: true, carrierVersion: CARRIER_V3 };
@@ -1549,13 +1602,15 @@
       }
       return readVisualMapping(pixels, width, height, visual.geometry, options.signal);
     }
+    const direct = await readNative(pixels, width, height, CARRIER_V3, undefined, options.signal);
+    if (direct) return direct;
     const native = await findLocator(pixels, width, height, true, false, options.signal);
     if (native) {
       const found = await readMapped(pixels, width, height, native, true, options.signal);
       if (!found.locatorOnly) return found;
       return readMapped(pixels, width, height, native, false, options.signal);
     }
-    const previous = await recoverScan(pixels, width, height);
+    const previous = await readNative(pixels, width, height, CARRIER_V1, undefined, options.signal);
     if (previous && previous.carrierVersion === CARRIER_V1) return previous;
     if (options.signal?.aborted) throw new DOMException("Search cancelled.", "AbortError");
     options.onProgress?.("Checking common image resize ratios…");
@@ -1598,7 +1653,7 @@
       return result;
     }
     options.onProgress?.("Reading the image at its original size…");
-    const recovery = await recover(pixels, width, height, { ...options, quickOnly: options.automatic === true });
+    const recovery = await recover(pixels, width, height, { ...options, quickOnly: options.quickOnly || options.automatic === true });
     if (options.signal?.aborted) throw new DOMException("Search cancelled.", "AbortError");
     const direct = describeRecovery(recovery);
     if (!options.automatic || (direct.found && !direct.unreadable)) return direct;
@@ -1611,8 +1666,9 @@
     return { ...transformed, ...direct };
   }
 
-  async function decode(pixels, width, height, password) {
-    const recovery = await recover(pixels, width, height);
+  async function decode(pixels, width, height, password, options = {}) {
+    const recovery = await recover(pixels, width, height, options);
+    checkCancelled(options.signal);
     if (!recovery) return { status: "none" };
     if (recovery.locatorOnly) return { status: "markers", carrierVersion: CARRIER_V3, geometry: recovery.geometry, scaleX: recovery.scaleX, scaleY: recovery.scaleY };
     if (recovery.passwordProtected && !password) {
@@ -1623,6 +1679,7 @@
         ? await decryptEnvelope(recovery.payload, password, recovery.bundle)
         : recovery.payload;
       try {
+        checkCancelled(options.signal);
         const content = recovery.bundle ? unpackBundle(textBytes) : { text: decodeUtf8(textBytes), attachments: [] };
         return {
           status: "success",
@@ -1658,7 +1715,8 @@
       if (probe.length * 12 <= available) bitsPerByte = 12;
       else if (probe.length * 9 <= available) bitsPerByte = 9;
       if (available <= 0 || bitsPerByte === 0) {
-        throw new Error("This image is too small for this payload. Use a larger picture, smaller files or a shorter recording.");
+        throw new Error("The framed payload needs " + probe.length.toLocaleString("en-GB") + " bytes, but this image holds " +
+          Math.max(0, Math.floor(available / 9)).toLocaleString("en-GB") + ". Use a larger picture, smaller files or a shorter recording.");
       }
       const copies = Math.max(1, Math.floor(available / (probe.length * bitsPerByte)));
       const multiplier = copies >= 4 ? 1 : copies === 3 ? 1.5 : copies === 2 ? 2 : 4;
@@ -1675,7 +1733,8 @@
       copies: written.copies,
       parityBits: written.parityBits,
       passwordProtected,
-      carrierVersion: version
+      carrierVersion: version,
+      map
     };
   }
 
@@ -1693,7 +1752,7 @@
     try {
       assertImage(pixels, width, height);
       await yieldNow();
-      const existing = await inspect(pixels, width, height);
+      const existing = await inspect(pixels, width, height, { quickOnly: true });
       if (existing.found) {
         throw new Error("This image already contains a fingerprint. Choose a picture that does not have one.");
       }
@@ -1704,9 +1763,7 @@
       try {
         let encoded = await encodeAt(pixels, width, height, payload, locked, STRENGTHS[0], true, bundle, usedVersion);
         for (;;) {
-          const recovery = usedVersion === CARRIER_V3
-            ? await recover(encoded.pixels, width, height)
-            : await tryReadAt(encoded.pixels, width, height, encoded.strength);
+          const recovery = await readNative(encoded.pixels, width, height, usedVersion, encoded.strength, undefined, encoded.map);
           if (recovery && !recovery.locatorOnly && recovery.carrierVersion === usedVersion &&
             recovery.bundle === bundle && recovery.passwordProtected === locked && bytesEqual(recovery.payload, payload)) {
             return {

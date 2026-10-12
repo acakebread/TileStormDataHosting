@@ -4,7 +4,7 @@ The original research branch was `codex/visual-transform-reader`; the browser
 reader is now on `main`. Current changes are for local user evaluation, with no
 new versioned fixtures, commit or deployment.
 Carrier 3 retains its eight 72 × 48 wavelet patches, dimensions and identifiers.
-Carrier 1 and the ordinary full-frame reader remain unchanged. No centre marker,
+Carrier 1 remains readable, and neither carrier's byte layout changes. No centre marker,
 visible ruler, border reservation, upload or service is added.
 
 ## Local use
@@ -16,7 +16,8 @@ for acquisition, worker scheduling, near-miss feedback and browser requirements.
 Open `pixelstow.html` directly or through the existing localhost server and choose
 an input image. Direct `file://` opening runs the detector on the page because
 browsers block the file worker's opaque origin; it yields between chunks to keep
-progress and cancellation available. HTTP/HTTPS uses the disposable Web Worker.
+progress and cancellation available. HTTP/HTTPS runs the whole automatic inspection
+in one disposable Web Worker, including native reads and final payload checks.
 Reading starts automatically when an image is chosen, pasted or loaded from a
 link. The preview appears before recovery, with progress and **Cancel search**
 outside the options panel. The pipeline stops at the first readable payload:
@@ -37,8 +38,22 @@ the same marker/search state for the perspective fit. The successful verificatio
 returns geometry and inspection metadata without sending payload bytes from the
 worker, and avoids a duplicate verification before initial inspection returns.
 Unlocking and subsequent decoding reuse recovered geometry and verify
-the frame again; they do not repeat discovery. Encoding/internal codec checks
-retain their existing read path and do not start photographic searches.
+the frame again; they do not repeat discovery.
+
+Generated output uses a separate direct verification path: the writer supplies
+the exact carrier version, image dimensions and nominal signal strength. The reader
+scores that native pixel lattice and validates the complete frame/payload without
+requiring locator detection or searching scales, phases or photograph geometry.
+The nominal strength is tried first; the existing strength templates remain
+available for blocks whose written amplitude was reduced to avoid clipping.
+PNG export checks exact pixels and decoded attachment bytes; JPEG export also
+uses the native lattice and is offered only if all contents survive. Compression,
+parity, encryption and carrier layouts are unchanged. Ordinary full-size version
+3 imports try the same direct header/payload read before looking for locators.
+The encoder's input guard uses native and common-ratio checks instead of repeating
+the broad resize scan. A genuine capacity error reports framed bytes required
+and available, including compressed body and framing, rather than blaming every
+verification failure on image space.
 
 For inputs larger than 1800 pixels on the longest side, the geometric stage
 searches a coarse-to-fine pyramid: 1/16, 1/8, 1/4, 1/2 and full size, stopping
@@ -105,7 +120,9 @@ available (including white and orange backgrounds), or searches at up to twelve
 frequency-derived bases. It no longer runs 432 full-image angle/scale sweeps.
 Local fits adjust both axes and shear; all discovery/fitting has a 60-second
 budget. **Cancel search** terminates the worker, or aborts the next chunk in
-direct-file mode. Budgeted/cancelled searches do not imply the image is unencoded.
+direct-file mode. Follow-up decoding carries the same abort signal through native
+pixel scoring and chunked soft-parity decoding; late worker progress is ignored.
+Budgeted/cancelled searches do not imply the image is unencoded.
 
 A cyan quadrilateral shows inferred encoded-image bounds when **Show detected
 bounds and markers** is enabled. Successful reads have a clean preview by default.
