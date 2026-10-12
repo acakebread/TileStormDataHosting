@@ -35,16 +35,18 @@
     return out;
   }
 
-  function basisMatrix(b, adapter) {
+  function basisMatrix(b, adapter, perspective = [0, 0]) {
     const c = centre(adapter);
-    return [b[2], b[4], b[0] - b[2] * c.x - b[4] * c.y,
-      b[3], b[5], b[1] - b[3] * c.x - b[5] * c.y, 0, 0, 1];
+    const [g, h] = perspective, d = 1 - g * c.x - h * c.y;
+    return [b[2] + b[0] * g, b[4] + b[0] * h, b[0] * d - b[2] * c.x - b[4] * c.y,
+      b[3] + b[1] * g, b[5] + b[1] * h, b[1] * d - b[3] * c.x - b[5] * c.y, g, h, d];
   }
 
   function matrixBasis(h, adapter) {
     const c = centre(adapter), p = point(h, c.x, c.y);
-    const u = point(h, c.x + 1, c.y), v = point(h, c.x, c.y + 1);
-    return [p.x, p.y, u.x - p.x, u.y - p.y, v.x - p.x, v.y - p.y];
+    const d = h[6] * c.x + h[7] * c.y + h[8];
+    return [p.x, p.y, (h[0] - p.x * h[6]) / d, (h[3] - p.y * h[6]) / d,
+      (h[1] - p.x * h[7]) / d, (h[4] - p.y * h[7]) / d];
   }
 
   function reasonableBasis(b) {
@@ -144,8 +146,14 @@
 
   async function refine(candidate, adapter, dimensions, options, wide = false) {
     // Fit a small patch locally before attempting a global affine/projective fit.
+    const c = centre(adapter), h = candidate.matrix, d = h[6] * c.x + h[7] * c.y + h[8];
+    if (!Number.isFinite(d) || Math.abs(d) < 1e-12) return null;
+    // Keep any projective curvature supplied by the current plane estimate.
+    // The centre and both local derivatives remain independently adjustable.
+    const perspective = options.mode === "perspective" ? [h[6] / d, h[7] / d] : [0, 0];
+    const toMatrix = (basis) => basisMatrix(basis, adapter, perspective);
     let basis = matrixBasis(candidate.matrix, adapter);
-    let score = adapter.quality(basisMatrix(basis, adapter), candidate.id, dimensions);
+    let score = adapter.quality(toMatrix(basis), candidate.id, dimensions);
     const initial = basis.slice();
     if (wide) {
       // Multiple starting basins bridge the deliberately coarse angle/scale bank.
@@ -154,7 +162,7 @@
         const b = initial.slice();
         b[2] = cos * initial[2] - sin * initial[3]; b[3] = sin * initial[2] + cos * initial[3];
         b[4] = cos * initial[4] - sin * initial[5]; b[5] = sin * initial[4] + cos * initial[5];
-        const value = adapter.quality(basisMatrix(b, adapter), candidate.id, dimensions);
+        const value = adapter.quality(toMatrix(b), candidate.id, dimensions);
         if (value > score) { score = value; basis = b; }
       }
     }
@@ -167,7 +175,7 @@
           for (const sign of [-1, 1]) {
             const b = basis.slice(); b[axis] += delta * sign;
             if (!reasonableBasis(b)) continue;
-            const value = adapter.quality(basisMatrix(b, adapter), candidate.id, dimensions);
+            const value = adapter.quality(toMatrix(b), candidate.id, dimensions);
             if (value > bestScore) { bestScore = value; best = b; }
           }
           if (best !== basis) { basis = best; score = bestScore; changed = true; }
@@ -176,7 +184,7 @@
       }
       check(options); await pause();
     }
-    const matrix = basisMatrix(basis, adapter);
+    const matrix = toMatrix(basis);
     if (options.mode === "padding") {
       // Native padded pixels have an integer translation, even when the response
       // field used every second search position on a large input.
@@ -184,7 +192,7 @@
     }
     const read = dimensions ? adapter.confirm(matrix, candidate.id, dimensions) : adapter.read(matrix, candidate.id);
     if (!read || (dimensions && (read.originalWidth !== dimensions.originalWidth || read.originalHeight !== dimensions.originalHeight))) return null;
-    return read;
+    return { ...read, localized: true };
   }
 
   function convexHull(points) {
@@ -356,8 +364,9 @@
     const rows = [], values = [];
     for (let i = 0; i < pairs.length; i++) {
       const { x, y } = source.points[i], { x: u, y: v } = target.points[i];
-      rows.push(projective ? [x, y, 1, 0, 0, 0, -u * x, -u * y] : [x, y, 1, 0, 0, 0]); values.push(u);
-      rows.push(projective ? [0, 0, 0, x, y, 1, -v * x, -v * y] : [0, 0, 0, x, y, 1]); values.push(v);
+      const weight = Math.sqrt(pairs[i].weight || 1);
+      rows.push((projective ? [x, y, 1, 0, 0, 0, -u * x, -u * y] : [x, y, 1, 0, 0, 0]).map((v) => v * weight)); values.push(u * weight);
+      rows.push((projective ? [0, 0, 0, x, y, 1, -v * x, -v * y] : [0, 0, 0, x, y, 1]).map((v) => v * weight)); values.push(v * weight);
     }
     const fit = solve(rows, values, projective ? 8 : 6);
     if (!fit) return null;
@@ -375,32 +384,95 @@
 
   function centrePair(marker, layout, adapter) {
     const patch = layout.find((p) => p.id === marker.id), c = centre(adapter);
-    return { source: { x: patch.x + c.x, y: patch.y + c.y }, target: point(marker.matrix, c.x, c.y), marker };
+    // These interior points measure the locally fitted axes, not extra markers.
+    // A prediction that merely passes a pattern threshold has no measured axes.
+    const controls = marker.localized ? [[-c.x * 0.65, 0], [c.x * 0.65, 0], [0, -c.y * 0.65], [0, c.y * 0.65]]
+      .map(([dx, dy]) => ({ source: { x: patch.x + c.x + dx, y: patch.y + c.y + dy },
+        target: point(marker.matrix, c.x + dx, c.y + dy) })) : [];
+    return { source: { x: patch.x + c.x, y: patch.y + c.y }, target: point(marker.matrix, c.x, c.y), marker, controls };
   }
 
-  function chooseFit(markers, dimensions, adapter, projective) {
+  function separated(sample, projective = false) {
+    // Four centres cannot determine a homography if any three are collinear.
+    // In particular, the three top patches plus the left midpoint are singular.
+    for (const triple of subsets(sample, 3)) for (const side of ["source", "target"]) {
+      const [a, b, c] = triple.map((p) => p[side]);
+      const span = Math.max((a.x - b.x) ** 2 + (a.y - b.y) ** 2,
+        (a.x - c.x) ** 2 + (a.y - c.y) ** 2, (b.x - c.x) ** 2 + (b.y - c.y) ** 2);
+      const area = Math.abs((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x));
+      if (area <= span * 0.001) { if (projective || sample.length === 3) return false; }
+    }
+    return true;
+  }
+
+  function controlPairs(pairs) {
+    return pairs.flatMap((pair) => [{ source: pair.source, target: pair.target, weight: 4 }, ...pair.controls]);
+  }
+
+  function measurementError(matrix, pair) {
+    const distance = (p) => {
+      const mapped = point(matrix, p.source.x, p.source.y);
+      return Math.hypot(mapped.x - p.target.x, mapped.y - p.target.y);
+    };
+    return Math.max(distance(pair), pair.controls.length ? pair.controls.reduce((s, p) => s + distance(p), 0) / pair.controls.length : 0);
+  }
+
+  const searchMargin = (width, height) => Math.min(48, Math.max(12, Math.max(width, height) * 0.03));
+
+  function chooseFit(markers, dimensions, adapter, projective, width, height) {
     const layout = adapter.layout(dimensions.originalWidth, dimensions.originalHeight);
     const pairs = markers.map((marker) => centrePair(marker, layout, adapter));
     const count = projective ? 4 : 3;
     if (pairs.length < count) return null;
     let best = null;
+    const consider = (matrix, controls) => {
+      if (!matrix || !validGeometry(matrix, dimensions.originalWidth, dimensions.originalHeight, width, height, searchMargin(width, height))) return;
+      const inliers = pairs.filter((pair) => measurementError(matrix, pair) < 2.5);
+      if (inliers.length < count) return;
+      const error = inliers.reduce((s, pair) => s + measurementError(matrix, pair), 0);
+      if (!best || inliers.length > best.inliers.length || (inliers.length === best.inliers.length && error < best.error)) best = { matrix, inliers, error, controls };
+    };
     for (const sample of subsets(pairs, count)) {
-      const matrix = fitPoints(sample, projective);
-      if (!matrix) continue;
-      const inliers = pairs.filter((pair) => {
-        const p = point(matrix, pair.source.x, pair.source.y);
-        return Math.hypot(p.x - pair.target.x, p.y - pair.target.y) < 2.5;
-      });
-      if (inliers.length < count) continue;
-      const error = inliers.reduce((s, pair) => {
-        const p = point(matrix, pair.source.x, pair.source.y);
-        return s + Math.hypot(p.x - pair.target.x, p.y - pair.target.y);
-      }, 0);
-      if (!best || inliers.length > best.inliers.length || (inliers.length === best.inliers.length && error < best.error)) best = { matrix, inliers, error };
+      if (separated(sample, projective)) consider(fitPoints(sample, projective), false);
+    }
+    if (projective) {
+      // Local directions remove the ambiguity of a centre-only fit. Use three
+      // spatially separated, independently refined patches to propose it, then
+      // require agreement from at least four whole patches, not four control points.
+      const measured = pairs.filter((pair) => pair.controls.length);
+      for (const sample of subsets(measured, 3)) {
+        if (separated(sample)) consider(fitPoints(controlPairs(sample), true), true);
+      }
     }
     if (!best) return null;
-    best.matrix = fitPoints(best.inliers, projective);
+    const refitted = fitPoints(best.controls ? controlPairs(best.inliers) : best.inliers, projective);
+    if (refitted && validGeometry(refitted, dimensions.originalWidth, dimensions.originalHeight, width, height, searchMargin(width, height)) &&
+        best.inliers.every((pair) => measurementError(refitted, pair) < 2.5)) best.matrix = refitted;
     return best;
+  }
+
+  function rankMappings(candidates, markers, seed, adapter, width, height, minimum = 1) {
+    const layout = adapter.layout(seed.originalWidth, seed.originalHeight);
+    const pairs = markers.map((marker) => centrePair(marker, layout, adapter));
+    const ranked = [];
+    for (const candidate of candidates) {
+      if (!validGeometry(candidate.matrix, seed.originalWidth, seed.originalHeight, width, height, searchMargin(width, height))) continue;
+      let score = 0;
+      for (const marker of markers) score += adapter.quality(patchMatrix(candidate.matrix, layout.find((p) => p.id === marker.id)), marker.id, seed);
+      if (!Number.isFinite(score)) continue;
+      const inliers = pairs.filter((pair) => measurementError(candidate.matrix, pair) < 2.5);
+      if (inliers.length >= minimum) ranked.push({ ...candidate, score: score / markers.length, inliers });
+    }
+    ranked.sort((a, b) => b.score - a.score);
+    const distinct = [];
+    for (const candidate of ranked) {
+      const corners = quad(candidate.matrix, seed.originalWidth, seed.originalHeight);
+      if (distinct.some((other) => quad(other.matrix, seed.originalWidth, seed.originalHeight)
+        .every((p, i) => Math.hypot(p.x - corners[i].x, p.y - corners[i].y) < 2))) continue;
+      distinct.push(candidate);
+      if (distinct.length === 3) break;
+    }
+    return distinct;
   }
 
   function fromSeed(seed, adapter) {
@@ -411,7 +483,7 @@
   async function findNear(matrix, patch, seed, adapter, options, radius) {
     const prediction = patchMatrix(matrix, patch), peaks = [];
     const direct = adapter.confirm(prediction, patch.id, seed);
-    if (direct) return direct;
+    if (direct) return await refine(direct, adapter, seed, options) || direct;
     const stride = radius > 30 ? 4 : 2;
     for (let y = -radius; y <= radius; y += stride) {
       check(options);
@@ -433,12 +505,16 @@
     return [[0, 0], [width - 1, 0], [width - 1, height - 1], [0, height - 1]].map(([x, y]) => point(matrix, x, y));
   }
 
-  function validGeometry(matrix, originalWidth, originalHeight, width, height) {
+  function validGeometry(matrix, originalWidth, originalHeight, width, height, margin = 3) {
+    if (!matrix || matrix.some((v) => !Number.isFinite(v))) return false;
     const corners = quad(matrix, originalWidth, originalHeight);
     const denominators = [[0, 0], [originalWidth - 1, 0], [originalWidth - 1, originalHeight - 1], [0, originalHeight - 1]]
       .map(([x, y]) => matrix[6] * x + matrix[7] * y + matrix[8]);
-    if (denominators.some((d) => !Number.isFinite(d) || d <= 0.1)) return false;
-    if (corners.some((p) => !Number.isFinite(p.x + p.y) || p.x < -3 || p.y < -3 || p.x > width + 2 || p.y > height + 2)) return false;
+    // Homographies are unchanged by multiplying all coefficients by a constant.
+    // Test the denominator relative to its value at the image centre.
+    const middle = denominators.reduce((s, d) => s + d, 0) / 4;
+    if (!Number.isFinite(middle) || Math.abs(middle) < 1e-12 || denominators.some((d) => d / middle <= 0.05)) return false;
+    if (corners.some((p) => !Number.isFinite(p.x + p.y) || p.x < -margin || p.y < -margin || p.x > width - 1 + margin || p.y > height - 1 + margin)) return false;
     for (let i = 0; i < 4; i++) {
       const a = corners[i], b = corners[(i + 1) % 4], c = corners[(i + 2) % 4];
       if ((b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x) <= 0) return false;
@@ -455,13 +531,15 @@
     const toImage = (h) => multiply(target, multiply(h, invert(source)));
     const quality = (h) => {
       const transform = toImage(h);
-      if (!validGeometry(transform, seed.originalWidth, seed.originalHeight, width, height)) return -Infinity;
+      // Coarse fits may overshoot an edge slightly. Allow refinement to approach
+      // the boundary; the final result still has the stricter three-pixel check.
+      if (!validGeometry(transform, seed.originalWidth, seed.originalHeight, width, height, searchMargin(width, height))) return -Infinity;
       let value = 0;
       for (const marker of markers) value += adapter.quality(patchMatrix(transform, layout.find((p) => p.id === marker.id)), marker.id, seed);
       return value / markers.length;
     };
     let score = quality(normalized);
-    for (const pixels of [0.75, 0.3, 0.12, 0.04]) {
+    for (const pixels of [1.5, 0.75, 0.3, 0.12, 0.04]) {
       for (let pass = 0; pass < 3; pass++) {
         let changed = false;
         for (let axis = 0; axis < (options.mode === "perspective" ? 8 : 6); axis++) {
@@ -494,30 +572,53 @@
       signature = await root.PixelStowSpectrum.analyze(luma, width, height, options);
       options.onSignature?.(signature);
       if (!signature.likely && !options.forceSearch && !options.corners?.length) return { geometry: null, markers, signature, reason: signature.message };
-      const seed = await seedSearch(pixels, luma, width, height, adapter, options, signature);
+      let seed = await seedSearch(pixels, luma, width, height, adapter, options, signature);
       if (!seed) return { geometry: null, markers, signature, reason: "No checksum-valid wavelet patch was found using the outline/frequency estimates." };
+      if (options.mode !== "padding") {
+        const localized = await refine(seed, adapter, seed, options);
+        if (localized) seed = { ...seed, ...localized };
+      }
       markers.push(seed);
       let matrix = seed.initialMatrix || fromSeed(seed, adapter), model = "translation";
       const layout = adapter.layout(seed.originalWidth, seed.originalHeight);
+      let predictions = [{ matrix, model }];
+      if (seed.initialMatrix) predictions.push({ matrix: fromSeed(seed, adapter), model: "affine" });
       for (let round = 0; round < (options.mode === "padding" ? 1 : 2); round++) {
-        for (const patch of layout) {
-          if (markers.some((m) => m.id === patch.id)) continue;
+        const pending = layout.filter((patch) => !markers.some((m) => m.id === patch.id));
+        const spread = (patch) => Math.min(...markers.map((marker) => {
+          const other = layout.find((p) => p.id === marker.id);
+          return ((patch.x - other.x) / seed.originalWidth) ** 2 + ((patch.y - other.y) / seed.originalHeight) ** 2;
+        }));
+        while (pending.length) {
+          // Prefer distant confirmations rather than first collecting a whole row.
+          if (options.mode !== "padding") pending.sort((a, b) => spread(b) - spread(a));
+          const patch = pending.shift();
           options.onProgress?.("Found " + markers.length + "/8 markers. Locating marker " + patch.id + "…");
-          const expected = patchMatrix(matrix, patch);
-          let found = adapter.confirm(expected, patch.id, seed);
-          if (!found && options.mode === "padding") {
-            found = await refine({ matrix: expected, id: patch.id }, adapter, seed, options);
+          let found = null;
+          if (options.mode === "padding") {
+            const expected = patchMatrix(matrix, patch);
+            found = adapter.confirm(expected, patch.id, seed) || await refine({ matrix: expected, id: patch.id }, adapter, seed, options);
+          } else {
+            const radius = Math.min(64, Math.max(16, Math.round(Math.max(width, height) * (round ? 0.03 : 0.02))));
+            // A local affine estimate remains a useful alternative while the
+            // perspective estimate is still extrapolating from one side.
+            for (const prediction of predictions) {
+              found = await findNear(prediction.matrix, patch, seed, adapter, options, radius);
+              if (found) break;
+            }
           }
-          if (!found && options.mode !== "padding") {
-            const radius = Math.min(48, Math.max(12, Math.round(Math.max(seed.originalWidth, seed.originalHeight) * (round ? 0.005 : 0.015))));
-            found = await findNear(matrix, patch, seed, adapter, options, radius);
-          }
-          if (found) markers.push(found);
-          const affine = options.mode === "padding" ? null : chooseFit(markers, seed, adapter, false);
-          if (affine) { matrix = affine.matrix; model = "affine"; }
-          if (options.mode === "perspective") {
-            const projective = chooseFit(markers, seed, adapter, true);
-            if (projective) { matrix = projective.matrix; model = "perspective"; }
+          if (!found) continue;
+          markers.push(found);
+          if (options.mode !== "padding") {
+            const candidates = predictions.slice();
+            const affine = chooseFit(markers, seed, adapter, false, width, height);
+            if (affine) candidates.push({ matrix: affine.matrix, model: "affine" });
+            if (options.mode === "perspective") {
+              const projective = chooseFit(markers, seed, adapter, true, width, height);
+              if (projective) candidates.push({ matrix: projective.matrix, model: "perspective" });
+            }
+            const ranked = rankMappings(candidates, markers, seed, adapter, width, height);
+            if (ranked.length) { predictions = ranked; matrix = ranked[0].matrix; model = ranked[0].model; }
           }
         }
       }
@@ -531,11 +632,14 @@
           0, 1, agreeing.reduce((s, h) => s + h[5], 0) / agreeing.length, 0, 0, 1];
         model = "translation";
       } else {
-        const fit = chooseFit(markers, seed, adapter, options.mode === "perspective");
-        if (!fit) return { geometry: null, markers, signature, reason: "Not enough separated markers confirmed a " + options.mode + " transform." };
-        matrix = fit.matrix; model = options.mode;
-        options.onProgress?.("Refining the pixel alignment from " + fit.inliers.length + " markers…");
-        matrix = await refineGlobal(matrix, fit.inliers.map((p) => p.marker), seed, adapter, width, height, options);
+        const fit = chooseFit(markers, seed, adapter, options.mode === "perspective", width, height);
+        if (!fit) return { geometry: null, markers, signature, reason: "The detected marker positions and local directions did not establish a stable " + options.mode + " transform." };
+        const ranked = rankMappings([...predictions, { matrix: fit.matrix, model: options.mode }],
+          markers, seed, adapter, width, height, options.mode === "perspective" ? 4 : 3);
+        if (!ranked.length) return { geometry: null, markers, signature, reason: "The fitted transform did not agree with enough independently measured markers." };
+        matrix = ranked[0].matrix; model = options.mode;
+        options.onProgress?.("Refining " + model + " alignment from " + ranked[0].inliers.length + " markers and their local directions…");
+        matrix = await refineGlobal(matrix, ranked[0].inliers.map((p) => p.marker), seed, adapter, width, height, options);
       }
       if (!validGeometry(matrix, seed.originalWidth, seed.originalHeight, width, height)) return {
         geometry: null, markers, signature, reason: "The marker fit places image corners outside the supplied picture or folds the plane." };

@@ -66,15 +66,34 @@ with recorded encoded dimensions. Translation search is followed, in wider
 modes, by local affine patch fitting. One patch supplies original dimensions
 and an initial transform; its identifier determines the canonical position.
 That predicts the remaining patches, where bounded local searches confirm other
-headers or correlate against all 96 known symbols. One damaged header need not
-discard a useful marker. Contents still require the complete payload checksum.
+headers or correlate against all 96 known symbols. In the affine and perspective
+modes, confirmed patches are also fitted independently using the known pattern;
+merely passing a threshold at a predicted position supplies no measured local
+directions. Perspective refinement preserves the current patch's projective
+curvature while independently adjusting its centre and both local derivatives;
+it no longer flattens the patch into an affine transform. Searches prefer patches
+far from existing confirmations. A small set
+of viable affine/projective predictions remains available while the perspective
+fit is extrapolating from one side. One damaged header need not discard a useful
+marker. Contents still require the complete payload checksum.
 
 Padding mode requires another patch to confirm the translation. Affine fitting
-requires three non-collinear patch centres. Perspective fitting requires four
-centres in a solvable projective configuration. Fits enumerate small subsets,
-reject outliers by reprojection error and refit using normalized coordinates.
-Known full 96-symbol patch patterns refine pixel alignment. Convexity, denominator
-and bounds checks reject invalid quadrilaterals. Actual image corners are inferred
+requires three non-collinear patch centres. A centre-only perspective fit requires
+four centres with no collinear triple: the three top-row markers and a left-side
+marker cannot determine a homography by themselves. An additional fit uses interior
+control points derived from each independently measured local patch transform.
+These are measurements of the existing pattern, not additional encoded markers.
+Three non-collinear measured patches can propose that fit, but at least four
+whole patches must agree before accepting perspective geometry. Fits enumerate
+small subsets, reject outliers by centre and local-direction error, and refit
+using weighted, normalized coordinates. Invalid fits cannot replace a viable
+search prediction; full-pattern agreement ranks the remaining candidates.
+
+Known full 96-symbol patch patterns refine pixel alignment. Convexity and a
+scale-invariant denominator check reject singular/folded planes before search
+predictions are updated. Coarse estimates may overshoot the supplied bounds by a
+small margin while finding other markers and refining alignment; the final fit
+retains the stricter three-pixel bounds check. Actual image corners are inferred
 from inset marker coordinates. A padding-outline proposal alone establishes no
 encoding evidence and never accepts a payload.
 

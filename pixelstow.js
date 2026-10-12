@@ -962,7 +962,7 @@
 
   function searchInWorker(pixels, width, height, options) {
     return new Promise((resolve, reject) => {
-      const url = new URL("pixelstow-transform-worker.js?v=20261012-transform3", codecScriptUrl);
+      const url = new URL("pixelstow-transform-worker.js?v=20261012-transform4", codecScriptUrl);
       const worker = new Worker(url);
       const abort = () => { cleanup(); reject(new DOMException("Search cancelled.", "AbortError")); };
       const cleanup = () => { worker.terminate(); options.signal?.removeEventListener("abort", abort); };
