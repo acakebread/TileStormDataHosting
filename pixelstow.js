@@ -1,6 +1,6 @@
 // Browser PCF1 encode/decode. The byte layout matches PixelStow's PictureCodec.Core.
 // Text keeps v1/v2 compatibility. Attachment bundles use the v3 envelope.
-(function () {
+(function (root) {
   const BLOCK = 4;
   const PREAMBLE_BLOCKS = 72 * 7;
   const MAX_TEXT = 16 * 1024;
@@ -21,6 +21,9 @@
   const CARRIER_V1 = 1;
   const CARRIER_V3 = 3;
   let preferredCarrier = CARRIER_V3;
+  const codecScriptUrl = typeof document !== "undefined" ? document.currentScript?.src : null;
+  // Store only geometry. Every later read still verifies the carrier and frame.
+  const visualMappings = new WeakMap();
   const encoder = new TextEncoder();
   const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 
@@ -745,6 +748,76 @@
     return { originalWidth, originalHeight, id, quality: pilot / pilotEnergy };
   }
 
+  function mappedPoint(matrix, x, y) {
+    const denominator = matrix[6] * x + matrix[7] * y + matrix[8];
+    return { x: (matrix[0] * x + matrix[1] * y + matrix[2]) / denominator,
+      y: (matrix[3] * x + matrix[4] * y + matrix[5]) / denominator };
+  }
+
+  function locatorScores(pixels, width, height, matrix, count = 96) {
+    // The patch matrix maps its own pixel centres into the supplied image.
+    for (const [x, y] of [[0, 0], [LOCATOR_WIDTH - 1, 0], [0, LOCATOR_HEIGHT - 1], [LOCATOR_WIDTH - 1, LOCATOR_HEIGHT - 1]]) {
+      const point = mappedPoint(matrix, x, y);
+      if (!Number.isFinite(point.x + point.y) || point.x < -0.5 || point.y < -0.5 || point.x > width - 0.5 || point.y > height - 0.5) return null;
+    }
+    const scores = new Float64Array(count);
+    for (let slot = 0; slot < count; slot++) {
+      const cell = locatorOrder[slot], x = cell % LOCATOR_COLUMNS * LOCATOR_CELL, y = Math.floor(cell / LOCATOR_COLUMNS) * LOCATOR_CELL;
+      let projection = 0, sum = 0, squares = 0;
+      for (let dy = 0; dy < 4; dy++) for (let dx = 0; dx < 4; dx++) {
+        const point = mappedPoint(matrix, x + 1.5 * dx + 0.5, y + 1.5 * dy + 0.5);
+        const value = sampleLuma(pixels, width, height, point.x, point.y);
+        projection += value * locatorShape[dx + dy * 4]; sum += value; squares += value * value;
+      }
+      scores[slot] = projection / Math.sqrt(400 + Math.max(0, squares - sum * sum / 16));
+    }
+    return scores;
+  }
+
+  function locatorAgreement(scores, header) {
+    if (!scores) return -Infinity;
+    let agreement = 0, energy = 0;
+    for (let slot = 0; slot < scores.length; slot++) {
+      agreement += scores[slot] * (WORD_BITS[header[Math.floor(slot / 12)] * 12 + slot % 12] ? 1 : -1);
+      energy += Math.abs(scores[slot]);
+    }
+    // Do not reward an almost empty response just because its signs agree.
+    return energy ? agreement / energy * Math.min(1, energy / (scores.length * 12)) : -Infinity;
+  }
+
+  function readVisualLocator(pixels, width, height, matrix, id) {
+    const scores = locatorScores(pixels, width, height, matrix);
+    if (!scores || locatorAgreement(scores.subarray(0, 24), locatorHeader(0, 0, id)) < 0.55) return null;
+    const bytes = decodeSoft(scores, 8).bytes;
+    scramble(bytes, LOCATOR_SEED);
+    if (bytes[0] !== 0xD3 || bytes[1] !== (0x30 | id) || (crc32(bytes, 0, 6) & 0xFFFF) !== (bytes[6] | bytes[7] << 8)) return null;
+    const originalWidth = bytes[2] | bytes[3] << 8, originalHeight = bytes[4] | bytes[5] << 8;
+    if (!locatorFits(originalWidth, originalHeight)) return null;
+    // Supplied image bounds say nothing about encoded bounds once there is padding.
+    return { originalWidth, originalHeight, id, matrix: Array.from(matrix),
+      quality: locatorAgreement(scores, locatorHeader(originalWidth, originalHeight, id)) };
+  }
+
+  function visualAdapter(pixels, width, height) {
+    const ids = [0, 2, 6, 8, 1, 3, 5, 7];
+    return {
+      patchWidth: LOCATOR_WIDTH, patchHeight: LOCATOR_HEIGHT,
+      shape: Array.from(locatorShape), ids,
+      pilots: ids.map((id) => {
+        const header = locatorHeader(0, 0, id);
+        return { id, points: Array.from({ length: 24 }, (_, slot) => {
+          const cell = locatorOrder[slot];
+          return { x: cell % LOCATOR_COLUMNS * LOCATOR_CELL, y: Math.floor(cell / LOCATOR_COLUMNS) * LOCATOR_CELL,
+            sign: WORD_BITS[header[Math.floor(slot / 12)] * 12 + slot % 12] ? 1 : -1 };
+        }) };
+      }),
+      layout: locatorLayout,
+      read: (matrix, id) => readVisualLocator(pixels, width, height, matrix, id),
+      quality: (matrix, id, dimensions) => locatorAgreement(locatorScores(pixels, width, height, matrix, dimensions ? 96 : 24),
+        locatorHeader(dimensions?.originalWidth || 0, dimensions?.originalHeight || 0, id))
+    };
+  }
+
   async function findLocator(pixels, width, height, nativeOnly = false) {
     const scales = nativeOnly ? [1] : [0.95, 2, 0.5, 1.05, 0.75, 1.5, 1.25, 1];
     if (!nativeOnly) {
@@ -778,9 +851,12 @@
     let differenceEnergy = 0;
     for (const value of difference) differenceEnergy += value * value;
     const block = new Float64Array(16);
-    const half = fit && Math.abs(fit.scaleX - 0.5) < 0.001 && Math.abs(fit.scaleY - 0.5) < 0.001;
+    const half = fit && !fit.matrix && Math.abs(fit.scaleX - 0.5) < 0.001 && Math.abs(fit.scaleY - 0.5) < 0.001;
     for (let i = 0; i < limit; i++) {
-      if ((i & 8191) === 8191) await yieldNow();
+      if ((i & 8191) === 8191) {
+        if (fit?.signal?.aborted) throw new DOMException("Search cancelled.", "AbortError");
+        await yieldNow();
+      }
       const x = (map[i] % columns) * BLOCK, y = Math.floor(map[i] / columns) * BLOCK;
       if (half) {
         // An aligned 2x2 average retains the two diagonal signs. Score that
@@ -797,8 +873,13 @@
       for (let dy = 0; dy < 4; dy++) for (let dx = 0; dx < 4; dx++) {
         const k = dx + dy * 4;
         const pixel = (x + dx + (y + dy) * width) * 4;
-        block[k] = fit ? sampleLuma(pixels, width, height, fit.scaleX * (x + dx) + fit.phaseX, fit.scaleY * (y + dy) + fit.phaseY)
-          : (pixels[pixel] + pixels[pixel + 1] + pixels[pixel + 2]) / 3;
+        if (fit?.matrix) {
+          const point = mappedPoint(fit.matrix, x + dx, y + dy);
+          block[k] = sampleLuma(pixels, width, height, point.x, point.y);
+        } else {
+          block[k] = fit ? sampleLuma(pixels, width, height, fit.scaleX * (x + dx) + fit.phaseX, fit.scaleY * (y + dy) + fit.phaseY)
+            : (pixels[pixel] + pixels[pixel + 1] + pixels[pixel + 2]) / 3;
+        }
         projection += block[k] * difference[k];
       }
       let noiseEnergy = 25;
@@ -834,6 +915,81 @@
       if (!native) await yieldNow();
     }
     return { locatorOnly: true, origWidth: originalWidth, origHeight: originalHeight, scaleX, scaleY };
+  }
+
+  async function readVisualMapping(pixels, width, height, geometry, signal) {
+    const map = locatorBlockMap(geometry.originalWidth, geometry.originalHeight);
+    const offsets = [0, -0.25, 0.25, -0.5, 0.5];
+    for (const oy of offsets) for (const ox of offsets) {
+      if (signal?.aborted) throw new DOMException("Search cancelled.", "AbortError");
+      const matrix = geometry.matrix.slice();
+      // Offset in observed space, including the projective denominator.
+      for (let i = 0; i < 3; i++) { matrix[i] += ox * matrix[i + 6]; matrix[i + 3] += oy * matrix[i + 6]; }
+      let fit = { matrix, signal };
+      if (Math.abs(matrix[1]) < 1e-12 && Math.abs(matrix[3]) < 1e-12 && Math.abs(matrix[6]) + Math.abs(matrix[7]) < 1e-12) {
+        fit = { scaleX: matrix[0] / matrix[8], scaleY: matrix[4] / matrix[8], phaseX: matrix[2] / matrix[8], phaseY: matrix[5] / matrix[8], signal };
+      }
+      for (const strength of STRENGTHS) {
+        const probe = await scoreMapped(pixels, width, height, map, geometry.originalWidth, strength, fit, PREAMBLE_BLOCKS);
+        const preamble = tryReadPreamble(probe.scores) || tryReadPreamble(probe.bounded);
+        if (!preamble || preamble.version !== CARRIER_V3) continue;
+        const scored = await scoreMapped(pixels, width, height, map, geometry.originalWidth, strength, fit);
+        const found = (await tryLayout(scored.scores)) || (await tryLayout(scored.bounded));
+        if (found && found.carrierVersion === CARRIER_V3) return {
+          ...found, origWidth: geometry.originalWidth, origHeight: geometry.originalHeight,
+          matrix, geometry: { ...geometry, matrix,
+            corners: [[0, 0], [geometry.originalWidth - 1, 0], [geometry.originalWidth - 1, geometry.originalHeight - 1], [0, geometry.originalHeight - 1]]
+              .map(([x, y]) => mappedPoint(matrix, x, y)) }, visualTransform: geometry.model
+        };
+      }
+      await yieldNow();
+    }
+    return { locatorOnly: true, origWidth: geometry.originalWidth, origHeight: geometry.originalHeight,
+      matrix: geometry.matrix, geometry, visualTransform: geometry.model };
+  }
+
+  function searchInWorker(pixels, width, height, options) {
+    return new Promise((resolve, reject) => {
+      const url = new URL("pixelstow-transform-worker.js?v=20261012-transform2", codecScriptUrl);
+      const worker = new Worker(url);
+      const abort = () => { cleanup(); reject(new DOMException("Search cancelled.", "AbortError")); };
+      const cleanup = () => { worker.terminate(); options.signal?.removeEventListener("abort", abort); };
+      worker.onmessage = ({ data }) => {
+        if (data.progress) { options.onProgress?.(data.progress); return; }
+        cleanup();
+        if (data.error) reject(new Error(data.error)); else resolve(data.result);
+      };
+      worker.onerror = () => { cleanup(); reject(new Error("The visual reader could not start. Reload the local page and check that its worker scripts are available.")); };
+      if (options.signal?.aborted) { abort(); return; }
+      options.signal?.addEventListener("abort", abort, { once: true });
+      const copy = new Uint8Array(pixels);
+      worker.postMessage({ pixels: copy, width, height, mode: options.mode }, [copy.buffer]);
+    });
+  }
+
+  async function findVisualTransform(pixels, width, height, options = {}) {
+    assertImage(pixels, width, height);
+    if (!root.PixelStowTransform) throw new Error("The visual transform reader script is missing. Reload this page.");
+    // A page opened from disk has an opaque origin and cannot start this worker.
+    // The same detector can run on the page, yielding between chunks for cancel/UI.
+    const canUseWorker = typeof Worker !== "undefined" && codecScriptUrl &&
+      ["http:", "https:"].includes(new URL(codecScriptUrl).protocol) && options.worker !== false;
+    const search = canUseWorker
+      ? await searchInWorker(pixels, width, height, options)
+      : await root.PixelStowTransform.find(pixels, width, height, options, visualAdapter(pixels, width, height));
+    if (options.geometryOnly) return search;
+    if (options.signal?.aborted) throw new DOMException("Search cancelled.", "AbortError");
+    if (!search?.geometry) {
+      const found = Boolean(search?.markers?.length);
+      if (found) visualMappings.set(pixels, { width, height, unreadable: true });
+      return { found, unreadable: found, markers: search?.markers || [], reason: search?.reason };
+    }
+    options.onProgress?.("Checking the recovered pixel grid…");
+    const recovered = await readVisualMapping(pixels, width, height, search.geometry, options.signal);
+    if (options.signal?.aborted) throw new DOMException("Search cancelled.", "AbortError");
+    visualMappings.set(pixels, { width, height, geometry: recovered.geometry });
+    return { found: true, unreadable: Boolean(recovered.locatorOnly), passwordProtected: recovered.passwordProtected,
+      carrierVersion: CARRIER_V3, geometry: recovered.geometry, markers: search.markers };
   }
 
   function bilinearSample(pixels, width, height, x, y) {
@@ -1164,6 +1320,11 @@
   async function recover(pixels, width, height) {
     if (!pixels || pixels.length !== width * height * 4 || width < BLOCK || height < BLOCK) return null;
     if (width * height > MAX_PIXELS) throw new Error("This image is too large for the browser tool.");
+    const visual = visualMappings.get(pixels);
+    if (visual && visual.width === width && visual.height === height) {
+      if (visual.unreadable) return { locatorOnly: true, carrierVersion: CARRIER_V3 };
+      return readVisualMapping(pixels, width, height, visual.geometry);
+    }
     const native = await findLocator(pixels, width, height, true);
     if (native) {
       const found = await readMapped(pixels, width, height, native, true);
@@ -1179,7 +1340,7 @@
   async function inspect(pixels, width, height) {
     const recovery = await recover(pixels, width, height);
     if (!recovery) return { found: false };
-    if (recovery.locatorOnly) return { found: true, unreadable: true, carrierVersion: CARRIER_V3 };
+    if (recovery.locatorOnly) return { found: true, unreadable: true, carrierVersion: CARRIER_V3, geometry: recovery.geometry };
     try {
       if (recovery.passwordProtected) validateEnvelope(recovery.payload, recovery.bundle);
       else if (recovery.bundle) unpackBundle(recovery.payload);
@@ -1193,6 +1354,7 @@
       formatVersion: recovery.formatVersion,
       hasAttachments: recovery.bundle,
       carrierVersion: recovery.carrierVersion,
+      geometry: recovery.geometry,
       strength: recovery.strength
     };
   }
@@ -1200,7 +1362,7 @@
   async function decode(pixels, width, height, password) {
     const recovery = await recover(pixels, width, height);
     if (!recovery) return { status: "none" };
-    if (recovery.locatorOnly) return { status: "markers", carrierVersion: CARRIER_V3, scaleX: recovery.scaleX, scaleY: recovery.scaleY };
+    if (recovery.locatorOnly) return { status: "markers", carrierVersion: CARRIER_V3, geometry: recovery.geometry, scaleX: recovery.scaleX, scaleY: recovery.scaleY };
     if (recovery.passwordProtected && !password) {
       return { status: "password", strength: recovery.strength };
     }
@@ -1215,6 +1377,8 @@
           ...content,
           formatVersion: recovery.formatVersion,
           carrierVersion: recovery.carrierVersion,
+          geometry: recovery.geometry,
+          visualTransform: recovery.visualTransform,
           scaleX: recovery.scaleX,
           scaleY: recovery.scaleY,
           passwordProtected: recovery.passwordProtected,
@@ -1592,12 +1756,15 @@
   }
 
   async function forwardSample(source, sourceW, sourceH, pixels, width, height, fit) {
-    const out = new Uint8Array(width * height * 4);
+    const out = pixels.slice();
+    const inverse = fit.matrix ? root.PixelStowTransform.invert(fit.matrix) : null;
     for (let y = 0; y < height; y++) {
       if ((y & 15) === 15) await yieldNow();
-      const originY = (y - fit.phaseY) / fit.scaleY;
+      const originY = inverse ? 0 : (y - fit.phaseY) / fit.scaleY;
       for (let x = 0; x < width; x++) {
-        const sample = bilinearSample(source, sourceW, sourceH, (x - fit.phaseX) / fit.scaleX, originY);
+        const point = inverse ? mappedPoint(inverse, x, y) : { x: (x - fit.phaseX) / fit.scaleX, y: originY };
+        if (point.x < 0 || point.y < 0 || point.x > sourceW - 1 || point.y > sourceH - 1) continue;
+        const sample = bilinearSample(source, sourceW, sourceH, point.x, point.y);
         const index = (x + y * width) * 4;
         out[index] = sample[0];
         out[index + 1] = sample[1];
@@ -1612,8 +1779,18 @@
     const fit = await recover(pixels, width, height);
     if (!fit || fit.locatorOnly || fit.carrierVersion !== CARRIER_V3) return extractBlind(pixels, width, height, strength);
     const origW = fit.origWidth, origH = fit.origHeight;
-    const identity = origW === width && origH === height && fit.phaseX === 0 && fit.phaseY === 0;
-    const restored = identity
+    const identity = !fit.matrix && origW === width && origH === height && fit.phaseX === 0 && fit.phaseY === 0;
+    let restored;
+    if (fit.matrix) {
+      restored = new Uint8Array(origW * origH * 4);
+      for (let y = 0; y < origH; y++) {
+        if ((y & 31) === 31) await yieldNow();
+        for (let x = 0; x < origW; x++) {
+          const point = mappedPoint(fit.matrix, x, y);
+          restored.set(bilinearSample(pixels, width, height, point.x, point.y), (x + y * origW) * 4);
+        }
+      }
+    } else restored = identity
       ? pixels.slice()
       : await resampleReadSpace(pixels, width, height, origW, origH, fit.scaleX, fit.scaleY, fit.phaseX, fit.phaseY);
     const cleaned = await extractBlind(restored, origW, origH, fit.strength, locatorBlockMap(origW, origH));
@@ -1686,7 +1863,7 @@
     return carrier;
   }
 
-  window.PixelStow = {
+  root.PixelStow = {
     estimateBytes,
     estimatePayloadBytes,
     payloadSize,
@@ -1696,6 +1873,8 @@
     encode,
     encodePayload,
     extractCarrier,
+    findVisualTransform,
+    clearVisualTransform(pixels) { visualMappings.delete(pixels); },
     setCarrierVersion(version) { preferredCarrier = version === CARRIER_V1 ? CARRIER_V1 : CARRIER_V3; },
     getCarrierVersion() { return preferredCarrier; },
     readImageFile,
@@ -1703,4 +1882,4 @@
     writePng,
     writeJpeg
   };
-})();
+})(typeof window !== "undefined" ? window : self);

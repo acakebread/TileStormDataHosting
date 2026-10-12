@@ -231,6 +231,10 @@
       inset: 0;
     }
 
+    #transform-outline { position: absolute; inset: 0; pointer-events: none; }
+    .transform-reader { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
+    .transform-reader summary { cursor: pointer; color: var(--tile-azure); font-weight: 700; }
+
     .compare-ui {
       position: absolute;
       pointer-events: none;
@@ -461,6 +465,7 @@
             <div class="compare" id="compare">
               <canvas id="preview-encoded"></canvas>
               <canvas id="preview-source" hidden></canvas>
+              <canvas id="transform-outline" hidden aria-label="Detected encoded image boundary and recovery markers"></canvas>
             </div>
             <div class="compare-ui" id="compare-ui" hidden>
               <span class="compare-tag left" id="tag-encoded">Encoded</span>
@@ -507,6 +512,22 @@
             </div>
           </div>
         </section>
+        <details class="transform-reader" id="transform-reader" hidden>
+          <summary>Visual transform reader — experimental</summary>
+          <p class="hint">Find an encoded image inside padding, or try reading a rotated or distorted image. Start with padding only. Wider searches can take much longer; all processing stays in this browser.</p>
+          <div class="attachment-controls">
+            <label for="transform-mode">Search</label>
+            <select id="transform-mode">
+              <option value="padding">Padding only · original size</option>
+              <option value="affine">Rotation, scale, stretch and shear</option>
+              <option value="perspective">Perspective · flat quadrilateral</option>
+            </select>
+            <button id="find-transform" type="button">Find encoded image</button>
+            <button id="cancel-transform" type="button" hidden>Cancel search</button>
+          </div>
+          <p class="hint" id="transform-status" role="status"></p>
+          <label><input id="show-transform" type="checkbox" checked> Show detected bounds and markers</label>
+        </details>
         <p class="status" id="status" role="status"></p>
       </div>
 
@@ -640,7 +661,8 @@
       </div>
     </form>
   </dialog>
-  <script src="./pixelstow.js?v=20261012-sparse-v3-small"></script>
+  <script src="./pixelstow-transform.js?v=20261012-transform1"></script>
+  <script src="./pixelstow.js?v=20261012-transform2"></script>
   <script src="./pixelstow-export.js?v=20261011-exports"></script>
   <script src="./pixelstow-media.js?v=20261011-webm-duration"></script>
   <script src="./pixelstow-sharing.js?v=20261011-png-clipboard"></script>
@@ -652,6 +674,14 @@
     const compare = document.querySelector("#compare");
     const previewEncoded = document.querySelector("#preview-encoded");
     const previewSource = document.querySelector("#preview-source");
+    const transformOutline = document.querySelector("#transform-outline");
+    const transformReader = document.querySelector("#transform-reader");
+    const transformMode = document.querySelector("#transform-mode");
+    const findTransformButton = document.querySelector("#find-transform");
+    const cancelTransformButton = document.querySelector("#cancel-transform");
+    const transformStatus = document.querySelector("#transform-status");
+    const showTransform = document.querySelector("#show-transform");
+    let transformAbort = null;
     const compareUi = document.querySelector("#compare-ui");
     const previewNote = document.querySelector("#preview-note");
     const comparisonControl = document.querySelector("#comparison-control");
@@ -739,6 +769,7 @@
 
     function carrierNote(result) {
       if (!result || result.carrierVersion !== 3) return "";
+      if (result.geometry) return " Version 3; read using the recovered " + result.geometry.model + " transform (" + result.geometry.markerCount + "/8 markers).";
       const sx = Number(result.scaleX);
       const sy = Number(result.scaleY);
       if (!sx || !sy || (Math.abs(sx - 1) < 0.0001 && Math.abs(sy - 1) < 0.0001)) return " New format (version 3).";
@@ -792,6 +823,10 @@
       const needsUnlock = protectedTarget && !hasDecoded;
       const canEncode = hasImage && !current.hasFingerprint && !needsUnlock;
       const working = busy || media.active;
+      transformReader.hidden = !hasImage;
+      findTransformButton.disabled = working || !hasImage;
+      transformMode.disabled = working;
+      cancelTransformButton.hidden = !transformAbort;
       carrierSelect.disabled = working;
       encodeButton.disabled = working || !canEncode;
       composition.hidden = Boolean(current && current.hasFingerprint) || needsUnlock;
@@ -990,6 +1025,84 @@
       resetView();
     }
 
+    function drawTransform(result) {
+      if (!current) return;
+      transformOutline.width = current.width;
+      transformOutline.height = current.height;
+      const ctx = transformOutline.getContext("2d");
+      ctx.clearRect(0, 0, current.width, current.height);
+      ctx.lineWidth = Math.max(1, current.width / 500);
+      const path = (points, colour) => {
+        ctx.beginPath(); ctx.strokeStyle = colour;
+        points.forEach((point, index) => index ? ctx.lineTo(point.x, point.y) : ctx.moveTo(point.x, point.y));
+        ctx.closePath(); ctx.stroke();
+      };
+      if (result.geometry) path(result.geometry.corners, "#8cebed");
+      ctx.font = Math.max(12, current.width / 70) + "px sans-serif";
+      ctx.fillStyle = "#f5e69e";
+      for (const marker of result.markers || []) {
+        const corners = [[0, 0], [71, 0], [71, 47], [0, 47]].map(([x, y]) => PixelStowTransform.point(marker.matrix, x, y));
+        path(corners, "#f5e69e");
+        ctx.fillText(String(marker.id), corners[0].x, corners[0].y - 4);
+      }
+      transformOutline.hidden = !showTransform.checked || !(result.geometry || result.markers?.length);
+    }
+
+    showTransform.addEventListener("change", () => {
+      const result = current?.transformResult;
+      transformOutline.hidden = !showTransform.checked || !(result?.geometry || result?.markers?.length);
+    });
+    cancelTransformButton.addEventListener("click", () => {
+      transformAbort?.abort();
+      transformStatus.textContent = "Cancelling search…";
+    });
+    findTransformButton.addEventListener("click", async () => {
+      if (!current || busy || media.active) return;
+      const job = current;
+      clearDecoded();
+      transformAbort = new AbortController();
+      setBusy(true);
+      transformStatus.textContent = "Starting visual transform search…";
+      try {
+        const result = await PixelStow.findVisualTransform(job.pixels, job.width, job.height, {
+          mode: transformMode.value, signal: transformAbort.signal,
+          onProgress: (text) => { transformStatus.textContent = text; }
+        });
+        if (current !== job) return;
+        job.transformResult = result;
+        drawTransform(result);
+        job.hasFingerprint = job.hasFingerprint || result.found;
+        if (!result.found || result.unreadable) {
+          transformStatus.textContent = result.reason || (result.found ? "Image bounds were found, but the payload did not pass its checksum." : "No encoded image was located.");
+          setStatus(result.found ? "Recovery markers were found, but the contents could not be read. The image cannot be encoded again." : transformStatus.textContent, true);
+          return;
+        }
+        job.passwordProtected = result.passwordProtected;
+        job.decodeProtected = result.passwordProtected;
+        transformStatus.textContent = result.geometry.originalWidth + " × " + result.geometry.originalHeight + " original pixels; " + result.geometry.markerCount + "/8 markers; " + result.geometry.model + " transform.";
+        if (result.passwordProtected) {
+          setStatus("This image is password protected. Please enter the password to unlock it.");
+        } else {
+          const decoded = await PixelStow.decode(job.pixels, job.width, job.height, "");
+          if (transformAbort.signal.aborted) throw new DOMException("Search cancelled.", "AbortError");
+          if (decoded.status === "success") {
+            readout.value = decoded.text; message.value = decoded.text;
+            rememberMessage(job.pixels, decoded);
+            setStatus("Read the fingerprint through the recovered image transform." + carrierNote(decoded));
+          } else setStatus("The recovered payload could not be read.", true);
+        }
+      } catch (error) {
+        const text = error?.name === "AbortError" ? "Visual transform search cancelled." : error?.message || "Visual transform search failed.";
+        transformStatus.textContent = text;
+        setStatus(text, error?.name !== "AbortError");
+      } finally {
+        transformAbort = null;
+        setBusy(false);
+        updateByteCounts();
+        if (!unlockForm.hidden) unlockPassword.focus({ preventScroll: true });
+      }
+    });
+
     function carrierFor(job) {
       if (!job.carrierPromise) {
         job.carrierPromise = PixelStow.extractCarrier(job.recoverPixels, job.width, job.height, job.strength).catch((error) => {
@@ -1035,6 +1148,8 @@
       confirmPassword.value = "";
       unlockPassword.value = "";
       current = null;
+      transformOutline.hidden = true;
+      transformStatus.textContent = "";
       loadedImage.hidden = true;
       loadedImage.textContent = "";
       setBusy(true);
@@ -1073,7 +1188,7 @@
             setStatus("A fingerprint was found, but its text could not be read.", true);
           }
         } else {
-          setStatus("No fingerprint found. Enter a message, attach a file or record some audio.");
+          setStatus("No fingerprint found. For a padded or distorted encoded image, open Visual transform reader below the preview. Otherwise enter a message, attach a file or record some audio.");
         }
       } catch (error) {
         current = null;

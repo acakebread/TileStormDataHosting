@@ -18,8 +18,8 @@ experiment was backed up locally under
 
 ## Local markers and layout
 
-Nine patches sit near the corners, side midpoints and centre. Each is 96 × 64
-original pixels, containing a 12 × 8 array of 8 × 8 symbols. An 8 × 8 symbol
+Eight patches sit near the corners and side midpoints; there is no centre patch.
+Each is 72 × 48 original pixels, containing a 12 × 8 array of 6 × 6 symbols. A 6 × 6 symbol
 uses the existing 4 × 4 diagonal wavelet, expanded to six pixels along each axis.
 Marker amplitude follows the verified payload strength, capped at 16 (normally
 8 for small payloads), so routine messages do not need double-strength patches.
@@ -31,7 +31,7 @@ stripes or ruler ticks are painted, and no whole border is reserved.
 Patch origins are aligned to the payload's 4-pixel lattice. For width `W`,
 the three x origins are `8`, `4*floor((W-72)/8)` and `4*floor((W-80)/4)`.
 For height `H`, the y origins are `8`, `4*floor((H-48)/8)` and
-`4*floor((H-56)/4)`. Patch identifiers are row-major 0–8.
+`4*floor((H-56)/4)`. Patch identifiers are row-major 0–8, with identifier 4 omitted.
 
 Each patch carries this independent eight-byte header:
 
@@ -93,6 +93,11 @@ photos are outside this version's supported recovery model. Resizing can remove
 signal even when alignment is known. Large, nearly full payloads and real
 photographs need further device/user verification; extra markers do not create
 additional error-correction capacity.
+
+The `codex/visual-transform-reader` branch adds a separate, unvalidated browser
+experiment for padding and more general geometry. It leaves this carrier layout
+unchanged. See [visual transform reader](VisualTransformReader.md); that experiment
+does not extend the demonstrated recovery claims below.
 
 ## Focused evidence
 
