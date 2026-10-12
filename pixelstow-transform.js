@@ -29,6 +29,12 @@
     return multiply(h, [1, 0, patch.x, 0, 1, patch.y, 0, 0, 1]);
   }
 
+  function offsetMatrix(matrix, dx, dy) {
+    const out = matrix.slice();
+    for (let i = 0; i < 3; i++) { out[i] += dx * out[i + 6]; out[i + 3] += dy * out[i + 6]; }
+    return out;
+  }
+
   function basisMatrix(b, adapter) {
     const c = centre(adapter);
     return [b[2], b[4], b[0] - b[2] * c.x - b[4] * c.y,
@@ -69,6 +75,10 @@
 
   function check(options) {
     if (options.signal?.aborted) throw new DOMException("Search cancelled.", "AbortError");
+    if (options.deadline && Date.now() > options.deadline) {
+      const error = new Error("Search stopped at the 60-second limit. No exhaustive angle sweep was run.");
+      error.name = "SearchLimit"; throw error;
+    }
   }
 
   async function responseField(luma, width, height, basis, adapter, options) {
@@ -172,30 +182,134 @@
       // field used every second search position on a large input.
       matrix[2] = Math.round(matrix[2]); matrix[5] = Math.round(matrix[5]);
     }
-    const read = adapter.read(matrix, candidate.id);
+    const read = dimensions ? adapter.confirm(matrix, candidate.id, dimensions) : adapter.read(matrix, candidate.id);
     if (!read || (dimensions && (read.originalWidth !== dimensions.originalWidth || read.originalHeight !== dimensions.originalHeight))) return null;
     return read;
   }
 
-  async function seedSearch(luma, width, height, adapter, options) {
-    const banks = [{ scale: 1, angle: 0 }];
-    if (options.mode !== "padding") {
-      // Wider searches are explicit. A fine local fit follows each coarse peak.
-      const angles = [0];
-      for (let a = 10; a < 180; a += 10) angles.push(a, -a);
-      angles.push(180);
-      for (const scale of [1, 0.95, 1.05, 0.75, 1.25, 0.5, 1.5, 2, 0.6, 0.85, 1.1, 1.7]) {
-        for (const angle of angles) if (scale !== 1 || angle !== 0) banks.push({ scale, angle });
+  function convexHull(points) {
+    points.sort((a, b) => a.x - b.x || a.y - b.y);
+    const cross = (a, b, c) => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+    const lower = [], upper = [];
+    for (const p of points) { while (lower.length > 1 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop(); lower.push(p); }
+    for (let i = points.length - 1; i >= 0; i--) { const p = points[i]; while (upper.length > 1 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop(); upper.push(p); }
+    const hull = lower.slice(0, -1).concat(upper.slice(0, -1));
+    while (hull.length > 4) {
+      let index = 0, area = Infinity;
+      for (let i = 0; i < hull.length; i++) {
+        const value = Math.abs(cross(hull[(i + hull.length - 1) % hull.length], hull[i], hull[(i + 1) % hull.length]));
+        if (value < area) { area = value; index = i; }
+      }
+      hull.splice(index, 1);
+    }
+    return hull;
+  }
+
+  async function paddingQuads(pixels, width, height, options) {
+    // Fast proposal for visible padding, including the white/orange examples.
+    // It only proposes geometry: it cannot establish that the picture is encoded.
+    const colours = [], quads = [];
+    const rgb = (x, y) => { const i = (Math.round(x) + Math.round(y) * width) * 4; return [pixels[i], pixels[i + 1], pixels[i + 2]]; };
+    const distance = (a, b) => Math.max(...a.map((v, i) => Math.abs(v - b[i])));
+    const edge = [];
+    for (let i = 0; i < 16; i++) {
+      const x = i * (width - 1) / 15, y = i * (height - 1) / 15;
+      edge.push(rgb(x, 0), rgb(x, height - 1), rgb(0, y), rgb(width - 1, y));
+    }
+    for (const colour of edge) {
+      if (colours.some((c) => distance(c, colour) < 20)) continue;
+      if (edge.filter((c) => distance(c, colour) < 20).length >= 24) colours.push(colour);
+    }
+    const step = Math.max(1, Math.ceil(Math.max(width, height) / 640)), w = Math.ceil(width / step), h = Math.ceil(height / step);
+    for (const colour of colours.slice(0, 2)) for (const tolerance of [22, 45]) {
+      options.onProgress?.("Checking visible padding for an image outline…");
+      const mask = new Uint8Array(w * h), visited = new Uint8Array(mask.length), queue = new Int32Array(mask.length);
+      for (let y = 0; y < h; y++) {
+        if ((y & 31) === 0) { check(options); await pause(); }
+        for (let x = 0; x < w; x++) mask[x + y * w] = distance(rgb(Math.min(width - 1, x * step), Math.min(height - 1, y * step)), colour) > tolerance ? 1 : 0;
+      }
+      let largest = 0, boundary = [];
+      for (let start = 0; start < mask.length; start++) {
+        if ((start & 8191) === 0) { check(options); await pause(); }
+        if (!mask[start] || visited[start]) continue;
+        let head = 0, tail = 1; queue[0] = start; visited[start] = 1;
+        const outline = [];
+        while (head < tail) {
+          if ((head & 8191) === 8191) { check(options); await pause(); }
+          const i = queue[head++], x = i % w, y = Math.floor(i / w);
+          let onEdge = false;
+          for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+            const nx = x + dx, ny = y + dy, n = nx + ny * w;
+            if (nx < 0 || ny < 0 || nx >= w || ny >= h || !mask[n]) { onEdge = true; continue; }
+            if (!visited[n]) { visited[n] = 1; queue[tail++] = n; }
+          }
+          if (onEdge) outline.push({ x: Math.min(width - 1, x * step), y: Math.min(height - 1, y * step) });
+        }
+        if (tail > largest) { largest = tail; boundary = outline; }
+      }
+      if (largest < mask.length * 0.06 || largest > mask.length * 0.995 || boundary.length < 4) continue;
+      const hull = convexHull(boundary);
+      if (hull.length === 4 && !quads.some((q) => q.every((p, i) => Math.hypot(p.x - hull[i].x, p.y - hull[i].y) < step * 2))) quads.push(hull);
+    }
+    return quads;
+  }
+
+  function quadFit(corners, width, height) {
+    return fitPoints([[0, 0], [width - 1, 0], [width - 1, height - 1], [0, height - 1]]
+      .map(([x, y], i) => ({ source: { x, y }, target: corners[i] })), true);
+  }
+
+  async function seedFromQuads(quads, signature, adapter, options) {
+    const scales = [[1, 1]], proposals = [];
+    for (const basis of signature.bases || []) {
+      const s = [Math.hypot(basis[0], basis[1]), Math.hypot(basis[2], basis[3])];
+      if (!scales.some((v) => Math.abs(v[0] - s[0]) + Math.abs(v[1] - s[1]) < 0.04)) scales.push(s);
+    }
+    for (const scale of [0.95, 1.05, 0.75, 1.25, 0.5, 2]) scales.push([scale, scale]);
+    for (const quad of quads) for (let turn = 0; turn < 4; turn++) {
+      const corners = quad.slice(turn).concat(quad.slice(0, turn));
+      const sideX = Math.hypot(corners[1].x - corners[0].x, corners[1].y - corners[0].y);
+      const sideY = Math.hypot(corners[3].x - corners[0].x, corners[3].y - corners[0].y);
+      for (const [sx, sy] of scales) {
+        const ow = Math.round(sideX / sx) + 1, oh = Math.round(sideY / sy) + 1;
+        const layout = adapter.layout(ow, oh), fit = quadFit(corners, ow, oh);
+        if (!layout || !fit) continue;
+        options.onProgress?.("Checking markers near the detected outline (orientation " + (turn + 1) + "/4)…");
+        for (const id of [0, 2, 6, 8]) {
+          check(options);
+          const patch = layout.find((p) => p.id === id), matrix = patchMatrix(fit, patch);
+          for (const dy of [0, -1.5, 1.5]) for (const dx of [0, -1.5, 1.5]) {
+            const trial = offsetMatrix(matrix, dx, dy), score = adapter.quality(trial, id);
+            if (score > 0.2) proposals.push({ matrix: trial, id, score, corners });
+          }
+        }
+        await pause();
       }
     }
+    proposals.sort((a, b) => b.score - a.score);
+    for (const proposal of proposals.slice(0, 24)) {
+      check(options);
+      const direct = adapter.read(proposal.matrix, proposal.id);
+      const seed = direct || await refine(proposal, adapter, null, options, true);
+      if (seed) return { ...seed, initialMatrix: quadFit(proposal.corners, seed.originalWidth, seed.originalHeight) };
+    }
+    return null;
+  }
+
+  async function seedSearch(pixels, luma, width, height, adapter, options, signature) {
+    if (options.mode !== "padding") {
+      const quads = options.corners?.length === 4 ? [options.corners] : await paddingQuads(pixels, width, height, options);
+      const seed = await seedFromQuads(quads, signature, adapter, options);
+      if (seed) return seed;
+    }
+    const banks = options.mode === "padding" ? [[1, 0, 0, 1]] : signature.bases.slice(0, 12);
+    if (options.forceSearch && !banks.length) banks.push([1, 0, 0, 1]);
     for (let bank = 0; bank < banks.length; bank++) {
       check(options);
-      const { scale, angle } = banks[bank], radians = angle * Math.PI / 180;
-      options.onProgress?.("Searching wavelet patches: " + angle + "°, " + Math.round(scale * 100) + "% (" + (bank + 1) + "/" + banks.length + ")…");
-      const basis = [Math.cos(radians) * scale, Math.sin(radians) * scale, -Math.sin(radians) * scale, Math.cos(radians) * scale];
+      const basis = banks[bank];
+      options.onProgress?.("Locating patches using the frequency estimate (" + (bank + 1) + "/" + banks.length + ")…");
       const peaks = await globalCandidates(luma, width, height, basis, adapter, options);
-      for (const peak of peaks) {
-        // Read the exact native lattice first. Refinement must not spoil it.
+      for (const peak of peaks.slice(0, 32)) {
         const direct = adapter.read(peak.matrix, peak.id);
         if (direct) return direct;
         const refined = await refine(peak, adapter, null, options, options.mode !== "padding");
@@ -296,18 +410,18 @@
 
   async function findNear(matrix, patch, seed, adapter, options, radius) {
     const prediction = patchMatrix(matrix, patch), peaks = [];
+    const direct = adapter.confirm(prediction, patch.id, seed);
+    if (direct) return direct;
     const stride = radius > 30 ? 4 : 2;
     for (let y = -radius; y <= radius; y += stride) {
       check(options);
       for (let x = -radius; x <= radius; x += stride) {
-        const trial = prediction.slice(); trial[2] += x; trial[5] += y;
-        const score = adapter.quality(trial, patch.id, seed);
+        const trial = offsetMatrix(prediction, x, y);
+        const score = adapter.quality(trial, patch.id);
         if (score > 0.32) keepPeak(peaks, { matrix: trial, id: patch.id, x, y, score }, 12, 5);
       }
       await pause();
     }
-    const direct = adapter.read(prediction, patch.id);
-    if (direct && direct.originalWidth === seed.originalWidth && direct.originalHeight === seed.originalHeight) return direct;
     for (const peak of peaks) {
       const read = await refine(peak, adapter, seed, options, true);
       if (read) return read;
@@ -368,54 +482,72 @@
   }
 
   async function find(pixels, width, height, requested, adapter) {
-    const options = { ...requested, mode: ["padding", "affine", "perspective"].includes(requested.mode) ? requested.mode : "padding" };
-    const luma = new Float32Array(width * height);
-    options.onProgress?.("Preparing wavelet search…");
-    for (let i = 0; i < luma.length; i++) luma[i] = (pixels[i * 4] + pixels[i * 4 + 1] + pixels[i * 4 + 2]) / 3;
-    const seed = await seedSearch(luma, width, height, adapter, options);
-    if (!seed) return { geometry: null, markers: [], reason: "No checksum-valid wavelet patch was found." };
-    const markers = [seed];
-    let matrix = fromSeed(seed, adapter), model = "translation";
-    const layout = adapter.layout(seed.originalWidth, seed.originalHeight);
-    for (let round = 0; round < (options.mode === "padding" ? 1 : 2); round++) {
-      for (const patch of layout) {
-        if (markers.some((m) => m.id === patch.id)) continue;
-        options.onProgress?.("Found " + markers.length + "/8 markers. Locating marker " + patch.id + "…");
-        const expected = patchMatrix(matrix, patch), direct = adapter.read(expected, patch.id);
-        let found = direct && direct.originalWidth === seed.originalWidth && direct.originalHeight === seed.originalHeight ? direct : null;
-        if (!found && options.mode !== "padding") {
-          const radius = Math.min(180, Math.max(12, Math.round(Math.max(seed.originalWidth, seed.originalHeight) * (round ? 0.015 : 0.07))));
-          found = await findNear(matrix, patch, seed, adapter, options, radius);
-        }
-        if (found) markers.push(found);
-        const affine = chooseFit(markers, seed, adapter, false);
-        if (affine) { matrix = affine.matrix; model = "affine"; }
-        if (options.mode === "perspective") {
-          const projective = chooseFit(markers, seed, adapter, true);
-          if (projective) { matrix = projective.matrix; model = "perspective"; }
+    const options = { ...requested, deadline: Date.now() + 60000,
+      mode: ["padding", "affine", "perspective"].includes(requested.mode) ? requested.mode : "padding" };
+    options.check = () => check(options);
+    let signature = null;
+    const markers = [];
+    try {
+      const luma = new Float32Array(width * height);
+      options.onProgress?.("Preparing wavelet search…");
+      for (let i = 0; i < luma.length; i++) luma[i] = (pixels[i * 4] + pixels[i * 4 + 1] + pixels[i * 4 + 2]) / 3;
+      signature = await root.PixelStowSpectrum.analyze(luma, width, height, options);
+      options.onSignature?.(signature);
+      if (!signature.likely && !options.forceSearch && !options.corners?.length) return { geometry: null, markers, signature, reason: signature.message };
+      const seed = await seedSearch(pixels, luma, width, height, adapter, options, signature);
+      if (!seed) return { geometry: null, markers, signature, reason: "No checksum-valid wavelet patch was found using the outline/frequency estimates." };
+      markers.push(seed);
+      let matrix = seed.initialMatrix || fromSeed(seed, adapter), model = "translation";
+      const layout = adapter.layout(seed.originalWidth, seed.originalHeight);
+      for (let round = 0; round < (options.mode === "padding" ? 1 : 2); round++) {
+        for (const patch of layout) {
+          if (markers.some((m) => m.id === patch.id)) continue;
+          options.onProgress?.("Found " + markers.length + "/8 markers. Locating marker " + patch.id + "…");
+          const expected = patchMatrix(matrix, patch);
+          let found = adapter.confirm(expected, patch.id, seed);
+          if (!found && options.mode === "padding") {
+            found = await refine({ matrix: expected, id: patch.id }, adapter, seed, options);
+          }
+          if (!found && options.mode !== "padding") {
+            const radius = Math.min(48, Math.max(12, Math.round(Math.max(seed.originalWidth, seed.originalHeight) * (round ? 0.005 : 0.015))));
+            found = await findNear(matrix, patch, seed, adapter, options, radius);
+          }
+          if (found) markers.push(found);
+          const affine = options.mode === "padding" ? null : chooseFit(markers, seed, adapter, false);
+          if (affine) { matrix = affine.matrix; model = "affine"; }
+          if (options.mode === "perspective") {
+            const projective = chooseFit(markers, seed, adapter, true);
+            if (projective) { matrix = projective.matrix; model = "perspective"; }
+          }
         }
       }
+      if (options.mode === "padding") {
+        // In this first milestone there is no scale/angle estimation to extrapolate.
+        // Match exact translations and require agreement from another distant patch.
+        const translations = markers.map((m) => fromSeed(m, adapter));
+        const agreeing = translations.filter((h) => Math.hypot(h[2] - translations[0][2], h[5] - translations[0][5]) < 0.6);
+        if (agreeing.length < 2) return { geometry: null, markers, signature, reason: "A patch was found, but a second patch did not confirm the image bounds." };
+        matrix = [1, 0, agreeing.reduce((s, h) => s + h[2], 0) / agreeing.length,
+          0, 1, agreeing.reduce((s, h) => s + h[5], 0) / agreeing.length, 0, 0, 1];
+        model = "translation";
+      } else {
+        const fit = chooseFit(markers, seed, adapter, options.mode === "perspective");
+        if (!fit) return { geometry: null, markers, signature, reason: "Not enough separated markers confirmed a " + options.mode + " transform." };
+        matrix = fit.matrix; model = options.mode;
+        options.onProgress?.("Refining the pixel alignment from " + fit.inliers.length + " markers…");
+        matrix = await refineGlobal(matrix, fit.inliers.map((p) => p.marker), seed, adapter, width, height, options);
+      }
+      if (!validGeometry(matrix, seed.originalWidth, seed.originalHeight, width, height)) return {
+        geometry: null, markers, signature, reason: "The marker fit places image corners outside the supplied picture or folds the plane." };
+      return { geometry: { matrix, originalWidth: seed.originalWidth, originalHeight: seed.originalHeight,
+        model, markerCount: markers.length, headerCount: markers.filter((m) => m.verification === "header").length,
+        patternCount: markers.filter((m) => m.verification === "pattern").length,
+        expectedMarkers: layout.map((p) => ({ id: p.id, matrix: patchMatrix(matrix, p) })),
+        corners: quad(matrix, seed.originalWidth, seed.originalHeight) }, markers, signature };
+    } catch (error) {
+      if (error?.name === "SearchLimit") return { geometry: null, markers, signature, reason: error.message };
+      throw error;
     }
-    if (options.mode === "padding") {
-      // In this first milestone there is no scale/angle estimation to extrapolate.
-      // Match exact translations and require agreement from another distant patch.
-      const translations = markers.map((m) => fromSeed(m, adapter));
-      const agreeing = translations.filter((h) => Math.hypot(h[2] - translations[0][2], h[5] - translations[0][5]) < 0.6);
-      if (agreeing.length < 2) return { geometry: null, markers, reason: "A patch was found, but a second patch did not confirm the image bounds." };
-      matrix = [1, 0, agreeing.reduce((s, h) => s + h[2], 0) / agreeing.length,
-        0, 1, agreeing.reduce((s, h) => s + h[5], 0) / agreeing.length, 0, 0, 1];
-      model = "translation";
-    } else {
-      const fit = chooseFit(markers, seed, adapter, options.mode === "perspective");
-      if (!fit) return { geometry: null, markers, reason: "Not enough separated markers confirmed a " + options.mode + " transform." };
-      matrix = fit.matrix; model = options.mode;
-      options.onProgress?.("Refining the pixel alignment from " + fit.inliers.length + " markers…");
-      matrix = await refineGlobal(matrix, fit.inliers.map((p) => p.marker), seed, adapter, width, height, options);
-    }
-    if (!validGeometry(matrix, seed.originalWidth, seed.originalHeight, width, height)) return {
-      geometry: null, markers, reason: "The marker fit places image corners outside the supplied picture or folds the plane." };
-    return { geometry: { matrix, originalWidth: seed.originalWidth, originalHeight: seed.originalHeight,
-      model, markerCount: markers.length, corners: quad(matrix, seed.originalWidth, seed.originalHeight) }, markers };
   }
 
   root.PixelStowTransform = { find, invert, point };

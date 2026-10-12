@@ -514,7 +514,7 @@
         </section>
         <details class="transform-reader" id="transform-reader" hidden>
           <summary>Visual transform reader — experimental</summary>
-          <p class="hint">Find an encoded image inside padding, or try reading a rotated or distorted image. Start with padding only. Wider searches can take much longer; all processing stays in this browser.</p>
+          <p class="hint">Check the encoding frequency signature, then locate the image and its markers. Start with padding only. Rotation and perspective use outline and frequency estimates; searches stop after 60 seconds. All processing stays in this browser.</p>
           <div class="attachment-controls">
             <label for="transform-mode">Search</label>
             <select id="transform-mode">
@@ -525,8 +525,11 @@
             <button id="find-transform" type="button">Find encoded image</button>
             <button id="cancel-transform" type="button" hidden>Cancel search</button>
           </div>
+          <label><input id="transform-force" type="checkbox"> Search anyway if the frequency signature is weak</label>
+          <p class="hint" id="transform-signature" role="status"></p>
           <p class="hint" id="transform-status" role="status"></p>
           <label><input id="show-transform" type="checkbox" checked> Show detected bounds and markers</label>
+          <p class="hint">Yellow: decoded marker header. Green: confirmed known pattern. Dashed: expected position, not confirmed. The payload checksum determines whether the message can be read.</p>
         </details>
         <p class="status" id="status" role="status"></p>
       </div>
@@ -661,8 +664,9 @@
       </div>
     </form>
   </dialog>
-  <script src="./pixelstow-transform.js?v=20261012-transform1"></script>
-  <script src="./pixelstow.js?v=20261012-transform2"></script>
+  <script src="./pixelstow-spectrum.js?v=20261012-spectrum1"></script>
+  <script src="./pixelstow-transform.js?v=20261012-transform3"></script>
+  <script src="./pixelstow.js?v=20261012-transform3"></script>
   <script src="./pixelstow-export.js?v=20261011-exports"></script>
   <script src="./pixelstow-media.js?v=20261011-webm-duration"></script>
   <script src="./pixelstow-sharing.js?v=20261011-png-clipboard"></script>
@@ -680,6 +684,8 @@
     const findTransformButton = document.querySelector("#find-transform");
     const cancelTransformButton = document.querySelector("#cancel-transform");
     const transformStatus = document.querySelector("#transform-status");
+    const transformSignature = document.querySelector("#transform-signature");
+    const transformForce = document.querySelector("#transform-force");
     const showTransform = document.querySelector("#show-transform");
     let transformAbort = null;
     const compareUi = document.querySelector("#compare-ui");
@@ -826,6 +832,7 @@
       transformReader.hidden = !hasImage;
       findTransformButton.disabled = working || !hasImage;
       transformMode.disabled = working;
+      transformForce.disabled = working;
       cancelTransformButton.hidden = !transformAbort;
       carrierSelect.disabled = working;
       encodeButton.disabled = working || !canEncode;
@@ -1040,9 +1047,15 @@
       if (result.geometry) path(result.geometry.corners, "#8cebed");
       ctx.font = Math.max(12, current.width / 70) + "px sans-serif";
       ctx.fillStyle = "#f5e69e";
+      for (const marker of result.geometry?.expectedMarkers || []) {
+        if (result.markers?.some((m) => m.id === marker.id)) continue;
+        ctx.setLineDash([ctx.lineWidth * 3, ctx.lineWidth * 3]);
+        path([[0, 0], [71, 0], [71, 47], [0, 47]].map(([x, y]) => PixelStowTransform.point(marker.matrix, x, y)), "#a8b7c8");
+      }
+      ctx.setLineDash([]);
       for (const marker of result.markers || []) {
         const corners = [[0, 0], [71, 0], [71, 47], [0, 47]].map(([x, y]) => PixelStowTransform.point(marker.matrix, x, y));
-        path(corners, "#f5e69e");
+        path(corners, marker.verification === "pattern" ? "#a9f5b5" : "#f5e69e");
         ctx.fillText(String(marker.id), corners[0].x, corners[0].y - 4);
       }
       transformOutline.hidden = !showTransform.checked || !(result.geometry || result.markers?.length);
@@ -1063,9 +1076,11 @@
       transformAbort = new AbortController();
       setBusy(true);
       transformStatus.textContent = "Starting visual transform search…";
+      transformSignature.textContent = "Checking for an encoding signature…";
       try {
         const result = await PixelStow.findVisualTransform(job.pixels, job.width, job.height, {
-          mode: transformMode.value, signal: transformAbort.signal,
+          mode: transformMode.value, signal: transformAbort.signal, forceSearch: transformForce.checked,
+          onSignature: (signature) => { transformSignature.textContent = signature.message; },
           onProgress: (text) => { transformStatus.textContent = text; }
         });
         if (current !== job) return;
@@ -1079,7 +1094,7 @@
         }
         job.passwordProtected = result.passwordProtected;
         job.decodeProtected = result.passwordProtected;
-        transformStatus.textContent = result.geometry.originalWidth + " × " + result.geometry.originalHeight + " original pixels; " + result.geometry.markerCount + "/8 markers; " + result.geometry.model + " transform.";
+        transformStatus.textContent = result.geometry.originalWidth + " × " + result.geometry.originalHeight + " original pixels; " + result.geometry.markerCount + "/8 markers confirmed (" + result.geometry.headerCount + " headers, " + result.geometry.patternCount + " known-pattern matches); " + result.geometry.model + " transform.";
         if (result.passwordProtected) {
           setStatus("This image is password protected. Please enter the password to unlock it.");
         } else {
@@ -1150,6 +1165,7 @@
       current = null;
       transformOutline.hidden = true;
       transformStatus.textContent = "";
+      transformSignature.textContent = "";
       loadedImage.hidden = true;
       loadedImage.textContent = "";
       setBusy(true);

@@ -795,7 +795,7 @@
     if (!locatorFits(originalWidth, originalHeight)) return null;
     // Supplied image bounds say nothing about encoded bounds once there is padding.
     return { originalWidth, originalHeight, id, matrix: Array.from(matrix),
-      quality: locatorAgreement(scores, locatorHeader(originalWidth, originalHeight, id)) };
+      verification: "header", quality: locatorAgreement(scores, locatorHeader(originalWidth, originalHeight, id)) };
   }
 
   function visualAdapter(pixels, width, height) {
@@ -813,6 +813,18 @@
       }),
       layout: locatorLayout,
       read: (matrix, id) => readVisualLocator(pixels, width, height, matrix, id),
+      confirm: (matrix, id, dimensions) => {
+        const read = readVisualLocator(pixels, width, height, matrix, id);
+        if (read && read.originalWidth === dimensions.originalWidth && read.originalHeight === dimensions.originalHeight) return read;
+        // Once dimensions are known, compare all 96 expected symbols. A damaged
+        // header can still supply geometry; acceptance of contents needs frame CRC.
+        const scores = locatorScores(pixels, width, height, matrix);
+        const header = locatorHeader(dimensions.originalWidth, dimensions.originalHeight, id);
+        const quality = locatorAgreement(scores, header);
+        if (quality < 0.58 || !scores || locatorAgreement(scores.subarray(0, 24), header) < 0.4) return null;
+        return { originalWidth: dimensions.originalWidth, originalHeight: dimensions.originalHeight,
+          id, matrix: Array.from(matrix), quality, verification: "pattern" };
+      },
       quality: (matrix, id, dimensions) => locatorAgreement(locatorScores(pixels, width, height, matrix, dimensions ? 96 : 24),
         locatorHeader(dimensions?.originalWidth || 0, dimensions?.originalHeight || 0, id))
     };
@@ -950,11 +962,12 @@
 
   function searchInWorker(pixels, width, height, options) {
     return new Promise((resolve, reject) => {
-      const url = new URL("pixelstow-transform-worker.js?v=20261012-transform2", codecScriptUrl);
+      const url = new URL("pixelstow-transform-worker.js?v=20261012-transform3", codecScriptUrl);
       const worker = new Worker(url);
       const abort = () => { cleanup(); reject(new DOMException("Search cancelled.", "AbortError")); };
       const cleanup = () => { worker.terminate(); options.signal?.removeEventListener("abort", abort); };
       worker.onmessage = ({ data }) => {
+        if (data.signature) { options.onSignature?.(data.signature); return; }
         if (data.progress) { options.onProgress?.(data.progress); return; }
         cleanup();
         if (data.error) reject(new Error(data.error)); else resolve(data.result);
@@ -963,7 +976,7 @@
       if (options.signal?.aborted) { abort(); return; }
       options.signal?.addEventListener("abort", abort, { once: true });
       const copy = new Uint8Array(pixels);
-      worker.postMessage({ pixels: copy, width, height, mode: options.mode }, [copy.buffer]);
+      worker.postMessage({ pixels: copy, width, height, mode: options.mode, forceSearch: options.forceSearch, corners: options.corners }, [copy.buffer]);
     });
   }
 
@@ -982,14 +995,14 @@
     if (!search?.geometry) {
       const found = Boolean(search?.markers?.length);
       if (found) visualMappings.set(pixels, { width, height, unreadable: true });
-      return { found, unreadable: found, markers: search?.markers || [], reason: search?.reason };
+      return { found, unreadable: found, markers: search?.markers || [], reason: search?.reason, signature: search?.signature };
     }
     options.onProgress?.("Checking the recovered pixel grid…");
     const recovered = await readVisualMapping(pixels, width, height, search.geometry, options.signal);
     if (options.signal?.aborted) throw new DOMException("Search cancelled.", "AbortError");
     visualMappings.set(pixels, { width, height, geometry: recovered.geometry });
     return { found: true, unreadable: Boolean(recovered.locatorOnly), passwordProtected: recovered.passwordProtected,
-      carrierVersion: CARRIER_V3, geometry: recovered.geometry, markers: search.markers };
+      carrierVersion: CARRIER_V3, geometry: recovered.geometry, markers: search.markers, signature: search.signature };
   }
 
   function bilinearSample(pixels, width, height, x, y) {
