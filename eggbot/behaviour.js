@@ -2,15 +2,17 @@
 export const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 // EggbotController.UpdateTurn/UpdateMove and SmoothingUtils.Ease.
 export const movementEase = t => (1 - Math.cos(clamp(t, 0, 1) * Math.PI)) / 2;
+const shortestTurn = (from, to) => ((to - from + 180) % 360 + 360) % 360 - 180;
 export class GridJourney {
   constructor(position, yaw, target) {
     this.start = { x: position.x, z: position.z };
     this.target = { x: target.x, z: target.z };
     this.yaw = yaw;
     const heading = Math.atan2(target.x - position.x, target.z - position.z) * 180 / Math.PI;
-    this.turn = ((heading - yaw + 180) % 360 + 360) % 360 - 180;
+    this.turn = shortestTurn(yaw, heading);
     this.turnDuration = Math.abs(this.turn) > 0.01 ? 0.25 : 0;
-    this.moveDuration = (Math.hypot(target.x - position.x, target.z - position.z) + 1) / 6;
+    // Half gameplay's speed suits this small preview grid.
+    this.moveDuration = (Math.hypot(target.x - position.x, target.z - position.z) + 1) / 3;
     this.time = 0;
   }
   tick(delta) {
@@ -22,6 +24,21 @@ export class GridJourney {
       yaw: this.yaw + this.turn * turn, done: this.time >= this.turnDuration + this.moveDuration };
   }
 }
+// Snapshot the camera at arrival: this turn never tracks later camera movement.
+export class ArrivalTurn {
+  constructor(position, yaw, camera) {
+    const dx = camera.x - position.x, dz = camera.z - position.z;
+    const heading = Math.hypot(dx, dz) > 0.0001 ? Math.atan2(dx, dz) * 180 / Math.PI : yaw;
+    this.yaw = yaw;
+    this.turn = shortestTurn(yaw, heading);
+    this.duration = Math.abs(this.turn) > 0.01 ? 0.45 : 0;
+    this.time = 0;
+  }
+  tick(delta) {
+    this.time += Math.max(0, delta);
+    return { yaw: this.yaw + this.turn * movementEase(this.duration ? this.time / this.duration : 1), done: this.time >= this.duration };
+  }
+}
 export function dragAngles(yaw, pitch, dx, dy, orbit = false) {
   return {
     yaw: yaw + dx * 0.2 * (orbit ? -1 : 1),
@@ -29,6 +46,70 @@ export function dragAngles(yaw, pitch, dx, dy, orbit = false) {
   };
 }
 const smoothstep = value => { const x = clamp(value, 0, 1); return x * x * (3 - 2 * x); };
+
+// Manual tilt holds for two seconds after interaction, then eases upright in one.
+export class TiltReturn {
+  constructor() { this.set(0); }
+  set(angle) { this.start = this.value = angle; this.time = 0; }
+  tick(delta, held = false) {
+    if (held) { this.set(this.value); return this.value; }
+    if (Number.isFinite(delta) && delta > 0) this.time += delta;
+    this.value = this.start * (1 - movementEase(this.time - 2));
+    return this.value;
+  }
+}
+
+// Gameplay EggbotController.UpdateSway uses 0.1 radians and these two rates.
+// Glances and shoulder corrections are occasional eased additions for the preview.
+export class IdleMotion {
+  constructor(random = Math.random) { this.random = random; this.reset(); }
+  reset() {
+    this.time = this.armTime = this.glanceTime = 0;
+    this.stationary = false;
+    this.glanceSign = 1;
+    this.nextGlance(); this.nextArms();
+  }
+  nextGlance() {
+    this.glanceDelay = 0.6 + this.random() * 0.7;
+    this.glanceDuration = 1.4 + this.random() * 0.6;
+    this.glanceAngle = this.glanceSign * (22 + this.random() * 10) * Math.PI / 180;
+    this.glanceSign *= -1;
+  }
+  nextArms() {
+    this.armDelay = 0.4 + this.random() * 0.9;
+    this.armDuration = 1.5 + this.random() * 0.8;
+  }
+  pulse(time, delay, duration) {
+    const phase = clamp((time - delay) / duration, 0, 1);
+    return Math.sin(Math.PI * phase) ** 2;
+  }
+  tick(delta, stationary = true) {
+    if (!Number.isFinite(delta) || delta < 0) delta = 0;
+    this.time += delta;
+    const pitch = 0.1 * Math.sin(7.8 * this.time) * Math.sin(1.8 * this.time);
+    this.armTime += delta;
+    while (this.armTime >= this.armDelay + this.armDuration) {
+      this.armTime -= this.armDelay + this.armDuration; this.nextArms();
+    }
+    if (stationary) {
+      this.glanceTime += delta;
+      while (this.glanceTime >= this.glanceDelay + this.glanceDuration) {
+        this.glanceTime -= this.glanceDelay + this.glanceDuration; this.nextGlance();
+      }
+    } else {
+      this.glanceTime = 0;
+      // Restart the wait once per interruption, rather than once per frame.
+      if (this.stationary) this.nextGlance();
+    }
+    this.stationary = stationary;
+    const arms = this.pulse(this.armTime, this.armDelay, this.armDuration);
+    return { pitch,
+      yaw: stationary ? this.glanceAngle * this.pulse(this.glanceTime, this.glanceDelay, this.glanceDuration) : 0,
+      leftShoulder: arms * (-pitch * 0.65 + 0.075),
+      rightShoulder: arms * (-pitch * 0.65 - 0.06),
+      shoulderLift: arms * 0.09 };
+  }
+}
 
 export class BlinkClock {
   constructor(random = Math.random) { this.random = random; this.reset(); }

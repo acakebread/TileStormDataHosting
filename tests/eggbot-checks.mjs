@@ -1,18 +1,76 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { BlinkClock, dragAngles, GridJourney, lidOffset, movementEase, SequenceClock } from '../eggbot/behaviour.js';
+import { ArrivalTurn, BlinkClock, dragAngles, GridJourney, IdleMotion, lidOffset, movementEase, SequenceClock, TiltReturn } from '../eggbot/behaviour.js';
 import * as THREE from '../eggbot/vendor/three/build/three.core.js';
 import { EggbotRig } from '../eggbot/rig.js';
 
 const near = (actual, expected, epsilon = 1e-8) => assert.ok(Math.abs(actual - expected) < epsilon, `${actual} != ${expected}`);
 near(movementEase(0), 0); near(movementEase(0.5), 0.5); near(movementEase(1), 1);
 const journey = new GridJourney({ x: 0, z: 0 }, 350, { x: 3, z: 0 });
+near(journey.moveDuration, 4 / 3); // Half gameplay speed; turning is still 0.25s.
+near(journey.turnDuration, 0.25);
 const turning = journey.tick(0.125);
 near(turning.yaw, 400); near(turning.x, 0);
 const halfway = journey.tick(0.125 + journey.moveDuration / 2);
 near(halfway.x, 1.5); near(halfway.yaw, 450);
 const arrived = journey.tick(100);
 near(arrived.x, 3); near(arrived.z, 0); assert.ok(arrived.done);
+
+// Finish travel, then face the camera once using the shortest horizontal turn.
+const arrivalCamera = { x: 3 + Math.sin(Math.PI / 18), y: 5, z: Math.cos(Math.PI / 18) };
+const arrivalTurn = new ArrivalTurn(arrived, 350, arrivalCamera);
+near(arrivalTurn.tick(0).yaw, 350);
+const facingHalfway = arrivalTurn.tick(0.225);
+near(facingHalfway.yaw, 360); assert.equal(facingHalfway.done, false);
+const facingCamera = arrivalTurn.tick(0.225);
+near(facingCamera.yaw, 370); assert.ok(facingCamera.done);
+arrivalCamera.x = -30; arrivalCamera.z = -10;
+near(arrivalTurn.tick(20).yaw, facingCamera.yaw); // No tracking after arrival.
+const overheadTurn = new ArrivalTurn({ x: 1, z: 2 }, 45, { x: 1, y: 10, z: 2 });
+near(overheadTurn.tick(0).yaw, 45); assert.ok(overheadTurn.tick(0).done);
+const offCentre = new ArrivalTurn({ x: 1.2, z: -0.4 }, 90, { x: -2, y: 4, z: 3 });
+const offCentreFacing = offCentre.tick(2).yaw * Math.PI / 180;
+const expectedDirection = new THREE.Vector2(-3.2, 3.4).normalize();
+near(Math.sin(offCentreFacing), expectedDirection.x); near(Math.cos(offCentreFacing), expectedDirection.y);
+const fineTurn = new ArrivalTurn({ x: 0, z: 0 }, 90, { x: 0, z: 3 });
+const coarseTurn = new ArrivalTurn({ x: 0, z: 0 }, 90, { x: 0, z: 3 });
+let fineFacing;
+for (let i = 0; i < 12; i++) fineFacing = fineTurn.tick(1 / 60);
+near(fineFacing.yaw, coarseTurn.tick(0.2).yaw, 1e-9);
+
+const procedural = new IdleMotion(() => 0.5);
+const wobble = procedural.tick(0.3, false);
+near(wobble.pitch, 0.1 * Math.sin(7.8 * 0.3) * Math.sin(1.8 * 0.3));
+near(wobble.yaw, 0);
+procedural.reset();
+const glance = procedural.tick(procedural.glanceDelay + procedural.glanceDuration / 2, true);
+near(glance.yaw, 27 * Math.PI / 180);
+near(procedural.tick(0.1, false).yaw, 0, 1e-7);
+const fineIdle = new IdleMotion(() => 0.5), coarseIdle = new IdleMotion(() => 0.5);
+let finePose;
+for (let i = 0; i < 1800; i++) finePose = fineIdle.tick(1 / 60);
+const coarsePose = coarseIdle.tick(30);
+for (const component of Object.keys(finePose)) near(finePose[component], coarsePose[component], 1e-9);
+
+// Manual tilt waits after release, returns smoothly, and never fights a held drag.
+const tiltReturn = new TiltReturn();
+tiltReturn.set(24);
+near(tiltReturn.tick(20, true), 24);
+near(tiltReturn.tick(1.9), 24);
+near(tiltReturn.tick(0.6), 12);
+near(tiltReturn.tick(0.5), 0);
+near(tiltReturn.tick(10), 0);
+tiltReturn.set(-30);
+near(tiltReturn.tick(2.5), -15);
+near(tiltReturn.tick(10, true), -15); // Grab midway through recovery: no jump.
+near(tiltReturn.tick(1.9), -15);
+near(tiltReturn.tick(1.1), 0);
+tiltReturn.set(20); tiltReturn.tick(2.3); tiltReturn.set(0);
+near(tiltReturn.tick(0.2), 0); // A grid click or Reset must cancel the old lean.
+const fineTilt = new TiltReturn(), coarseTilt = new TiltReturn();
+fineTilt.set(25); coarseTilt.set(25);
+for (let i = 0; i < 150; i++) fineTilt.tick(1 / 60);
+near(fineTilt.value, coarseTilt.tick(2.5), 1e-9);
 
 // Front-view dragging should move Eggbot's facing toward screen-right and
 // lean his head toward screen-down. RMB retains its existing orbit direction.
@@ -218,4 +276,69 @@ for (const tilt of [-30, 0, 30]) {
 }
 assert.ok(maxYaw > 0.12 && minYaw < -0.12, 'Idle must keep its turning animation on the yaw parent');
 
-console.log(`Eggbot checks passed: drag directions, Idle yaw/pitch hierarchy (wheel height difference ≤ ${(maxWheelHeightDifference * 1000).toFixed(1)}mm), blink timing, eyelid coverage, GLB structure, antenna skinning, animation ranges and sequence rollover.`);
+// No-animation balance should never accumulate transforms or lift the wheels.
+rest.forEach((pose, id) => { nodes[id].position.copy(pose.position); nodes[id].quaternion.copy(pose.quaternion); nodes[id].scale.copy(pose.scale); });
+rig.resetView(); rig.idleMotion = new IdleMotion(() => 0.5);
+assert.equal(rig.shoulders.length, 2, 'Both shoulder pivots must be available');
+const fingers = nodes.filter(node => /finger|thumb/i.test(node.name)).map(node => ({ node, position: node.position.clone(), rotation: node.quaternion.clone() }));
+const shoulderPositions = rig.shoulders.map(shoulder => shoulder.node.position.clone());
+rig.updatePose();
+const hands = [rig.leftHand, rig.rightHand];
+const handPositions = hands.map(hand => rig.actor.worldToLocal(hand.getWorldPosition(new THREE.Vector3())));
+let handTravel = 0, shoulderTravel = 0, glanceMinimum = 0, glanceMaximum = 0, glancePeaks = 0, lastGlanceMagnitude = 0, risingGlance = false;
+for (let frame = 0; frame < 960; frame++) {
+  rig.updateProceduralMotion(1 / 60, true, true);
+  rig.actor.quaternion.copy(rig.actorQuaternion); rig.updatePose();
+  near(rig.turntable.position.length(), 0);
+  near(rig.yaw, 0); near(rig.tilt, 0);
+  const heights = rig.wheels.map(wheel => wheel.mesh.getWorldPosition(new THREE.Vector3()).y);
+  assert.ok(Math.abs(heights[0] - heights[1]) < 0.005, 'Forward/back wobble must not roll sideways');
+  let bottom = Infinity;
+  for (const mesh of rig.meshes) {
+    const vertex = new THREE.Vector3();
+    for (let i = 0; i < mesh.geometry.attributes.position.count; i++) {
+      bottom = Math.min(bottom, mesh.getVertexPosition(i, vertex).applyMatrix4(mesh.matrixWorld).y);
+    }
+  }
+  // Spinning the polygonal wheels after seating can shift their lowest vertex
+  // by a fraction of a millimetre; it must never accumulate or visibly float.
+  near(bottom, 0, 0.001);
+  rig.shoulders.forEach((shoulder, index) => {
+    near(shoulder.node.position.distanceTo(shoulderPositions[index]), 0);
+    const travel = shoulder.node.quaternion.angleTo(shoulder.base);
+    assert.ok(travel < 0.17, 'Shoulder motion must stay below ten degrees'); shoulderTravel = Math.max(shoulderTravel, travel);
+  });
+  hands.forEach((hand, index) => {
+    const local = rig.actor.worldToLocal(hand.getWorldPosition(new THREE.Vector3()));
+    handTravel = Math.max(handTravel, local.distanceTo(handPositions[index]) * Math.abs(rig.actor.getWorldScale(new THREE.Vector3()).x));
+  });
+  for (const finger of fingers) {
+    near(finger.node.position.distanceTo(finger.position), 0);
+    near(finger.node.quaternion.angleTo(finger.rotation), 0, 1e-7);
+  }
+  glanceMinimum = Math.min(glanceMinimum, rig.proceduralPose.yaw);
+  glanceMaximum = Math.max(glanceMaximum, rig.proceduralPose.yaw);
+  const magnitude = Math.abs(rig.proceduralPose.yaw);
+  if (risingGlance && magnitude < lastGlanceMagnitude && lastGlanceMagnitude > 0.4) { glancePeaks++; risingGlance = false; }
+  else if (magnitude > lastGlanceMagnitude) risingGlance = true;
+  lastGlanceMagnitude = magnitude;
+}
+assert.ok(shoulderTravel > 0.12 && handTravel > 0.015, 'Shoulder corrections must visibly move the hands');
+assert.ok(glanceMinimum < -0.46 && glanceMaximum > 0.46, 'Stationary glances should look clearly both ways');
+assert.ok(glancePeaks >= 5, 'Stationary glances should happen frequently');
+rig.updateProceduralMotion(0, true, false);
+near(rig.proceduralPose.yaw, 0);
+rig.updateProceduralMotion(0, false, true);
+rig.updatePose();
+near(rig.balancePivot.quaternion.angleTo(new THREE.Quaternion()), 0);
+for (const shoulder of rig.shoulders) assert.deepEqual(shoulder.node.quaternion.toArray(), shoulder.base.toArray());
+// Disabled procedural motion must leave even held animation shoulder poses alone.
+for (const animation of gltf.animations) {
+  sampleAnimation(animation, 0.5);
+  const authoredShoulders = rig.shoulders.map(shoulder => shoulder.node.quaternion.clone());
+  rig.updateProceduralMotion(2, false, true);
+  rig.updatePose();
+  rig.shoulders.forEach((shoulder, index) => assert.deepEqual(shoulder.node.quaternion.toArray(), authoredShoulders[index].toArray()));
+}
+
+console.log(`Eggbot checks passed: one-shot camera-facing arrival, tilt recovery, procedural wobble, frequent stationary glances, visible shoulder-only balance and clip isolation; drag directions, Idle yaw/pitch hierarchy (wheel height difference ≤ ${(maxWheelHeightDifference * 1000).toFixed(1)}mm), blink timing, eyelid coverage, GLB structure, antenna skinning, animation ranges and sequence rollover.`);
