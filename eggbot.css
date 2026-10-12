@@ -55,6 +55,8 @@ input[type="radio"] { accent-color: var(--accent); width: 15px; height: 15px; ma
 .loading.failed .loading-orbit { display: none; }
 .no-script { z-index: 2; }
 .stage:fullscreen { height: 100dvh; }
+.eye-settings label { display: flex; justify-content: space-between; align-items: center; margin: 8px 0; font-size: 12px; }
+.eye-settings input { width: 76px; padding: 5px; color: var(--text); background: #0e1924; border: 1px solid var(--line); border-radius: 4px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .loading-orbit { animation: none; border-top-color: var(--accent); } }
 @media (max-width: 760px) {

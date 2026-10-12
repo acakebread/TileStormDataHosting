@@ -1,10 +1,18 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { BlinkClock, dragAngles, lidOffset, SequenceClock } from '../eggbot/behaviour.js';
+import { BlinkClock, dragAngles, GridJourney, lidOffset, movementEase, SequenceClock } from '../eggbot/behaviour.js';
 import * as THREE from '../eggbot/vendor/three/build/three.core.js';
 import { EggbotRig } from '../eggbot/rig.js';
 
 const near = (actual, expected, epsilon = 1e-8) => assert.ok(Math.abs(actual - expected) < epsilon, `${actual} != ${expected}`);
+near(movementEase(0), 0); near(movementEase(0.5), 0.5); near(movementEase(1), 1);
+const journey = new GridJourney({ x: 0, z: 0 }, 350, { x: 3, z: 0 });
+const turning = journey.tick(0.125);
+near(turning.yaw, 400); near(turning.x, 0);
+const halfway = journey.tick(0.125 + journey.moveDuration / 2);
+near(halfway.x, 1.5); near(halfway.yaw, 450);
+const arrived = journey.tick(100);
+near(arrived.x, 3); near(arrived.z, 0); assert.ok(arrived.done);
 
 // Front-view dragging should move Eggbot's facing toward screen-right and
 // lean his head toward screen-down. RMB retains its existing orbit direction.
@@ -178,6 +186,21 @@ rest.forEach((pose, id) => { nodes[id].position.copy(pose.position); nodes[id].q
 const turntable = new THREE.Group(), animationYaw = new THREE.Group(), pitchPivot = new THREE.Group();
 turntable.add(animationYaw); animationYaw.add(pitchPivot); pitchPivot.add(root);
 const rig = new EggbotRig(root, turntable, animationYaw, pitchPivot);
+// Exercise the actual UV adapter, not just the inspector constants.
+const gazeEye = rig.eyes.getWorldPosition(new THREE.Vector3());
+const gazeTarget = gazeEye.clone().add(new THREE.Vector3(0.5, 0.3, 1));
+rig.gazeStrength = 0;
+assert.deepEqual(rig.gazeOffset(gazeEye, gazeTarget).toArray(), [0, -0]);
+rig.gazeStrength = 0.5;
+const weakGaze = rig.gazeOffset(gazeEye, gazeTarget);
+rig.gazeStrength = 1;
+const strongGaze = rig.gazeOffset(gazeEye, gazeTarget);
+near(strongGaze.x, weakGaze.x * 2); near(strongGaze.y, weakGaze.y * 2);
+rig.mode = 'disabled'; rig.pupilUvBias.set(0.03, 0.07);
+rig.updateGaze(0, new THREE.PerspectiveCamera(), new THREE.Vector2(), new THREE.Vector3(), null);
+near(rig.eyeBinding.uv.getX(0), rig.eyeBinding.original[0] - 0.03, 1e-7);
+near(rig.eyeBinding.uv.getY(0), rig.eyeBinding.original[1] - 0.07, 1e-7);
+rig.gazeStrength = 1.3; rig.pupilUvBias.set(0, 0.07);
 const idle = gltf.animations.find(animation => animation.name === 'Idle_01');
 let maxWheelHeightDifference = 0, maxYaw = -Infinity, minYaw = Infinity;
 for (const tilt of [-30, 0, 30]) {

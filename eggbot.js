@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { EggbotRig } from './eggbot/rig.js';
-import { clamp, dragAngles, SEQUENCE, SequenceClock } from './eggbot/behaviour.js';
+import { clamp, dragAngles, GridJourney, SEQUENCE, SequenceClock } from './eggbot/behaviour.js';
 
 const canvas = document.getElementById('scene');
 const stage = document.getElementById('stage');
@@ -20,6 +20,7 @@ let renderer, scene, camera, model, mixer, rig, clips = [], activeAction = null,
 let sequence = null, selection = 'none', lastStatus = '', lastFrame = null, worldTime = 0;
 let cameraYaw = 0, cameraPitch = 15, cameraDistance = cameraDefaultDistance;
 let orb, dragged = false, touchGesture = null;
+let ground, journey = null, tap = null, destination;
 const bindPose = [];
 
 function fail(message, error) {
@@ -92,7 +93,20 @@ function fitWorldTarget() {
   const distance = 1.55 / Math.sin(Math.min(verticalHalf, horizontalHalf));
   if (cameraDistance < distance) zoom(distance);
 }
-function resetView() { cameraYaw = 0; cameraPitch = 15; cameraDistance = cameraDefaultDistance; rig.resetView(); applyCamera(); fitWorldTarget(); }
+function resetView() { journey = null; destination.visible = false; rig.turntable.position.set(0, 0, 0); cameraYaw = 0; cameraPitch = 15; cameraDistance = cameraDefaultDistance; rig.resetView(); applyCamera(); fitWorldTarget(); }
+
+function walkTo(clientX, clientY) {
+  const bounds = canvas.getBoundingClientRect();
+  const point = new THREE.Vector2((clientX - bounds.left) / bounds.width * 2 - 1, 1 - (clientY - bounds.top) / bounds.height * 2);
+  const ray = new THREE.Raycaster(); ray.setFromCamera(point, camera);
+  // Only visible grid hits count; clicking Eggbot doesn't send him elsewhere.
+  const hit = ray.intersectObjects([ground, model], true)[0];
+  if (hit?.object !== ground) return;
+  const target = hit.point.clone(); target.y = 0;
+  if (target.distanceTo(rig.turntable.position) < 0.01) return;
+  journey = new GridJourney(rig.turntable.position, rig.yaw, target);
+  destination.position.set(target.x, 0.008, target.z); destination.visible = true;
+}
 function resize() {
   const width = stage.clientWidth, height = stage.clientHeight;
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -108,6 +122,7 @@ function move(dx, dy, orbit) {
     cameraYaw = next.yaw; cameraPitch = next.pitch; applyCamera();
   }
   else {
+    journey = null; destination.visible = false;
     // Unity's front camera reverses screen X relative to Three.js, and DOM Y
     // points down rather than up. Convert Eggbot's drag in both directions.
     const next = dragAngles(rig.yaw, rig.tilt, dx, dy);
@@ -128,6 +143,7 @@ function controls() {
     if (event.pointerType === 'mouse' && event.button !== 0 && event.button !== 2) return;
     canvas.focus({ preventScroll: true });
     canvas.setPointerCapture(event.pointerId);
+    tap = touches.size === 0 && event.button === 0 ? { id: event.pointerId, x: event.clientX, y: event.clientY } : null;
     touches.set(event.pointerId, { x: event.clientX, y: event.clientY, orbit: event.button === 2 });
     touchGesture = touchState(); dragged = true;
   });
@@ -136,6 +152,7 @@ function controls() {
     pointer.set((event.clientX - bounds.left) / bounds.width * 2 - 1, 1 - (event.clientY - bounds.top) / bounds.height * 2);
     const previous = touches.get(event.pointerId);
     if (!previous) return;
+    if (tap && Math.hypot(event.clientX - tap.x, event.clientY - tap.y) > 5) tap = null;
     touches.set(event.pointerId, { x: event.clientX, y: event.clientY, orbit: previous.orbit });
     if (touches.size >= 2) {
       const next = touchState();
@@ -144,9 +161,12 @@ function controls() {
         if (next.distance > 1 && touchGesture.distance > 1) zoom(cameraDistance * touchGesture.distance / next.distance);
       }
       touchGesture = next;
-    } else move(event.clientX - previous.x, event.clientY - previous.y, previous.orbit);
+    } else if (!tap) move(event.clientX - previous.x, event.clientY - previous.y, previous.orbit);
   });
-  const release = event => { touches.delete(event.pointerId); touchGesture = touchState(); dragged = touches.size > 0; };
+  const release = event => {
+    if (event.type === 'pointerup' && tap?.id === event.pointerId) walkTo(event.clientX, event.clientY);
+    tap = null; touches.delete(event.pointerId); touchGesture = touchState(); dragged = touches.size > 0;
+  };
   canvas.addEventListener('pointerup', release);
   canvas.addEventListener('pointercancel', release);
   canvas.addEventListener('lostpointercapture', release);
@@ -169,6 +189,11 @@ function controls() {
   sequenceButton.addEventListener('click', () => play('sequence'));
   for (const input of document.querySelectorAll('input[name="gaze"]')) input.addEventListener('change', () => { rig.mode = input.value; fitWorldTarget(); });
   resetButton.addEventListener('click', resetView);
+  for (const input of document.querySelectorAll('[data-eye-setting]')) input.addEventListener('input', () => {
+    if (!Number.isFinite(input.valueAsNumber)) return;
+    if (input.dataset.eyeSetting === 'strength') rig.gazeStrength = clamp(input.valueAsNumber, 0, 4);
+    else rig.pupilUvBias[input.dataset.eyeSetting] = clamp(input.valueAsNumber, -0.32, 0.32);
+  });
   fullscreenButton.hidden = !document.fullscreenEnabled;
   fullscreenButton.addEventListener('click', async () => {
     try { if (document.fullscreenElement) await document.exitFullscreen(); else await stage.requestFullscreen(); }
@@ -181,7 +206,7 @@ function controls() {
   });
   new ResizeObserver(resize).observe(stage);
   document.addEventListener('visibilitychange', () => { lastFrame = null; touches.clear(); dragged = false; touchGesture = null; });
-  if (matchMedia('(pointer: coarse)').matches) document.getElementById('stageHint').innerHTML = '<span>One finger to turn</span><span>Two fingers to orbit / zoom</span>';
+  if (matchMedia('(pointer: coarse)').matches) document.getElementById('stageHint').innerHTML = '<span>Tap grid to move</span><span>Drag to turn</span><span>Two fingers to orbit</span>';
 }
 
 function animate(time) {
@@ -207,6 +232,11 @@ function animate(time) {
     rig.sampledQuaternion.copy(rig.actor.quaternion);
   } else {
     rig.actor.quaternion.copy(rig.actorQuaternion);
+  }
+  if (journey) {
+    const next = journey.tick(delta);
+    rig.turntable.position.set(next.x, 0, next.z); rig.yaw = next.yaw;
+    if (next.done) { journey = null; destination.visible = false; }
   }
   rig.updatePose();
   orb.visible = rig.mode === 'world';
@@ -244,8 +274,10 @@ async function initialise() {
     const groundTexture = await new THREE.TextureLoader().loadAsync('./eggbot/assets/ground.jpg');
     groundTexture.colorSpace = THREE.SRGBColorSpace;
     groundTexture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(4, 4), new THREE.MeshStandardMaterial({ map: groundTexture, color: 0x737f85, roughness: 1, metalness: 0 }));
+    ground = new THREE.Mesh(new THREE.PlaneGeometry(4, 4), new THREE.MeshStandardMaterial({ map: groundTexture, color: 0x737f85, roughness: 1, metalness: 0 }));
     ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+    destination = new THREE.Mesh(new THREE.RingGeometry(0.08, 0.11, 32), new THREE.MeshBasicMaterial({ color: 0xf0c35b, depthWrite: false }));
+    destination.rotation.x = -Math.PI / 2; destination.visible = false; scene.add(destination);
     orb = new THREE.Mesh(new THREE.SphereGeometry(0.06, 20, 12), new THREE.MeshStandardMaterial({ color: 0xffd933, roughness: 0.4, emissive: 0x5b3e00, emissiveIntensity: 0.3 }));
     orb.visible = false; scene.add(orb);
     const asset = await new GLTFLoader().loadAsync('./eggbot/assets/eggbot.glb', progress => {

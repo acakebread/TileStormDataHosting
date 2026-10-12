@@ -1,5 +1,27 @@
 // Unity testbed timings and UV values, kept independent of the rendering engine.
 export const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+// EggbotController.UpdateTurn/UpdateMove and SmoothingUtils.Ease.
+export const movementEase = t => (1 - Math.cos(clamp(t, 0, 1) * Math.PI)) / 2;
+export class GridJourney {
+  constructor(position, yaw, target) {
+    this.start = { x: position.x, z: position.z };
+    this.target = { x: target.x, z: target.z };
+    this.yaw = yaw;
+    const heading = Math.atan2(target.x - position.x, target.z - position.z) * 180 / Math.PI;
+    this.turn = ((heading - yaw + 180) % 360 + 360) % 360 - 180;
+    this.turnDuration = Math.abs(this.turn) > 0.01 ? 0.25 : 0;
+    this.moveDuration = (Math.hypot(target.x - position.x, target.z - position.z) + 1) / 6;
+    this.time = 0;
+  }
+  tick(delta) {
+    this.time += Math.max(0, delta);
+    const turn = movementEase(this.turnDuration ? this.time / this.turnDuration : 1);
+    const move = movementEase((this.time - this.turnDuration) / this.moveDuration);
+    return { x: this.start.x + (this.target.x - this.start.x) * move,
+      z: this.start.z + (this.target.z - this.start.z) * move,
+      yaw: this.yaw + this.turn * turn, done: this.time >= this.turnDuration + this.moveDuration };
+  }
+}
 export function dragAngles(yaw, pitch, dx, dy, orbit = false) {
   return {
     yaw: yaw + dx * 0.2 * (orbit ? -1 : 1),
