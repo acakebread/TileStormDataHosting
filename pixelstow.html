@@ -545,6 +545,13 @@
       </div>
       </section>
 
+      <label for="carrier-version">Encoding format</label>
+      <select id="carrier-version">
+        <option value="3">New format — resize recovery (version 3)</option>
+        <option value="1">Previous format (version 1)</option>
+      </select>
+      <p class="hint">The new format is the default, with small wavelet markers for experimental resize recovery. Previous-format pictures still open here. Choose version 1 to switch encoding back; use it for the desktop app and TileStorm until their readers are updated.</p>
+
       <div class="actions">
         <button id="encode" type="button" disabled>Encode into a new image</button>
         <button id="decode" type="button" disabled>Decode image</button>
@@ -562,7 +569,7 @@
 
       <section class="more-info" id="more-info" aria-labelledby="more-info-title">
         <h2 id="more-info-title">About PixelStow</h2>
-        <p>Everything is processed in this browser and is not uploaded. Encoding saves a new image. Text-only images remain compatible with TileStorm Evolution; attachments need a reader that supports binary payloads.</p>
+        <p>Everything is processed in this browser and is not uploaded. Encoding saves a new image. The new resize-recovery format currently needs this browser reader. Choose version 1 for existing desktop and TileStorm readers; attachments also need binary-payload support.</p>
         <p>This is a prototype. Short recordings and small attachments work best; heavy payloads can give variable results. Download the verified PNG and keep the original file. Sharing apps may resize or recompress photos, especially large images over about 2,000 pixels, and the hidden contents can disappear. That size is a guideline, not a guaranteed safe limit.</p>
         <p>For WhatsApp, send the image as a Document / original file where possible and include the PixelStow opening link. The recipient can save it to Files and use Choose image, or copy it and use Paste image. A link opens this page but cannot automatically read a WhatsApp attachment. Screenshots, resized copies and ordinary photo sharing may not keep the payload.</p>
         <p>On iPhone, allow Safari's Paste prompt after tapping Paste image. If needed, use the touch-and-hold paste box. Safari may require a tap on Play voice message before sound is allowed; the full audio player is also available under Attached files. Audio format support varies by browser. Resize and print/photo recovery are still research work.</p>
@@ -633,7 +640,7 @@
       </div>
     </form>
   </dialog>
-  <script src="./pixelstow.js?v=20261011-binary-v3"></script>
+  <script src="./pixelstow.js?v=20261012-sparse-v3"></script>
   <script src="./pixelstow-export.js?v=20261011-exports"></script>
   <script src="./pixelstow-media.js?v=20261011-webm-duration"></script>
   <script src="./pixelstow-sharing.js?v=20261011-png-clipboard"></script>
@@ -714,6 +721,30 @@
       imageForClipboard: () => encodedPng || PixelStow.writePng(current.decodePixels || current.pixels, current.width, current.height)
     });
 
+    const carrierSelect = document.querySelector("#carrier-version");
+    let storedCarrier;
+    try { storedCarrier = localStorage.getItem("pixelstow-carrier-v3"); } catch (_) { /* Storage can be disabled. */ }
+    if (storedCarrier === "1" || storedCarrier === "3") carrierSelect.value = storedCarrier;
+    PixelStow.setCarrierVersion(Number(carrierSelect.value));
+    carrierSelect.addEventListener("change", () => {
+      try { localStorage.setItem("pixelstow-carrier-v3", carrierSelect.value); } catch (_) { /* The choice still works for this session. */ }
+      PixelStow.setCarrierVersion(Number(carrierSelect.value));
+      updateByteCounts();
+      if (current) {
+        const room = PixelStow.estimatePayloadBytes(current.width, current.height);
+        const exactNote = current.exact ? "" : " Browser colour conversion was used, so an existing fingerprint may not read.";
+        capacity.textContent = current.width + " × " + current.height + " · about " + room.toLocaleString("en-GB") + " payload bytes before compression." + exactNote;
+      }
+    });
+
+    function carrierNote(result) {
+      if (!result || result.carrierVersion !== 3) return "";
+      const sx = Number(result.scaleX);
+      const sy = Number(result.scaleY);
+      if (!sx || !sy || (Math.abs(sx - 1) < 0.0001 && Math.abs(sy - 1) < 0.0001)) return " New format (version 3).";
+      return " New format (version 3), recovered at " + (100 * sx).toFixed(1) + "% × " + (100 * sy).toFixed(1) + "% of its original size.";
+    }
+
     function byteLabel(text) {
       const count = new TextEncoder().encode(text || "").length;
       const formatted = count.toLocaleString("en-GB");
@@ -761,6 +792,7 @@
       const needsUnlock = protectedTarget && !hasDecoded;
       const canEncode = hasImage && !current.hasFingerprint && !needsUnlock;
       const working = busy || media.active;
+      carrierSelect.disabled = working;
       encodeButton.disabled = working || !canEncode;
       composition.hidden = Boolean(current && current.hasFingerprint) || needsUnlock;
       encodeButton.hidden = composition.hidden;
@@ -1026,7 +1058,9 @@
         const room = PixelStow.estimatePayloadBytes(image.width, image.height);
         const exactNote = image.exact ? "" : " Browser colour conversion was used, so an existing fingerprint may not read.";
         capacity.textContent = image.width + " × " + image.height + " · about " + room.toLocaleString("en-GB") + " payload bytes before compression." + exactNote;
-        if (found.found && found.passwordProtected) {
+        if (found.unreadable) {
+          setStatus("Recovery markers were found, but the contents could not be recovered. This image cannot be encoded again.", true);
+        } else if (found.found && found.passwordProtected) {
           setStatus("This image is password protected. Please enter the password to unlock it.");
         } else if (found.found) {
           const decoded = await PixelStow.decode(image.pixels, image.width, image.height, "");
@@ -1034,7 +1068,7 @@
             readout.value = decoded.text;
             message.value = decoded.text;
             rememberMessage(image.pixels, decoded);
-            setStatus("This image already has a public fingerprint, so it cannot be encoded again.");
+            setStatus("This image already has a public fingerprint, so it cannot be encoded again." + carrierNote(decoded));
           } else {
             setStatus("A fingerprint was found, but its text could not be read.", true);
           }
@@ -1221,7 +1255,9 @@
         rememberMessage(encoded.pixels, verified, false);
         const lock = encoded.passwordProtected ? "Password-locked" : "Public";
         const formats = encodedJpeg ? "PNG or JPEG" : "PNG";
-        setStatus(lock + " fingerprint encoded. Download the new " + formats + ". The original file was not changed." + jpegNote);
+        const fallback = encoded.locatorFallback ? "This picture is too small for the recovery markers, so version 1 was used. " : "";
+        const written = encoded.carrierVersion === 3 ? " New format (version 3). Resize recovery remains experimental." : " Previous format (version 1).";
+        setStatus(fallback + lock + " fingerprint encoded. Download the new " + formats + ". The original file was not changed." + written + jpegNote);
         password.value = "";
         confirmPassword.value = "";
       } catch (error) {
@@ -1244,10 +1280,13 @@
           message.value = decoded.text;
           rememberMessage(target, decoded);
           const lock = decoded.passwordProtected ? "Unlocked" : "Read";
-          setStatus(lock + " the fingerprint from this image.");
+          setStatus(lock + " the fingerprint from this image." + carrierNote(decoded));
           password.value = "";
           confirmPassword.value = "";
           unlockPassword.value = "";
+        } else if (decoded.status === "markers") {
+          clearDecoded();
+          setStatus("Recovery markers were found, but the contents could not be recovered at this scale.", true);
         } else if (decoded.status === "password") {
           clearDecoded();
           current.decodeProtected = true;

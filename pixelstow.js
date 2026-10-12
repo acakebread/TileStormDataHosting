@@ -18,6 +18,9 @@
   const MAGIC = 0xC7;
   const FLAGS = 1;
   const ONE_PARITY = 2;
+  const CARRIER_V1 = 1;
+  const CARRIER_V3 = 3;
+  let preferredCarrier = CARRIER_V3;
   const encoder = new TextEncoder();
   const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 
@@ -188,9 +191,10 @@
     return Math.min(MAX_TEXT, estimatePayloadBytes(width, height));
   }
 
-  function estimatePayloadBytes(width, height, passwordProtected = false) {
+  function estimatePayloadBytes(width, height, passwordProtected = false, carrierVersion = preferredCarrier) {
     if (width < BLOCK || height < BLOCK || width * height > MAX_PIXELS) return 0;
-    const blocks = Math.floor(width / BLOCK) * Math.floor(height / BLOCK);
+    const blocks = Math.floor(width / BLOCK) * Math.floor(height / BLOCK) -
+      (carrierVersion === CARRIER_V3 && locatorFits(width, height) ? 9 * LOCATOR_WIDTH * LOCATOR_HEIGHT / 16 : 0);
     if (blocks <= PREAMBLE_BLOCKS || blocks > MAX_BLOCKS) return 0;
     let framed = Math.floor((blocks - PREAMBLE_BLOCKS) / 9);
     if (framed > MAX_FRAMED) framed = MAX_FRAMED;
@@ -614,9 +618,273 @@
     }
   }
 
-  async function writeSignal(reference, image, width, height, framed, strength) {
+  // Carrier 3: nine local, coarse wavelet patches; no reserved border.
+  // The locator header is independent of payload ordering, compression and passwords.
+  const LOCATOR_CELL = 8;
+  const LOCATOR_COLUMNS = 12;
+  const LOCATOR_ROWS = 8;
+  const LOCATOR_WIDTH = LOCATOR_CELL * LOCATOR_COLUMNS;
+  const LOCATOR_HEIGHT = LOCATOR_CELL * LOCATOR_ROWS;
+  const LOCATOR_INSET = 8;
+  const LOCATOR_STRENGTH = 16;
+  const LOCATOR_SEED = 0x50534C33;
+  const locatorOrder = scatterOrder(96, LOCATOR_SEED);
+  const locatorShape = buildShapes(LOCATOR_STRENGTH).difference;
+
+  function locatorLayout(width, height) {
+    if (width < 3 * LOCATOR_WIDTH + 2 * LOCATOR_INSET || height < 3 * LOCATOR_HEIGHT + 2 * LOCATOR_INSET) return null;
+    const xs = [LOCATOR_INSET, Math.floor((width - LOCATOR_WIDTH) / 8) * 4, Math.floor((width - LOCATOR_WIDTH - LOCATOR_INSET) / 4) * 4];
+    const ys = [LOCATOR_INSET, Math.floor((height - LOCATOR_HEIGHT) / 8) * 4, Math.floor((height - LOCATOR_HEIGHT - LOCATOR_INSET) / 4) * 4];
+    return ys.flatMap((y, row) => xs.map((x, column) => ({ x, y, id: row * 3 + column })));
+  }
+
+  function locatorFits(width, height) {
+    // Small pictures use carrier 1 rather than sacrifice most of their capacity.
+    return width <= 65535 && height <= 65535 && Boolean(locatorLayout(width, height)) &&
+      width * height <= MAX_PIXELS && 9 * LOCATOR_WIDTH * LOCATOR_HEIGHT <= width * height * 0.3;
+  }
+
+  function locatorBlockMap(width, height) {
+    const layout = locatorLayout(width, height);
+    if (!layout) return null;
+    const columns = Math.floor(width / BLOCK), rows = Math.floor(height / BLOCK);
+    const map = new Uint32Array(columns * rows - 9 * LOCATOR_WIDTH * LOCATOR_HEIGHT / 16);
+    let count = 0;
+    for (let row = 0; row < rows; row++) {
+      for (let column = 0; column < columns; column++) {
+        const x = column * BLOCK, y = row * BLOCK;
+        if (!layout.some((patch) => x >= patch.x && x < patch.x + LOCATOR_WIDTH && y >= patch.y && y < patch.y + LOCATOR_HEIGHT)) {
+          map[count++] = column + row * columns;
+        }
+      }
+    }
+    return map;
+  }
+
+  function locatorHeader(width, height, id) {
+    const bytes = new Uint8Array(8);
+    bytes[0] = 0xD3;
+    bytes[1] = 0x30 | id;
+    bytes[2] = width & 255; bytes[3] = width >>> 8;
+    bytes[4] = height & 255; bytes[5] = height >>> 8;
+    const checksum = crc32(bytes, 0, 6) & 0xFFFF;
+    bytes[6] = checksum & 255; bytes[7] = checksum >>> 8;
+    scramble(bytes, LOCATOR_SEED);
+    return bytes;
+  }
+
+  function paintLocators(reference, output, width, height, strength) {
+    const amplitude = Math.min(LOCATOR_STRENGTH, strength);
+    for (const patch of locatorLayout(width, height)) {
+      const header = locatorHeader(width, height, patch.id);
+      for (let slot = 0; slot < 96; slot++) {
+        const cell = locatorOrder[slot];
+        const bit = WORD_BITS[header[Math.floor(slot / 12)] * 12 + slot % 12];
+        const x = patch.x + (cell % LOCATOR_COLUMNS) * LOCATOR_CELL;
+        const y = patch.y + Math.floor(cell / LOCATOR_COLUMNS) * LOCATOR_CELL;
+        for (let channel = 0; channel < 3; channel++) {
+          let low = -Infinity, high = Infinity;
+          for (let dy = 0; dy < LOCATOR_CELL; dy++) for (let dx = 0; dx < LOCATOR_CELL; dx++) {
+            const delta = scaleWeight(amplitude, shapeWeight(dx >> 1, dy >> 1, bit));
+            const value = reference[(x + dx + (y + dy) * width) * 4 + channel];
+            low = Math.max(low, -value - delta);
+            high = Math.min(high, 255 - value - delta);
+          }
+          const bias = low <= high ? Math.max(low, Math.min(high, 0)) : 0;
+          for (let dy = 0; dy < LOCATOR_CELL; dy++) for (let dx = 0; dx < LOCATOR_CELL; dx++) {
+            const index = (x + dx + (y + dy) * width) * 4 + channel;
+            output[index] = clampByte(reference[index] + bias + scaleWeight(amplitude, shapeWeight(dx >> 1, dy >> 1, bit)));
+          }
+        }
+      }
+    }
+  }
+
+  function sampleLuma(pixels, width, height, x, y) {
+    x = Math.max(0, Math.min(width - 1, x)); y = Math.max(0, Math.min(height - 1, y));
+    const x0 = Math.floor(x), y0 = Math.floor(y), x1 = Math.min(width - 1, x0 + 1), y1 = Math.min(height - 1, y0 + 1);
+    const fx = x - x0, fy = y - y0;
+    const a = (x0 + y0 * width) * 4, b = (x1 + y0 * width) * 4;
+    const c = (x0 + y1 * width) * 4, d = (x1 + y1 * width) * 4;
+    return ((pixels[a] + pixels[a + 1] + pixels[a + 2]) * (1 - fx) * (1 - fy) +
+      (pixels[b] + pixels[b + 1] + pixels[b + 2]) * fx * (1 - fy) +
+      (pixels[c] + pixels[c + 1] + pixels[c + 2]) * (1 - fx) * fy +
+      (pixels[d] + pixels[d + 1] + pixels[d + 2]) * fx * fy) / 3;
+  }
+
+  function readLocator(pixels, width, height, x, y, scaleX, scaleY, id) {
+    if (x < -2 || y < -2 || x + (LOCATOR_WIDTH - 1) * scaleX > width + 1 || y + (LOCATOR_HEIGHT - 1) * scaleY > height + 1) return null;
+    const known = locatorHeader(0, 0, id);
+    const scores = new Float64Array(96);
+    let pilot = 0, pilotEnergy = 0;
+    for (let slot = 0; slot < 96; slot++) {
+      const cell = locatorOrder[slot];
+      const originX = x + cell % LOCATOR_COLUMNS * LOCATOR_CELL * scaleX;
+      const originY = y + Math.floor(cell / LOCATOR_COLUMNS) * LOCATOR_CELL * scaleY;
+      let projection = 0, sum = 0, squares = 0;
+      for (let dy = 0; dy < 4; dy++) for (let dx = 0; dx < 4; dx++) {
+        const value = sampleLuma(pixels, width, height, originX + (2 * dx + 0.5) * scaleX, originY + (2 * dy + 0.5) * scaleY);
+        projection += value * locatorShape[dx + dy * 4]; sum += value; squares += value * value;
+      }
+      const score = projection / Math.sqrt(400 + Math.max(0, squares - sum * sum / 16));
+      scores[slot] = score;
+      if (slot < 24) {
+        pilot += score * (WORD_BITS[known[Math.floor(slot / 12)] * 12 + slot % 12] ? 1 : -1);
+        pilotEnergy += Math.abs(score);
+        if (slot === 23 && (pilotEnergy === 0 || pilot / pilotEnergy < 0.55)) return null;
+      }
+    }
+    const bytes = decodeSoft(scores, 8).bytes;
+    scramble(bytes, LOCATOR_SEED);
+    if (bytes[0] !== 0xD3 || bytes[1] !== (0x30 | id) || (crc32(bytes, 0, 6) & 0xFFFF) !== (bytes[6] | bytes[7] << 8)) return null;
+    const originalWidth = bytes[2] | bytes[3] << 8, originalHeight = bytes[4] | bytes[5] << 8;
+    if (!locatorFits(originalWidth, originalHeight)) return null;
+    const actualX = width / originalWidth, actualY = height / originalHeight;
+    if (actualX < 0.49 || actualX > 2.01 || actualY < 0.49 || actualY > 2.01 ||
+      Math.abs(actualX - scaleX) > 0.04 || Math.abs(actualY - scaleY) > 0.04) return null;
+    return { originalWidth, originalHeight, id, quality: pilot / pilotEnergy };
+  }
+
+  async function findLocator(pixels, width, height, nativeOnly = false) {
+    const scales = nativeOnly ? [1] : [0.95, 2, 0.5, 1.05, 0.75, 1.5, 1.25, 1];
+    if (!nativeOnly) {
+      for (let i = 20; i <= 80; i++) {
+        const scale = i / 40;
+        if (!scales.includes(scale)) scales.push(scale);
+      }
+    }
+    const offsets = nativeOnly ? [0] : [0, -0.5, 0.5, -1, 1];
+    const ids = [0, 2, 6, 8, 1, 3, 5, 7, 4];
+    for (const scale of scales) {
+      const guessedWidth = Math.round(width / scale), guessedHeight = Math.round(height / scale);
+      const layout = locatorLayout(guessedWidth, guessedHeight);
+      if (!layout || !locatorFits(guessedWidth, guessedHeight)) continue;
+      for (const id of ids) {
+        const patch = layout[id];
+        for (const oy of offsets) for (const ox of offsets) {
+          const found = readLocator(pixels, width, height, patch.x * scale + (scale - 1) / 2 + ox, patch.y * scale + (scale - 1) / 2 + oy, scale, scale, id);
+          if (found && (!nativeOnly || (found.originalWidth === width && found.originalHeight === height))) return found;
+        }
+      }
+      await yieldNow();
+    }
+    return null;
+  }
+
+  async function scoreMapped(pixels, width, height, map, originalWidth, strength, fit, limit = map.length) {
+    const scores = new Int32Array(limit), bounded = new Int32Array(limit);
+    const difference = buildShapes(strength).difference;
+    const columns = Math.floor(originalWidth / BLOCK);
+    let differenceEnergy = 0;
+    for (const value of difference) differenceEnergy += value * value;
+    const block = new Float64Array(16);
+    const half = fit && Math.abs(fit.scaleX - 0.5) < 0.001 && Math.abs(fit.scaleY - 0.5) < 0.001;
+    for (let i = 0; i < limit; i++) {
+      if ((i & 8191) === 8191) await yieldNow();
+      const x = (map[i] % columns) * BLOCK, y = Math.floor(map[i] / columns) * BLOCK;
+      if (half) {
+        // An aligned 2x2 average retains the two diagonal signs. Score that
+        // reduced symbol directly instead of blurring it back into 4x4 pixels.
+        let projection = 0, sum = 0, squares = 0;
+        for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) {
+          const value = sampleLuma(pixels, width, height, fit.scaleX * (x + 2 * dx + 0.5) + fit.phaseX, fit.scaleY * (y + 2 * dy + 0.5) + fit.phaseY);
+          projection += value * (dx === dy ? 1 : -1); sum += value; squares += value * value;
+        }
+        scores[i] = bounded[i] = roundHalfToEven(100 * projection / Math.sqrt(25 + Math.max(0, squares - sum * sum / 4)));
+        continue;
+      }
+      let projection = 0;
+      for (let dy = 0; dy < 4; dy++) for (let dx = 0; dx < 4; dx++) {
+        const k = dx + dy * 4;
+        const pixel = (x + dx + (y + dy) * width) * 4;
+        block[k] = fit ? sampleLuma(pixels, width, height, fit.scaleX * (x + dx) + fit.phaseX, fit.scaleY * (y + dy) + fit.phaseY)
+          : (pixels[pixel] + pixels[pixel + 1] + pixels[pixel + 2]) / 3;
+        projection += block[k] * difference[k];
+      }
+      let noiseEnergy = 25;
+      for (const kernel of NOISE_KERNELS) {
+        let coefficient = 0;
+        for (let k = 0; k < 16; k++) coefficient += block[k] * kernel[k];
+        noiseEnergy += coefficient * coefficient;
+      }
+      scores[i] = roundHalfToEven(100 * projection / Math.sqrt(noiseEnergy));
+      bounded[i] = roundHalfToEven(100 * Math.max(-differenceEnergy / 2, Math.min(differenceEnergy / 2, projection)) / 5);
+    }
+    return { scores, bounded };
+  }
+
+  async function readMapped(pixels, width, height, record, native = false) {
+    const originalWidth = record.originalWidth, originalHeight = record.originalHeight;
+    const map = locatorBlockMap(originalWidth, originalHeight);
+    const scaleX = width / originalWidth, scaleY = height / originalHeight;
+    const offsets = native ? [0] : [0, -0.25, 0.25, -0.5, 0.5, -1, 1];
+    for (const oy of offsets) for (const ox of offsets) {
+      const fit = native ? null : { scaleX, scaleY, phaseX: (scaleX - 1) / 2 + ox, phaseY: (scaleY - 1) / 2 + oy };
+      for (const strength of STRENGTHS) {
+        const probe = await scoreMapped(pixels, width, height, map, originalWidth, strength, fit, PREAMBLE_BLOCKS);
+        const preamble = tryReadPreamble(probe.scores) || tryReadPreamble(probe.bounded);
+        if (!preamble || preamble.version !== CARRIER_V3) continue;
+        const scored = await scoreMapped(pixels, width, height, map, originalWidth, strength, fit);
+        const found = (await tryLayout(scored.scores)) || (await tryLayout(scored.bounded));
+        if (found && found.carrierVersion === CARRIER_V3) return {
+          ...found, origWidth: originalWidth, origHeight: originalHeight,
+          scaleX, scaleY, phaseX: fit?.phaseX || 0, phaseY: fit?.phaseY || 0
+        };
+      }
+      if (!native) await yieldNow();
+    }
+    return { locatorOnly: true, origWidth: originalWidth, origHeight: originalHeight, scaleX, scaleY };
+  }
+
+  function bilinearSample(pixels, width, height, x, y) {
+    x = Math.max(0, Math.min(width - 1, x)); y = Math.max(0, Math.min(height - 1, y));
+    const x0 = Math.floor(x), y0 = Math.floor(y), x1 = Math.min(width - 1, x0 + 1), y1 = Math.min(height - 1, y0 + 1);
+    const fx = x - x0, fy = y - y0;
+    const sample = [0, 0, 0, 255];
+    for (let channel = 0; channel < 4; channel++) {
+      const a = pixels[(x0 + y0 * width) * 4 + channel], b = pixels[(x1 + y0 * width) * 4 + channel];
+      const c = pixels[(x0 + y1 * width) * 4 + channel], d = pixels[(x1 + y1 * width) * 4 + channel];
+      sample[channel] = roundHalfToEven(a * (1 - fx) * (1 - fy) + b * fx * (1 - fy) + c * (1 - fx) * fy + d * fx * fy);
+    }
+    return sample;
+  }
+
+  async function resampleReadSpace(pixels, width, height, origW, origH, scaleX, scaleY, phaseX, phaseY) {
+    const out = new Uint8Array(origW * origH * 4);
+    for (let y = 0; y < origH; y++) {
+      if ((y & 31) === 31) await yieldNow();
+      for (let x = 0; x < origW; x++) {
+        out.set(bilinearSample(pixels, width, height, phaseX + scaleX * x, phaseY + scaleY * y), (x + y * origW) * 4);
+      }
+    }
+    return out;
+  }
+
+  function cleanLocators(pixels, width, height, output) {
+    for (const patch of locatorLayout(width, height)) {
+      const header = locatorHeader(width, height, patch.id);
+      for (let slot = 0; slot < 96; slot++) {
+        const cell = locatorOrder[slot], bit = WORD_BITS[header[Math.floor(slot / 12)] * 12 + slot % 12];
+        const x = patch.x + cell % LOCATOR_COLUMNS * LOCATOR_CELL, y = patch.y + Math.floor(cell / LOCATOR_COLUMNS) * LOCATOR_CELL;
+        let projection = 0, energy = 0;
+        for (let dy = 0; dy < 8; dy++) for (let dx = 0; dx < 8; dx++) {
+          const k = scaleWeight(LOCATOR_STRENGTH, shapeWeight(dx >> 1, dy >> 1, bit));
+          const p = (x + dx + (y + dy) * width) * 4;
+          projection += (pixels[p] + pixels[p + 1] + pixels[p + 2]) / 3 * k; energy += k * k;
+        }
+        const amount = Math.max(0, Math.min(1, projection / energy));
+        for (let dy = 0; dy < 8; dy++) for (let dx = 0; dx < 8; dx++) {
+          const delta = amount * scaleWeight(LOCATOR_STRENGTH, shapeWeight(dx >> 1, dy >> 1, bit));
+          const p = (x + dx + (y + dy) * width) * 4;
+          for (let c = 0; c < 3; c++) output[p + c] = clampChannel(pixels[p + c] - delta);
+        }
+      }
+    }
+  }
+
+  async function writeSignal(reference, image, width, height, framed, strength, version, map = null) {
     const columns = Math.floor(width / BLOCK);
-    const blockCount = columns * Math.floor(height / BLOCK);
+    const blockCount = map ? map.length : columns * Math.floor(height / BLOCK);
     const payloadBlocks = blockCount - PREAMBLE_BLOCKS;
     if (payloadBlocks < 1 || framed.length > MAX_FRAMED) {
       throw new Error("This image is too small for that message. Use a larger picture or a shorter message.");
@@ -631,22 +899,25 @@
     const flags = FLAGS | (parityBits === 1 ? ONE_PARITY : 0);
     const bytes = new Uint8Array(9);
     bytes[0] = MAGIC;
-    bytes[1] = 1;
+    bytes[1] = version === CARRIER_V3 ? CARRIER_V3 : CARRIER_V1;
     bytes[2] = flags;
     writeU32(bytes, 3, framed.length);
     const crc = crc32(bytes, 0, 7) & 0xFFFF;
     bytes[7] = crc & 0xFF;
     bytes[8] = (crc >> 8) & 0xFF;
-    const amplitudeCache = new Int16Array(blockCount);
+    const amplitudeCache = new Int16Array(columns * Math.floor(height / BLOCK));
     amplitudeCache.fill(-1);
     const preambleOrder = scatterOrder(PREAMBLE_BLOCKS, SEED);
-    await writeBits(reference, image, width, columns, preambleOrder, (slot) => {
+    await writeBits(reference, image, width, columns, map ? preambleOrder.map((block) => map[block]) : preambleOrder, (slot) => {
       const bitIndex = slot % 72;
       return (bytes[bitIndex >> 3] >> (7 - (bitIndex & 7))) & 1;
     }, strength, amplitudeCache);
     const payloadOrder = scatterOrder(payloadBlocks, SEED);
     const payloadSlots = new Uint32Array(payloadBlocks);
-    for (let slot = 0; slot < payloadBlocks; slot++) payloadSlots[slot] = PREAMBLE_BLOCKS + payloadOrder[slot];
+    for (let slot = 0; slot < payloadBlocks; slot++) {
+      const block = PREAMBLE_BLOCKS + payloadOrder[slot];
+      payloadSlots[slot] = map ? map[block] : block;
+    }
     await writeBits(reference, image, width, columns, payloadSlots, (slot) => codedBit(framed, slot % (framed.length * bitsPerByte), bitsPerByte), strength, amplitudeCache);
     return {
       copies: Math.floor(payloadBlocks / (framed.length * bitsPerByte)),
@@ -763,7 +1034,8 @@
   function readFramedScores(scores) {
     const preamble = tryReadPreamble(scores);
     if (!preamble) throw frameError("The image does not contain a matching carrier header.");
-    if (preamble.version !== 1 || preamble.framedLength < HEADER || preamble.framedLength > MAX_FRAMED) {
+    if ((preamble.version !== CARRIER_V1 && preamble.version !== CARRIER_V3) ||
+      preamble.framedLength < HEADER || preamble.framedLength > MAX_FRAMED) {
       throw frameError("Unsupported image carrier.");
     }
     if ((preamble.flags & ~ONE_PARITY) !== FLAGS) throw frameError("The carrier flags do not match this profile.");
@@ -781,7 +1053,8 @@
       bytes: decoded.bytes,
       corrections: decoded.corrections,
       copies: Math.floor(payloadBlocks / codedBits),
-      parityBits
+      parityBits,
+      carrierVersion: preamble.version
     };
   }
 
@@ -851,7 +1124,8 @@
         parityBits: framed.parityBits,
         passwordProtected: unpacked.passwordProtected,
         bundle: unpacked.bundle,
-        formatVersion: unpacked.formatVersion
+        formatVersion: unpacked.formatVersion,
+        carrierVersion: framed.carrierVersion
       };
     } catch (error) {
       if (error && error.code === "frame") return null;
@@ -870,19 +1144,42 @@
     return (await tryLayout(scored.scores)) || (await tryLayout(scored.bounded));
   }
 
-  async function recover(pixels, width, height) {
+  async function recoverScan(pixels, width, height) {
     if (!pixels || width < BLOCK || height < BLOCK || pixels.length !== width * height * 4) return null;
     if (width * height > MAX_PIXELS) throw new Error("This image is too large for the browser tool.");
+    if (Math.floor(width / BLOCK) * Math.floor(height / BLOCK) <= PREAMBLE_BLOCKS) return null;
+    const preambleMap = Uint32Array.from({ length: PREAMBLE_BLOCKS }, (_, i) => i);
     for (let i = 0; i < STRENGTHS.length; i++) {
+      // Reject wrong grids on the small repeated header before scoring a whole
+      // photograph. This leaves the previous carrier's decoder unchanged.
+      const probe = await scoreMapped(pixels, width, height, preambleMap, width, STRENGTHS[i], null);
+      const preamble = tryReadPreamble(probe.scores) || tryReadPreamble(probe.bounded);
+      if (!preamble || preamble.version !== CARRIER_V1) continue;
       const found = await tryReadAt(pixels, width, height, STRENGTHS[i]);
       if (found) return found;
     }
     return null;
   }
 
+  async function recover(pixels, width, height) {
+    if (!pixels || pixels.length !== width * height * 4 || width < BLOCK || height < BLOCK) return null;
+    if (width * height > MAX_PIXELS) throw new Error("This image is too large for the browser tool.");
+    const native = await findLocator(pixels, width, height, true);
+    if (native) {
+      const found = await readMapped(pixels, width, height, native, true);
+      if (!found.locatorOnly) return found;
+      return readMapped(pixels, width, height, native);
+    }
+    const previous = await recoverScan(pixels, width, height);
+    if (previous && previous.carrierVersion === CARRIER_V1) return previous;
+    const locator = await findLocator(pixels, width, height);
+    return locator ? readMapped(pixels, width, height, locator) : null;
+  }
+
   async function inspect(pixels, width, height) {
     const recovery = await recover(pixels, width, height);
     if (!recovery) return { found: false };
+    if (recovery.locatorOnly) return { found: true, unreadable: true, carrierVersion: CARRIER_V3 };
     try {
       if (recovery.passwordProtected) validateEnvelope(recovery.payload, recovery.bundle);
       else if (recovery.bundle) unpackBundle(recovery.payload);
@@ -895,6 +1192,7 @@
       passwordProtected: recovery.passwordProtected,
       formatVersion: recovery.formatVersion,
       hasAttachments: recovery.bundle,
+      carrierVersion: recovery.carrierVersion,
       strength: recovery.strength
     };
   }
@@ -902,6 +1200,7 @@
   async function decode(pixels, width, height, password) {
     const recovery = await recover(pixels, width, height);
     if (!recovery) return { status: "none" };
+    if (recovery.locatorOnly) return { status: "markers", carrierVersion: CARRIER_V3, scaleX: recovery.scaleX, scaleY: recovery.scaleY };
     if (recovery.passwordProtected && !password) {
       return { status: "password", strength: recovery.strength };
     }
@@ -915,6 +1214,9 @@
           status: "success",
           ...content,
           formatVersion: recovery.formatVersion,
+          carrierVersion: recovery.carrierVersion,
+          scaleX: recovery.scaleX,
+          scaleY: recovery.scaleY,
           passwordProtected: recovery.passwordProtected,
           strength: recovery.strength
         };
@@ -926,11 +1228,13 @@
     }
   }
 
-  async function encodeAt(reference, width, height, payload, passwordProtected, strength, adaptive, bundle) {
+  async function encodeAt(reference, width, height, payload, passwordProtected, strength, adaptive, bundle, carrierVersion) {
     strength = Math.max(1, Math.min(32, strength));
+    const version = carrierVersion === CARRIER_V3 ? CARRIER_V3 : CARRIER_V1;
+    const map = version === CARRIER_V3 ? locatorBlockMap(width, height) : null;
     const probe = await packFrame(payload, 8, passwordProtected, bundle);
     const columns = Math.floor(width / BLOCK);
-    const blockCount = columns * Math.floor(height / BLOCK);
+    const blockCount = map ? map.length : columns * Math.floor(height / BLOCK);
     if (adaptive) {
       const available = blockCount - PREAMBLE_BLOCKS;
       let bitsPerByte = 0;
@@ -945,14 +1249,16 @@
       if (adjusted !== strength) strength = adjusted;
     }
     const framed = await packFrame(payload, strength, passwordProtected, bundle);
-    const pixels = reference.slice();
-    const written = await writeSignal(reference, pixels, width, height, framed, strength);
+    const output = reference.slice();
+    const written = await writeSignal(reference, output, width, height, framed, strength, version, map);
+    if (map) paintLocators(reference, output, width, height, strength);
     return {
-      pixels,
+      pixels: output,
       strength,
       copies: written.copies,
       parityBits: written.parityBits,
-      passwordProtected
+      passwordProtected,
+      carrierVersion: version
     };
   }
 
@@ -975,12 +1281,17 @@
         throw new Error("This image already contains a fingerprint. Choose a picture that does not have one.");
       }
       const locked = typeof password === "string" && password.length > 0;
+      const wantLocators = preferredCarrier === CARRIER_V3;
+      const usedVersion = wantLocators && locatorFits(width, height) ? CARRIER_V3 : CARRIER_V1;
       const payload = locked ? await encryptEnvelope(plain, password, bundle) : plain.slice();
       try {
-        let encoded = await encodeAt(pixels, width, height, payload, locked, STRENGTHS[0], true, bundle);
+        let encoded = await encodeAt(pixels, width, height, payload, locked, STRENGTHS[0], true, bundle, usedVersion);
         for (;;) {
-          const recovery = await tryReadAt(encoded.pixels, width, height, encoded.strength);
-          if (recovery && recovery.bundle === bundle && recovery.passwordProtected === locked && bytesEqual(recovery.payload, payload)) {
+          const recovery = usedVersion === CARRIER_V3
+            ? await recover(encoded.pixels, width, height)
+            : await tryReadAt(encoded.pixels, width, height, encoded.strength);
+          if (recovery && !recovery.locatorOnly && recovery.carrierVersion === usedVersion &&
+            recovery.bundle === bundle && recovery.passwordProtected === locked && bytesEqual(recovery.payload, payload)) {
             return {
               pixels: encoded.pixels,
               width,
@@ -988,7 +1299,9 @@
               strength: encoded.strength,
               copies: encoded.copies,
               parityBits: encoded.parityBits,
-              passwordProtected: locked
+              passwordProtected: locked,
+              carrierVersion: usedVersion,
+              locatorFallback: wantLocators && usedVersion === CARRIER_V1
             };
           }
           let next = 0;
@@ -1001,7 +1314,7 @@
           if (next === 0) {
             throw new Error("The message could not be verified in this image. Try another picture or a shorter message.");
           }
-          encoded = await encodeAt(pixels, width, height, payload, locked, next, false, bundle);
+          encoded = await encodeAt(pixels, width, height, payload, locked, next, false, bundle, usedVersion);
         }
       } finally { payload.fill(0); }
     } finally { plain.fill(0); }
@@ -1278,7 +1591,38 @@
     return rounded;
   }
 
+  async function forwardSample(source, sourceW, sourceH, pixels, width, height, fit) {
+    const out = new Uint8Array(width * height * 4);
+    for (let y = 0; y < height; y++) {
+      if ((y & 15) === 15) await yieldNow();
+      const originY = (y - fit.phaseY) / fit.scaleY;
+      for (let x = 0; x < width; x++) {
+        const sample = bilinearSample(source, sourceW, sourceH, (x - fit.phaseX) / fit.scaleX, originY);
+        const index = (x + y * width) * 4;
+        out[index] = sample[0];
+        out[index + 1] = sample[1];
+        out[index + 2] = sample[2];
+        out[index + 3] = pixels[index + 3];
+      }
+    }
+    return out;
+  }
+
   async function extractCarrier(pixels, width, height, strength) {
+    const fit = await recover(pixels, width, height);
+    if (!fit || fit.locatorOnly || fit.carrierVersion !== CARRIER_V3) return extractBlind(pixels, width, height, strength);
+    const origW = fit.origWidth, origH = fit.origHeight;
+    const identity = origW === width && origH === height && fit.phaseX === 0 && fit.phaseY === 0;
+    const restored = identity
+      ? pixels.slice()
+      : await resampleReadSpace(pixels, width, height, origW, origH, fit.scaleX, fit.scaleY, fit.phaseX, fit.phaseY);
+    const cleaned = await extractBlind(restored, origW, origH, fit.strength, locatorBlockMap(origW, origH));
+    cleanLocators(restored, origW, origH, cleaned);
+    if (identity) return cleaned;
+    return forwardSample(cleaned, origW, origH, pixels, width, height, fit);
+  }
+
+  async function extractBlind(pixels, width, height, strength, map = null) {
     assertImage(pixels, width, height);
     strength = Math.max(1, Math.min(32, strength | 0));
     const common = new Float64Array(16);
@@ -1307,9 +1651,12 @@
     const carrier = pixels.slice();
     const columns = Math.floor(width / BLOCK);
     const rows = Math.floor(height / BLOCK);
+    const included = map ? new Uint8Array(columns * rows) : null;
+    if (included) for (const block of map) included[block] = 1;
     for (let row = 0; row < rows; row++) {
       if ((row & 15) === 15) await yieldNow();
       for (let column = 0; column < columns; column++) {
+        if (included && !included[column + row * columns]) continue;
         let marker = 0;
         let bit = 0;
         for (let y = 0; y < 4; y++) {
@@ -1349,6 +1696,8 @@
     encode,
     encodePayload,
     extractCarrier,
+    setCarrierVersion(version) { preferredCarrier = version === CARRIER_V1 ? CARRIER_V1 : CARRIER_V3; },
+    getCarrierVersion() { return preferredCarrier; },
     readImageFile,
     decodePng,
     writePng,
