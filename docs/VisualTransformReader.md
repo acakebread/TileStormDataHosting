@@ -1,7 +1,8 @@
 # Browser visual transform reader experiment
 
-Work on branch `codex/visual-transform-reader`. This is implementation for local
-user evaluation, with no new fixtures, executed tests, commit or deployment.
+The original research branch was `codex/visual-transform-reader`; the browser
+reader is now on `main`. Current changes are for local user evaluation, with no
+new versioned fixtures, commit or deployment.
 Carrier 3 retains its eight 72 × 48 wavelet patches, dimensions and identifiers.
 Carrier 1 and the ordinary full-frame reader remain unchanged. No centre marker,
 visible ruler, border reservation, upload or service is added.
@@ -38,6 +39,53 @@ worker, and avoids a duplicate verification before initial inspection returns.
 Unlocking and subsequent decoding reuse recovered geometry and verify
 the frame again; they do not repeat discovery. Encoding/internal codec checks
 retain their existing read path and do not start photographic searches.
+
+For inputs larger than 1800 pixels on the longest side, the geometric stage
+searches a coarse-to-fine pyramid: 1/16, 1/8, 1/4, 1/2 and full size, stopping
+at the first readable result. Duplicate sizes are skipped. Every working raster
+is reduced directly from the original capture using pixel-area averaging, without
+cascaded resizes or accumulated rounding. These passes share the 60-second
+discovery budget. Unproductive seed searches at 1/16 and 1/8 stop after five and
+eight seconds respectively; subsequent levels reserve some time for larger
+ones. Once a checksum-valid marker header is found, its geometry search can use
+the remainder of the shared budget without discarding the localization state.
+The same verified translation and affine shortcuts used by ordinary imports
+remain enabled. Verification at a working scale can establish a geometry proposal;
+the accepted payload still comes from the rectified full capture.
+Large photographs can enlarge carrier symbols beyond the existing detector's
+scale range; area filtering makes their geometry easier to locate. A weak FFT
+signature, missing header or failed payload at one level does not reject the
+other levels. Frequency absence at half size is not evidence that quarter size
+cannot work: both undersampling and the detector's basis limits affect the result.
+Working images
+provide marker transforms and the original dimensions recorded in their headers.
+They do not supply the accepted payload in this large-photo path. Their transforms
+are mapped back into full-capture coordinates, with the pixel-centre offset.
+
+Once geometry is established, `rectifyPhoto` samples the original full capture
+directly into an image of exactly the recorded encoded dimensions. Each native
+pixel represents a footprint mapped by one continuous 3 × 3 homography. Local
+derivatives choose a quadrature density, bounded at eight samples per axis; every
+subsample uses the exact perspective denominator and bilinear source interpolation.
+This integrates enlarged pixels rather than taking isolated points through screen
+moire. There is no intermediate preview resize and no two-triangle approximation.
+The existing wavelet reader checks this native raster, starting with its repeated
+preamble, with a small phase refinement before accepting the full frame checksum.
+Phase adjustments are composed in native space on the right of the homography.
+
+Input pixels, files and displayed dimensions remain unchanged. The rectified native
+raster and its sampling transform are retained for later checksum-verified reads
+and source extraction. Camera workers return the dimensions, homography and phase
+metadata; subsequent page reads can recreate the identical raster from the original
+capture. Guide coordinates stay in full-capture space. A focused diagnosis of the
+supplied 4032 × 3024 PNG recovered all eight markers and a checksum-valid payload
+on a 640 × 480 native grid, both through the codec and through the localhost
+browser's worker/import path. The original raster remained 4032 × 3024. Its
+manually resized 25% counterpart was used to compare localization and filtering;
+pixel-area reduction also located all eight markers, so changing its filter was
+not necessary for this capture. This is evidence for that one input, not general
+phone, photographic or print support. No broad test suite was run. Private input
+files and diagnostic geometry remain outside versioned fixtures.
 
 Below the preview and image contents, **Image recovery options** provides
 **Automatic · recommended** and the three individual modes for retries. **Padding
@@ -133,12 +181,15 @@ encoding evidence and never accepts a payload.
 A 3 × 3 homography maps original pixel centres to observed pixel centres. Each
 coordinate is a ratio of linear expressions. One continuous mapping covers the
 plane, without two affine triangles. Payload samples go directly through that
-transform in floating point. A small phase search checks the repeated preamble
-before scoring the whole payload. Complete PCF1 frame validation is required.
+transform in floating point for the established smaller-image path. Large photos
+instead use the native raster reconstructed from the full capture as described
+above. A small phase search checks the repeated preamble before scoring the whole
+payload. Complete PCF1 frame validation is required.
 
-Only geometry is retained for later reads/unlocking. Payload bytes are read and
-verified again. Approximate source extraction removes signal in canonical read
-space, then maps that source back for comparison, preserving surrounding padding.
+Geometry and, where used, the rectified native raster are retained for later
+reads/unlocking. Payload bytes are read and verified again. Approximate source
+extraction removes signal in canonical read space, then maps that source back
+for comparison, preserving surrounding padding.
 The overlay is a separate canvas, excluded from exports and clipboard data.
 
 ## Files and limits
@@ -152,7 +203,10 @@ The overlay is a separate canvas, excluded from exports and clipboard data.
 - `pixelstow.js`: locator adapter, transform sampling, payload verification and
   geometry-aware approximate source extraction.
 - `pixelstow.html`: automatic import recovery, optional manual search modes,
-  cancellation and diagnostic overlay.
+  cancellation and diagnostic overlay. The image viewport owns pinch zoom and
+  two-finger pan, sharing one transform across both comparison images. One finger
+  still drags the divider; mouse wheel zoom, left-button comparison and right-button
+  pan remain available. Native page zoom is suppressed inside the viewport only.
 
 The user has reported successful recovery from a photograph with the committed
 reader (`6675dc8`). This is useful evidence for that input, rather than a general

@@ -10,9 +10,13 @@ can therefore be worse than a full-resolution still photograph.
 
 On HTTP/HTTPS, one disposable worker runs the entire automatic inspection:
 native reading, common resize checks, FFT gate, shared translation/affine/
-perspective localization, and final payload validation. There is no frame queue
-or overlapping search. After a failed read, the next fresh frame is captured
-after a short delay. Geometric discovery retains its existing 60-second budget
+perspective localization, and final payload validation. Large frames also use the
+coarse-to-fine 1/16, 1/8, 1/4, 1/2 and full-size localization described in
+[VisualTransformReader.md](VisualTransformReader.md),
+then rectify the full capture onto the encoded dimensions for wavelet reading.
+The captured raster and marker guides remain in original-resolution coordinates.
+There is no frame queue or overlapping search. After a failed read, the next fresh
+frame is captured after a short delay. Geometric discovery retains its existing 60-second budget
 per attempt; this is continuous capture, rather than decoding at video frame rate.
 The camera UI does not bypass the weak-signature gate. **Use this frame** opens
 a single frame with the ordinary image recovery controls, including the option

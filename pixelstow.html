@@ -204,6 +204,10 @@
       overflow: hidden;
       border-radius: 12px;
       background: rgba(0, 0, 0, 0.28);
+      touch-action: none;
+      overscroll-behavior: contain;
+      user-select: none;
+      -webkit-user-select: none;
     }
 
     .viewport.panning,
@@ -440,7 +444,7 @@
       .loaded-image { font-size: 0.85rem; margin: 8px 0 4px; }
       #capacity { font-size: 0.8rem; margin-bottom: 0; }
       .status { margin-top: 8px; font-size: 0.9rem; }
-      .preview-note { display: none; }
+      .preview-note { font-size: 0.8rem; margin: 4px 0; }
       .preview-audio { display: inline-flex; }
       .attachment-row { padding: 10px; }
     }
@@ -712,8 +716,8 @@
     </form>
   </dialog>
   <script src="./pixelstow-spectrum.js?v=20261012-spectrum1"></script>
-  <script src="./pixelstow-transform.js?v=20261012-auto1"></script>
-  <script src="./pixelstow.js?v=20261012-camera1"></script>
+  <script src="./pixelstow-transform.js?v=20261012-photo-pyramid1"></script>
+  <script src="./pixelstow.js?v=20261012-photo-pyramid1"></script>
   <script src="./pixelstow-export.js?v=20261011-exports"></script>
   <script src="./pixelstow-media.js?v=20261011-webm-duration"></script>
   <script src="./pixelstow-sharing.js?v=20261011-png-clipboard"></script>
@@ -790,6 +794,8 @@
     let panX = 0;
     let panY = 0;
     let blockPanMenu = false;
+    const previewTouches = new Map();
+    let touchView = null;
     const exports = new PixelStowExportDialog();
     const media = new PixelStowMediaPanel({
       save: saveBlob,
@@ -831,7 +837,8 @@
 
     function carrierNote(result) {
       if (!result || result.carrierVersion !== 3) return "";
-      if (result.geometry) return " Version 3; read using the recovered " + result.geometry.model + " transform (" + result.geometry.markerCount + "/8 markers).";
+      if (result.geometry) return " Version 3; read using the recovered " + result.geometry.model + " transform (" + result.geometry.markerCount + "/8 markers)." +
+        (result.readResolution ? " Full photo rectified onto the original " + result.readResolution.width + " × " + result.readResolution.height + " pixel grid." : "");
       const sx = Number(result.scaleX);
       const sy = Number(result.scaleY);
       if (!sx || !sy || (Math.abs(sx - 1) < 0.0001 && Math.abs(sy - 1) < 0.0001)) return " New format (version 3).";
@@ -1055,6 +1062,7 @@
     }
 
     function resetView() {
+      clearPreviewTouches();
       fitMode = true;
       sizeViewport();
     }
@@ -1076,12 +1084,19 @@
       applyView();
     }
 
+    function previewHelp(comparing) {
+      if (window.matchMedia("(pointer: coarse)").matches) {
+        return "Pinch to zoom. Use two fingers to pan." + (comparing ? " Drag the divider to compare." : "");
+      }
+      return (comparing ? "Left-click or drag the picture to compare. " : "") + "Scroll to zoom. Hold the right mouse button to pan.";
+    }
+
     function hideComparison() {
       previewGeneration += 1;
       previewSource.hidden = true;
       compareUi.hidden = true;
       comparisonControl.hidden = true;
-      previewNote.textContent = "Scroll over the picture to zoom. Hold the right mouse button to pan.";
+      previewNote.textContent = previewHelp(false);
     }
 
     function showPreview(pixels, width, height) {
@@ -1154,7 +1169,8 @@
         const geometry = result.geometry;
         transformStatus.textContent = "Recovered " + geometry.originalWidth + " × " + geometry.originalHeight +
           " original pixels; " + geometry.markerCount + "/8 markers confirmed (" + geometry.headerCount + " headers, " +
-          geometry.patternCount + " known-pattern matches); " + geometry.model + " transform.";
+          geometry.patternCount + " known-pattern matches); " + geometry.model + " transform." +
+          (result.readResolution ? " Native read grid: " + result.readResolution.width + " × " + result.readResolution.height + "; resampled from the full capture." : "");
       } else {
         transformStatus.textContent = result.reason || (result.unreadable ? "Recovery markers were found, but the payload did not pass its checks."
           : result.found ? "Read the image without geometric recovery." : "No encoded image was located.");
@@ -1235,7 +1251,7 @@
         comparisonControl.hidden = false;
         preview.hidden = false;
         previewNote.hidden = false;
-        previewNote.textContent = "Left-click or drag the picture to compare. Scroll to zoom. Hold the right mouse button to pan.";
+        previewNote.textContent = previewHelp(true);
         resetView();
       } catch (error) {
         if (generation !== previewGeneration || current !== job) return;
@@ -1348,6 +1364,73 @@
     split.addEventListener("input", () => setSplit(split.value));
     let splitPointer = null;
     let splitCapture = null;
+    function endSplit(event) {
+      if (splitPointer === null || (event && event.pointerId !== splitPointer)) return;
+      const id = splitPointer, capture = splitCapture;
+      splitPointer = null;
+      splitCapture = null;
+      if (capture.hasPointerCapture(id)) capture.releasePointerCapture(id);
+    }
+
+    function clearPreviewTouches() {
+      endSplit();
+      for (const id of previewTouches.keys()) {
+        if (viewport.hasPointerCapture(id)) viewport.releasePointerCapture(id);
+      }
+      previewTouches.clear();
+      touchView = null;
+    }
+
+    function startTouchView() {
+      const [a, b] = [...previewTouches.values()];
+      if (!b) { touchView = null; return; }
+      const rect = viewport.getBoundingClientRect();
+      const x = (a.x + b.x) / 2 - rect.left, y = (a.y + b.y) / 2 - rect.top;
+      touchView = { distance: Math.max(1, Math.hypot(b.x - a.x, b.y - a.y)), scale: viewScale,
+        imageX: (x - originX) / viewScale, imageY: (y - originY) / viewScale };
+    }
+
+    // Capture both fingers before the comparison handler. Pinching takes over
+    // from a one-finger divider drag; dropping to one finger does not move it.
+    viewport.addEventListener("pointerdown", (event) => {
+      if (event.pointerType !== "touch" || !imagePixels().w) return;
+      const onButton = event.target.closest("button") && !splitHandle.contains(event.target);
+      previewTouches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      // A normal tap must still reach the preview's Play audio button.
+      if (!onButton || previewTouches.size >= 2) {
+        event.preventDefault();
+        viewport.setPointerCapture(event.pointerId);
+      }
+      if (previewTouches.size >= 2) {
+        endSplit();
+        for (const id of previewTouches.keys()) viewport.setPointerCapture(id);
+        startTouchView();
+      }
+    });
+    viewport.addEventListener("pointermove", (event) => {
+      if (!previewTouches.has(event.pointerId)) return;
+      previewTouches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (!touchView) return;
+      event.preventDefault();
+      const [a, b] = [...previewTouches.values()], rect = viewport.getBoundingClientRect();
+      const x = (a.x + b.x) / 2 - rect.left, y = (a.y + b.y) / 2 - rect.top;
+      fitMode = false;
+      viewScale = clampScale(touchView.scale * Math.hypot(b.x - a.x, b.y - a.y) / touchView.distance, imagePixels(), viewBox());
+      originX = x - touchView.imageX * viewScale;
+      originY = y - touchView.imageY * viewScale;
+      applyView();
+    });
+    function endPreviewTouch(event) {
+      if (!previewTouches.delete(event.pointerId)) return;
+      if (viewport.hasPointerCapture(event.pointerId)) viewport.releasePointerCapture(event.pointerId);
+      startTouchView();
+    }
+    viewport.addEventListener("pointerup", endPreviewTouch);
+    viewport.addEventListener("pointercancel", endPreviewTouch);
+    window.addEventListener("blur", clearPreviewTouches);
+    // Also suppress Safari's native gesture events within this viewer only.
+    ["gesturestart", "gesturechange"].forEach((name) => viewport.addEventListener(name, (event) => event.preventDefault(), { passive: false }));
+
     function dragSplit(event) {
       const rect = compareUi.getBoundingClientRect();
       if (!rect.width) return;
@@ -1356,7 +1439,7 @@
     }
     viewport.addEventListener("pointerdown", (event) => {
       const onHandle = splitHandle.contains(event.target);
-      if (event.button !== 0 || compareUi.hidden || panning || splitPointer !== null) return;
+      if (event.button !== 0 || compareUi.hidden || panning || splitPointer !== null || previewTouches.size > 1) return;
       if (!onHandle && (event.pointerType === "touch" || !compare.contains(event.target))) return;
       event.preventDefault();
       splitPointer = event.pointerId;
@@ -1367,17 +1450,11 @@
     viewport.addEventListener("pointermove", (event) => {
       if (event.pointerId === splitPointer) dragSplit(event);
     });
-    ["pointerup", "pointercancel", "lostpointercapture"].forEach((name) => viewport.addEventListener(name, (event) => {
-      if (event.pointerId !== splitPointer) return;
-      splitPointer = null;
-      const capture = splitCapture;
-      splitCapture = null;
-      if (capture.hasPointerCapture(event.pointerId)) capture.releasePointerCapture(event.pointerId);
-    }));
+    ["pointerup", "pointercancel", "lostpointercapture"].forEach((name) => viewport.addEventListener(name, endSplit));
     window.addEventListener("resize", () => { if (!preview.hidden) sizeViewport(); });
 
     viewport.addEventListener("wheel", (event) => {
-      if (!event.deltaY || event.ctrlKey || !imagePixels().w) return;
+      if (!event.deltaY || !imagePixels().w) return;
       event.preventDefault();
       const delta = event.deltaMode === 1 ? event.deltaY * 16 : event.deltaY;
       zoomAt(event.clientX, event.clientY, Math.pow(1.0015, -delta));

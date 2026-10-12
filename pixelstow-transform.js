@@ -78,7 +78,7 @@
   function check(options) {
     if (options.signal?.aborted) throw new DOMException("Search cancelled.", "AbortError");
     if (options.deadline && Date.now() > options.deadline) {
-      const error = new Error("Search stopped at the 60-second limit. No exhaustive angle sweep was run.");
+      const error = new Error("This geometry pass reached its search time limit. No exhaustive angle sweep was run.");
       error.name = "SearchLimit"; throw error;
     }
   }
@@ -605,7 +605,8 @@
   }
 
   async function find(pixels, width, height, requested, adapter) {
-    const options = { ...requested, deadline: Date.now() + 60000,
+    const deadline = Math.min(Date.now() + 60000, requested.deadline || Infinity);
+    const options = { ...requested, deadline: Math.min(deadline, requested.seedDeadline || Infinity),
       mode: ["padding", "affine", "perspective"].includes(requested.mode) ? requested.mode : "padding" };
     options.check = () => check(options);
     let signature = null;
@@ -620,6 +621,9 @@
       if (!signature.likely && !options.forceSearch && !options.corners?.length) return { geometry: null, markers, signature, reason: signature.message };
       let seed = await seedSearch(pixels, luma, width, height, adapter, options, signature);
       if (!seed) return { geometry: null, markers, signature, reason: "No checksum-valid wavelet patch was found using the outline/frequency estimates." };
+      // Coarse pyramid levels have a short seed allowance. Once a header is
+      // verified, keep its search state and use the remaining overall budget.
+      options.deadline = deadline;
       if (options.mode !== "padding") {
         const localized = await refine(seed, adapter, seed, options);
         if (localized) seed = { ...seed, ...localized };

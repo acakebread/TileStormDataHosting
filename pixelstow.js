@@ -22,7 +22,8 @@
   const CARRIER_V3 = 3;
   let preferredCarrier = CARRIER_V3;
   const codecScriptUrl = typeof document !== "undefined" ? document.currentScript?.src : null;
-  // Store only geometry. Every later read still verifies the carrier and frame.
+  // Store geometry and, for photographs, the rectified native pixel grid. Payload
+  // bytes are never cached; every later read still verifies the carrier/frame.
   const visualMappings = new WeakMap();
   const encoder = new TextEncoder();
   const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
@@ -976,7 +977,7 @@
 
   function searchInWorker(pixels, width, height, options, operation = "geometry") {
     return new Promise((resolve, reject) => {
-      const url = new URL("pixelstow-transform-worker.js?v=20261012-camera1", codecScriptUrl);
+      const url = new URL("pixelstow-transform-worker.js?v=20261012-photo-pyramid1", codecScriptUrl);
       const worker = new Worker(url);
       const abort = () => { cleanup(); reject(new DOMException("Search cancelled.", "AbortError")); };
       const cleanup = () => { worker.terminate(); options.signal?.removeEventListener("abort", abort); };
@@ -992,7 +993,8 @@
       try {
         const copy = new Uint8Array(pixels);
         worker.postMessage({ pixels: copy, width, height, operation, mode: options.mode, forceSearch: options.forceSearch,
-          corners: options.corners, simplerFirst: options.simplerFirst }, [copy.buffer]);
+          corners: options.corners, simplerFirst: options.simplerFirst, deadline: options.deadline,
+          seedDeadline: options.seedDeadline }, [copy.buffer]);
       } catch (error) { cleanup(); reject(error); }
     });
   }
@@ -1000,6 +1002,12 @@
   async function findVisualTransform(pixels, width, height, options = {}) {
     assertImage(pixels, width, height);
     if (!root.PixelStowTransform) throw new Error("The visual transform reader script is missing. Reload this page.");
+    // A high-resolution camera image can enlarge the stored six-pixel symbols
+    // beyond the local reader's scale range. Locate on smaller working rasters,
+    // then rectify the full capture onto the dimensions recorded in the markers.
+    if (!options.geometryOnly && !options.singleResolution && options.mode !== "padding" && Math.max(width, height) > 1800) {
+      return findPhotoTransform(pixels, width, height, options);
+    }
     // A page opened from disk has an opaque origin and cannot start this worker.
     // The same detector can run on the page, yielding between chunks for cancel/UI.
     const search = canUseReaderWorker(options)
@@ -1023,6 +1031,182 @@
     const inspection = describeRecovery(recovered);
     return { ...inspection, found: true, unreadable: Boolean(recovered.locatorOnly) || !inspection.found,
       carrierVersion: CARRIER_V3, geometry: recovered.geometry, markers: search.markers, signature: search.signature };
+  }
+
+  async function reducePhoto(pixels, width, height, targetWidth, targetHeight, signal) {
+    // Area averaging suppresses screen/sensor moire. Sampling a few bilinear
+    // points when shrinking by 3x would alias the very texture being removed.
+    // One row accumulator avoids a full-size floating-point intermediate raster.
+    const rx = width / targetWidth, ry = height / targetHeight;
+    const columns = Array.from({ length: targetWidth }, (_, x) => {
+      const left = x * rx, right = (x + 1) * rx, first = Math.floor(left);
+      const last = Math.min(width - 1, Math.ceil(right) - 1);
+      return { first, weights: Float64Array.from({ length: last - first + 1 }, (_, i) =>
+        Math.max(0, Math.min(right, first + i + 1) - Math.max(left, first + i)) / rx) };
+    });
+    const out = new Uint8Array(targetWidth * targetHeight * 4), row = new Float64Array(targetWidth * 4);
+    for (let y = 0; y < targetHeight; y++) {
+      if ((y & 7) === 0) {
+        if (signal?.aborted) throw new DOMException("Search cancelled.", "AbortError");
+        await yieldNow();
+      }
+      row.fill(0);
+      const top = y * ry, bottom = (y + 1) * ry;
+      for (let sy = Math.floor(top); sy < Math.min(height, Math.ceil(bottom)); sy++) {
+        const wy = Math.max(0, Math.min(bottom, sy + 1) - Math.max(top, sy)) / ry;
+        for (let x = 0; x < targetWidth; x++) {
+          const { first, weights } = columns[x], dest = x * 4;
+          for (let k = 0; k < weights.length; k++) {
+            const src = (first + k + sy * width) * 4, weight = weights[k] * wy;
+            row[dest] += pixels[src] * weight;
+            row[dest + 1] += pixels[src + 1] * weight;
+            row[dest + 2] += pixels[src + 2] * weight;
+            row[dest + 3] += pixels[src + 3] * weight;
+          }
+        }
+      }
+      for (let i = 0; i < row.length; i++) out[y * row.length + i] = roundHalfToEven(row[i]);
+    }
+    return { pixels: out, width: targetWidth, height: targetHeight };
+  }
+
+  function liftPhotoResult(result, width, height, readWidth, readHeight) {
+    const sx = width / readWidth, sy = height / readHeight, ox = (sx - 1) / 2, oy = (sy - 1) / 2;
+    const lift = (h) => [sx * h[0] + ox * h[6], sx * h[1] + ox * h[7], sx * h[2] + ox * h[8],
+      sy * h[3] + oy * h[6], sy * h[4] + oy * h[7], sy * h[5] + oy * h[8], h[6], h[7], h[8]];
+    const geometry = result.geometry ? { ...result.geometry, matrix: lift(result.geometry.matrix),
+      corners: result.geometry.corners.map((p) => ({ x: sx * p.x + ox, y: sy * p.y + oy })),
+      expectedMarkers: result.geometry.expectedMarkers.map((m) => ({ ...m, matrix: lift(m.matrix) })) } : undefined;
+    return { ...result, geometry, markers: result.markers?.map((m) => ({ ...m, matrix: lift(m.matrix) })),
+      localizationResolution: { width: readWidth, height: readHeight } };
+  }
+
+  function geometryAt(geometry, matrix) {
+    const { originalWidth: w, originalHeight: h } = geometry;
+    return { ...geometry, matrix,
+      corners: [[0, 0], [w - 1, 0], [w - 1, h - 1], [0, h - 1]].map(([x, y]) => mappedPoint(matrix, x, y)),
+      expectedMarkers: locatorLayout(w, h).map((p) => ({ id: p.id, matrix: [
+        matrix[0], matrix[1], matrix[2] + matrix[0] * p.x + matrix[1] * p.y,
+        matrix[3], matrix[4], matrix[5] + matrix[3] * p.x + matrix[4] * p.y,
+        matrix[6], matrix[7], matrix[8] + matrix[6] * p.x + matrix[7] * p.y] })) };
+  }
+
+  async function rectifyPhoto(pixels, width, height, nativeWidth, nativeHeight, matrix, signal) {
+    // Each output pixel is on the original carrier lattice. A single homography
+    // maps its footprint into the full capture; no triangles or preview resize.
+    const out = new Uint8Array(nativeWidth * nativeHeight * 4), sum = new Float64Array(4);
+    for (let y = 0; y < nativeHeight; y++) {
+      if ((y & 7) === 0) {
+        if (signal?.aborted) throw new DOMException("Search cancelled.", "AbortError");
+        await yieldNow();
+      }
+      for (let x = 0; x < nativeWidth; x++) {
+        const d = matrix[6] * x + matrix[7] * y + matrix[8];
+        const cx = (matrix[0] * x + matrix[1] * y + matrix[2]) / d;
+        const cy = (matrix[3] * x + matrix[4] * y + matrix[5]) / d;
+        // Local derivatives determine quadrature density, not the mapping itself.
+        // Subsamples still use the exact projective denominator at their position.
+        const nx = Math.min(8, Math.max(1, Math.ceil(Math.hypot(matrix[0] - cx * matrix[6], matrix[3] - cy * matrix[6]) / Math.abs(d))));
+        const ny = Math.min(8, Math.max(1, Math.ceil(Math.hypot(matrix[1] - cx * matrix[7], matrix[4] - cy * matrix[7]) / Math.abs(d))));
+        sum.fill(0);
+        for (let iy = 0; iy < ny; iy++) for (let ix = 0; ix < nx; ix++) {
+          const px = x + (ix + 0.5) / nx - 0.5, py = y + (iy + 0.5) / ny - 0.5;
+          const divisor = matrix[6] * px + matrix[7] * py + matrix[8];
+          const sx = Math.max(0, Math.min(width - 1, (matrix[0] * px + matrix[1] * py + matrix[2]) / divisor));
+          const sy = Math.max(0, Math.min(height - 1, (matrix[3] * px + matrix[4] * py + matrix[5]) / divisor));
+          const x0 = Math.floor(sx), y0 = Math.floor(sy), fx = sx - x0, fy = sy - y0;
+          const a = (x0 + y0 * width) * 4, b = (Math.min(width - 1, x0 + 1) + y0 * width) * 4;
+          const c = (x0 + Math.min(height - 1, y0 + 1) * width) * 4, e = (Math.min(width - 1, x0 + 1) + Math.min(height - 1, y0 + 1) * width) * 4;
+          for (let channel = 0; channel < 4; channel++) {
+            sum[channel] += (pixels[a + channel] * (1 - fx) + pixels[b + channel] * fx) * (1 - fy) +
+              (pixels[c + channel] * (1 - fx) + pixels[e + channel] * fx) * fy;
+          }
+        }
+        const dest = (x + y * nativeWidth) * 4;
+        for (let channel = 0; channel < 4; channel++) out[dest + channel] = clampChannel(sum[channel] / (nx * ny));
+      }
+    }
+    return { pixels: out, width: nativeWidth, height: nativeHeight };
+  }
+
+  function photoReadResult(recovered, image, photoGeometry) {
+    // The small phase refinement is now in native read space. Compose it on the
+    // right of the photo transform, rather than shifting camera pixels linearly.
+    const h = photoGeometry.matrix, q = recovered.matrix, matrix = new Array(9).fill(0);
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
+      for (let k = 0; k < 3; k++) matrix[r * 3 + c] += h[r * 3 + k] * q[k * 3 + c];
+    }
+    return { ...recovered, matrix, geometry: geometryAt(photoGeometry, matrix),
+      readResolution: { width: image.width, height: image.height, geometry: recovered.geometry, photoMatrix: h },
+      readImage: { ...image, matrix: q } };
+  }
+
+  async function readPhotoMapping(pixels, width, height, geometry, signal) {
+    const image = await rectifyPhoto(pixels, width, height, geometry.originalWidth, geometry.originalHeight, geometry.matrix, signal);
+    const nativeGeometry = geometryAt(geometry, [1, 0, 0, 0, 1, 0, 0, 0, 1]);
+    const recovered = await readVisualMapping(image.pixels, image.width, image.height, nativeGeometry, signal);
+    return photoReadResult(recovered, image, geometry);
+  }
+
+  function retainVisualResult(pixels, width, height, result, workingImage) {
+    if (!result) return;
+    if (result.geometry) visualMappings.set(pixels, { width, height, geometry: result.geometry,
+      readResolution: result.readResolution, workingImage });
+    else if (result.unreadable) visualMappings.set(pixels, { width, height, unreadable: true });
+  }
+
+  async function findPhotoTransform(pixels, width, height, options) {
+    const deadline = Math.min(options.deadline || Infinity, Date.now() + 60000);
+    let best = null, bestImage = null;
+    // Start with cheap coarse images, then double the working resolution. A
+    // missing spectral signature or marker at one scale does not reject another.
+    // Every level comes directly from the full capture, without accumulated blur.
+    const sizes = [16, 8, 4, 2, 1].map((divisor) => ({ divisor,
+      width: Math.round(width / divisor), height: Math.round(height / divisor) }))
+      .filter((size, i, all) => size.width >= BLOCK && size.height >= BLOCK &&
+        all.findIndex((s) => s.width === size.width && s.height === size.height) === i);
+    for (let pass = 0; pass < sizes.length; pass++) {
+      if (options.signal?.aborted) throw new DOMException("Search cancelled.", "AbortError");
+      if (Date.now() >= deadline) {
+        best = { ...(best || { found: false }), reason: "Image recovery stopped at the shared 60-second limit. Retry a specific search if needed." };
+        break;
+      }
+      const { width: rw, height: rh, divisor } = sizes[pass], full = divisor === 1;
+      const label = (full ? "Full size" : "1/" + divisor + " size") + " (" + rw + " × " + rh + ")";
+      options.onProgress?.("Locating photo markers: " + label + "…");
+      const image = full ? { pixels, width, height } : await reducePhoto(pixels, width, height, rw, rh, options.signal);
+      const corners = options.corners?.map((p) => ({ x: (p.x + 0.5) * rw / width - 0.5, y: (p.y + 0.5) * rh / height - 0.5 }));
+      // Limit unproductive seed searches so they cannot starve later levels.
+      // A checksum-valid marker earns the rest of the shared budget to fit the
+      // plane, rather than throwing away a promising search at a scale timeout.
+      const remaining = deadline - Date.now();
+      const seedBudget = divisor >= 8 ? (divisor === 16 ? 5000 : 8000)
+        : Math.max(5000, remaining * (divisor === 4 ? 0.7 : divisor === 2 ? 0.7 : 1));
+      const result = await findVisualTransform(image.pixels, rw, rh, { ...options, corners, singleResolution: true,
+        geometryOnly: true, simplerFirst: options.simplerFirst !== false, deadline,
+        seedDeadline: Math.min(deadline, Date.now() + seedBudget),
+        onProgress: (text) => options.onProgress?.(label + ": " + text) });
+      const lifted = full ? result : liftPhotoResult(result, width, height, rw, rh);
+      let candidate = { ...lifted, found: Boolean(lifted.geometry || lifted.markers?.length), unreadable: Boolean(lifted.geometry || lifted.markers?.length) };
+      let nativeImage;
+      if (lifted.geometry) {
+        options.onProgress?.("Rectifying the full capture to its original " + lifted.geometry.originalWidth + " × " + lifted.geometry.originalHeight + " pixel grid…");
+        const recovered = await readPhotoMapping(pixels, width, height, lifted.geometry, options.signal);
+        if (options.signal?.aborted) throw new DOMException("Search cancelled.", "AbortError");
+        const inspection = describeRecovery(recovered);
+        nativeImage = recovered.readImage;
+        candidate = { ...lifted, ...inspection, found: true, unreadable: Boolean(recovered.locatorOnly) || !inspection.found,
+          carrierVersion: CARRIER_V3, geometry: recovered.geometry, readResolution: recovered.readResolution };
+        if (!candidate.unreadable) {
+          retainVisualResult(pixels, width, height, candidate, nativeImage);
+          return candidate;
+        }
+      }
+      const rank = (r) => (r?.geometry ? 16 : 0) + (r?.markers?.length || 0);
+      if (!best || rank(candidate) >= rank(best)) { best = candidate; bestImage = nativeImage; }
+    }
+    retainVisualResult(pixels, width, height, best, bestImage);
+    return best;
   }
 
   function bilinearSample(pixels, width, height, x, y) {
@@ -1356,6 +1540,13 @@
     const visual = visualMappings.get(pixels);
     if (visual && visual.width === width && visual.height === height) {
       if (visual.unreadable) return { locatorOnly: true, carrierVersion: CARRIER_V3 };
+      if (visual.readResolution) {
+        const resolution = visual.readResolution;
+        const image = visual.workingImage || await rectifyPhoto(pixels, width, height, resolution.width, resolution.height, resolution.photoMatrix, options.signal);
+        visual.workingImage = image;
+        const recovered = await readVisualMapping(image.pixels, image.width, image.height, resolution.geometry, options.signal);
+        return photoReadResult(recovered, image, geometryAt(visual.geometry, resolution.photoMatrix));
+      }
       return readVisualMapping(pixels, width, height, visual.geometry, options.signal);
     }
     const native = await findLocator(pixels, width, height, true, false, options.signal);
@@ -1389,6 +1580,7 @@
       hasAttachments: recovery.bundle,
       carrierVersion: recovery.carrierVersion,
       geometry: recovery.geometry,
+      readResolution: recovery.readResolution,
       strength: recovery.strength
     };
   }
@@ -1402,8 +1594,7 @@
     if (options.background && canUseReaderWorker(options)) {
       const result = await searchInWorker(pixels, width, height, options, "inspect");
       if (options.signal?.aborted) throw new DOMException("Search cancelled.", "AbortError");
-      if (result.geometry) visualMappings.set(pixels, { width, height, geometry: result.geometry });
-      else if (result.unreadable && result.markers?.length) visualMappings.set(pixels, { width, height, unreadable: true });
+      retainVisualResult(pixels, width, height, result);
       return result;
     }
     options.onProgress?.("Reading the image at its original size…");
@@ -1439,6 +1630,7 @@
           formatVersion: recovery.formatVersion,
           carrierVersion: recovery.carrierVersion,
           geometry: recovery.geometry,
+          readResolution: recovery.readResolution,
           visualTransform: recovery.visualTransform,
           scaleX: recovery.scaleX,
           scaleY: recovery.scaleY,
@@ -1843,12 +2035,13 @@
     const identity = !fit.matrix && origW === width && origH === height && fit.phaseX === 0 && fit.phaseY === 0;
     let restored;
     if (fit.matrix) {
+      const read = fit.readImage || { pixels, width, height, matrix: fit.matrix };
       restored = new Uint8Array(origW * origH * 4);
       for (let y = 0; y < origH; y++) {
         if ((y & 31) === 31) await yieldNow();
         for (let x = 0; x < origW; x++) {
-          const point = mappedPoint(fit.matrix, x, y);
-          restored.set(bilinearSample(pixels, width, height, point.x, point.y), (x + y * origW) * 4);
+          const point = mappedPoint(read.matrix, x, y);
+          restored.set(bilinearSample(read.pixels, read.width, read.height, point.x, point.y), (x + y * origW) * 4);
         }
       }
     } else restored = identity
