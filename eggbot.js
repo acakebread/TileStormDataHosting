@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { EggbotRig } from './eggbot/rig.js';
-import { clamp, dragAngles, GridJourney, SEQUENCE, SequenceClock } from './eggbot/behaviour.js';
+import { ArrivalTurn, clamp, dragAngles, GridJourney, SEQUENCE, SequenceClock, TiltReturn } from './eggbot/behaviour.js';
 
 const canvas = document.getElementById('scene');
 const stage = document.getElementById('stage');
@@ -16,11 +16,12 @@ const cameraDefaultDistance = 3 / Math.cos(THREE.MathUtils.degToRad(15));
 const cameraTarget = new THREE.Vector3(0, 1.5 - 3 * Math.tan(THREE.MathUtils.degToRad(15)), 0);
 const pointer = new THREE.Vector2();
 const touches = new Map();
+const tiltReturn = new TiltReturn();
 let renderer, scene, camera, model, mixer, rig, clips = [], activeAction = null, activeClip = null;
 let sequence = null, selection = 'none', lastStatus = '', lastFrame = null, worldTime = 0;
 let cameraYaw = 0, cameraPitch = 15, cameraDistance = cameraDefaultDistance;
 let orb, dragged = false, touchGesture = null;
-let ground, journey = null, tap = null, destination;
+let ground, journey = null, arrivalTurn = null, tap = null, destination;
 const bindPose = [];
 
 function fail(message, error) {
@@ -47,6 +48,7 @@ function restorePose() {
 }
 
 function startClip(name) {
+  rig?.resetProceduralMotion();
   restorePose();
   activeClip = clips.find(clip => clip.name === name) || null;
   activeAction = activeClip ? mixer.clipAction(activeClip).reset() : null;
@@ -93,7 +95,7 @@ function fitWorldTarget() {
   const distance = 1.55 / Math.sin(Math.min(verticalHalf, horizontalHalf));
   if (cameraDistance < distance) zoom(distance);
 }
-function resetView() { journey = null; destination.visible = false; rig.turntable.position.set(0, 0, 0); cameraYaw = 0; cameraPitch = 15; cameraDistance = cameraDefaultDistance; rig.resetView(); applyCamera(); fitWorldTarget(); }
+function resetView() { journey = null; arrivalTurn = null; destination.visible = false; tiltReturn.set(0); rig.turntable.position.set(0, 0, 0); cameraYaw = 0; cameraPitch = 15; cameraDistance = cameraDefaultDistance; rig.resetView(); applyCamera(); fitWorldTarget(); }
 
 function walkTo(clientX, clientY) {
   const bounds = canvas.getBoundingClientRect();
@@ -103,7 +105,11 @@ function walkTo(clientX, clientY) {
   const hit = ray.intersectObjects([ground, model], true)[0];
   if (hit?.object !== ground) return;
   const target = hit.point.clone(); target.y = 0;
+  // Grid travel always starts upright; imported clip motion still plays normally.
+  rig.tilt = 0;
+  tiltReturn.set(0);
   if (target.distanceTo(rig.turntable.position) < 0.01) return;
+  arrivalTurn = null;
   journey = new GridJourney(rig.turntable.position, rig.yaw, target);
   destination.position.set(target.x, 0.008, target.z); destination.visible = true;
 }
@@ -122,11 +128,12 @@ function move(dx, dy, orbit) {
     cameraYaw = next.yaw; cameraPitch = next.pitch; applyCamera();
   }
   else {
-    journey = null; destination.visible = false;
+    journey = null; arrivalTurn = null; destination.visible = false;
     // Unity's front camera reverses screen X relative to Three.js, and DOM Y
     // points down rather than up. Convert Eggbot's drag in both directions.
     const next = dragAngles(rig.yaw, rig.tilt, dx, dy);
     rig.yaw = next.yaw; rig.tilt = next.pitch;
+    tiltReturn.set(rig.tilt);
   }
 }
 
@@ -214,6 +221,8 @@ function animate(time) {
   if (document.hidden) { lastFrame = null; return; }
   const delta = lastFrame === null ? 0 : Math.max(0, (time - lastFrame) / 1000);
   lastFrame = time;
+  rig.tilt = tiltReturn.tick(delta, dragged);
+  rig.updateProceduralMotion(delta, selection === 'none', !journey && !arrivalTurn && !dragged);
   // Restore the actor's animation rotation before mixing: the rig extracts its
   // yaw after evaluation, so even a held frame must be evaluated afresh.
   if (activeAction) {
@@ -233,10 +242,20 @@ function animate(time) {
   } else {
     rig.actor.quaternion.copy(rig.actorQuaternion);
   }
+  let turnDelta = delta;
   if (journey) {
     const next = journey.tick(delta);
     rig.turntable.position.set(next.x, 0, next.z); rig.yaw = next.yaw;
-    if (next.done) { journey = null; destination.visible = false; }
+    if (next.done) {
+      turnDelta = journey.time - journey.turnDuration - journey.moveDuration;
+      arrivalTurn = new ArrivalTurn(rig.turntable.position, rig.yaw, camera.position);
+      journey = null; destination.visible = false;
+    }
+  }
+  if (arrivalTurn) {
+    const next = arrivalTurn.tick(turnDelta);
+    rig.yaw = next.yaw;
+    if (next.done) arrivalTurn = null;
   }
   rig.updatePose();
   orb.visible = rig.mode === 'world';

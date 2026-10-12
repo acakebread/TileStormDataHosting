@@ -1,5 +1,5 @@
 import * as THREE from './vendor/three/build/three.core.js';
-import { BlinkClock, clamp, lidOffset } from './behaviour.js';
+import { BlinkClock, clamp, IdleMotion, lidOffset } from './behaviour.js';
 
 const vector = () => new THREE.Vector3();
 const cleanName = name => name.toLowerCase().replace(/[ _.-]/g, '');
@@ -14,6 +14,15 @@ export class EggbotRig {
     this.turntable = turntable;
     this.animationYaw = animationYaw;
     this.pitchPivot = pitchPivot;
+    // Keep procedural balance separate from imported clips and manual tilt.
+    this.balancePivot = new THREE.Group();
+    this.balancePivot.name = 'Procedural balance';
+    animationYaw.add(this.balancePivot);
+    this.balancePivot.add(pitchPivot);
+    this.idleMotion = new IdleMotion();
+    this.proceduralEnabled = false;
+    this.proceduralPose = { pitch: 0, yaw: 0 };
+    this.shoulders = [];
     this.meshes = [];
     this.wheels = [];
     this.lids = [];
@@ -37,6 +46,12 @@ export class EggbotRig {
       const name = cleanName(node.name);
       if (name === 'lefthand') this.leftHand = node;
       if (name === 'righthand') this.rightHand = node;
+      if (name === 'leftarm' || name === 'rightarm') {
+        const inverse = new THREE.Matrix4().copy(node.matrixWorld).invert();
+        const axis = vector().set(1, 0, 0).transformDirection(model.matrixWorld).transformDirection(inverse);
+        const liftAxis = vector().set(0, 0, 1).transformDirection(model.matrixWorld).transformDirection(inverse);
+        this.shoulders.push({ node, axis, liftAxis, base: node.quaternion.clone(), side: name === 'leftarm' ? 'leftShoulder' : 'rightShoulder', liftSign: name === 'leftarm' ? 1 : -1 });
+      }
       if (!node.isMesh) return;
       node.castShadow = true;
       node.receiveShadow = true;
@@ -158,6 +173,9 @@ export class EggbotRig {
   }
 
   applyPose() {
+    this.balancePivot.rotation.set(this.proceduralPose.pitch, this.proceduralPose.yaw, 0, 'YXZ');
+    // Match UpdateSway's rotated (0, 0, -pitch) translation, in metres.
+    this.balancePivot.position.set(0, 0, -this.proceduralPose.pitch).applyQuaternion(this.balancePivot.quaternion);
     this.turntable.rotation.y = THREE.MathUtils.degToRad(this.yaw);
     this.pitchPivot.rotation.x = THREE.MathUtils.degToRad(this.tilt);
     const rotated = this.head.clone().sub(this.contact).applyQuaternion(this.pitchPivot.quaternion).add(this.contact);
@@ -189,7 +207,8 @@ export class EggbotRig {
         bottom = Math.min(bottom, point.y);
       }
     }
-    if (Number.isFinite(bottom)) this.pitchPivot.position.y -= bottom;
+    // This parent's Y is world-up even when the balance pivot pitches.
+    if (Number.isFinite(bottom)) this.balancePivot.position.y -= bottom;
     this.model.updateWorldMatrix(true, true);
     const heading = this.scratch.set(0, 0, 1).applyQuaternion(this.turntable.quaternion);
     const ground = this.scratch2, delta = this.scratch3;
@@ -211,6 +230,29 @@ export class EggbotRig {
     const gain = Math.max(0, this.gazeStrength) * 0.5;
     return new THREE.Vector2(clamp(direction.dot(this.eyeRight) * this.uvRadius.x * gain, -0.16, 0.16),
       clamp(-direction.dot(this.eyeUp) * this.uvRadius.y * gain, -0.32, 0.32));
+  }
+
+  resetProceduralMotion() {
+    if (this.proceduralEnabled) for (const shoulder of this.shoulders) shoulder.node.quaternion.copy(shoulder.base);
+    this.proceduralEnabled = false;
+    this.proceduralPose = { pitch: 0, yaw: 0 };
+    this.idleMotion.reset();
+    this.balancePivot.quaternion.identity();
+    this.balancePivot.position.set(0, 0, 0);
+  }
+
+  updateProceduralMotion(delta, enabled, stationary) {
+    if (!enabled) {
+      if (this.proceduralEnabled) this.resetProceduralMotion();
+      return;
+    }
+    this.proceduralEnabled = true;
+    this.proceduralPose = this.idleMotion.tick(delta, stationary);
+    for (const shoulder of this.shoulders) {
+      shoulder.node.quaternion.copy(shoulder.base).multiply(new THREE.Quaternion().setFromAxisAngle(shoulder.axis, this.proceduralPose[shoulder.side]));
+      // A small outward lift makes the balance correction visible from the front.
+      shoulder.node.quaternion.multiply(new THREE.Quaternion().setFromAxisAngle(shoulder.liftAxis, this.proceduralPose.shoulderLift * shoulder.liftSign));
+    }
   }
 
   screenTarget(camera, pointer, eyeCenter) {
@@ -270,6 +312,7 @@ export class EggbotRig {
   }
 
   resetView() {
+    this.resetProceduralMotion();
     this.yaw = 0; this.tilt = 0;
     this.wheels.forEach(wheel => { wheel.spin = 0; wheel.lastGround = null; });
     this.applyPose();

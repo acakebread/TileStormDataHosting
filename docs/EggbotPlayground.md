@@ -13,12 +13,37 @@ including natural blinking and per-eye gaze. Each page load starts with
 No animation selected. Cameras and robot rotation
 can also be controlled with the keyboard or touch gestures.
 
+No animation retains the authored pose with procedural gameplay balance:
+`pitch = 0.1 * sin(7.8 * time) * sin(1.8 * time)` radians and the same
+rotated `(0, 0, -pitch)` translation as `EggbotController.UpdateSway`.
+Shoulder corrections include forward/back swing and a small outward lift,
+staying below ten degrees; hand and finger joints retain their authored local
+pose. Stationary Eggbot also glances left/right by 22–32 degrees approximately
+every 2–3 seconds, with eased returns to his heading. Glances stop during travel
+or dragging. A separate balance pivot keeps this motion apart from imported
+clips and manual tilt. All procedural body/arm motion is reset and disabled
+when any clip or the sequence is selected, including held end poses.
+
 Click or tap a visible grid point to turn and travel there. Movement uses the
-main app's cosine `SmoothingUtils.Ease`, 0.25-second turns, and travel duration
-`(distance + 1) / 6`. New clicks replace the destination; manual robot dragging
-cancels travel, and Reset view also restores the starting position. Wheels roll
+main app's cosine `SmoothingUtils.Ease` and 0.25-second turns. Travel duration
+is `(distance + 1) / 3`, half gameplay's travel speed for this small grid.
+New clicks replace the destination; manual robot dragging
+cancels travel, and Reset view also restores the starting position. Every valid
+grid destination clears manual tilt, with or without an animation. Wheels roll
 from actual travel. This open grid moves directly to the point without tile
 navigation or obstacle routing.
+
+After reaching a clicked destination, Eggbot turns toward the camera once over
+0.45 seconds, using the shortest horizontal turn and the same cosine easing.
+The camera position is sampled at arrival; later camera movement does not turn
+him again. Another grid journey triggers a new arrival turn. Manual robot
+dragging, Reset, or a new destination cancels an unfinished arrival turn.
+Idle glances resume around the new heading once the turn finishes.
+
+After manual tilt input stops, Eggbot holds that lean for two seconds and eases
+upright over one second. Recovery pauses while dragging and restarts from the
+current angle when grabbed again. This applies in every animation mode; it
+does not change the camera pitch or the selected clip's authored body motion.
 
 The eye debug controls are retained in an HTML comment in `eggbot.html` for
 future tuning; uncomment them to enable live comparison. They expose the saved
@@ -53,6 +78,9 @@ run a full sequence cycle; try every gaze mode (context gaze follows the hands
 only during Console Loop); rotate/tilt Eggbot, orbit and zoom; reset the view;
 reload to check No animation is selected; check full screen and a narrow/mobile
 viewport. Check the home page icon routes here without recording a game launch.
+In No animation, watch the wobble, occasional shoulders and stationary glances;
+select a clip to verify those additions stop. Tilt Eggbot, then click the grid
+to verify travel clears manual tilt in both procedural and animation modes.
 
 ## Re-export after changing Unity art or animations
 
