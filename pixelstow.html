@@ -232,6 +232,21 @@
     }
 
     #transform-outline { position: absolute; inset: 0; pointer-events: none; }
+    .camera-panel { margin-top: 14px; }
+    .camera-view { position: relative; line-height: 0; background: #081016; border-radius: 12px; overflow: hidden; }
+    .camera-view video { display: block; width: 100%; max-height: 420px; max-height: min(50svh, 420px); object-fit: contain; }
+    .camera-controls { margin: 10px 0; }
+    .camera-near-miss { margin-top: 12px; }
+    .camera-near-miss summary { cursor: pointer; color: var(--tile-community); }
+    .camera-still { position: relative; max-width: 480px; margin: 10px auto; line-height: 0; }
+    .camera-still canvas { display: block; width: 100%; height: auto; }
+    #camera-guides { position: absolute; inset: 0; pointer-events: none; }
+    .camera-open > .preview,
+    .camera-open > .loaded-image,
+    .camera-open > #capacity,
+    .camera-open > .payload-panel,
+    .camera-open > #recovery-progress,
+    .camera-open > .transform-reader { display: none !important; }
     .transform-reader { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
     .transform-reader summary { cursor: pointer; color: var(--tile-azure); font-weight: 700; }
 
@@ -457,9 +472,35 @@
           <input id="file" class="file-input" type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg">
           <label class="choose button-link" for="file">Choose image</label>
           <button id="paste-image" type="button">Paste image</button>
+          <button id="open-camera" type="button">Open camera</button>
+          <button id="take-photo" type="button">Take photo</button>
+          <input id="camera-file" class="file-input" type="file" accept="image/*" capture="environment" aria-label="Take a photo with the camera">
         </div>
+        <section class="camera-panel" id="camera-panel" hidden aria-label="Camera image reader">
+          <div class="camera-view">
+            <video id="camera-video" autoplay muted playsinline aria-label="Live camera preview"></video>
+          </div>
+          <div class="file-row camera-controls">
+            <button id="capture-frame" type="button">Use this frame</button>
+            <button id="pause-camera" type="button">Pause scanning</button>
+            <button id="switch-camera" type="button">Switch camera</button>
+            <button id="close-camera" type="button">Close camera</button>
+          </div>
+          <p class="hint">Include all four corners, fill the view and hold steady. Scanning stops when readable contents are found. Take photo uses your phone's still camera if the live view lacks detail. Nothing is uploaded.</p>
+          <p class="hint" id="camera-progress" role="status"></p>
+          <p class="hint" id="camera-signature"></p>
+          <details class="camera-near-miss" id="camera-near-miss" hidden open>
+            <summary id="camera-near-summary">Markers found in an earlier capture</summary>
+            <div class="camera-still">
+              <canvas id="camera-still"></canvas>
+              <canvas id="camera-guides" aria-label="Markers detected in this captured frame"></canvas>
+            </div>
+            <p class="hint">These guides belong to the captured frame above. For the next attempt, keep every corner visible, move closer for more detail, keep sharp focus and avoid glare.</p>
+            <button id="use-camera-near-miss" type="button">Inspect this capture</button>
+          </details>
+        </section>
         <p class="loaded-image" id="loaded-image" hidden></p>
-        <p class="hint" id="capacity">Choose or paste a PNG or JPEG. Your original stays unchanged.</p>
+        <p class="hint" id="capacity">Choose or paste a PNG or JPEG, or open the camera. Your original stays unchanged.</p>
         <div class="preview" id="preview" hidden>
           <div class="viewport" id="viewport">
             <div class="compare" id="compare">
@@ -602,6 +643,7 @@
         <p>For WhatsApp, send the image as a Document / original file where possible and include the PixelStow opening link. The recipient can save it to Files and use Choose image, or copy it and use Paste image. A link opens this page but cannot automatically read a WhatsApp attachment. Screenshots, resized copies and ordinary photo sharing may not keep the payload.</p>
         <p>On iPhone, allow Safari's Paste prompt after tapping Paste image. If needed, use the touch-and-hold paste box. Safari may require a tap on Play voice message before sound is allowed; the full audio player is also available under Attached files. Audio format support varies by browser.</p>
         <p>PixelStow automatically attempts recovery from resized, padded, rotated or photographed encoded images. Recovery remains experimental: blur, cropping, print quality and heavy recompression can still prevent reading. Keep the original encoded file where possible.</p>
+        <p>Open camera scans one captured frame at a time while the preview stays live. A difficult frame can take up to a minute; pause scanning to reposition, or use Take photo for a sharper still. Live scanning needs HTTPS or localhost and camera permission. The camera closes when you leave the page. All captures and decoding stay on your device.</p>
       </section>
 
       <div class="links">
@@ -671,10 +713,11 @@
   </dialog>
   <script src="./pixelstow-spectrum.js?v=20261012-spectrum1"></script>
   <script src="./pixelstow-transform.js?v=20261012-auto1"></script>
-  <script src="./pixelstow.js?v=20261012-auto1"></script>
+  <script src="./pixelstow.js?v=20261012-camera1"></script>
   <script src="./pixelstow-export.js?v=20261011-exports"></script>
   <script src="./pixelstow-media.js?v=20261011-webm-duration"></script>
   <script src="./pixelstow-sharing.js?v=20261011-png-clipboard"></script>
+  <script src="./pixelstow-camera.js?v=20261012-camera1"></script>
   <script>
     const fileInput = document.querySelector("#file");
     const drop = document.querySelector("#drop");
@@ -733,6 +776,7 @@
     const messageBytes = document.querySelector("#message-bytes");
     const readoutBytes = document.querySelector("#readout-bytes");
     let current = null;
+    let camera = null;
     let downloadUrl = "";
     let encodedPng = null;
     let encodedJpeg = null;
@@ -760,9 +804,13 @@
     });
     media.setState(false, true);
     const sharing = new PixelStowSharing({
-      importImage: useFile, save: saveBlob, report: setStatus, working: () => busy || media.active, setBusy,
+      importImage: useFile, save: saveBlob, report: setStatus, working: () => busy || media.active || Boolean(camera?.active), setBusy,
       hasImage: () => Boolean(current),
       imageForClipboard: () => encodedPng || PixelStow.writePng(current.decodePixels || current.pixels, current.width, current.height)
+    });
+    camera = new PixelStowCamera({
+      importImage: useFile, report: setStatus, working: () => busy || media.active,
+      changed: () => setBusy(busy), drawGuides: paintTransform
     });
 
     const carrierSelect = document.querySelector("#carrier-version");
@@ -836,7 +884,9 @@
       const protectedTarget = Boolean(current && (current.decodeProtected ?? current.passwordProtected));
       const needsUnlock = protectedTarget && !hasDecoded;
       const canEncode = hasImage && !current.hasFingerprint && !needsUnlock;
-      const working = busy || media.active;
+      const cameraActive = Boolean(camera?.active);
+      const working = busy || media.active || cameraActive;
+      drop.classList.toggle("camera-open", cameraActive);
       transformReader.hidden = !hasImage;
       recoveryProgress.hidden = !hasImage || !recoveryVisible;
       findTransformButton.disabled = working || !hasImage;
@@ -845,7 +895,7 @@
       cancelTransformButton.hidden = !transformAbort;
       carrierSelect.disabled = working;
       encodeButton.disabled = working || !canEncode;
-      composition.hidden = Boolean(current && current.hasFingerprint) || needsUnlock;
+      composition.hidden = cameraActive || Boolean(current && current.hasFingerprint) || needsUnlock;
       encodeButton.hidden = composition.hidden;
       decodeButton.hidden = protectedTarget || Boolean(current && current.hasFingerprint);
       decodeButton.disabled = working || !hasImage;
@@ -871,8 +921,9 @@
       message.disabled = working || !canEncode;
       password.disabled = working || encodingPasswords.hidden;
       confirmPassword.disabled = working || encodingPasswords.hidden;
-      media.setState(busy, !canEncode);
+      media.setState(busy || cameraActive, !canEncode);
       sharing.sync();
+      camera?.sync();
       saveEncodedJpegButton.disabled = working;
       downloadLink.setAttribute("aria-disabled", String(working));
       saveMessageButton.hidden = !hasMessage;
@@ -889,7 +940,7 @@
     }
 
     async function saveBlob(blobOrFactory, suggestedName) {
-      if (busy || media.active) return null;
+      if (busy || media.active || camera?.active) return null;
       setBusy(true);
       try {
         const filename = await exports.chooseFilename(suggestedName);
@@ -1041,20 +1092,19 @@
       resetView();
     }
 
-    function drawTransform(result) {
-      if (!current) return;
-      transformOutline.width = current.width;
-      transformOutline.height = current.height;
-      const ctx = transformOutline.getContext("2d");
-      ctx.clearRect(0, 0, current.width, current.height);
-      ctx.lineWidth = Math.max(1, current.width / 500);
+    function paintTransform(canvas, result, width, height) {
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, width, height);
+      ctx.lineWidth = Math.max(1, width / 500);
       const path = (points, colour) => {
         ctx.beginPath(); ctx.strokeStyle = colour;
         points.forEach((point, index) => index ? ctx.lineTo(point.x, point.y) : ctx.moveTo(point.x, point.y));
         ctx.closePath(); ctx.stroke();
       };
       if (result.geometry) path(result.geometry.corners, "#8cebed");
-      ctx.font = Math.max(12, current.width / 70) + "px sans-serif";
+      ctx.font = Math.max(12, width / 70) + "px sans-serif";
       ctx.fillStyle = "#f5e69e";
       for (const marker of result.geometry?.expectedMarkers || []) {
         if (result.markers?.some((m) => m.id === marker.id)) continue;
@@ -1067,6 +1117,11 @@
         path(corners, marker.verification === "pattern" ? "#a9f5b5" : "#f5e69e");
         ctx.fillText(String(marker.id), corners[0].x, corners[0].y - 4);
       }
+    }
+
+    function drawTransform(result) {
+      if (!current) return;
+      paintTransform(transformOutline, result, current.width, current.height);
       transformOutline.hidden = !showTransform.checked || !(result.geometry || result.markers?.length);
     }
 
@@ -1110,7 +1165,7 @@
       transformStatus.textContent = "Cancelling search…";
     });
     findTransformButton.addEventListener("click", async () => {
-      if (!current || busy || media.active) return;
+      if (!current || busy || media.active || camera?.active) return;
       const job = current;
       clearDecoded();
       transformAbort = new AbortController();
@@ -1190,8 +1245,9 @@
       }
     }
 
-    async function useFile(file, origin = "file") {
+    async function useFile(file, origin = "file", captured = null) {
       if (!file || busy || media.active) return;
+      camera?.close();
       media.reset();
       clearDownload();
       readout.value = "";
@@ -1213,7 +1269,9 @@
       setBusy(true);
       setStatus("Reading the image…");
       try {
-        const image = await PixelStow.readImageFile(file);
+        // A camera scan keeps its original RGBA buffer and verified geometry.
+        // Reuse both: no JPEG round trip and no second discovery search.
+        const image = captured?.image || await PixelStow.readImageFile(file);
         current = {
           file,
           origin,
@@ -1224,7 +1282,8 @@
           hasFingerprint: false,
           passwordProtected: false
         };
-        loadedImage.textContent = origin === "clipboard" ? "Pasted from clipboard" : file.name ? "Loaded file: " + file.name : "Loaded image";
+        loadedImage.textContent = origin === "camera" ? "Captured with camera" + (file.name ? " · " + file.name : "")
+          : origin === "clipboard" ? "Pasted from clipboard" : file.name ? "Loaded file: " + file.name : "Loaded image";
         loadedImage.hidden = false;
         showPreview(image.pixels, image.width, image.height);
         const room = PixelStow.estimatePayloadBytes(image.width, image.height);
@@ -1235,9 +1294,10 @@
         transformAbort = new AbortController();
         recoveryVisible = true;
         setBusy(true);
-        const found = await PixelStow.inspect(image.pixels, image.width, image.height, {
+        const found = captured?.inspection || await PixelStow.inspect(image.pixels, image.width, image.height, {
           ...recoveryOptions(transformAbort), automatic: true
         });
+        if (found.signature) transformSignature.textContent = found.signature.message;
         recordRecovery(current, found);
         current.passwordProtected = found.passwordProtected;
         current.decodeProtected = found.passwordProtected;
@@ -1274,7 +1334,7 @@
           preview.hidden = true;
           previewNote.hidden = true;
           hideComparison();
-          capacity.textContent = "Choose or paste a PNG or JPEG. Your original stays unchanged.";
+          capacity.textContent = "Choose or paste a PNG or JPEG, or open the camera. Your original stays unchanged.";
           setStatus(error && error.message ? error.message : "Could not read that image.", true);
         }
       } finally {

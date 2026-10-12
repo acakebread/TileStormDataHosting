@@ -969,9 +969,14 @@
       matrix: geometry.matrix, geometry, visualTransform: geometry.model };
   }
 
-  function searchInWorker(pixels, width, height, options) {
+  function canUseReaderWorker(options) {
+    return typeof Worker !== "undefined" && codecScriptUrl &&
+      ["http:", "https:"].includes(new URL(codecScriptUrl).protocol) && options.worker !== false;
+  }
+
+  function searchInWorker(pixels, width, height, options, operation = "geometry") {
     return new Promise((resolve, reject) => {
-      const url = new URL("pixelstow-transform-worker.js?v=20261012-auto1", codecScriptUrl);
+      const url = new URL("pixelstow-transform-worker.js?v=20261012-camera1", codecScriptUrl);
       const worker = new Worker(url);
       const abort = () => { cleanup(); reject(new DOMException("Search cancelled.", "AbortError")); };
       const cleanup = () => { worker.terminate(); options.signal?.removeEventListener("abort", abort); };
@@ -984,9 +989,11 @@
       worker.onerror = () => { cleanup(); reject(new Error("The visual reader could not start. Reload the local page and check that its worker scripts are available.")); };
       if (options.signal?.aborted) { abort(); return; }
       options.signal?.addEventListener("abort", abort, { once: true });
-      const copy = new Uint8Array(pixels);
-      worker.postMessage({ pixels: copy, width, height, mode: options.mode, forceSearch: options.forceSearch,
-        corners: options.corners, simplerFirst: options.simplerFirst }, [copy.buffer]);
+      try {
+        const copy = new Uint8Array(pixels);
+        worker.postMessage({ pixels: copy, width, height, operation, mode: options.mode, forceSearch: options.forceSearch,
+          corners: options.corners, simplerFirst: options.simplerFirst }, [copy.buffer]);
+      } catch (error) { cleanup(); reject(error); }
     });
   }
 
@@ -995,9 +1002,7 @@
     if (!root.PixelStowTransform) throw new Error("The visual transform reader script is missing. Reload this page.");
     // A page opened from disk has an opaque origin and cannot start this worker.
     // The same detector can run on the page, yielding between chunks for cancel/UI.
-    const canUseWorker = typeof Worker !== "undefined" && codecScriptUrl &&
-      ["http:", "https:"].includes(new URL(codecScriptUrl).protocol) && options.worker !== false;
-    const search = canUseWorker
+    const search = canUseReaderWorker(options)
       ? await searchInWorker(pixels, width, height, options)
       : await root.PixelStowTransform.find(pixels, width, height, options, visualAdapter(pixels, width, height));
     if (options.geometryOnly) return search;
@@ -1389,7 +1394,18 @@
   }
 
   async function inspect(pixels, width, height, options = {}) {
+    assertImage(pixels, width, height);
     if (options.signal?.aborted) throw new DOMException("Search cancelled.", "AbortError");
+    // Camera frames run the entire inspection off the page, including native
+    // reads and final frame checks. Later decoding uses the same captured pixels
+    // and the recovered geometry, and still validates the payload again.
+    if (options.background && canUseReaderWorker(options)) {
+      const result = await searchInWorker(pixels, width, height, options, "inspect");
+      if (options.signal?.aborted) throw new DOMException("Search cancelled.", "AbortError");
+      if (result.geometry) visualMappings.set(pixels, { width, height, geometry: result.geometry });
+      else if (result.unreadable && result.markers?.length) visualMappings.set(pixels, { width, height, unreadable: true });
+      return result;
+    }
     options.onProgress?.("Reading the image at its original size…");
     const recovery = await recover(pixels, width, height, { ...options, quickOnly: options.automatic === true });
     if (options.signal?.aborted) throw new DOMException("Search cancelled.", "AbortError");

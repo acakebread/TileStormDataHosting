@@ -8,6 +8,10 @@ visible ruler, border reservation, upload or service is added.
 
 ## Local use
 
+The main page also provides **Open camera** for sequential background capture
+and **Take photo** for native still capture. See [CameraCapture.md](CameraCapture.md)
+for acquisition, worker scheduling, near-miss feedback and browser requirements.
+
 Open `pixelstow.html` directly or through the existing localhost server and choose
 an input image. Direct `file://` opening runs the detector on the page because
 browsers block the file worker's opaque origin; it yields between chunks to keep
