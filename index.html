@@ -877,7 +877,7 @@
   </div>
   <header class="site-banner">
     <div class="site-banner-inner">
-      <a class="brand-mark-link" href="https://acakebread.github.io/TileStormEvo/WebGL/" data-launch-game aria-label="Launch TileStorm Evolution">
+      <a class="brand-mark-link" href="./eggbot.html" data-meet-eggbot aria-label="Meet Eggbot in his 3D playground" title="Meet Eggbot">
         <img class="brand-mark" src="./eggbot_render.png" alt="" aria-hidden="true">
       </a>
       <div class="brand-copy">
@@ -1683,6 +1683,12 @@
     document.querySelectorAll("[data-launch-game]").forEach(link => {
       link.addEventListener("click", () => {
         trackAnalyticsEvent("game-launch-clicked", "Launch TileStorm Evolution clicked");
+      });
+    });
+
+    document.querySelectorAll("[data-meet-eggbot]").forEach(link => {
+      link.addEventListener("click", () => {
+        trackAnalyticsEvent("eggbot-playground-clicked", "Meet Eggbot clicked");
       });
     });
 

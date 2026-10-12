@@ -1,0 +1,65 @@
+{
+  "sourceModel": "Assets/Art/Eggbot/Eggbot_Model.fbx",
+  "sourceAnimation": "Assets/Art/Eggbot/Resources/EggbotAnimations/Eggbot_Anims.fbx",
+  "fps": 30,
+  "upAxis": "+Y",
+  "frontAxis": "+Z",
+  "units": "metres",
+  "defaultPose": "source model bind pose",
+  "rootAnimationFrame": "conversion parent local",
+  "uvVFlipped": true,
+  "textureMaximumSize": 1024,
+  "clips": [
+    {
+      "name": "Idle_01",
+      "firstFrame": 1,
+      "lastFrame": 35,
+      "loop": true
+    },
+    {
+      "name": "Console_Start",
+      "firstFrame": 60,
+      "lastFrame": 65,
+      "loop": false
+    },
+    {
+      "name": "Console_Loop",
+      "firstFrame": 66,
+      "lastFrame": 100,
+      "loop": true
+    },
+    {
+      "name": "Console_End",
+      "firstFrame": 101,
+      "lastFrame": 106,
+      "loop": false
+    }
+  ],
+  "nodes": [
+    "Antenna_End",
+    "Antenna_03",
+    "Antenna_02",
+    "Antenna_01",
+    "Antenna",
+    "Armature",
+    "eyelids_bottom",
+    "eyelids_top",
+    "Eyes",
+    "L_Wheel",
+    "Left Finger 1",
+    "Left Finger 2",
+    "Left Thumb",
+    "Left Hand",
+    "Left Arm",
+    "R_Wheel",
+    "Right Finger 1",
+    "Right Finger 2",
+    "Right Thumb",
+    "Right Hand",
+    "Right Arm",
+    "EggBot",
+    "EggbotModel"
+  ],
+  "triangles": 3666,
+  "fileSize": 4201188
+}
