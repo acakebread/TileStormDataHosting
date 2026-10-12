@@ -72,8 +72,8 @@ merely passing a threshold at a predicted position supplies no measured local
 directions. Perspective refinement preserves the current patch's projective
 curvature while independently adjusting its centre and both local derivatives;
 it no longer flattens the patch into an affine transform. Searches prefer patches
-far from existing confirmations. A small set
-of viable affine/projective predictions remains available while the perspective
+far from existing confirmations. A small set of viable affine/projective
+predictions remains available while the perspective
 fit is extrapolating from one side. One damaged header need not discard a useful
 marker. Contents still require the complete payload checksum.
 

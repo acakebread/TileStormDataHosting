@@ -392,7 +392,7 @@
     return { source: { x: patch.x + c.x, y: patch.y + c.y }, target: point(marker.matrix, c.x, c.y), marker, controls };
   }
 
-  function separated(sample, projective = false) {
+  function separated(sample) {
     // Four centres cannot determine a homography if any three are collinear.
     // In particular, the three top patches plus the left midpoint are singular.
     for (const triple of subsets(sample, 3)) for (const side of ["source", "target"]) {
@@ -400,7 +400,7 @@
       const span = Math.max((a.x - b.x) ** 2 + (a.y - b.y) ** 2,
         (a.x - c.x) ** 2 + (a.y - c.y) ** 2, (b.x - c.x) ** 2 + (b.y - c.y) ** 2);
       const area = Math.abs((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x));
-      if (area <= span * 0.001) { if (projective || sample.length === 3) return false; }
+      if (area <= span * 0.001) return false;
     }
     return true;
   }
@@ -433,7 +433,7 @@
       if (!best || inliers.length > best.inliers.length || (inliers.length === best.inliers.length && error < best.error)) best = { matrix, inliers, error, controls };
     };
     for (const sample of subsets(pairs, count)) {
-      if (separated(sample, projective)) consider(fitPoints(sample, projective), false);
+      if (separated(sample)) consider(fitPoints(sample, projective), false);
     }
     if (projective) {
       // Local directions remove the ambiguity of a centre-only fit. Use three
@@ -634,7 +634,9 @@
       } else {
         const fit = chooseFit(markers, seed, adapter, options.mode === "perspective", width, height);
         if (!fit) return { geometry: null, markers, signature, reason: "The detected marker positions and local directions did not establish a stable " + options.mode + " transform." };
-        const ranked = rankMappings([...predictions, { matrix: fit.matrix, model: options.mode }],
+        const candidates = [{ matrix: fit.matrix, model: options.mode }];
+        if (options.mode === "perspective") candidates.push(...predictions);
+        const ranked = rankMappings(candidates,
           markers, seed, adapter, width, height, options.mode === "perspective" ? 4 : 3);
         if (!ranked.length) return { geometry: null, markers, signature, reason: "The fitted transform did not agree with enough independently measured markers." };
         matrix = ranked[0].matrix; model = options.mode;
