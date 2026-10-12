@@ -826,21 +826,29 @@
           id, matrix: Array.from(matrix), quality, verification: "pattern" };
       },
       quality: (matrix, id, dimensions) => locatorAgreement(locatorScores(pixels, width, height, matrix, dimensions ? 96 : 24),
-        locatorHeader(dimensions?.originalWidth || 0, dimensions?.originalHeight || 0, id))
+        locatorHeader(dimensions?.originalWidth || 0, dimensions?.originalHeight || 0, id)),
+      verifyGeometry: async (geometry, signal) => {
+        const recovered = await readVisualMapping(pixels, width, height, geometry, signal);
+        const inspection = describeRecovery(recovered);
+        // Only geometry and inspection metadata leave the worker. A plausible
+        // simple fit never short-circuits search without complete frame validation.
+        return inspection.found && !inspection.unreadable ? { ...inspection, geometry: recovered.geometry } : null;
+      }
     };
   }
 
-  async function findLocator(pixels, width, height, nativeOnly = false) {
-    const scales = nativeOnly ? [1] : [0.95, 2, 0.5, 1.05, 0.75, 1.5, 1.25, 1];
-    if (!nativeOnly) {
+  async function findLocator(pixels, width, height, nativeOnly = false, quickOnly = false, signal) {
+    const scales = nativeOnly ? [1] : quickOnly ? [0.95, 2, 0.5, 1.05, 0.75, 1.5, 1.25] : [0.95, 2, 0.5, 1.05, 0.75, 1.5, 1.25, 1];
+    if (!nativeOnly && !quickOnly) {
       for (let i = 20; i <= 80; i++) {
         const scale = i / 40;
         if (!scales.includes(scale)) scales.push(scale);
       }
     }
-    const offsets = nativeOnly ? [0] : [0, -0.5, 0.5, -1, 1];
+    const offsets = nativeOnly ? [0] : quickOnly ? [0, -0.5, 0.5] : [0, -0.5, 0.5, -1, 1];
     const ids = [0, 2, 6, 8, 1, 3, 5, 7];
     for (const scale of scales) {
+      if (signal?.aborted) throw new DOMException("Search cancelled.", "AbortError");
       const guessedWidth = Math.round(width / scale), guessedHeight = Math.round(height / scale);
       const layout = locatorLayout(guessedWidth, guessedHeight);
       if (!layout || !locatorFits(guessedWidth, guessedHeight)) continue;
@@ -906,13 +914,14 @@
     return { scores, bounded };
   }
 
-  async function readMapped(pixels, width, height, record, native = false) {
+  async function readMapped(pixels, width, height, record, native = false, signal) {
     const originalWidth = record.originalWidth, originalHeight = record.originalHeight;
     const map = locatorBlockMap(originalWidth, originalHeight);
     const scaleX = width / originalWidth, scaleY = height / originalHeight;
     const offsets = native ? [0] : [0, -0.25, 0.25, -0.5, 0.5, -1, 1];
     for (const oy of offsets) for (const ox of offsets) {
-      const fit = native ? null : { scaleX, scaleY, phaseX: (scaleX - 1) / 2 + ox, phaseY: (scaleY - 1) / 2 + oy };
+      if (signal?.aborted) throw new DOMException("Search cancelled.", "AbortError");
+      const fit = native ? null : { scaleX, scaleY, phaseX: (scaleX - 1) / 2 + ox, phaseY: (scaleY - 1) / 2 + oy, signal };
       for (const strength of STRENGTHS) {
         const probe = await scoreMapped(pixels, width, height, map, originalWidth, strength, fit, PREAMBLE_BLOCKS);
         const preamble = tryReadPreamble(probe.scores) || tryReadPreamble(probe.bounded);
@@ -962,7 +971,7 @@
 
   function searchInWorker(pixels, width, height, options) {
     return new Promise((resolve, reject) => {
-      const url = new URL("pixelstow-transform-worker.js?v=20261012-transform4", codecScriptUrl);
+      const url = new URL("pixelstow-transform-worker.js?v=20261012-auto1", codecScriptUrl);
       const worker = new Worker(url);
       const abort = () => { cleanup(); reject(new DOMException("Search cancelled.", "AbortError")); };
       const cleanup = () => { worker.terminate(); options.signal?.removeEventListener("abort", abort); };
@@ -976,7 +985,8 @@
       if (options.signal?.aborted) { abort(); return; }
       options.signal?.addEventListener("abort", abort, { once: true });
       const copy = new Uint8Array(pixels);
-      worker.postMessage({ pixels: copy, width, height, mode: options.mode, forceSearch: options.forceSearch, corners: options.corners }, [copy.buffer]);
+      worker.postMessage({ pixels: copy, width, height, mode: options.mode, forceSearch: options.forceSearch,
+        corners: options.corners, simplerFirst: options.simplerFirst }, [copy.buffer]);
     });
   }
 
@@ -997,11 +1007,16 @@
       if (found) visualMappings.set(pixels, { width, height, unreadable: true });
       return { found, unreadable: found, markers: search?.markers || [], reason: search?.reason, signature: search?.signature };
     }
+    if (search.payloadVerified) {
+      visualMappings.set(pixels, { width, height, geometry: search.geometry });
+      return search;
+    }
     options.onProgress?.("Checking the recovered pixel grid…");
     const recovered = await readVisualMapping(pixels, width, height, search.geometry, options.signal);
     if (options.signal?.aborted) throw new DOMException("Search cancelled.", "AbortError");
     visualMappings.set(pixels, { width, height, geometry: recovered.geometry });
-    return { found: true, unreadable: Boolean(recovered.locatorOnly), passwordProtected: recovered.passwordProtected,
+    const inspection = describeRecovery(recovered);
+    return { ...inspection, found: true, unreadable: Boolean(recovered.locatorOnly) || !inspection.found,
       carrierVersion: CARRIER_V3, geometry: recovered.geometry, markers: search.markers, signature: search.signature };
   }
 
@@ -1330,28 +1345,29 @@
     return null;
   }
 
-  async function recover(pixels, width, height) {
+  async function recover(pixels, width, height, options = {}) {
     if (!pixels || pixels.length !== width * height * 4 || width < BLOCK || height < BLOCK) return null;
     if (width * height > MAX_PIXELS) throw new Error("This image is too large for the browser tool.");
     const visual = visualMappings.get(pixels);
     if (visual && visual.width === width && visual.height === height) {
       if (visual.unreadable) return { locatorOnly: true, carrierVersion: CARRIER_V3 };
-      return readVisualMapping(pixels, width, height, visual.geometry);
+      return readVisualMapping(pixels, width, height, visual.geometry, options.signal);
     }
-    const native = await findLocator(pixels, width, height, true);
+    const native = await findLocator(pixels, width, height, true, false, options.signal);
     if (native) {
-      const found = await readMapped(pixels, width, height, native, true);
+      const found = await readMapped(pixels, width, height, native, true, options.signal);
       if (!found.locatorOnly) return found;
-      return readMapped(pixels, width, height, native);
+      return readMapped(pixels, width, height, native, false, options.signal);
     }
     const previous = await recoverScan(pixels, width, height);
     if (previous && previous.carrierVersion === CARRIER_V1) return previous;
-    const locator = await findLocator(pixels, width, height);
-    return locator ? readMapped(pixels, width, height, locator) : null;
+    if (options.signal?.aborted) throw new DOMException("Search cancelled.", "AbortError");
+    options.onProgress?.("Checking common image resize ratios…");
+    const locator = await findLocator(pixels, width, height, false, options.quickOnly, options.signal);
+    return locator ? readMapped(pixels, width, height, locator, false, options.signal) : null;
   }
 
-  async function inspect(pixels, width, height) {
-    const recovery = await recover(pixels, width, height);
+  function describeRecovery(recovery) {
     if (!recovery) return { found: false };
     if (recovery.locatorOnly) return { found: true, unreadable: true, carrierVersion: CARRIER_V3, geometry: recovery.geometry };
     try {
@@ -1370,6 +1386,22 @@
       geometry: recovery.geometry,
       strength: recovery.strength
     };
+  }
+
+  async function inspect(pixels, width, height, options = {}) {
+    if (options.signal?.aborted) throw new DOMException("Search cancelled.", "AbortError");
+    options.onProgress?.("Reading the image at its original size…");
+    const recovery = await recover(pixels, width, height, { ...options, quickOnly: options.automatic === true });
+    if (options.signal?.aborted) throw new DOMException("Search cancelled.", "AbortError");
+    const direct = describeRecovery(recovery);
+    if (!options.automatic || (direct.found && !direct.unreadable)) return direct;
+    // One perspective search also retains translation/affine estimates. Running
+    // the three manual modes in sequence would repeat the FFT and seed searches.
+    options.onProgress?.("Looking for encoded contents in a resized, padded or photographed image…");
+    const transformed = await findVisualTransform(pixels, width, height, { ...options, mode: "perspective", simplerFirst: true });
+    if (transformed.found || !direct.found) return transformed;
+    // A weak spectral signature must not erase a checksum-valid native marker.
+    return { ...transformed, ...direct };
   }
 
   async function decode(pixels, width, height, password) {

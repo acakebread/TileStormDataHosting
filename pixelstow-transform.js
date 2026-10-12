@@ -559,12 +559,58 @@
     return toImage(normalized);
   }
 
+  function geometryFor(matrix, seed, markers, adapter, model) {
+    const layout = adapter.layout(seed.originalWidth, seed.originalHeight);
+    return { matrix, originalWidth: seed.originalWidth, originalHeight: seed.originalHeight,
+      model, markerCount: markers.length, headerCount: markers.filter((m) => m.verification === "header").length,
+      patternCount: markers.filter((m) => m.verification === "pattern").length,
+      expectedMarkers: layout.map((p) => ({ id: p.id, matrix: patchMatrix(matrix, p) })),
+      corners: quad(matrix, seed.originalWidth, seed.originalHeight) };
+  }
+
+  async function trySimpleGeometry(markers, seed, adapter, width, height, options, attempted) {
+    const verify = async (matrix, model, confirmed) => {
+      if (!validGeometry(matrix, seed.originalWidth, seed.originalHeight, width, height)) return null;
+      attempted.add(model);
+      options.onProgress?.("Checking the payload with a " + model + " transform (" + confirmed.length + " markers)…");
+      const verified = await adapter.verifyGeometry(geometryFor(matrix, seed, confirmed, adapter, model), options.signal);
+      if (verified) return { ...verified, payloadVerified: true };
+      check(options);
+      return null;
+    };
+    if (!attempted.has("translation") && markers.length >= 2) {
+      const layout = adapter.layout(seed.originalWidth, seed.originalHeight);
+      const translations = markers.map((marker) => {
+        const pair = centrePair(marker, layout, adapter);
+        return { marker, x: pair.target.x - pair.source.x, y: pair.target.y - pair.source.y };
+      });
+      const agreeing = translations.filter((p) => Math.hypot(p.x - translations[0].x, p.y - translations[0].y) < 0.6);
+      if (agreeing.length >= 2) {
+        const matrix = [1, 0, agreeing.reduce((s, p) => s + p.x, 0) / agreeing.length,
+          0, 1, agreeing.reduce((s, p) => s + p.y, 0) / agreeing.length, 0, 0, 1];
+        const verified = await verify(matrix, "translation", agreeing.map((p) => p.marker));
+        if (verified) return verified;
+      }
+    }
+    if (!attempted.has("affine") && markers.length >= 3) {
+      const fit = chooseFit(markers, seed, adapter, false, width, height);
+      if (fit) {
+        attempted.add("affine");
+        const confirmed = fit.inliers.map((p) => p.marker);
+        const matrix = await refineGlobal(fit.matrix, confirmed, seed, adapter, width, height, { ...options, mode: "affine" });
+        return verify(matrix, "affine", confirmed);
+      }
+    }
+    return null;
+  }
+
   async function find(pixels, width, height, requested, adapter) {
     const options = { ...requested, deadline: Date.now() + 60000,
       mode: ["padding", "affine", "perspective"].includes(requested.mode) ? requested.mode : "padding" };
     options.check = () => check(options);
     let signature = null;
     const markers = [];
+    const simpleAttempts = new Set();
     try {
       const luma = new Float32Array(width * height);
       options.onProgress?.("Preparing wavelet search…");
@@ -620,6 +666,10 @@
             const ranked = rankMappings(candidates, markers, seed, adapter, width, height);
             if (ranked.length) { predictions = ranked; matrix = ranked[0].matrix; model = ranked[0].model; }
           }
+          if (options.simplerFirst && adapter.verifyGeometry) {
+            const simple = await trySimpleGeometry(markers, seed, adapter, width, height, options, simpleAttempts);
+            if (simple) return { ...simple, markers, signature };
+          }
         }
       }
       if (options.mode === "padding") {
@@ -645,11 +695,7 @@
       }
       if (!validGeometry(matrix, seed.originalWidth, seed.originalHeight, width, height)) return {
         geometry: null, markers, signature, reason: "The marker fit places image corners outside the supplied picture or folds the plane." };
-      return { geometry: { matrix, originalWidth: seed.originalWidth, originalHeight: seed.originalHeight,
-        model, markerCount: markers.length, headerCount: markers.filter((m) => m.verification === "header").length,
-        patternCount: markers.filter((m) => m.verification === "pattern").length,
-        expectedMarkers: layout.map((p) => ({ id: p.id, matrix: patchMatrix(matrix, p) })),
-        corners: quad(matrix, seed.originalWidth, seed.originalHeight) }, markers, signature };
+      return { geometry: geometryFor(matrix, seed, markers, adapter, model), markers, signature };
     } catch (error) {
       if (error?.name === "SearchLimit") return { geometry: null, markers, signature, reason: error.message };
       throw error;

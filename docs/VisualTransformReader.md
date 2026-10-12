@@ -12,11 +12,33 @@ Open `pixelstow.html` directly or through the existing localhost server and choo
 an input image. Direct `file://` opening runs the detector on the page because
 browsers block the file worker's opaque origin; it yields between chunks to keep
 progress and cancellation available. HTTP/HTTPS uses the disposable Web Worker.
-Normal reading runs first. Below the preview and image contents, expand
-**Visual transform reader — experimental** and choose **Find encoded image**.
-The first/default mode is **Padding only · original size**. It assumes the
-encoded rectangle's original pixels are preserved, with arbitrary surrounding
-padding. Padding can contain texture or other photographic material.
+Reading starts automatically when an image is chosen, pasted or loaded from a
+link. The preview appears before recovery, with progress and **Cancel search**
+outside the options panel. The pipeline stops at the first readable payload:
+
+1. Direct full-frame reading, including previous carrier 1 images.
+2. A small set of common full-frame resize ratios and phases for carrier 3.
+3. One shared geometric search with the existing FFT gate, outline proposals and
+   frequency-derived local search. Two agreeing markers can propose a translation,
+   and three non-collinear markers an affine fit; the complete frame is checked
+   before either short-circuits discovery. If those fail, localization continues
+   toward the existing four-marker perspective fit.
+
+Running the padding, affine and perspective modes as three separate fallback
+passes would repeat FFT analysis and seed localization. Automatic reading uses
+the working perspective reader once instead, after the inexpensive full-frame
+checks. Each simpler model gets at most one payload attempt; its failure keeps
+the same marker/search state for the perspective fit. The successful verification
+returns geometry and inspection metadata without sending payload bytes from the
+worker, and avoids a duplicate verification before initial inspection returns.
+Unlocking and subsequent decoding reuse recovered geometry and verify
+the frame again; they do not repeat discovery. Encoding/internal codec checks
+retain their existing read path and do not start photographic searches.
+
+Below the preview and image contents, **Image recovery options** provides
+**Automatic · recommended** and the three individual modes for retries. **Padding
+only · original size** assumes original pixels are preserved, with arbitrary
+surrounding padding. Padding can contain texture or other photographic material.
 
 The optional modes attempt affine geometry (rotation, scaling, independent
 stretch and shear) and planar perspective geometry. A whole-image FFT precheck
@@ -33,7 +55,9 @@ Local fits adjust both axes and shear; all discovery/fitting has a 60-second
 budget. **Cancel search** terminates the worker, or aborts the next chunk in
 direct-file mode. Budgeted/cancelled searches do not imply the image is unencoded.
 
-A cyan quadrilateral shows inferred encoded-image bounds. Yellow rectangles have
+A cyan quadrilateral shows inferred encoded-image bounds when **Show detected
+bounds and markers** is enabled. Guides are off by default and their canvas is
+drawn on demand. Yellow rectangles have
 decoded, CRC-valid headers. Green rectangles match the expected full marker
 pattern after dimensions are established by a valid header. Dashed rectangles
 show expected positions that were not confirmed. Counts distinguish header reads
@@ -114,16 +138,19 @@ The overlay is a separate canvas, excluded from exports and clipboard data.
   estimation and alignment refinement; works in a worker or on the main thread.
 - `pixelstow-spectrum.js`: whole-image frequency triage and candidate read bases.
 - `pixelstow-transform-worker.js`: imports detector and codec, searches a
-  transferred copy of input pixels, and returns geometry and progress only.
+  transferred copy of input pixels, and returns geometry, progress and inspection
+  metadata; payload bytes stay in the worker when checking a simpler fit.
 - `pixelstow.js`: locator adapter, transform sampling, payload verification and
   geometry-aware approximate source extraction.
-- `pixelstow.html`: explicit search modes, cancellation and diagnostic overlay.
+- `pixelstow.html`: automatic import recovery, optional manual search modes,
+  cancellation and diagnostic overlay.
 
-No support for cropped-away markers, curved paper, lens correction, physical
-printing, camera blur or halftoning is claimed. Corner location and payload
+The user has reported successful recovery from a photograph with the committed
+reader (`6675dc8`). This is useful evidence for that input, rather than a general
+print/camera guarantee. No general support for cropped-away markers, curved paper,
+lens correction, camera blur or halftoning is claimed. Corner location and payload
 recovery are reported separately: a plausible outline alone is not a successful
-decode. This experiment needs the user's local evaluation before reliability
-or performance claims.
+decode. The automatic routing changes still need local user evaluation.
 
 Four confirmed markers can be sufficient: in padding mode only translation is
 unknown, and the header gives the original dimensions. Marker rectangles contain

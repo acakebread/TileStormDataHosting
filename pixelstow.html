@@ -512,23 +512,26 @@
             </div>
           </div>
         </section>
+        <div id="recovery-progress" hidden>
+          <p class="hint" id="transform-status" role="status"></p>
+          <p class="hint" id="transform-signature" role="status"></p>
+          <button id="cancel-transform" type="button" hidden>Cancel search</button>
+        </div>
         <details class="transform-reader" id="transform-reader" hidden>
-          <summary>Visual transform reader — experimental</summary>
-          <p class="hint">Check the encoding frequency signature, then locate the image and its markers. Start with padding only. Rotation and perspective use outline and frequency estimates; searches stop after 60 seconds. All processing stays in this browser.</p>
+          <summary>Image recovery options</summary>
+          <p class="hint">Images are read automatically when opened. If contents cannot be recovered, retry here or choose a specific search. Wider searches stop after 60 seconds. All processing stays in this browser.</p>
           <div class="attachment-controls">
             <label for="transform-mode">Search</label>
             <select id="transform-mode">
+              <option value="auto">Automatic · recommended</option>
               <option value="padding">Padding only · original size</option>
               <option value="affine">Rotation, scale, stretch and shear</option>
               <option value="perspective">Perspective · flat quadrilateral</option>
             </select>
-            <button id="find-transform" type="button">Find encoded image</button>
-            <button id="cancel-transform" type="button" hidden>Cancel search</button>
+            <button id="find-transform" type="button">Retry image recovery</button>
           </div>
           <label><input id="transform-force" type="checkbox"> Search anyway if the frequency signature is weak</label>
-          <p class="hint" id="transform-signature" role="status"></p>
-          <p class="hint" id="transform-status" role="status"></p>
-          <label><input id="show-transform" type="checkbox" checked> Show detected bounds and markers</label>
+          <label><input id="show-transform" type="checkbox"> Show detected bounds and markers</label>
           <p class="hint">Yellow: decoded marker header. Green: confirmed known pattern. Dashed: expected position, not confirmed. The payload checksum determines whether the message can be read.</p>
         </details>
         <p class="status" id="status" role="status"></p>
@@ -596,7 +599,8 @@
         <p>Everything is processed in this browser and is not uploaded. Encoding saves a new image. The new resize-recovery format currently needs this browser reader. Choose version 1 for existing desktop and TileStorm readers; attachments also need binary-payload support.</p>
         <p>This is a prototype. Short recordings and small attachments work best; heavy payloads can give variable results. Download the verified PNG and keep the original file. Sharing apps may resize or recompress photos, especially large images over about 2,000 pixels, and the hidden contents can disappear. That size is a guideline, not a guaranteed safe limit.</p>
         <p>For WhatsApp, send the image as a Document / original file where possible and include the PixelStow opening link. The recipient can save it to Files and use Choose image, or copy it and use Paste image. A link opens this page but cannot automatically read a WhatsApp attachment. Screenshots, resized copies and ordinary photo sharing may not keep the payload.</p>
-        <p>On iPhone, allow Safari's Paste prompt after tapping Paste image. If needed, use the touch-and-hold paste box. Safari may require a tap on Play voice message before sound is allowed; the full audio player is also available under Attached files. Audio format support varies by browser. Resize and print/photo recovery are still research work.</p>
+        <p>On iPhone, allow Safari's Paste prompt after tapping Paste image. If needed, use the touch-and-hold paste box. Safari may require a tap on Play voice message before sound is allowed; the full audio player is also available under Attached files. Audio format support varies by browser.</p>
+        <p>PixelStow automatically attempts recovery from resized, padded, rotated or photographed encoded images. Recovery remains experimental: blur, cropping, print quality and heavy recompression can still prevent reading. Keep the original encoded file where possible.</p>
       </section>
 
       <div class="links">
@@ -665,8 +669,8 @@
     </form>
   </dialog>
   <script src="./pixelstow-spectrum.js?v=20261012-spectrum1"></script>
-  <script src="./pixelstow-transform.js?v=20261012-transform4"></script>
-  <script src="./pixelstow.js?v=20261012-transform4"></script>
+  <script src="./pixelstow-transform.js?v=20261012-auto1"></script>
+  <script src="./pixelstow.js?v=20261012-auto1"></script>
   <script src="./pixelstow-export.js?v=20261011-exports"></script>
   <script src="./pixelstow-media.js?v=20261011-webm-duration"></script>
   <script src="./pixelstow-sharing.js?v=20261011-png-clipboard"></script>
@@ -680,6 +684,7 @@
     const previewSource = document.querySelector("#preview-source");
     const transformOutline = document.querySelector("#transform-outline");
     const transformReader = document.querySelector("#transform-reader");
+    const recoveryProgress = document.querySelector("#recovery-progress");
     const transformMode = document.querySelector("#transform-mode");
     const findTransformButton = document.querySelector("#find-transform");
     const cancelTransformButton = document.querySelector("#cancel-transform");
@@ -688,6 +693,7 @@
     const transformForce = document.querySelector("#transform-force");
     const showTransform = document.querySelector("#show-transform");
     let transformAbort = null;
+    let recoveryVisible = false;
     const compareUi = document.querySelector("#compare-ui");
     const previewNote = document.querySelector("#preview-note");
     const comparisonControl = document.querySelector("#comparison-control");
@@ -830,6 +836,7 @@
       const canEncode = hasImage && !current.hasFingerprint && !needsUnlock;
       const working = busy || media.active;
       transformReader.hidden = !hasImage;
+      recoveryProgress.hidden = !hasImage || !recoveryVisible;
       findTransformButton.disabled = working || !hasImage;
       transformMode.disabled = working;
       transformForce.disabled = working;
@@ -1063,8 +1070,33 @@
 
     showTransform.addEventListener("change", () => {
       const result = current?.transformResult;
-      transformOutline.hidden = !showTransform.checked || !(result?.geometry || result?.markers?.length);
+      if (showTransform.checked && result) drawTransform(result);
+      else transformOutline.hidden = true;
     });
+
+    function recoveryOptions(controller) {
+      return {
+        signal: controller.signal, forceSearch: transformForce.checked,
+        onSignature: (signature) => { transformSignature.textContent = signature.message; },
+        onProgress: (text) => { transformStatus.textContent = text; }
+      };
+    }
+
+    function recordRecovery(job, result) {
+      job.transformResult = { ...result, markers: result.markers || (result.geometry ? job.transformResult?.markers : null) || [] };
+      if (showTransform.checked) drawTransform(job.transformResult);
+      else transformOutline.hidden = true;
+      job.hasFingerprint = job.hasFingerprint || result.found;
+      if (result.geometry && result.found && !result.unreadable) {
+        const geometry = result.geometry;
+        transformStatus.textContent = "Recovered " + geometry.originalWidth + " × " + geometry.originalHeight +
+          " original pixels; " + geometry.markerCount + "/8 markers confirmed (" + geometry.headerCount + " headers, " +
+          geometry.patternCount + " known-pattern matches); " + geometry.model + " transform.";
+      } else {
+        transformStatus.textContent = result.reason || (result.unreadable ? "Recovery markers were found, but the payload did not pass its checks."
+          : result.found ? "Read the image without geometric recovery." : "No encoded image was located.");
+      }
+    }
     cancelTransformButton.addEventListener("click", () => {
       transformAbort?.abort();
       transformStatus.textContent = "Cancelling search…";
@@ -1074,19 +1106,17 @@
       const job = current;
       clearDecoded();
       transformAbort = new AbortController();
+      recoveryVisible = true;
       setBusy(true);
-      transformStatus.textContent = "Starting visual transform search…";
-      transformSignature.textContent = "Checking for an encoding signature…";
+      transformStatus.textContent = "Starting image recovery…";
+      transformSignature.textContent = "";
       try {
-        const result = await PixelStow.findVisualTransform(job.pixels, job.width, job.height, {
-          mode: transformMode.value, signal: transformAbort.signal, forceSearch: transformForce.checked,
-          onSignature: (signature) => { transformSignature.textContent = signature.message; },
-          onProgress: (text) => { transformStatus.textContent = text; }
-        });
+        const options = recoveryOptions(transformAbort);
+        const result = transformMode.value === "auto"
+          ? await PixelStow.inspect(job.pixels, job.width, job.height, { ...options, automatic: true })
+          : await PixelStow.findVisualTransform(job.pixels, job.width, job.height, { ...options, mode: transformMode.value });
         if (current !== job) return;
-        job.transformResult = result;
-        drawTransform(result);
-        job.hasFingerprint = job.hasFingerprint || result.found;
+        recordRecovery(job, result);
         if (!result.found || result.unreadable) {
           transformStatus.textContent = result.reason || (result.found ? "Image bounds were found, but the payload did not pass its checksum." : "No encoded image was located.");
           setStatus(result.found ? "Recovery markers were found, but the contents could not be read. The image cannot be encoded again." : transformStatus.textContent, true);
@@ -1094,7 +1124,6 @@
         }
         job.passwordProtected = result.passwordProtected;
         job.decodeProtected = result.passwordProtected;
-        transformStatus.textContent = result.geometry.originalWidth + " × " + result.geometry.originalHeight + " original pixels; " + result.geometry.markerCount + "/8 markers confirmed (" + result.geometry.headerCount + " headers, " + result.geometry.patternCount + " known-pattern matches); " + result.geometry.model + " transform.";
         if (result.passwordProtected) {
           setStatus("This image is password protected. Please enter the password to unlock it.");
         } else {
@@ -1103,7 +1132,7 @@
           if (decoded.status === "success") {
             readout.value = decoded.text; message.value = decoded.text;
             rememberMessage(job.pixels, decoded);
-            setStatus("Read the fingerprint through the recovered image transform." + carrierNote(decoded));
+            setStatus("Read the fingerprint from this image." + carrierNote(decoded));
           } else setStatus("The recovered payload could not be read.", true);
         }
       } catch (error) {
@@ -1164,6 +1193,9 @@
       unlockPassword.value = "";
       current = null;
       transformOutline.hidden = true;
+      transformOutline.width = 0;
+      transformOutline.height = 0;
+      recoveryVisible = false;
       transformStatus.textContent = "";
       transformSignature.textContent = "";
       loadedImage.hidden = true;
@@ -1172,7 +1204,6 @@
       setStatus("Reading the image…");
       try {
         const image = await PixelStow.readImageFile(file);
-        const found = await PixelStow.inspect(image.pixels, image.width, image.height);
         current = {
           file,
           origin,
@@ -1180,8 +1211,8 @@
           width: image.width,
           height: image.height,
           exact: image.exact,
-          hasFingerprint: found.found,
-          passwordProtected: found.passwordProtected
+          hasFingerprint: false,
+          passwordProtected: false
         };
         loadedImage.textContent = origin === "clipboard" ? "Pasted from clipboard" : file.name ? "Loaded file: " + file.name : "Loaded image";
         loadedImage.hidden = false;
@@ -1189,12 +1220,25 @@
         const room = PixelStow.estimatePayloadBytes(image.width, image.height);
         const exactNote = image.exact ? "" : " Browser colour conversion was used, so an existing fingerprint may not read.";
         capacity.textContent = image.width + " × " + image.height + " · about " + room.toLocaleString("en-GB") + " payload bytes before compression." + exactNote;
+        // Show the supplied photo before automatic recovery starts. Progress and
+        // cancellation remain visible without opening the recovery options.
+        transformAbort = new AbortController();
+        recoveryVisible = true;
+        setBusy(true);
+        const found = await PixelStow.inspect(image.pixels, image.width, image.height, {
+          ...recoveryOptions(transformAbort), automatic: true
+        });
+        recordRecovery(current, found);
+        current.passwordProtected = found.passwordProtected;
+        current.decodeProtected = found.passwordProtected;
+        recoveryVisible = Boolean(found.geometry || found.markers?.length || found.signature?.likely);
         if (found.unreadable) {
           setStatus("Recovery markers were found, but the contents could not be recovered. This image cannot be encoded again.", true);
         } else if (found.found && found.passwordProtected) {
           setStatus("This image is password protected. Please enter the password to unlock it.");
         } else if (found.found) {
           const decoded = await PixelStow.decode(image.pixels, image.width, image.height, "");
+          if (transformAbort.signal.aborted) throw new DOMException("Search cancelled.", "AbortError");
           if (decoded.status === "success") {
             readout.value = decoded.text;
             message.value = decoded.text;
@@ -1204,18 +1248,27 @@
             setStatus("A fingerprint was found, but its text could not be read.", true);
           }
         } else {
-          setStatus("No fingerprint found. For a padded or distorted encoded image, open Visual transform reader below the preview. Otherwise enter a message, attach a file or record some audio.");
+          setStatus(found.signature?.likely
+            ? "No readable fingerprint was recovered. You can retry with Image recovery options below, or choose another image."
+            : "No fingerprint found. Enter a message, attach a file or record some audio. If you expected encoded contents, try Image recovery options below.");
         }
       } catch (error) {
-        current = null;
-        loadedImage.hidden = true;
-        loadedImage.textContent = "";
-        preview.hidden = true;
-        previewNote.hidden = true;
-        hideComparison();
-        capacity.textContent = "Choose or paste a PNG or JPEG. Your original stays unchanged.";
-        setStatus(error && error.message ? error.message : "Could not read that image.", true);
+        if (current) {
+          recoveryVisible = true;
+          transformStatus.textContent = error?.name === "AbortError" ? "Image recovery cancelled. Retry recovery or choose another image."
+            : error?.message || "Image recovery failed. Retry recovery or choose another image.";
+          setStatus(transformStatus.textContent, error?.name !== "AbortError");
+        } else {
+          loadedImage.hidden = true;
+          loadedImage.textContent = "";
+          preview.hidden = true;
+          previewNote.hidden = true;
+          hideComparison();
+          capacity.textContent = "Choose or paste a PNG or JPEG. Your original stays unchanged.";
+          setStatus(error && error.message ? error.message : "Could not read that image.", true);
+        }
       } finally {
+        transformAbort = null;
         setBusy(false);
         updateByteCounts();
         if (!unlockForm.hidden) unlockPassword.focus({ preventScroll: true });
