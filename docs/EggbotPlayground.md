@@ -13,7 +13,27 @@ including natural blinking and per-eye gaze. Each page load starts with
 No animation selected. Cameras and robot rotation
 can also be controlled with the keyboard or touch gestures.
 
+Click or tap a visible grid point to turn and travel there. Movement uses the
+main app's cosine `SmoothingUtils.Ease`, 0.25-second turns, and travel duration
+`(distance + 1) / 6`. New clicks replace the destination; manual robot dragging
+cancels travel, and Reset view also restores the starting position. Wheels roll
+from actual travel. This open grid moves directly to the point without tile
+navigation or obstacle routing.
+
+The eye debug controls are retained in an HTML comment in `eggbot.html` for
+future tuning; uncomment them to enable live comparison. They expose the saved
+test scene's gaze strength (1.3) and pupil UV bias (0, 0.07).
+The bias also feeds eyelid following.
+The original upper/lower resting scalars (4.5 / 0), pupil-to-lid scale (0.724),
+and lower follow scale (0.5) remain in the lid calculation. Changes to the live
+controls last until the page reloads.
+
 ## Local preview and checks
+
+On Windows, double-click `Preview Eggbot.cmd` in the repository root. It starts
+a localhost server on a free port and opens Eggbot in your default browser.
+Keep its terminal window open while previewing; close it or press Ctrl+C to stop.
+Python 3 must be available as `python`.
 
 From the repository root:
 

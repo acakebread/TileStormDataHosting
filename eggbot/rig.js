@@ -22,6 +22,11 @@ export class EggbotRig {
     this.rightGaze = new THREE.Vector2();
     this.sharedGaze = new THREE.Vector2();
     this.mode = 'camera';
+    // Saved EggbotAnimationTest inspector values, expressed in Unity UVs.
+    this.gazeStrength = 1.3;
+    this.pupilUvBias = new THREE.Vector2(0, 0.07);
+    this.consoleGazeYOffset = -0.25;
+    this.consoleGazeCross = 0.03;
     this.yaw = 0;
     this.tilt = 0;
     this.scratch = vector();
@@ -203,8 +208,9 @@ export class EggbotRig {
   gazeOffset(eye, target) {
     const inverse = new THREE.Matrix4().copy(this.eyes.matrixWorld).invert();
     const direction = vector().subVectors(target, eye).transformDirection(inverse);
-    return new THREE.Vector2(clamp(direction.dot(this.eyeRight) * this.uvRadius.x * 0.65, -0.16, 0.16),
-      clamp(-direction.dot(this.eyeUp) * this.uvRadius.y * 0.65, -0.32, 0.32));
+    const gain = Math.max(0, this.gazeStrength) * 0.5;
+    return new THREE.Vector2(clamp(direction.dot(this.eyeRight) * this.uvRadius.x * gain, -0.16, 0.16),
+      clamp(-direction.dot(this.eyeUp) * this.uvRadius.y * gain, -0.32, 0.32));
   }
 
   screenTarget(camera, pointer, eyeCenter) {
@@ -235,17 +241,17 @@ export class EggbotRig {
       else if (this.mode === 'context' && clipName === 'Console_Loop') {
         focus = this.leftHand && this.rightHand ? this.leftHand.getWorldPosition(vector()).add(this.rightHand.getWorldPosition(vector())).multiplyScalar(0.5)
           : center.clone().add(vector().set(0, 0, 0.5).transformDirection(this.model.matrixWorld).multiplyScalar(0.5));
-        focus.add(vector().set(0, 1, 0).transformDirection(this.model.matrixWorld).multiplyScalar(-0.25));
+        focus.add(vector().set(0, 1, 0).transformDirection(this.model.matrixWorld).multiplyScalar(this.consoleGazeYOffset));
       }
       if (focus) {
         leftTarget = this.gazeOffset(leftEye, focus); rightTarget = this.gazeOffset(rightEye, focus);
-        if (this.mode === 'context') { leftTarget.x += 0.03; rightTarget.x -= 0.03; }
+        if (this.mode === 'context') { leftTarget.x += this.consoleGazeCross; rightTarget.x -= this.consoleGazeCross; }
       }
       this.leftGaze.lerp(leftTarget, 1 - Math.exp(-14 * delta));
       this.rightGaze.lerp(rightTarget, 1 - Math.exp(-14 * delta));
     }
-    const left = this.leftGaze.clone().add(new THREE.Vector2(0, 0.07));
-    const right = this.rightGaze.clone().add(new THREE.Vector2(0, 0.07));
+    const left = this.leftGaze.clone().add(this.pupilUvBias);
+    const right = this.rightGaze.clone().add(this.pupilUvBias);
     this.applyUvs(this.eyeBinding, left, right);
     const blink = this.blink.tick(delta);
     for (const lid of this.lids) {

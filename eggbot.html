@@ -11,6 +11,14 @@
     {"imports":{"three":"./eggbot/vendor/three/build/three.module.js","three/addons/":"./eggbot/vendor/three/addons/"}}
   </script>
   <script type="module" src="./eggbot.js"></script>
+  <script>
+    // This must run without modules: Chrome blocks them on file:// pages.
+    if (location.protocol === 'file:') document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('loading').classList.add('failed');
+      document.getElementById('loadingText').textContent = 'Open Eggbot through a local web server. Double-click Preview Eggbot.cmd in this folder, then use the browser page it opens.';
+      document.getElementById('status').textContent = 'Local web server needed';
+    });
+  </script>
 </head>
 <body>
   <header class="masthead">
@@ -33,14 +41,17 @@
         <label><input type="radio" name="gaze" value="world"><span>Follow the orb</span><small>World tracking</small></label>
         <label><input type="radio" name="gaze" value="disabled"><span>Eyes at rest</span><small>No tracking</small></label>
       </fieldset>
-      <details class="instructions"><summary>How to play</summary><p>Drag to turn and tilt Eggbot. Right-drag to orbit the camera. Scroll to zoom.</p><p>On a touchscreen, use one finger for Eggbot; two fingers to orbit and pinch to zoom.</p><p>With the scene focused, use arrow keys to turn Eggbot, Shift + arrows to orbit, + / − to zoom, and 0 to reset the view.</p><p>Single animations marked “once” hold their last pose. The sequence repeats Idle → Console Start → Console Loop → Console End.</p></details>
+      <!-- Eye debug controls: uncomment for future tuning. Styles and input handlers are retained.
+      <details class="instructions eye-settings"><summary>Eye adjustments</summary><p>Unity test scene values. Offsets move the pupils and their following eyelids together.</p><label>Gaze strength <input type="number" data-eye-setting="strength" value="1.3" min="0" max="4" step="0.1"></label><label>Pupil offset U <input type="number" data-eye-setting="x" value="0" min="-0.32" max="0.32" step="0.01"></label><label>Pupil offset V <input type="number" data-eye-setting="y" value="0.07" min="-0.32" max="0.32" step="0.01"></label></details>
+      -->
+      <details class="instructions"><summary>How to play</summary><p>Click or tap the grid to move Eggbot. Drag to turn and tilt him. Right-drag to orbit the camera. Scroll to zoom.</p><p>On a touchscreen, use one finger for Eggbot; two fingers to orbit and pinch to zoom.</p><p>With the scene focused, use arrow keys to turn Eggbot, Shift + arrows to orbit, + / − to zoom, and 0 to reset the view and position.</p><p>Single animations marked “once” hold their last pose. The sequence repeats Idle → Console Start → Console Loop → Console End.</p></details>
       <p class="panel-note">The TileStorm animation testbed,<br>now in your browser.</p>
     </aside>
     <section class="stage" id="stage" aria-label="Eggbot 3D playground">
       <canvas id="scene" tabindex="0" aria-label="Interactive Eggbot scene. Arrow keys turn Eggbot; Shift and arrow keys orbit the camera; plus and minus zoom."></canvas>
       <div class="stage-toolbar"><div class="status"><span class="status-dot" aria-hidden="true"></span><span id="status" role="status">Getting Eggbot ready…</span></div><div class="stage-actions"><button type="button" id="resetView" title="Reset Eggbot and camera view" disabled>Reset view</button><button type="button" id="fullscreen" aria-label="Enter full screen" title="Full screen">⛶</button></div></div>
       <div class="loading" id="loading" role="status"><div class="loading-orbit" aria-hidden="true"></div><p id="loadingText">Getting Eggbot ready…</p><a href="./index.html" hidden id="errorHome">Back to the community</a></div>
-      <p class="stage-hint" id="stageHint"><span>Drag to turn</span><span>Right-drag to orbit</span><span>Scroll to zoom</span></p>
+      <p class="stage-hint" id="stageHint"><span>Click grid to move</span><span>Drag to turn</span><span>Right-drag to orbit</span></p>
       <noscript><div class="no-script">Enable JavaScript to meet Eggbot. <a href="./index.html">Back to the community</a></div></noscript>
     </section>
   </main>
