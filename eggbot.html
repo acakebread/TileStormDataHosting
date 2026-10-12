@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101923">
+  <meta name="description" content="Meet Eggbot. Explore his animations, turn him around, and see how he follows your gaze in an interactive 3D playground.">
+  <title>Eggbot · TileStorm Evolution</title>
+  <link rel="stylesheet" href="./eggbot.css">
+  <script type="importmap">
+    {"imports":{"three":"./eggbot/vendor/three/build/three.module.js","three/addons/":"./eggbot/vendor/three/addons/"}}
+  </script>
+  <script type="module" src="./eggbot.js"></script>
+</head>
+<body>
+  <header class="masthead">
+    <a class="home-link" href="./index.html" aria-label="Back to TileStorm Evolution"><img src="./eggbot_render.png" alt=""><span>TileStorm <strong>Evolution</strong></span></a>
+    <a class="back-link" href="./index.html">← Community maps</a>
+  </header>
+  <main class="playground">
+    <aside class="panel" aria-label="Eggbot controls">
+      <div class="intro"><p class="eyebrow">MEET THE ROBOT</p><h1>Eggbot<span>.</span></h1><p>Pick an animation. Catch his eye. <br>Give him a spin.</p></div>
+      <fieldset id="animationControls" disabled>
+        <legend>Animation</legend>
+        <div class="animation-list" id="animationList"><button type="button" data-animation="none" aria-pressed="true"><span>No animation</span><small>Authored pose</small></button></div>
+        <button type="button" class="sequence-button" id="sequence" aria-pressed="false"><span class="play-symbol" aria-hidden="true">▶</span> Play sequence <span aria-hidden="true">↻</span></button>
+      </fieldset>
+      <fieldset id="gazeControls" disabled>
+        <legend>Where to look</legend>
+        <label><input type="radio" name="gaze" value="camera" checked><span>At you</span><small>Camera</small></label>
+        <label><input type="radio" name="gaze" value="mouse"><span>Follow pointer</span><small>Mouse / touch</small></label>
+        <label><input type="radio" name="gaze" value="context"><span>At his console</span><small>During Console Loop</small></label>
+        <label><input type="radio" name="gaze" value="world"><span>Follow the orb</span><small>World tracking</small></label>
+        <label><input type="radio" name="gaze" value="disabled"><span>Eyes at rest</span><small>No tracking</small></label>
+      </fieldset>
+      <details class="instructions"><summary>How to play</summary><p>Drag to turn and tilt Eggbot. Right-drag to orbit the camera. Scroll to zoom.</p><p>On a touchscreen, use one finger for Eggbot; two fingers to orbit and pinch to zoom.</p><p>With the scene focused, use arrow keys to turn Eggbot, Shift + arrows to orbit, + / − to zoom, and 0 to reset the view.</p><p>Single animations marked “once” hold their last pose. The sequence repeats Idle → Console Start → Console Loop → Console End.</p></details>
+      <p class="panel-note">The TileStorm animation testbed,<br>now in your browser.</p>
+    </aside>
+    <section class="stage" id="stage" aria-label="Eggbot 3D playground">
+      <canvas id="scene" tabindex="0" aria-label="Interactive Eggbot scene. Arrow keys turn Eggbot; Shift and arrow keys orbit the camera; plus and minus zoom."></canvas>
+      <div class="stage-toolbar"><div class="status"><span class="status-dot" aria-hidden="true"></span><span id="status" role="status">Getting Eggbot ready…</span></div><div class="stage-actions"><button type="button" id="resetView" title="Reset Eggbot and camera view" disabled>Reset view</button><button type="button" id="fullscreen" aria-label="Enter full screen" title="Full screen">⛶</button></div></div>
+      <div class="loading" id="loading" role="status"><div class="loading-orbit" aria-hidden="true"></div><p id="loadingText">Getting Eggbot ready…</p><a href="./index.html" hidden id="errorHome">Back to the community</a></div>
+      <p class="stage-hint" id="stageHint"><span>Drag to turn</span><span>Right-drag to orbit</span><span>Scroll to zoom</span></p>
+      <noscript><div class="no-script">Enable JavaScript to meet Eggbot. <a href="./index.html">Back to the community</a></div></noscript>
+    </section>
+  </main>
+</body>
+</html>

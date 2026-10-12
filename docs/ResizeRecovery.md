@@ -20,7 +20,7 @@ experiment was backed up locally under
 
 Nine patches sit near the corners, side midpoints and centre. Each is 96 × 64
 original pixels, containing a 12 × 8 array of 8 × 8 symbols. An 8 × 8 symbol
-uses the existing 4 × 4 diagonal wavelet, replicated twice along each axis.
+uses the existing 4 × 4 diagonal wavelet, expanded to six pixels along each axis.
 Marker amplitude follows the verified payload strength, capped at 16 (normally
 8 for small payloads), so routine messages do not need double-strength patches.
 The marker reader uses soft diagonal scores and does not need the amplitude
@@ -29,9 +29,9 @@ the pixel range; otherwise values clamp. Alpha is untouched. No continuous
 stripes or ruler ticks are painted, and no whole border is reserved.
 
 Patch origins are aligned to the payload's 4-pixel lattice. For width `W`,
-the three x origins are `8`, `4*floor((W-96)/8)` and `4*floor((W-104)/4)`.
-For height `H`, the y origins are `8`, `4*floor((H-64)/8)` and
-`4*floor((H-72)/4)`. Patch identifiers are row-major 0–8.
+the three x origins are `8`, `4*floor((W-72)/8)` and `4*floor((W-80)/4)`.
+For height `H`, the y origins are `8`, `4*floor((H-48)/8)` and
+`4*floor((H-56)/4)`. Patch identifiers are row-major 0–8.
 
 Each patch carries this independent eight-byte header:
 
@@ -50,12 +50,12 @@ with the same locator seed. The decoder knows the first two bytes before reading
 the dimensions and can reject incorrect marker candidates cheaply.
 
 The payload's logical block list is the full row-major 4 × 4 image grid with
-only those nine rectangles excluded. Preamble and payload scattering operate
+only those eight rectangles excluded. Preamble and payload scattering operate
 on that logical list, using the unchanged PCF1 seed. The C7 preamble's carrier
 version is 3. Every encoder capacity calculation uses the same exclusion.
 
-Marker area is 55,296 pixels: about 2.88% of a 1600 × 1200 photo. Pictures that
-cannot fit nine disjoint patches, have either dimension above 65,535, or would
+Marker area is 27,648 pixels: about 1.44% of a 1600 × 1200 photo. Pictures that
+cannot fit eight disjoint patches, have either dimension above 65,535, or would
 spend over 30% of their pixels on markers automatically write carrier 1. The
 page reports that fallback. Capacity still depends on actual compressed data.
 
@@ -106,3 +106,5 @@ works. Reproduce the focused check with `node tests/pixelstow-resize-checks.mjs`
 using Node with web compression APIs and Python with Pillow installed. Generated
 images/results go under ignored `artifacts/research/resize-check-*`; the initial
 research snapshot is under `artifacts/research/sparse-markers-20261012`.
+
+The smaller eight-marker layout replaces the initial development version 3 directly; those initial version-3 images are intentionally not retained. Carrier 1 compatibility is unchanged.

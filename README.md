@@ -16,6 +16,10 @@ Useful links:
 - Authoring guide: `content-authoring-guide.html`
 - Technical notes: `technical-notes.md`
 
+The home page Eggbot icon opens `eggbot.html`, a standalone 3D animation
+playground using the original Eggbot art and animations. See
+[preview, checks and asset export](docs/EggbotPlayground.md).
+
 PixelStow's browser utility is `pixelstow.html`. It encodes optional text, file
 attachments and short voice recordings locally into a new image. See
 [payload format and rollout](docs/PixelStowPayloads.md). Run

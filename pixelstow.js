@@ -194,7 +194,7 @@
   function estimatePayloadBytes(width, height, passwordProtected = false, carrierVersion = preferredCarrier) {
     if (width < BLOCK || height < BLOCK || width * height > MAX_PIXELS) return 0;
     const blocks = Math.floor(width / BLOCK) * Math.floor(height / BLOCK) -
-      (carrierVersion === CARRIER_V3 && locatorFits(width, height) ? 9 * LOCATOR_WIDTH * LOCATOR_HEIGHT / 16 : 0);
+      (carrierVersion === CARRIER_V3 && locatorFits(width, height) ? 8 * LOCATOR_WIDTH * LOCATOR_HEIGHT / 16 : 0);
     if (blocks <= PREAMBLE_BLOCKS || blocks > MAX_BLOCKS) return 0;
     let framed = Math.floor((blocks - PREAMBLE_BLOCKS) / 9);
     if (framed > MAX_FRAMED) framed = MAX_FRAMED;
@@ -618,9 +618,9 @@
     }
   }
 
-  // Carrier 3: nine local, coarse wavelet patches; no reserved border.
+  // Carrier 3: eight local, coarse wavelet patches; no reserved border.
   // The locator header is independent of payload ordering, compression and passwords.
-  const LOCATOR_CELL = 8;
+  const LOCATOR_CELL = 6;
   const LOCATOR_COLUMNS = 12;
   const LOCATOR_ROWS = 8;
   const LOCATOR_WIDTH = LOCATOR_CELL * LOCATOR_COLUMNS;
@@ -635,20 +635,20 @@
     if (width < 3 * LOCATOR_WIDTH + 2 * LOCATOR_INSET || height < 3 * LOCATOR_HEIGHT + 2 * LOCATOR_INSET) return null;
     const xs = [LOCATOR_INSET, Math.floor((width - LOCATOR_WIDTH) / 8) * 4, Math.floor((width - LOCATOR_WIDTH - LOCATOR_INSET) / 4) * 4];
     const ys = [LOCATOR_INSET, Math.floor((height - LOCATOR_HEIGHT) / 8) * 4, Math.floor((height - LOCATOR_HEIGHT - LOCATOR_INSET) / 4) * 4];
-    return ys.flatMap((y, row) => xs.map((x, column) => ({ x, y, id: row * 3 + column })));
+    return ys.flatMap((y, row) => xs.map((x, column) => ({ x, y, id: row * 3 + column }))).filter((patch) => patch.id !== 4);
   }
 
   function locatorFits(width, height) {
     // Small pictures use carrier 1 rather than sacrifice most of their capacity.
     return width <= 65535 && height <= 65535 && Boolean(locatorLayout(width, height)) &&
-      width * height <= MAX_PIXELS && 9 * LOCATOR_WIDTH * LOCATOR_HEIGHT <= width * height * 0.3;
+      width * height <= MAX_PIXELS && 8 * LOCATOR_WIDTH * LOCATOR_HEIGHT <= width * height * 0.3;
   }
 
   function locatorBlockMap(width, height) {
     const layout = locatorLayout(width, height);
     if (!layout) return null;
     const columns = Math.floor(width / BLOCK), rows = Math.floor(height / BLOCK);
-    const map = new Uint32Array(columns * rows - 9 * LOCATOR_WIDTH * LOCATOR_HEIGHT / 16);
+    const map = new Uint32Array(columns * rows - 8 * LOCATOR_WIDTH * LOCATOR_HEIGHT / 16);
     let count = 0;
     for (let row = 0; row < rows; row++) {
       for (let column = 0; column < columns; column++) {
@@ -685,7 +685,7 @@
         for (let channel = 0; channel < 3; channel++) {
           let low = -Infinity, high = Infinity;
           for (let dy = 0; dy < LOCATOR_CELL; dy++) for (let dx = 0; dx < LOCATOR_CELL; dx++) {
-            const delta = scaleWeight(amplitude, shapeWeight(dx >> 1, dy >> 1, bit));
+            const delta = scaleWeight(amplitude, shapeWeight(Math.floor(dx * 4 / LOCATOR_CELL), Math.floor(dy * 4 / LOCATOR_CELL), bit));
             const value = reference[(x + dx + (y + dy) * width) * 4 + channel];
             low = Math.max(low, -value - delta);
             high = Math.min(high, 255 - value - delta);
@@ -693,7 +693,7 @@
           const bias = low <= high ? Math.max(low, Math.min(high, 0)) : 0;
           for (let dy = 0; dy < LOCATOR_CELL; dy++) for (let dx = 0; dx < LOCATOR_CELL; dx++) {
             const index = (x + dx + (y + dy) * width) * 4 + channel;
-            output[index] = clampByte(reference[index] + bias + scaleWeight(amplitude, shapeWeight(dx >> 1, dy >> 1, bit)));
+            output[index] = clampByte(reference[index] + bias + scaleWeight(amplitude, shapeWeight(Math.floor(dx * 4 / LOCATOR_CELL), Math.floor(dy * 4 / LOCATOR_CELL), bit)));
           }
         }
       }
@@ -723,7 +723,7 @@
       const originY = y + Math.floor(cell / LOCATOR_COLUMNS) * LOCATOR_CELL * scaleY;
       let projection = 0, sum = 0, squares = 0;
       for (let dy = 0; dy < 4; dy++) for (let dx = 0; dx < 4; dx++) {
-        const value = sampleLuma(pixels, width, height, originX + (2 * dx + 0.5) * scaleX, originY + (2 * dy + 0.5) * scaleY);
+        const value = sampleLuma(pixels, width, height, originX + (1.5 * dx + 0.5) * scaleX, originY + (1.5 * dy + 0.5) * scaleY);
         projection += value * locatorShape[dx + dy * 4]; sum += value; squares += value * value;
       }
       const score = projection / Math.sqrt(400 + Math.max(0, squares - sum * sum / 16));
@@ -754,13 +754,13 @@
       }
     }
     const offsets = nativeOnly ? [0] : [0, -0.5, 0.5, -1, 1];
-    const ids = [0, 2, 6, 8, 1, 3, 5, 7, 4];
+    const ids = [0, 2, 6, 8, 1, 3, 5, 7];
     for (const scale of scales) {
       const guessedWidth = Math.round(width / scale), guessedHeight = Math.round(height / scale);
       const layout = locatorLayout(guessedWidth, guessedHeight);
       if (!layout || !locatorFits(guessedWidth, guessedHeight)) continue;
       for (const id of ids) {
-        const patch = layout[id];
+        const patch = layout.find((patch) => patch.id === id);
         for (const oy of offsets) for (const ox of offsets) {
           const found = readLocator(pixels, width, height, patch.x * scale + (scale - 1) / 2 + ox, patch.y * scale + (scale - 1) / 2 + oy, scale, scale, id);
           if (found && (!nativeOnly || (found.originalWidth === width && found.originalHeight === height))) return found;
@@ -867,14 +867,14 @@
         const cell = locatorOrder[slot], bit = WORD_BITS[header[Math.floor(slot / 12)] * 12 + slot % 12];
         const x = patch.x + cell % LOCATOR_COLUMNS * LOCATOR_CELL, y = patch.y + Math.floor(cell / LOCATOR_COLUMNS) * LOCATOR_CELL;
         let projection = 0, energy = 0;
-        for (let dy = 0; dy < 8; dy++) for (let dx = 0; dx < 8; dx++) {
-          const k = scaleWeight(LOCATOR_STRENGTH, shapeWeight(dx >> 1, dy >> 1, bit));
+        for (let dy = 0; dy < LOCATOR_CELL; dy++) for (let dx = 0; dx < LOCATOR_CELL; dx++) {
+          const k = scaleWeight(LOCATOR_STRENGTH, shapeWeight(Math.floor(dx * 4 / LOCATOR_CELL), Math.floor(dy * 4 / LOCATOR_CELL), bit));
           const p = (x + dx + (y + dy) * width) * 4;
           projection += (pixels[p] + pixels[p + 1] + pixels[p + 2]) / 3 * k; energy += k * k;
         }
         const amount = Math.max(0, Math.min(1, projection / energy));
-        for (let dy = 0; dy < 8; dy++) for (let dx = 0; dx < 8; dx++) {
-          const delta = amount * scaleWeight(LOCATOR_STRENGTH, shapeWeight(dx >> 1, dy >> 1, bit));
+        for (let dy = 0; dy < LOCATOR_CELL; dy++) for (let dx = 0; dx < LOCATOR_CELL; dx++) {
+          const delta = amount * scaleWeight(LOCATOR_STRENGTH, shapeWeight(Math.floor(dx * 4 / LOCATOR_CELL), Math.floor(dy * 4 / LOCATOR_CELL), bit));
           const p = (x + dx + (y + dy) * width) * 4;
           for (let c = 0; c < 3; c++) output[p + c] = clampChannel(pixels[p + c] - delta);
         }
