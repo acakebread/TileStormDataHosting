@@ -515,6 +515,7 @@
         <div id="recovery-progress" hidden>
           <p class="hint" id="transform-status" role="status"></p>
           <p class="hint" id="transform-signature" role="status"></p>
+          <p class="hint" id="recovery-framing" hidden>Markers were detected, but the contents could not be read. Solid boxes mark confirmed detections; any dashed boxes show expected positions. Retake the photo with all four corners visible, the picture filling more of the frame, and sharp focus. Avoid glare.</p>
           <button id="cancel-transform" type="button" hidden>Cancel search</button>
         </div>
         <details class="transform-reader" id="transform-reader" hidden>
@@ -685,6 +686,7 @@
     const transformOutline = document.querySelector("#transform-outline");
     const transformReader = document.querySelector("#transform-reader");
     const recoveryProgress = document.querySelector("#recovery-progress");
+    const recoveryFraming = document.querySelector("#recovery-framing");
     const transformMode = document.querySelector("#transform-mode");
     const findTransformButton = document.querySelector("#find-transform");
     const cancelTransformButton = document.querySelector("#cancel-transform");
@@ -1069,6 +1071,7 @@
     }
 
     showTransform.addEventListener("change", () => {
+      if (current) current.markerGuideOverride = showTransform.checked;
       const result = current?.transformResult;
       if (showTransform.checked && result) drawTransform(result);
       else transformOutline.hidden = true;
@@ -1084,6 +1087,11 @@
 
     function recordRecovery(job, result) {
       job.transformResult = { ...result, markers: result.markers || (result.geometry ? job.transformResult?.markers : null) || [] };
+      const nearMiss = Boolean(result.unreadable && job.transformResult.markers.length);
+      recoveryFraming.hidden = !nearMiss;
+      // Automatic guides belong to a failed read, not to the next successful
+      // retry. An explicit checkbox choice is retained for this image only.
+      showTransform.checked = job.markerGuideOverride ?? nearMiss;
       if (showTransform.checked) drawTransform(job.transformResult);
       else transformOutline.hidden = true;
       job.hasFingerprint = job.hasFingerprint || result.found;
@@ -1196,6 +1204,8 @@
       transformOutline.width = 0;
       transformOutline.height = 0;
       recoveryVisible = false;
+      recoveryFraming.hidden = true;
+      showTransform.checked = false;
       transformStatus.textContent = "";
       transformSignature.textContent = "";
       loadedImage.hidden = true;

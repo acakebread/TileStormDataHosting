@@ -56,8 +56,13 @@ budget. **Cancel search** terminates the worker, or aborts the next chunk in
 direct-file mode. Budgeted/cancelled searches do not imply the image is unencoded.
 
 A cyan quadrilateral shows inferred encoded-image bounds when **Show detected
-bounds and markers** is enabled. Guides are off by default and their canvas is
-drawn on demand. Yellow rectangles have
+bounds and markers** is enabled. Successful reads have a clean preview by default.
+If recovery confirms markers but cannot read the payload, guides appear
+automatically with advice to include all four corners, fill more of the frame,
+keep sharp focus and avoid glare. A successful retry hides automatic guides;
+an explicit checkbox choice is retained for that image only. Inputs with no
+confirmed markers and password prompts do not trigger automatic guides.
+The overlay canvas is drawn on demand. Yellow rectangles have
 decoded, CRC-valid headers. Green rectangles match the expected full marker
 pattern after dimensions are established by a valid header. Dashed rectangles
 show expected positions that were not confirmed. Counts distinguish header reads
