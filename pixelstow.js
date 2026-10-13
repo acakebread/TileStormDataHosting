@@ -302,6 +302,30 @@
     return attachments.length ? packBundle(text, attachments).length : strictUtf8(text).length;
   }
 
+  function repetitionBudget(payloadBlocks, framedBytes, bitsPerByte) {
+    const codedBits = framedBytes * bitsPerByte;
+    return { repetitionRatio: payloadBlocks / codedBits, copies: Math.floor(payloadBlocks / codedBits),
+      parityBits: bitsPerByte - 8, framedBytes, fits: codedBits <= payloadBlocks };
+  }
+
+  async function estimateRepetition(width, height, content, passwordProtected = false) {
+    const { text = "", attachments = [] } = content, bundle = attachments.length > 0;
+    const plain = bundle ? packBundle(text, attachments) : strictUtf8(text);
+    try {
+      if (!plain.length) return null;
+      const version = locatorProfile(preferredCarrier) && locatorFits(width, height, preferredCarrier) ? preferredCarrier : CARRIER_V1;
+      const payloadBlocks = Math.floor(width / BLOCK) * Math.floor(height / BLOCK) - PREAMBLE_BLOCKS -
+        (locatorProfile(version) ? locatorArea(version) / 16 : 0);
+      // Both paths compress before framing/encryption. The encrypted envelope
+      // then adds fixed overhead; no password or encryption is needed here.
+      const compressed = await deflateRaw(plain);
+      const framedBytes = HEADER + (passwordProtected ? ENVELOPE : 0) + Math.min(plain.length, compressed.length || Infinity);
+      compressed.fill(0);
+      const bitsPerByte = framedBytes * 12 <= payloadBlocks ? 12 : 9;
+      return repetitionBudget(Math.max(0, payloadBlocks), framedBytes, bitsPerByte);
+    } finally { plain.fill(0); }
+  }
+
   function payloadsEqual(left, right) {
     if (left.text !== right.text || left.attachments.length !== right.attachments.length) return false;
     return left.attachments.every((file, i) => file.name === right.attachments[i].name &&
@@ -1179,7 +1203,7 @@
 
   function searchInWorker(pixels, width, height, options, operation = "geometry") {
     return new Promise((resolve, reject) => {
-      const url = new URL("pixelstow-transform-worker.js?v=20261013-marker-follow2", codecScriptUrl);
+      const url = new URL("pixelstow-transform-worker.js?v=20261013-voice-repetition1", codecScriptUrl);
       const worker = new Worker(url);
       let finished = false;
       const abort = () => { if (finished) return; cleanup(); reject(new DOMException("Search cancelled.", "AbortError")); };
@@ -1843,8 +1867,7 @@
     }
     await writeBits(reference, image, width, columns, payloadSlots, (slot) => codedBit(framed, slot % (framed.length * bitsPerByte), bitsPerByte), strength, amplitudeCache);
     return {
-      copies: Math.floor(payloadBlocks / (framed.length * bitsPerByte)),
-      parityBits
+      ...repetitionBudget(payloadBlocks, framed.length, bitsPerByte)
     };
   }
 
@@ -1979,7 +2002,6 @@
     }
     if ((preamble.flags & ~ONE_PARITY) !== FLAGS) throw frameError("The carrier flags do not match this profile.");
     const bitsPerByte = (preamble.flags & ONE_PARITY) !== 0 ? 9 : 12;
-    const parityBits = bitsPerByte === 12 ? 4 : 1;
     const payloadBlocks = scores.length - PREAMBLE_BLOCKS;
     const codedBits = preamble.framedLength * bitsPerByte;
     if (payloadBlocks < codedBits) throw frameError("The image does not hold a complete copy of the payload.");
@@ -1992,8 +2014,7 @@
     return {
       bytes: decoded.bytes,
       corrections: decoded.corrections,
-      copies: Math.floor(payloadBlocks / codedBits),
-      parityBits,
+      ...repetitionBudget(payloadBlocks, preamble.framedLength, bitsPerByte),
       carrierVersion: preamble.version
     };
   }
@@ -2064,6 +2085,8 @@
         corrections: framed.corrections,
         copies: framed.copies,
         parityBits: framed.parityBits,
+        repetitionRatio: framed.repetitionRatio,
+        framedBytes: framed.framedBytes,
         passwordProtected: unpacked.passwordProtected,
         bundle: unpacked.bundle,
         formatVersion: unpacked.formatVersion,
@@ -2177,7 +2200,11 @@
       carrierVersion: recovery.carrierVersion,
       geometry: recovery.geometry,
       readResolution: recovery.readResolution,
-      strength: recovery.strength
+      strength: recovery.strength,
+      repetitionRatio: recovery.repetitionRatio,
+      copies: recovery.copies,
+      parityBits: recovery.parityBits,
+      framedBytes: recovery.framedBytes
     };
   }
 
@@ -2212,7 +2239,8 @@
     if (!recovery) return { status: "none" };
     if (recovery.locatorOnly) return { status: "markers", carrierVersion: recovery.carrierVersion || CARRIER_V3, geometry: recovery.geometry, scaleX: recovery.scaleX, scaleY: recovery.scaleY };
     if (recovery.passwordProtected && !password) {
-      return { status: "password", strength: recovery.strength };
+      return { status: "password", strength: recovery.strength, repetitionRatio: recovery.repetitionRatio,
+        copies: recovery.copies, parityBits: recovery.parityBits, framedBytes: recovery.framedBytes };
     }
     try {
       const textBytes = recovery.passwordProtected
@@ -2232,7 +2260,11 @@
           scaleX: recovery.scaleX,
           scaleY: recovery.scaleY,
           passwordProtected: recovery.passwordProtected,
-          strength: recovery.strength
+          strength: recovery.strength,
+          repetitionRatio: recovery.repetitionRatio,
+          copies: recovery.copies,
+          parityBits: recovery.parityBits,
+          framedBytes: recovery.framedBytes
         };
       } finally { textBytes.fill(0); }
     } catch (error) {
@@ -2272,6 +2304,8 @@
       strength,
       copies: written.copies,
       parityBits: written.parityBits,
+      repetitionRatio: written.repetitionRatio,
+      framedBytes: written.framedBytes,
       passwordProtected,
       carrierVersion: version,
       map
@@ -2313,6 +2347,8 @@
               strength: encoded.strength,
               copies: encoded.copies,
               parityBits: encoded.parityBits,
+              repetitionRatio: encoded.repetitionRatio,
+              framedBytes: encoded.framedBytes,
               passwordProtected: locked,
               carrierVersion: usedVersion,
               locatorFallback: wantLocators && usedVersion === CARRIER_V1
@@ -2753,6 +2789,7 @@
     estimateBytes,
     estimatePayloadBytes,
     payloadSize,
+    estimateRepetition,
     payloadsEqual,
     inspect,
     decode,

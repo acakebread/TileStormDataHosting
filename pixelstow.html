@@ -114,6 +114,7 @@
       margin: 0 0 14px;
       color: var(--muted);
     }
+    .hint.repetition-warning { color: #ffe285; border-left: 3px solid #ffe285; padding-left: 10px; }
 
     a {
       color: var(--tile-azure);
@@ -570,6 +571,7 @@
             <span>Source</span>
           </div>
           <p class="hint preview-note" id="preview-note" hidden>Scroll over the picture to zoom. Hold the right mouse button to pan.</p>
+          <p class="hint" id="image-repetition" role="status" hidden></p>
         </div>
         <section class="payload-panel" id="payload-panel" hidden aria-label="Embedded image contents">
           <form id="unlock-form" hidden>
@@ -645,6 +647,13 @@
       </div>
       <p class="hint">Attach up to eight files, with or without a text message. Audio gets a player when decoded; other files can be downloaded. The photo's capacity is the limit.</p>
       <div id="attachment-list" aria-label="Files to encode"></div>
+      <label for="record-quality">Voice recording size</label>
+      <select id="record-quality">
+        <option value="compatible">Original recording — compatible</option>
+        <option value="compact" disabled>Smaller voice — 8 kbit/s Opus</option>
+        <option value="tiny" disabled>Smallest voice — 6 kbit/s Opus</option>
+      </select>
+      <p class="hint" id="record-help">Checking whether this browser can make smaller voice files…</p>
       <div class="actions">
         <button id="record-audio" type="button" disabled>Record voice message</button>
         <button id="stop-audio" type="button" hidden>Stop and attach recording</button>
@@ -652,6 +661,7 @@
       </div>
       <p class="hint" id="record-status" role="status"></p>
       <p class="hint" id="payload-budget" role="status">Choose a photo to see how much it can hold.</p>
+      <p class="hint" id="payload-repetition" role="status" hidden></p>
 
       <div id="encoding-passwords">
         <label for="password">Password for encoding</label>
@@ -765,9 +775,10 @@
   <script src="./pixelstow-spectrum.js?v=20261013-marker-follow2"></script>
   <script src="./pixelstow-transform.js?v=20261013-marker-follow2"></script>
   <script src="./pixelstow-lattice.js?v=20261013-marker-follow2"></script>
-  <script src="./pixelstow.js?v=20261013-marker-follow2"></script>
+  <script src="./pixelstow.js?v=20261013-voice-repetition1"></script>
   <script src="./pixelstow-export.js?v=20261011-exports"></script>
-  <script src="./pixelstow-media.js?v=20261013-audio-start1"></script>
+  <script src="./pixelstow-voice.js?v=20261013-voice-repetition1"></script>
+  <script src="./pixelstow-media.js?v=20261013-voice-repetition1"></script>
   <script src="./pixelstow-sharing.js?v=20261011-png-clipboard"></script>
   <script src="./pixelstow-camera.js?v=20261013-marker-follow2"></script>
   <script>
@@ -817,6 +828,9 @@
     const decodeButton = document.querySelector("#decode");
     const relockButton = document.querySelector("#relock");
     const payloadBudget = document.querySelector("#payload-budget");
+    const payloadRepetition = document.querySelector("#payload-repetition");
+    const imageRepetition = document.querySelector("#image-repetition");
+    let repetitionGeneration = 0, repetitionTimer;
     const attachmentBytes = document.querySelector("#attachment-bytes");
     const downloadLink = document.querySelector("#download");
     const saveEncodedJpegButton = document.querySelector("#save-encoded-jpeg");
@@ -928,6 +942,7 @@
     }
 
     function updateByteCounts() {
+      updateRepetition();
       messageBytes.textContent = byteLabel(message.value);
       readoutBytes.textContent = byteLabel(readout.value);
       attachmentBytes.textContent = "(" + media.files.reduce((sum, file) => sum + file.bytes.length, 0).toLocaleString("en-GB") + " bytes)";
@@ -941,6 +956,41 @@
         payloadBudget.textContent = error.message;
         payloadBudget.classList.add("error");
       }
+    }
+
+    function showRepetition(element, data, prefix = "Redundancy") {
+      element.hidden = !data || !Number.isFinite(data.repetitionRatio);
+      if (element.hidden) { element.textContent = ""; element.classList.remove("repetition-warning"); return; }
+      const ratio = data.repetitionRatio, nearLimit = ratio < 1.25, weakParity = data.parityBits === 1;
+      element.classList.toggle("repetition-warning", nearLimit || weakParity);
+      element.textContent = prefix + ": " + ratio.toFixed(2) + "× payload repetition. " +
+        (data.fits === false ? "The contents do not fit. Remove an attachment, shorten the recording or use a larger photo."
+          : nearLimit ? "Close to 1× means very little repeated data. Photographs and resized copies are likely to be harder to read; proceed with caution. Smaller attachments give more margin."
+            : weakParity ? "This payload uses reduced error correction. Smaller attachments provide more protection."
+              : ratio < 2 ? "Some contents repeat, but the extra margin is limited. Aim for 2× or more when photographing the image."
+                : "The contents have room for extra repeats, giving the reader more margin. Photo recovery remains experimental.");
+    }
+
+    function updateRepetition() {
+      const generation = ++repetitionGeneration;
+      clearTimeout(repetitionTimer);
+      showRepetition(imageRepetition, current?.repetition);
+      if (!current || current.hasFingerprint || (!message.value && !media.files.length)) {
+        showRepetition(payloadRepetition, null); return;
+      }
+      payloadRepetition.hidden = false;
+      payloadRepetition.classList.remove("repetition-warning");
+      payloadRepetition.textContent = "Calculating payload repetition after compression…";
+      const job = current;
+      repetitionTimer = setTimeout(async () => {
+        try {
+          const data = await PixelStow.estimateRepetition(job.width, job.height,
+            { text: message.value, attachments: media.files }, Boolean(password.value));
+          if (generation === repetitionGeneration && job === current) showRepetition(payloadRepetition, data, "Expected redundancy");
+        } catch (_) {
+          if (generation === repetitionGeneration && job === current) showRepetition(payloadRepetition, null);
+        }
+      }, 250);
     }
 
     function setStatus(text, isError) {
@@ -1050,6 +1100,8 @@
       current.decodeProtected = decoded.passwordProtected;
       current.decodedAttachments = decoded.attachments;
       current.strength = decoded.strength;
+      current.repetition = decoded;
+      showRepetition(imageRepetition, decoded);
       media.showDecoded(decoded.attachments, autoplay);
       sharing.setFile(encodedPng ? new File([encodedPng], downloadLink.download, { type: "image/png" }) : current.hasFingerprint ? current.file : null);
       current.carrierAbort?.abort();
@@ -1264,6 +1316,10 @@
     }
 
     function recordRecovery(job, result) {
+      if (Number.isFinite(result.repetitionRatio)) {
+        job.repetition = result;
+        if (job === current) showRepetition(imageRepetition, result);
+      }
       job.transformResult = { ...result, markers: result.markers || (result.geometry ? job.transformResult?.markers : null) || [] };
       // Frequency evidence is tentative. Replace the running precheck message
       // with the actual result, including failed searches and native reads.

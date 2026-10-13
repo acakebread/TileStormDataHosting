@@ -167,6 +167,17 @@
       this.stopButton = document.querySelector("#stop-audio");
       this.cancelButton = document.querySelector("#cancel-audio");
       this.recordStatus = document.querySelector("#record-status");
+      this.recordQuality = document.querySelector("#record-quality");
+      this.recordHelp = document.querySelector("#record-help");
+      this.compactAvailable = false;
+      this.recordQuality.addEventListener("change", () => this.recordingHelp());
+      Promise.all([PixelStowVoice.supported(8000), PixelStowVoice.supported(6000)]).then(([compact, tiny]) => {
+        this.compactAvailable = compact;
+        this.recordQuality.querySelector('option[value="compact"]').disabled = !compact;
+        this.recordQuality.querySelector('option[value="tiny"]').disabled = !compact || !tiny;
+        if (!compact) this.recordQuality.value = "compatible";
+        this.recordingHelp(); this.render(this.list, this.files, "compose", false); this.sync();
+      });
       this.audioAction = document.querySelector("#audio-action");
       this.voiceButton = document.querySelector("#play-voice");
       this.previewVoiceButton = document.querySelector("#preview-audio");
@@ -253,9 +264,11 @@
       this.kind.disabled = disabled;
       const supported = Boolean(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
       this.recordButton.disabled = disabled || this.files.length >= 8 || !supported;
+      this.recordQuality.disabled = disabled;
       this.stopButton.hidden = !this.recording;
       this.stopButton.disabled = Boolean(this.recording?.finishing);
-      this.cancelButton.hidden = !this.recording && !this.requestingMic;
+      this.cancelButton.hidden = !this.recording && !this.requestingMic && !this.compressionAbort;
+      this.cancelButton.textContent = this.compressionAbort ? "Cancel compression" : "Discard recording";
       this.list.querySelectorAll("button").forEach((button) => { button.disabled = disabled; });
       this.voiceButton.disabled = this.busy || !this.voiceAudio;
       this.previewVoiceButton.disabled = this.voiceButton.disabled;
@@ -266,6 +279,37 @@
       this.busy = busy;
       this.locked = locked;
       this.sync();
+    }
+
+    recordingHelp() {
+      this.recordHelp.textContent = !this.compactAvailable
+        ? "The working recorder is available. Smaller voice files need Opus audio encoding, available in newer browsers including Safari 26."
+        : this.recordQuality.value === "compatible"
+          ? "Keep the working recording format. You can also choose Make voice smaller on an attached audio file."
+          : "Record normally, then reduce to mono " + (this.recordQuality.value === "tiny" ? "6" : "8") +
+            " kbit/s Opus after Stop. Voice quality is reduced. The original is kept if conversion fails; listen before encoding.";
+    }
+
+    async compactAttachment(index) {
+      if (this.busy || this.locked || this.active || !this.compactAvailable) return;
+      const file = this.files[index], generation = this.generation;
+      this.compressionAbort = new AbortController();
+      this.pending = true; this.changed();
+      this.report("Making the voice attachment smaller…");
+      try {
+        const result = await PixelStowVoice.compact(file, this.recordQuality.value === "tiny" ? 6000 : 8000,
+          { signal: this.compressionAbort.signal });
+        if (generation !== this.generation) return;
+        this.files[index] = result.file;
+        this.render(this.list, this.files, "compose", false);
+        this.report(result.saved ? "Voice reduced from " + file.bytes.length.toLocaleString("en-GB") + " to " +
+          result.file.bytes.length.toLocaleString("en-GB") + " bytes. Listen to the smaller version before encoding."
+          : "This voice file is already as small as the conversion. The original was kept.");
+      } catch (error) {
+        if (generation === this.generation && error.name !== "AbortError") this.report("The original audio was kept. " + error.message, true);
+      } finally {
+        if (generation === this.generation) { this.pending = false; this.compressionAbort = null; this.changed(); }
+      }
     }
 
     async addFiles(files) {
@@ -340,6 +384,11 @@
             this.changed();
           });
           row.appendChild(remove);
+          if (/^audio\//i.test(file.type) && this.compactAvailable) {
+            const smaller = document.createElement("button"); smaller.type = "button";
+            smaller.textContent = "Make voice smaller";
+            smaller.addEventListener("click", () => this.compactAttachment(index)); row.appendChild(smaller);
+          }
         }
         {
           const blob = new Blob([file.bytes], { type: "application/octet-stream" });
@@ -488,6 +537,9 @@
 
     reset() {
       this.generation++;
+      this.compressionAbort?.abort();
+      this.compressionAbort = null;
+      this.pending = false;
       this.stopRecording(true);
       this.files.forEach((file) => file.bytes.fill(0));
       this.files = [];
@@ -502,6 +554,11 @@
     stopRecording(cancel = false) {
       const job = this.recording;
       if (!job) {
+        if (cancel && this.compressionAbort) {
+          this.compressionAbort.abort();
+          this.report("Voice compression cancelled. The original audio was kept.");
+          return;
+        }
         if (cancel && this.requestingMic) {
           this.generation++;
           this.pending = false;
@@ -512,9 +569,11 @@
         return;
       }
       job.cancelled ||= cancel;
+      if (cancel) job.compressionAbort?.abort();
       clearInterval(job.timer);
       if (!job.finishing) {
         job.finishing = true;
+        job.elapsedSeconds = (performance.now() - job.started) / 1000;
         if (job.recorder.state !== "inactive") job.recorder.stop();
         if (!job.cancelled) this.recordStatus.textContent = "Finishing voice recording…";
         this.sync();
@@ -582,17 +641,23 @@
         const recorder = new MediaRecorder(inputs.recordStream, options);
         this.requestingMic = false;
         const singleClip = mimeType?.includes("mp4") || recorder.mimeType.includes("mp4");
-        const maxSeconds = singleClip ? Math.min(30, Math.max(1, (budget - 1536) * 8 / 16000)) : 30;
-        const job = { ...inputs, recorder, chunks: [], size: 0, started: performance.now(), cancelled: false, finishing: false, timer: null };
+        const compactBitrate = this.compactAvailable && this.recordQuality.value !== "compatible" ?
+          (this.recordQuality.value === "tiny" ? 6000 : 8000) : 0;
+        const maxSeconds = compactBitrate ? Math.min(30, Math.max(1, (budget - 400) * 8 / (compactBitrate + 800)))
+          : singleClip ? Math.min(30, Math.max(1, (budget - 1536) * 8 / 16000)) : 30;
+        const job = { ...inputs, recorder, compactBitrate, compressionAbort: new AbortController(),
+          chunks: [], size: 0, started: performance.now(), cancelled: false, finishing: false, timer: null };
         this.recording = job;
         const update = () => {
           if (job.finishing) return;
           const seconds = (performance.now() - job.started) / 1000;
-          this.recordStatus.textContent = "Recording: " + seconds.toFixed(1) + " s · " + (singleClip
+          this.recordStatus.textContent = "Recording: " + seconds.toFixed(1) + " s · " + (compactBitrate
+            ? "Smaller voice after Stop. Estimated room for " + maxSeconds.toFixed(1) + " seconds."
+            : singleClip
             ? "M4A/AAC. Estimated room for " + maxSeconds.toFixed(1) + " seconds; file size shown after Stop."
             : job.size.toLocaleString("en-GB") + " / about " + budget.toLocaleString("en-GB") + " bytes · Opus. Maximum 30 seconds.");
           // M4A container chunks are not a reliable measure of speech bytes.
-          if (seconds >= maxSeconds || (!singleClip && job.size >= Math.max(1024, budget - 1024))) this.stopRecording();
+          if (seconds >= maxSeconds || (!compactBitrate && !singleClip && job.size >= Math.max(1024, budget - 1024))) this.stopRecording();
         };
         recorder.addEventListener("dataavailable", (event) => {
           if (event.data.size) { job.chunks.push(event.data); job.size += event.data.size; }
@@ -614,13 +679,27 @@
               const extension = type.includes("mp4") ? "m4a" : type.includes("ogg") ? "ogg" : type.includes("wav") ? "wav" : "webm";
               const name = "voice-message-" + (this.files.length + 1) + "." + extension;
               const bytes = new Uint8Array(await blob.arrayBuffer());
-              const attachment = { name, type, bytes: /webm/i.test(type) ? finalizeWebmAudio(bytes) : bytes };
-              if (generation !== this.generation) return;
+              let attachment = { name, type, bytes: /webm/i.test(type) ? finalizeWebmAudio(bytes) : bytes }, compactNote = "";
+              if (compactBitrate) {
+                this.recordStatus.textContent = "Making the voice recording smaller…";
+                try {
+                  const smaller = await PixelStowVoice.compact(attachment, compactBitrate, { signal: job.compressionAbort.signal });
+                  attachment = smaller.file;
+                  compactNote = smaller.saved ? " Saved " + smaller.saved.toLocaleString("en-GB") + " bytes."
+                    : " The original was already smaller.";
+                } catch (error) {
+                  if (job.cancelled || generation !== this.generation) return;
+                  compactNote = " Conversion did not succeed; the original recording was kept.";
+                }
+              }
+              if (job.cancelled || generation !== this.generation) return;
               PixelStow.payloadSize("", [...this.files, attachment]);
               this.files.push(attachment);
               this.render(this.list, this.files, "compose", false);
               const size = attachment.bytes.length;
-              this.recordStatus.textContent = "Recording attached: " + size.toLocaleString("en-GB") + " bytes · " + (type.includes("opus") || type.includes("webm") || type.includes("ogg") ? "Opus" : "M4A/AAC") + ". Listen before encoding; remove it to record again.";
+              this.recordStatus.textContent = "Recording attached: " + size.toLocaleString("en-GB") + " bytes · " +
+                (job.elapsedSeconds ?? (performance.now() - job.started) / 1000).toFixed(1) + " s · " +
+                (attachment.type.includes("opus") || attachment.type.includes("webm") || attachment.type.includes("ogg") ? "Opus" : "M4A/AAC") + "." + compactNote + " Listen before encoding; remove it to record again.";
               this.report(size > budget ? "The recording may be too large for this photo. Use a larger image or make a shorter recording." : "Voice message attached. You can encode it with or without text.", size > budget);
             } else if (generation === this.generation && !job.failed) {
               this.recordStatus.textContent = "Recording discarded.";

@@ -76,13 +76,38 @@ Opus retains the original byte-budget cutoff and 30-second limit. On a normal
 Stop the input remains alive until the recorder's final data/stop events, then
 microphone tracks and the audio context are released. Cancel releases them
 immediately. The recording status identifies the format and final actual byte
-count. There is no compact-quality mode or automatic switch to it.
+count. This remains the default recording path.
 
 The browser may choose a different actual bitrate, and container overhead can
 exceed the estimate. This is not a fixed output-size guarantee. The codec still
 checks actual capacity and refuses an export that cannot be verified. These
 iPhone recorder changes require device verification; the desktop playback retry
 fix remains.
+
+Optional **Smaller voice** (8 kbit/s) and **Smallest voice** (6 kbit/s) modes
+compress the finished recording to mono Opus locally with WebCodecs. They do not
+change microphone capture or the working MediaRecorder settings. The nominal
+audio rates are 1,000 and 750 bytes per second, plus container overhead; voice
+quality is lower. Actual encoded bytes determine whether there is a saving.
+The selectable options are enabled only after the browser reports encoder and
+WebM/Opus playback support. Safari added AudioEncoder in version 26; older or
+unsupported browsers keep the original recording. No server, CDN or external
+encoder dependency is used. See [Safari 26 release notes](https://developer.apple.com/documentation/safari-release-notes/safari-26-release-notes)
+and [Opus configuration](https://www.w3.org/TR/webcodecs-opus-codec-registration/).
+
+**Make voice smaller** applies the same conversion to an existing audio attachment
+(up to 60 seconds / 1 MiB), using 8 kbit/s unless Smallest voice is selected.
+The source is mixed to mono at 16 kHz offline. Encoder delay and final padding
+are recorded in a finite WebM with an explicit duration. One-second laced blocks
+reduce container overhead while retaining each encoded packet. Container rules
+follow the [Matroska Opus mapping](https://www.matroska.org/technical/codec_specs.html#a_opus).
+Ogg/Opus was avoided because of [Safari's reported Ogg timing bug](https://bugs.webkit.org/show_bug.cgi?id=293310).
+Before replacing the attachment, the conversion is decoded to check its duration
+and that an audible source has not become silent. The original is retained if
+conversion fails or produces a larger file. Cancel/import discards pending work;
+the encoder closes on cancellation or a stalled queue/flush. Users should listen
+to the converted recording before encoding. Native Chrome checks verify encoding,
+playback duration and fallback; actual iPhone Safari use still needs device testing.
 
 Browser WebM/Opus recordings receive a final Matroska `Info/Duration`, calculated
 from cluster/block timestamps and Opus packet durations. This gives the native
@@ -151,6 +176,33 @@ writes PNG, including on mobile, to avoid introducing a JPEG conversion before
 pasting into another app. This allows a comparison with the earlier JPEG path;
 it does not establish the cause of Facebook import failures. JPEG downloads and
 native photo sharing retain their separate verified-JPEG option.
+
+## Payload repetition and photo margin
+
+The preview shows the stored image's **Redundancy**, and the composition area
+shows **Expected redundancy** before encoding. Both report the average repetition
+of the coded payload, e.g. 1.06× or 1.64×. A fractional value means only part of the
+payload has another copy, rather than an additional complete copy of every bit.
+It is not a probability of successful recovery.
+
+The ratio is usable payload blocks divided by `storedFrameBytes * bitsPerByte`.
+Usable blocks exclude the 504 preamble blocks and the chosen carrier's marker
+regions. The stored frame includes the 20-byte header, compressed bundle/text and,
+when locked, the 60-byte protection overhead. Compression is measured before
+encryption without reading a password. The codec uses 12 bits per byte with four
+parity bits when it fits, otherwise nine with one parity bit. That change is
+reported separately as reduced error correction. Metadata is derived from the
+existing layout; it changes neither the carrier nor any encoded bytes.
+
+Ratios below 1.25× get an inline caution that photos and resized copies are
+likely harder to recover near 1×. Values below 2× suggest aiming for more room
+when photographing. These are guidance thresholds, not measured success limits,
+and do not prevent encoding. Smaller attachments can increase repetition; lens
+mapping, blur, exposure and glare can still defeat a more redundant image.
+
+`node tests/pixelstow-repetition-checks.mjs` checks that predicted, encoded,
+inspected and decoded ratios match for compressed password-protected text and a
+near-capacity public binary attachment, with unchanged recovered payload bytes.
 
 ## Local mobile checks
 
