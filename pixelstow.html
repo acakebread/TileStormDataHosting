@@ -623,7 +623,7 @@
           </div>
           <label><input id="transform-force" type="checkbox"> Search anyway if the frequency signature is weak</label>
           <label><input id="show-transform" type="checkbox"> Show detected bounds and markers</label>
-          <p class="hint">Yellow: decoded marker header. Green: confirmed known pattern. Dashed: expected position, not confirmed. The payload checksum determines whether the message can be read.</p>
+          <p class="hint">Yellow: decoded marker header. Green: confirmed known pattern. Blue: side-reference cross-check. Dashed: expected position, not confirmed. The payload checksum determines whether the message can be read.</p>
         </details>
         <p class="status" id="status" role="status"></p>
       </div>
@@ -665,10 +665,11 @@
 
       <label for="carrier-version">Encoding format</label>
       <select id="carrier-version">
-        <option value="3">New format — resize recovery (version 3)</option>
+        <option value="4">Version 4 — quieter corner markers (experimental)</option>
+        <option value="3">Version 3 — eight recovery markers</option>
         <option value="1">Previous format (version 1)</option>
       </select>
-      <p class="hint">The new format is the default, with small wavelet markers for experimental resize recovery. Previous-format pictures still open here. Choose version 1 to switch encoding back; use it for the desktop app and TileStorm until their readers are updated.</p>
+      <p class="hint">Version 4 is the default for evaluation: smaller square corner markers and tiny side references. Photo and resize recovery remain experimental. Existing version 1 and 3 pictures still open here; choose version 3 to return to the previous recovery format. Use version 1 for desktop and TileStorm readers until they are upgraded.</p>
 
       <div class="actions">
         <button id="encode" type="button" disabled>Encode into a new image</button>
@@ -760,13 +761,13 @@
       </div>
     </form>
   </dialog>
-  <script src="./pixelstow-spectrum.js?v=20261013-ranked2"></script>
-  <script src="./pixelstow-transform.js?v=20261013-ranked2"></script>
-  <script src="./pixelstow.js?v=20261013-audio-start1"></script>
+  <script src="./pixelstow-spectrum.js?v=20261013-markers-v4-2"></script>
+  <script src="./pixelstow-transform.js?v=20261013-markers-v4-2"></script>
+  <script src="./pixelstow.js?v=20261013-markers-v4-2"></script>
   <script src="./pixelstow-export.js?v=20261011-exports"></script>
   <script src="./pixelstow-media.js?v=20261013-audio-start1"></script>
   <script src="./pixelstow-sharing.js?v=20261011-png-clipboard"></script>
-  <script src="./pixelstow-camera.js?v=20261013-ranked2"></script>
+  <script src="./pixelstow-camera.js?v=20261013-markers-v4-2"></script>
   <script>
     const fileInput = document.querySelector("#file");
     const drop = document.querySelector("#drop");
@@ -874,34 +875,40 @@
 
     const carrierSelect = document.querySelector("#carrier-version");
     let storedCarrier;
-    try { storedCarrier = localStorage.getItem("pixelstow-carrier-v3"); } catch (_) { /* Storage can be disabled. */ }
-    if (storedCarrier === "1" || storedCarrier === "3") carrierSelect.value = storedCarrier;
+    try { storedCarrier = localStorage.getItem("pixelstow-carrier-v4"); } catch (_) { /* Storage can be disabled. */ }
+    if (storedCarrier === "1" || storedCarrier === "3" || storedCarrier === "4") carrierSelect.value = storedCarrier;
     PixelStow.setCarrierVersion(Number(carrierSelect.value));
     carrierSelect.addEventListener("change", () => {
-      try { localStorage.setItem("pixelstow-carrier-v3", carrierSelect.value); } catch (_) { /* The choice still works for this session. */ }
+      try { localStorage.setItem("pixelstow-carrier-v4", carrierSelect.value); } catch (_) { /* The choice still works for this session. */ }
       PixelStow.setCarrierVersion(Number(carrierSelect.value));
       updateByteCounts();
       if (current) {
         const room = PixelStow.estimatePayloadBytes(current.width, current.height);
         const exactNote = current.exact ? "" : " Browser colour conversion was used, so an existing fingerprint may not read.";
-        capacity.textContent = current.width + " × " + current.height + " · about " + room.toLocaleString("en-GB") + " payload bytes before compression." + exactNote;
+        capacity.textContent = capacityLabel(current, room, exactNote);
       }
     });
 
     function carrierNote(result) {
-      if (!result || result.carrierVersion !== 3) return "";
-      if (result.geometry) return " Version 3; read using the recovered " + result.geometry.model + " transform (" + result.geometry.markerCount + "/8 markers)." +
+      if (!result || ![3, 4].includes(result.carrierVersion)) return "";
+      const version = " Version " + result.carrierVersion;
+      if (result.geometry) return version + "; read using the recovered " + result.geometry.model + " transform (" + result.geometry.markerCount + "/" + (result.geometry.markerTotal || 8) + " markers)." +
         (result.readResolution ? " Full photo rectified onto the original " + result.readResolution.width + " × " + result.readResolution.height + " pixel grid." : "");
-      const sx = Number(result.scaleX);
-      const sy = Number(result.scaleY);
-      if (!sx || !sy || (Math.abs(sx - 1) < 0.0001 && Math.abs(sy - 1) < 0.0001)) return " New format (version 3).";
-      return " New format (version 3), recovered at " + (100 * sx).toFixed(1) + "% × " + (100 * sy).toFixed(1) + "% of its original size.";
+      const sx = Number(result.scaleX), sy = Number(result.scaleY);
+      if (!sx || !sy || (Math.abs(sx - 1) < 0.0001 && Math.abs(sy - 1) < 0.0001)) return version + ".";
+      return version + ", recovered at " + (100 * sx).toFixed(1) + "% × " + (100 * sy).toFixed(1) + "% of its original size.";
     }
 
     function byteLabel(text) {
       const count = new TextEncoder().encode(text || "").length;
       const formatted = count.toLocaleString("en-GB");
       return "(" + formatted + (count === 1 ? " byte)" : " bytes)");
+    }
+
+    function capacityLabel(image, room, exactNote) {
+      return image.width + " × " + image.height + (image.width * image.height > PixelStow.getLimits().encodingPixels
+        ? " · Full-resolution photo for reading. Encoding supports images up to 24 megapixels."
+        : " · about " + room.toLocaleString("en-GB") + " payload bytes before compression.") + exactNote;
     }
 
     function updateByteCounts() {
@@ -943,7 +950,8 @@
       const hasDecoded = Boolean(current && current.recoverPixels);
       const protectedTarget = Boolean(current && (current.decodeProtected ?? current.passwordProtected));
       const needsUnlock = protectedTarget && !hasDecoded;
-      const canEncode = hasImage && !current.hasFingerprint && !needsUnlock;
+      const canEncode = hasImage && !current.hasFingerprint && !needsUnlock &&
+        current.width * current.height <= PixelStow.getLimits().encodingPixels;
       const cameraActive = Boolean(camera?.active);
       const working = busy || media.active || cameraActive;
       drop.classList.toggle("camera-open", cameraActive);
@@ -1035,12 +1043,29 @@
     }
 
     function paintCanvas(canvas, pixels, width, height) {
-      canvas.width = width;
-      canvas.height = height;
+      canvas.dataset.imageWidth = String(width);
+      canvas.dataset.imageHeight = String(height);
+      const ratio = width * height > PixelStow.getLimits().encodingPixels ? Math.min(1, 2048 / Math.max(width, height)) : 1;
+      canvas.width = Math.round(width * ratio);
+      canvas.height = Math.round(height * ratio);
       const context = canvas.getContext("2d");
-      const view = new Uint8ClampedArray(pixels.length);
-      view.set(pixels);
-      context.putImageData(new ImageData(view, width, height), 0, 0);
+      if (ratio === 1) {
+        context.putImageData(new ImageData(new Uint8ClampedArray(pixels.buffer, pixels.byteOffset, pixels.byteLength), width, height), 0, 0);
+        return;
+      }
+      // Only the display backing is smaller. Reader/export buffers retain every
+      // original pixel; zoom/pan coordinates still use the original dimensions.
+      const strip = document.createElement("canvas");
+      strip.width = width; strip.height = Math.min(height, 256);
+      const stripContext = strip.getContext("2d");
+      try {
+        for (let y = 0; y < height; y += strip.height) {
+          const rows = Math.min(strip.height, height - y);
+          const view = new Uint8ClampedArray(pixels.buffer, pixels.byteOffset + y * width * 4, rows * width * 4);
+          stripContext.putImageData(new ImageData(view, width, rows), 0, 0);
+          context.drawImage(strip, 0, 0, width, rows, 0, y * canvas.height / height, canvas.width, rows * canvas.height / height);
+        }
+      } finally { strip.width = strip.height = 0; }
     }
 
     function setSplit(value) {
@@ -1053,7 +1078,8 @@
     }
 
     function imagePixels() {
-      return { w: previewEncoded.width, h: previewEncoded.height };
+      return { w: Number(previewEncoded.dataset.imageWidth) || previewEncoded.width,
+        h: Number(previewEncoded.dataset.imageHeight) || previewEncoded.height };
     }
 
     function viewBox() {
@@ -1167,9 +1193,11 @@
     }
 
     function paintTransform(canvas, result, width, height) {
-      canvas.width = width;
-      canvas.height = height;
+      const ratio = Math.min(1, 2048 / Math.max(width, height));
+      canvas.width = Math.round(width * ratio);
+      canvas.height = Math.round(height * ratio);
       const ctx = canvas.getContext("2d");
+      ctx.setTransform(canvas.width / width, 0, 0, canvas.height / height, 0, 0);
       ctx.clearRect(0, 0, width, height);
       ctx.lineWidth = Math.max(1, width / 500);
       const path = (points, colour) => {
@@ -1180,15 +1208,20 @@
       if (result.geometry) path(result.geometry.corners, "#8cebed");
       ctx.font = Math.max(12, width / 70) + "px sans-serif";
       ctx.fillStyle = "#f5e69e";
+      const markerCorners = (marker) => {
+        const w = marker.patchWidth || result.geometry?.patchWidth || 72;
+        const h = marker.patchHeight || result.geometry?.patchHeight || 48;
+        return [[0, 0], [w - 1, 0], [w - 1, h - 1], [0, h - 1]].map(([x, y]) => PixelStowTransform.point(marker.matrix, x, y));
+      };
       for (const marker of result.geometry?.expectedMarkers || []) {
         if (result.markers?.some((m) => m.id === marker.id)) continue;
         ctx.setLineDash([ctx.lineWidth * 3, ctx.lineWidth * 3]);
-        path([[0, 0], [71, 0], [71, 47], [0, 47]].map(([x, y]) => PixelStowTransform.point(marker.matrix, x, y)), "#a8b7c8");
+        path(markerCorners(marker), "#a8b7c8");
       }
       ctx.setLineDash([]);
-      for (const marker of result.markers || []) {
-        const corners = [[0, 0], [71, 0], [71, 47], [0, 47]].map(([x, y]) => PixelStowTransform.point(marker.matrix, x, y));
-        path(corners, marker.verification === "pattern" ? "#a9f5b5" : "#f5e69e");
+      for (const marker of [...(result.markers || []), ...(result.geometry?.referenceMarkers || [])]) {
+        const corners = markerCorners(marker);
+        path(corners, marker.verification === "reference" ? "#8cebed" : marker.verification === "pattern" ? "#a9f5b5" : "#f5e69e");
         ctx.fillText(String(marker.id), corners[0].x, corners[0].y - 4);
       }
     }
@@ -1233,8 +1266,8 @@
       if (result.geometry && result.found && !result.unreadable) {
         const geometry = result.geometry;
         transformStatus.textContent = "Recovered " + geometry.originalWidth + " × " + geometry.originalHeight +
-          " original pixels; " + geometry.markerCount + "/8 markers confirmed (" + geometry.headerCount + " headers, " +
-          geometry.patternCount + " known-pattern matches); " + geometry.model + " transform." +
+          " original pixels; " + geometry.markerCount + "/" + (geometry.markerTotal || 8) + " markers confirmed (" + geometry.headerCount + " headers, " +
+          geometry.patternCount + " known-pattern matches)" + (geometry.referenceCount ? "; " + geometry.referenceCount + "/4 side references" : "") + "; " + geometry.model + " transform." +
           (result.readResolution ? " Native read grid: " + result.readResolution.width + " × " + result.readResolution.height + "; resampled from the full capture." : "");
       } else {
         transformStatus.textContent = result.reason || (result.unreadable ? "Recovery markers were found, but the payload did not pass its checks."
@@ -1380,7 +1413,7 @@
         showPreview(image.pixels, image.width, image.height);
         const room = PixelStow.estimatePayloadBytes(image.width, image.height);
         const exactNote = image.exact ? "" : " Browser colour conversion was used, so an existing fingerprint may not read.";
-        capacity.textContent = image.width + " × " + image.height + " · about " + room.toLocaleString("en-GB") + " payload bytes before compression." + exactNote;
+        capacity.textContent = capacityLabel(image, room, exactNote);
         // Show the supplied photo before automatic recovery starts. Progress and
         // cancellation remain visible without opening the recovery options.
         transformAbort = new AbortController();
@@ -1672,7 +1705,7 @@
         const lock = encoded.passwordProtected ? "Password-locked" : "Public";
         const formats = encodedJpeg ? "PNG or JPEG" : "PNG";
         const fallback = encoded.locatorFallback ? "This picture is too small for the recovery markers, so version 1 was used. " : "";
-        const written = encoded.carrierVersion === 3 ? " New format (version 3). Resize recovery remains experimental." : " Previous format (version 1).";
+        const written = encoded.carrierVersion === 1 ? " Previous format (version 1)." : " Version " + encoded.carrierVersion + ". Photo and resize recovery remain experimental.";
         setStatus(fallback + lock + " fingerprint encoded. Download the new " + formats + ". The original file was not changed." + written + jpegNote);
         password.value = "";
         confirmPassword.value = "";

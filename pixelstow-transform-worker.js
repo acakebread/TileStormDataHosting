@@ -1,5 +1,5 @@
 // Dedicated disposable worker; its input is a copy, never the UI's pixel buffer.
-importScripts("./pixelstow-spectrum.js?v=20261013-ranked2", "./pixelstow-transform.js?v=20261013-ranked2", "./pixelstow.js?v=20261013-audio-start1");
+importScripts("./pixelstow-spectrum.js?v=20261013-markers-v4-2", "./pixelstow-transform.js?v=20261013-markers-v4-2", "./pixelstow.js?v=20261013-markers-v4-2");
 self.onmessage = async ({ data }) => {
   try {
     const options = {

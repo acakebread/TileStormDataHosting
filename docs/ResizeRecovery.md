@@ -1,11 +1,10 @@
 # Browser resize-recovery carrier 3
 
-Carrier 3 is the browser's default writer. **Encoding format → Previous format
-(version 1)** switches writing back immediately and remembers that choice when
-browser storage is available. Reading automatically accepts both formats;
-changing the writer never changes what can be read. The new preference key is
-`pixelstow-carrier-v3`, so the unfinished ruler experiment's selection does not
-override the new default.
+Carrier 3 remains readable and selectable under **Encoding format: Version 3**.
+The browser now defaults to [carrier 4](CarrierV4.md) for evaluation. Versions 1,
+3 and 4 are read automatically; the writer choice never limits reading. Carrier
+3's layout and pixel writer remain unchanged. Its original preference key was
+`pixelstow-carrier-v3`; the new UI uses `pixelstow-carrier-v4`.
 
 This is a new **image carrier**, separate from PCF1's existing text, password and
 attachment-envelope versions. PCF1 framing, DEFLATE, encryption, attachment

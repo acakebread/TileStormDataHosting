@@ -10,7 +10,9 @@ await fs.mkdir(folder, { recursive: true });
 const code = await fs.readFile('pixelstow.js', 'utf8');
 const context = vm.createContext({ window: {}, Uint8Array, TextEncoder, TextDecoder, Blob, Response, CompressionStream, DecompressionStream, crypto: webcrypto, setTimeout });
 vm.runInContext(code, context);
+// This suite measures the frozen carrier 3, independently of the UI default.
 const codec = context.window.PixelStow;
+codec.setCarrierVersion(3);
 const width = 768, height = 512;
 const pixels = new Uint8Array(width * height * 4);
 for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {

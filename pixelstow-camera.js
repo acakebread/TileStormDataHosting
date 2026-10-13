@@ -288,7 +288,7 @@
       if (this.session?.adjusting || this.video.readyState < 2 || !rawWidth || !rawHeight) throw new Error("Wait for the live camera picture, then try again.");
       const rotation = this.session?.rotation || 0, sideways = rotation % 180 !== 0;
       const width = sideways ? rawHeight : rawWidth, height = sideways ? rawWidth : rawHeight;
-      if (width * height > 24000000) throw new Error("This camera frame is too large. Use Take photo with an image under 24 megapixels.");
+      if (width * height > PixelStow.getLimits().inputPixels) throw new Error("This camera frame exceeds the 32 megapixel photo input limit.");
       const canvas = this.captureCanvas;
       if (canvas.width !== width) canvas.width = width;
       if (canvas.height !== height) canvas.height = height;
@@ -352,7 +352,7 @@
         this.displayedFrame = entry;
       }
       this.nearSummary.textContent = "Best capture · frame " + frameNumber + ": " + scan.markers.length +
-        "/8 markers; " + (entry.state || (entry.inspection?.unreadable ? "contents did not pass their checks" : entry.attempted ? "reading contents" : "waiting for frame appraisal"));
+        "/" + (entry.scan?.geometry?.markerTotal || entry.inspection?.geometry?.markerTotal || 8) + " markers; " + (entry.state || (entry.inspection?.unreadable ? "contents did not pass their checks" : entry.attempted ? "reading contents" : "waiting for frame appraisal"));
       this.nearMiss.hidden = false;
       this.sync();
     }

@@ -84,15 +84,15 @@
   }
 
   async function responseField(luma, width, height, basis, adapter, options) {
-    // Preserve the locator's six-pixel wavelet. This is a response field, not a
+    // Preserve the versioned locator wavelet. This is a response field, not a
     // reduced photograph: sample original pixels before reducing search positions.
     const step = Math.max(1, Math.ceil(Math.sqrt(width * height / 6000000)));
     const w = Math.ceil(width / step), h = Math.ceil(height / step);
     const values = new Float32Array(w * h);
-    const taps = [];
+    const taps = [], spacing = adapter.sampleStep ?? 1.5, offset = adapter.sampleOffset ?? 0.5;
     for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) {
-      taps.push({ x: basis[0] * (1.5 * x + 0.5) + basis[2] * (1.5 * y + 0.5),
-        y: basis[1] * (1.5 * x + 0.5) + basis[3] * (1.5 * y + 0.5), weight: adapter.shape[x + y * 4] });
+      taps.push({ x: basis[0] * (spacing * x + offset) + basis[2] * (spacing * y + offset),
+        y: basis[1] * (spacing * x + offset) + basis[3] * (spacing * y + offset), weight: adapter.shape[x + y * 4] });
     }
     for (let y = 0; y < h; y++) {
       if ((y & 31) === 31) { check(options); await pause(); }
@@ -267,7 +267,7 @@
       .map(([x, y], i) => ({ source: { x, y }, target: corners[i] })), true);
   }
 
-  async function seedFromQuads(quads, signature, adapter, options) {
+  async function seedFromQuads(quads, signature, adapters, options) {
     const scales = [[1, 1]], proposals = [];
     for (const basis of signature.bases || []) {
       const s = [Math.hypot(basis[0], basis[1]), Math.hypot(basis[2], basis[3])];
@@ -278,7 +278,7 @@
       const corners = quad.slice(turn).concat(quad.slice(0, turn));
       const sideX = Math.hypot(corners[1].x - corners[0].x, corners[1].y - corners[0].y);
       const sideY = Math.hypot(corners[3].x - corners[0].x, corners[3].y - corners[0].y);
-      for (const [sx, sy] of scales) {
+      for (const [sx, sy] of scales) for (const adapter of adapters) {
         const ow = Math.round(sideX / sx) + 1, oh = Math.round(sideY / sy) + 1;
         const layout = adapter.layout(ow, oh), fit = quadFit(corners, ow, oh);
         if (!layout || !fit) continue;
@@ -289,7 +289,7 @@
           for (const dy of [0, -1.5, 1.5]) for (const dx of [0, -1.5, 1.5]) {
             const trial = offsetMatrix(matrix, dx, dy), score = adapter.quality(trial, id);
             options.pilotQuality = Math.max(options.pilotQuality || 0, score);
-            if (score > 0.2) proposals.push({ matrix: trial, id, score, corners });
+            if (score > 0.2) proposals.push({ matrix: trial, id, score, corners, adapter });
           }
         }
         await pause();
@@ -298,17 +298,23 @@
     proposals.sort((a, b) => b.score - a.score);
     for (const proposal of proposals.slice(0, 24)) {
       check(options);
+      const adapter = proposal.adapter;
       const direct = adapter.read(proposal.matrix, proposal.id);
-      const seed = direct || await refine(proposal, adapter, null, options, true);
+      if (direct) return { ...direct, initialMatrix: quadFit(proposal.corners, direct.originalWidth, direct.originalHeight) };
+    }
+    for (const proposal of proposals.slice(0, 24)) {
+      check(options);
+      const adapter = proposal.adapter;
+      const seed = await refine(proposal, adapter, null, options, true);
       if (seed) return { ...seed, initialMatrix: quadFit(proposal.corners, seed.originalWidth, seed.originalHeight) };
     }
     return null;
   }
 
-  async function seedSearch(pixels, luma, width, height, adapter, options, signature) {
+  async function seedSearch(pixels, luma, width, height, adapters, options, signature) {
     if (options.mode !== "padding") {
       const quads = options.corners?.length === 4 ? [options.corners] : await paddingQuads(pixels, width, height, options);
-      const seed = await seedFromQuads(quads, signature, adapter, options);
+      const seed = await seedFromQuads(quads, signature, adapters, options);
       if (seed) return seed;
     }
     const banks = options.mode === "padding" ? [[1, 0, 0, 1]] : signature.bases.slice(0, 12);
@@ -317,11 +323,25 @@
       check(options);
       const basis = banks[bank];
       options.onProgress?.("Locating patches using the frequency estimate (" + (bank + 1) + "/" + banks.length + ")…");
-      const peaks = await globalCandidates(luma, width, height, basis, adapter, options);
-      for (const peak of peaks) options.pilotQuality = Math.max(options.pilotQuality || 0, peak.score);
-      for (const peak of peaks.slice(0, 32)) {
+      const peaks = [];
+      for (const adapter of adapters) {
+        const candidates = await globalCandidates(luma, width, height, basis, adapter, options);
+        for (const peak of candidates) {
+          options.pilotQuality = Math.max(options.pilotQuality || 0, peak.score);
+          peaks.push({ ...peak, adapter });
+        }
+      }
+      peaks.sort((a, b) => b.score - a.score);
+      // Both versions get cheap header checks before any expensive local fit.
+      // A new profile must not delay discovery of the previous carrier behind
+      // dozens of plausible but invalid patches of the other frequency.
+      for (const peak of peaks) {
+        const adapter = peak.adapter;
         const direct = adapter.read(peak.matrix, peak.id);
         if (direct) return direct;
+      }
+      for (const peak of peaks.slice(0, 32)) {
+        const adapter = peak.adapter;
         const refined = await refine(peak, adapter, null, options, options.mode !== "padding");
         if (refined) return refined;
       }
@@ -575,12 +595,13 @@
     const fitError = inliers.length ? inliers.reduce((sum, pair) => sum + measurementError(matrix, pair), 0) / inliers.length : 2.5;
     const headerCount = inliers.filter((p) => p.marker.verification === "header").length;
     return { matrix, originalWidth: seed.originalWidth, originalHeight: seed.originalHeight,
+      carrierVersion: adapter.carrierVersion, markerTotal: adapter.ids.length, patchWidth: adapter.patchWidth, patchHeight: adapter.patchHeight,
       model, markerCount: markers.length, headerCount: markers.filter((m) => m.verification === "header").length,
       patternCount: markers.filter((m) => m.verification === "pattern").length,
       inlierCount: inliers.length, patternQuality, coverage, fitError,
       rank: 100 * patternQuality + 3 * inliers.length + 10 * coverage + headerCount - 2 * fitError,
-      highConfidence: inliers.length === 8 && headerCount >= 2 && patternQuality >= 0.9 && coverage >= 0.6 && fitError <= 0.6,
-      expectedMarkers: layout.map((p) => ({ id: p.id, matrix: patchMatrix(matrix, p) })),
+      highConfidence: inliers.length === adapter.ids.length && headerCount >= 2 && patternQuality >= 0.9 && coverage >= 0.6 && fitError <= 0.6,
+      expectedMarkers: layout.map((p) => ({ id: p.id, patchWidth: adapter.patchWidth, patchHeight: adapter.patchHeight, matrix: patchMatrix(matrix, p) })),
       corners: quad(matrix, seed.originalWidth, seed.originalHeight) };
   }
 
@@ -619,6 +640,8 @@
   }
 
   async function find(pixels, width, height, requested, adapter) {
+    const adapters = Array.isArray(adapter) ? adapter : [adapter];
+    adapter = adapters.find((a) => a.carrierVersion === requested.seed?.carrierVersion) || adapters[0];
     const deadline = Math.min(Date.now() + 60000, requested.deadline || Infinity);
     const options = { ...requested, deadline: Math.min(deadline, requested.seedDeadline || Infinity),
       mode: ["padding", "affine", "perspective"].includes(requested.mode) ? requested.mode : "padding" };
@@ -628,23 +651,24 @@
     let seed = null, predictions = [];
     const evidence = () => ({ pilotQuality: options.pilotQuality || 0 });
     try {
-      const luma = new Float32Array(width * height);
-      options.onProgress?.("Preparing wavelet search…");
-      for (let i = 0; i < luma.length; i++) luma[i] = (pixels[i * 4] + pixels[i * 4 + 1] + pixels[i * 4 + 2]) / 3;
       // A previous pyramid level may already have read a checksum-valid header.
       // Confirm it against these pixels before reusing its dimensions/position;
       // this avoids rediscovering the same patch from scratch at every scale.
       seed = requested.seed && adapter.confirm(requested.seed.matrix, requested.seed.id, requested.seed);
       if (seed) seed = { ...requested.seed, ...seed };
       else {
+        const luma = new Float32Array(width * height);
+        options.onProgress?.("Preparing wavelet search…");
+        for (let i = 0; i < luma.length; i++) luma[i] = (pixels[i * 4] + pixels[i * 4 + 1] + pixels[i * 4 + 2]) / 3;
         signature = await root.PixelStowSpectrum.analyze(luma, width, height, options);
         options.onSignature?.(signature);
         if (!signature.likely && !options.forceSearch && !options.corners?.length) return { geometry: null, markers, signature, evidence: evidence(), reason: signature.message };
-        seed = await seedSearch(pixels, luma, width, height, adapter, options, signature);
+        seed = await seedSearch(pixels, luma, width, height, adapters, options, signature);
       }
       if (!seed) return { geometry: null, markers, evidence: evidence(),
         signature: { ...signature, confirmed: false, message: "No checksum-valid markers found. Frequency evidence alone does not confirm an encoded image." },
         reason: "No checksum-valid wavelet patch was found using the outline/frequency estimates." };
+      adapter = adapters.find((a) => a.carrierVersion === seed.carrierVersion) || adapter;
       signature = { ...signature, likely: true, confirmed: true,
         message: "Recovery marker verified. Locating the remaining markers before reading contents…" };
       options.onSignature?.(signature);
@@ -670,7 +694,7 @@
           // Prefer distant confirmations rather than first collecting a whole row.
           if (options.mode !== "padding") pending.sort((a, b) => spread(b) - spread(a));
           const patch = pending.shift();
-          options.onProgress?.("Found " + markers.length + "/8 markers. Locating marker " + patch.id + "…");
+          options.onProgress?.("Found " + markers.length + "/" + adapter.ids.length + " markers. Locating marker " + patch.id + "…");
           let found = null;
           if (options.mode === "padding") {
             const expected = patchMatrix(matrix, patch);
@@ -711,6 +735,12 @@
           candidates.push(geometryFor(refined, seed, markers, adapter, candidate.model));
       }
       candidates.sort((a, b) => b.rank - a.rank);
+      // Small side references are optional cross-checks after corner discovery.
+      // They do not inflate header counts, confidence or payload acceptance.
+      if (candidates[0] && adapter.references) {
+        candidates[0].referenceMarkers = adapter.references(candidates[0].matrix, seed);
+        candidates[0].referenceCount = candidates[0].referenceMarkers.length;
+      }
       return { geometry: candidates[0] || null, candidates, markers, signature, evidence: evidence(),
         reason: candidates.length ? undefined : "The verified markers did not establish a stable image transform." };
     } catch (error) {

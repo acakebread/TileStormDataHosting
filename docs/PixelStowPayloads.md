@@ -7,7 +7,8 @@ locally in the browser; there is no upload or service dependency.
 Text without attachments still writes public PCF1 envelope v1 / kind 1 or
 password-protected v2 / kind 2, unchanged. Writing carrier 1 preserves existing
 PixelStow and TileStorm Evolution text-level interchange; the new default
-carrier 3 currently needs the browser reader. Readers in the desktop and game need
+carrier 4 currently needs the browser reader. Carrier 3 remains available as a
+recovery-format fallback. Readers in the desktop and game need
 the v3 upgrade before importing an image with attachments. A game should use the
 bundle's optional text for level JSON and leave unrelated attachments opaque.
 
@@ -15,10 +16,10 @@ bundle's optional text for level JSON and leave unrelated attachments opaque.
 
 The PCF1 frame shuffle, whitening, 20-byte header, strength, repetition and
 parity are unchanged. The browser now defaults to a separate versioned image
-carrier 3 with sparse wavelet recovery markers; carrier 1 remains readable and
-selectable for writing. See [resize recovery](ResizeRecovery.md) for its layout,
-limits and current evidence. Header byte 4 is 3; byte 5 is 3
-for a public bundle or 4 for a protected bundle. Public bundles may use raw
+carrier 4 with smaller corner wavelets and tiny side references. Carriers 1
+and 3 remain readable and selectable for writing. See [carrier 4](CarrierV4.md)
+and [carrier 3 resize recovery](ResizeRecovery.md) for their layouts and limits.
+Header byte 4 is 3; byte 5 is 3 for a public bundle or 4 for a protected bundle. Public bundles may use raw
 DEFLATE when smaller. Protected outer frames are never compressed. Frame CRC32
 covers header bytes 0–15 followed by the uncompressed body, as before.
 
