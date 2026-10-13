@@ -16,9 +16,11 @@ bundle's optional text for level JSON and leave unrelated attachments opaque.
 
 The PCF1 frame shuffle, whitening, 20-byte header, strength, repetition and
 parity are unchanged. The browser now defaults to a separate versioned image
-carrier 4 with smaller corner wavelets and tiny side references. Carriers 1
-and 3 remain readable and selectable for writing. See [carrier 4](CarrierV4.md)
-and [carrier 3 resize recovery](ResizeRecovery.md) for their layouts and limits.
+carrier 4 with the same eight markers as carrier 3 and balanced local brightness.
+Carrier 5 makes the smaller-corner-marker experiment selectable. Carriers 1
+and 3 remain readable and selectable for writing. See [carrier 4](CarrierV4.md),
+[experimental carrier 5](CarrierV5.md) and [carrier 3 resize recovery](ResizeRecovery.md)
+for their layouts and limits.
 Header byte 4 is 3; byte 5 is 3 for a public bundle or 4 for a protected bundle. Public bundles may use raw
 DEFLATE when smaller. Protected outer frames are never compressed. Frame CRC32
 covers header bytes 0–15 followed by the uncompressed body, as before.

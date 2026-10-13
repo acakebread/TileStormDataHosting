@@ -665,11 +665,12 @@
 
       <label for="carrier-version">Encoding format</label>
       <select id="carrier-version">
-        <option value="4">Version 4 — quieter corner markers (experimental)</option>
-        <option value="3">Version 3 — eight recovery markers</option>
+        <option value="4">Version 4 — eight brightness-balanced markers (default)</option>
+        <option value="5">Version 5 — smaller corner markers (experimental)</option>
+        <option value="3">Version 3 — original eight recovery markers</option>
         <option value="1">Previous format (version 1)</option>
       </select>
-      <p class="hint">Version 4 is the default for evaluation: smaller square corner markers and tiny side references. Photo and resize recovery remain experimental. Existing version 1 and 3 pictures still open here; choose version 3 to return to the previous recovery format. Use version 1 for desktop and TileStorm readers until they are upgraded.</p>
+      <p class="hint">Version 4 keeps version 3’s eight recovery markers and balances their brightness with the surrounding picture. Version 5 tests smaller markers and is experimental. Photo and resize recovery remain experimental; version 3 is available for comparison. Use version 1 for desktop and TileStorm readers until they are upgraded.</p>
 
       <div class="actions">
         <button id="encode" type="button" disabled>Encode into a new image</button>
@@ -761,13 +762,13 @@
       </div>
     </form>
   </dialog>
-  <script src="./pixelstow-spectrum.js?v=20261013-markers-v4-2"></script>
-  <script src="./pixelstow-transform.js?v=20261013-markers-v4-2"></script>
-  <script src="./pixelstow.js?v=20261013-markers-v4-2"></script>
+  <script src="./pixelstow-spectrum.js?v=20261013-balanced-v4-v5-1"></script>
+  <script src="./pixelstow-transform.js?v=20261013-balanced-v4-v5-1"></script>
+  <script src="./pixelstow.js?v=20261013-balanced-v4-v5-1"></script>
   <script src="./pixelstow-export.js?v=20261011-exports"></script>
   <script src="./pixelstow-media.js?v=20261013-audio-start1"></script>
   <script src="./pixelstow-sharing.js?v=20261011-png-clipboard"></script>
-  <script src="./pixelstow-camera.js?v=20261013-markers-v4-2"></script>
+  <script src="./pixelstow-camera.js?v=20261013-balanced-v4-v5-1"></script>
   <script>
     const fileInput = document.querySelector("#file");
     const drop = document.querySelector("#drop");
@@ -875,11 +876,13 @@
 
     const carrierSelect = document.querySelector("#carrier-version");
     let storedCarrier;
-    try { storedCarrier = localStorage.getItem("pixelstow-carrier-v4"); } catch (_) { /* Storage can be disabled. */ }
-    if (storedCarrier === "1" || storedCarrier === "3" || storedCarrier === "4") carrierSelect.value = storedCarrier;
+    // The previous V4 was a disposable small-marker experiment. Start with the
+    // replacement V4 once, then retain explicit choices under this new key.
+    try { storedCarrier = localStorage.getItem("pixelstow-carrier-v4-balanced"); } catch (_) { /* Storage can be disabled. */ }
+    if (["1", "3", "4", "5"].includes(storedCarrier)) carrierSelect.value = storedCarrier;
     PixelStow.setCarrierVersion(Number(carrierSelect.value));
     carrierSelect.addEventListener("change", () => {
-      try { localStorage.setItem("pixelstow-carrier-v4", carrierSelect.value); } catch (_) { /* The choice still works for this session. */ }
+      try { localStorage.setItem("pixelstow-carrier-v4-balanced", carrierSelect.value); } catch (_) { /* The choice still works for this session. */ }
       PixelStow.setCarrierVersion(Number(carrierSelect.value));
       updateByteCounts();
       if (current) {

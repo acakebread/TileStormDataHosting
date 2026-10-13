@@ -23,7 +23,9 @@
   const CARRIER_V1 = 1;
   const CARRIER_V3 = 3;
   const CARRIER_V4 = 4;
+  const CARRIER_V5 = 5;
   let preferredCarrier = CARRIER_V4;
+  const RECOVERY_CARRIERS = [CARRIER_V4, CARRIER_V3, CARRIER_V5];
   const codecScriptUrl = typeof document !== "undefined" ? document.currentScript?.src : null;
   // Store geometry and, for photographs, the rectified native pixel grid. Payload
   // bytes are never cached; every later read still verifies the carrier/frame.
@@ -632,26 +634,35 @@
   }
 
   // Versioned geometry profiles. Payload/encryption envelopes are independent.
-  // V3 is frozen; V4 has four smaller, mean-preserving corner patches.
+  // V3 is frozen. V4 keeps its eight patches, wavelets and strength, correcting
+  // their local brightness. V5 experiments with smaller, softer corner patches.
   const LOCATOR_INSET = 8;
   const LOCATOR_STRENGTH = 16;
   const LOCATOR_PROFILES = new Map([
     [3, { version: 3, cell: 6, columns: 12, rows: 8, width: 72, height: 48,
       magic: 0xD3, tag: 0x30, seed: 0x50534C33, ids: [0, 2, 6, 8, 1, 3, 5, 7], sampleStep: 1.5, sampleOffset: 0.5 }],
-    [4, { version: 4, cell: 5, columns: 10, rows: 10, width: 50, height: 50,
-      magic: 0xD4, tag: 0x40, seed: 0x50534C34, ids: [0, 2, 6, 8], sampleStep: 1.25, sampleOffset: 0.125 }]
+    [4, { version: 4, cell: 6, columns: 12, rows: 8, width: 72, height: 48,
+      magic: 0xD4, tag: 0x40, seed: 0x50534C34, ids: [0, 2, 6, 8, 1, 3, 5, 7], sampleStep: 1.5, sampleOffset: 0.5 }],
+    [5, { version: 5, cell: 5, columns: 10, rows: 10, width: 50, height: 50,
+      magic: 0xD5, tag: 0x50, seed: 0x50534C35, ids: [0, 2, 6, 8], sampleStep: 1.25, sampleOffset: 0.125 }]
   ]);
   for (const p of LOCATOR_PROFILES.values()) {
     p.reserveWidth = Math.ceil(p.width / 4) * 4;
     p.reserveHeight = Math.ceil(p.height / 4) * 4;
     p.order = scatterOrder(p.columns * p.rows, p.seed);
     p.shape = buildShapes(LOCATOR_STRENGTH).difference;
-    if (p.version === CARRIER_V4) {
-      // Interpolate symmetrically, rather than duplicating selected pixels of the
-      // old wavelet. Remove DC before writing: neither bit changes cell brightness.
+    if (p.version !== CARRIER_V3) {
+      // Retain V3's expansion for V4; V5 interpolates a smaller cell. Remove
+      // DC before writing so the bit does not set the local background brightness.
       p.kernels = [0, 1].map((bit) => {
         const weights = new Float64Array(p.cell * p.cell);
         for (let y = 0; y < p.cell; y++) for (let x = 0; x < p.cell; x++) {
+          if (p.version === CARRIER_V4) {
+            // Keep V3's six-pixel expansion and full contrast. Only its DC
+            // component changes; the diagonal difference reader rejects DC.
+            weights[x + y * p.cell] = shapeWeight(Math.floor(x * 4 / p.cell), Math.floor(y * 4 / p.cell), bit);
+            continue;
+          }
           const sx = Math.max(0, Math.min(3, (x + 0.5) * 4 / p.cell - 0.5));
           const sy = Math.max(0, Math.min(3, (y + 0.5) * 4 / p.cell - 0.5));
           const ix = Math.floor(sx), iy = Math.floor(sy), jx = Math.min(3, ix + 1), jy = Math.min(3, iy + 1);
@@ -676,20 +687,20 @@
 
   function locatorArea(version) {
     const p = locatorProfile(version);
-    return p.ids.length * p.reserveWidth * p.reserveHeight + (version === CARRIER_V4 ? 4 * 24 * 16 : 0);
+    return p.ids.length * p.reserveWidth * p.reserveHeight + (version === CARRIER_V5 ? 4 * 24 * 16 : 0);
   }
 
   function reservedLocators(width, height, version) {
     const p = locatorProfile(version);
     return locatorLayout(width, height, version).map((patch) => ({ ...patch, width: p.reserveWidth, height: p.reserveHeight }))
-      .concat(version === CARRIER_V4 ? referenceLayout(width, height).map((patch) => ({ ...patch, width: 24, height: 16 })) : []);
+      .concat(version === CARRIER_V5 ? referenceLayout(width, height).map((patch) => ({ ...patch, width: 24, height: 16 })) : []);
   }
 
   function locatorLayout(width, height, version = CARRIER_V3) {
-    const p = locatorProfile(version), span = version === CARRIER_V4 ? 2 : 3;
-    // V4 also leaves room between corners for the small side references.
-    if (!p || width < span * p.reserveWidth + 2 * LOCATOR_INSET + (version === 4 ? 24 : 0) ||
-      height < span * p.reserveHeight + 2 * LOCATOR_INSET + (version === 4 ? 16 : 0)) return null;
+    const p = locatorProfile(version), span = version === CARRIER_V5 ? 2 : 3;
+    // V5 also leaves room between corners for the small side references.
+    if (!p || width < span * p.reserveWidth + 2 * LOCATOR_INSET + (version === CARRIER_V5 ? 24 : 0) ||
+      height < span * p.reserveHeight + 2 * LOCATOR_INSET + (version === CARRIER_V5 ? 16 : 0)) return null;
     const xs = [LOCATOR_INSET, Math.floor((width - p.reserveWidth) / 8) * 4, Math.floor((width - p.reserveWidth - LOCATOR_INSET) / 4) * 4];
     const ys = [LOCATOR_INSET, Math.floor((height - p.reserveHeight) / 8) * 4, Math.floor((height - p.reserveHeight - LOCATOR_INSET) / 4) * 4];
     return p.ids.map((id) => ({ x: xs[id % 3], y: ys[Math.floor(id / 3)], id }));
@@ -735,7 +746,7 @@
   }
 
   function paintLocators(reference, output, width, height, strength, version = CARRIER_V3) {
-    if (version === CARRIER_V4) return paintBlendedLocators(reference, output, width, height, strength);
+    if (version !== CARRIER_V3) return paintBlendedLocators(reference, output, width, height, strength, version);
     const p = locatorProfile(version);
     const amplitude = Math.min(LOCATOR_STRENGTH, strength);
     for (const patch of locatorLayout(width, height, version)) {
@@ -771,7 +782,7 @@
   let sideReferenceProfile;
   function referenceProfile() {
     return sideReferenceProfile ||= { cell: 4, columns: 6, rows: 4, width: 24, height: 16,
-      order: scatterOrder(24, locatorProfile(CARRIER_V4).seed), sampleStep: 1, sampleOffset: 0,
+      order: scatterOrder(24, locatorProfile(CARRIER_V5).seed), sampleStep: 1, sampleOffset: 0,
       shape: buildShapes(16).difference,
       kernels: [0, 1].map((bit) => Float64Array.from({ length: 16 }, (_, i) => shapeWeight(i % 4, Math.floor(i / 4), bit))) };
   }
@@ -788,9 +799,9 @@
     // be used to claim that an image is encoded, or to accept its payload.
     const found = [];
     for (const patch of referenceLayout(dimensions.originalWidth, dimensions.originalHeight)) {
-      const header = locatorHeader(0, 0, patch.id, CARRIER_V4);
+      const header = locatorHeader(0, 0, patch.id, CARRIER_V5);
       const quality = (x, y) => locatorAgreement(locatorScores(pixels, width, height,
-        patchTransform(matrix, { x: patch.x + x, y: patch.y + y }), 24, CARRIER_V4, true), header);
+        patchTransform(matrix, { x: patch.x + x, y: patch.y + y }), 24, CARRIER_V5, true), header);
       let best = { x: 0, y: 0, quality: quality(0, 0) };
       for (const y of [-6, -4, -2, 0, 2, 4, 6]) for (const x of [-6, -4, -2, 0, 2, 4, 6]) {
         const q = quality(x, y);
@@ -804,17 +815,21 @@
         }
       }
       if (best.quality >= 0.82) found.push({ id: patch.id, verification: "reference", quality: best.quality,
-        carrierVersion: CARRIER_V4, patchWidth: 24, patchHeight: 16,
+        carrierVersion: CARRIER_V5, patchWidth: 24, patchHeight: 16,
         matrix: patchTransform(matrix, { x: patch.x + best.x, y: patch.y + best.y }),
         expectedMatrix: patchTransform(matrix, patch), displacement: { x: best.x, y: best.y } });
     }
     return found;
   }
 
-  function paintBlendedLocators(reference, output, width, height, strength) {
-    const p = locatorProfile(CARRIER_V4), amplitude = Math.min(12, strength) / 16;
+  function blendedLocatorGain(version, grid, cell, main = true) {
+    return version === CARRIER_V4 ? 1 : locatorGain(grid, cell) * (main ? 1 : 0.65);
+  }
+
+  function paintBlendedLocators(reference, output, width, height, strength, version) {
+    const p = locatorProfile(version), amplitude = Math.min(version === CARRIER_V4 ? LOCATOR_STRENGTH : 12, strength) / 16;
     const side = referenceProfile();
-    const reserved = reservedLocators(width, height, CARRIER_V4);
+    const reserved = reservedLocators(width, height, version);
     // Match the surrounding carrier's DC correction on clipped colours (pure
     // black/white cannot carry a zero-mean mark). Measure only payload pixels,
     // before painting any markers, so patch order never changes the result.
@@ -830,24 +845,24 @@
       }
       return [patch.id, bias.map((value) => count ? value / count : 0)];
     }));
-    // The aligned reservation is two pixels wider/taller than a main patch.
-    // Give that margin the same background correction, avoiding a bright/dark
-    // outline on saturated pictures; cells below supply the actual signal.
+    // Give any aligned reservation margin the same background correction,
+    // avoiding a bright/dark outline; cells below supply the actual signal.
     for (const patch of reserved) for (let y = patch.y; y < patch.y + patch.height; y++) {
       for (let x = patch.x; x < patch.x + patch.width; x++) {
         const index = (x + y * width) * 4;
         for (let c = 0; c < 3; c++) output[index + c] = Math.round(clampByte(reference[index + c] + backgrounds.get(patch.id)[c]));
       }
     }
-    for (const patch of [...locatorLayout(width, height, CARRIER_V4), ...referenceLayout(width, height)]) {
+    const patches = locatorLayout(width, height, version).concat(version === CARRIER_V5 ? referenceLayout(width, height) : []);
+    for (const patch of patches) {
       const main = p.ids.includes(patch.id), grid = main ? p : side, count = grid.cell ** 2;
       const samples = new Float64Array(count), values = new Float64Array(count);
-      const header = locatorHeader(width, height, patch.id, CARRIER_V4);
+      const header = locatorHeader(width, height, patch.id, version);
       for (let slot = 0; slot < grid.order.length; slot++) {
         const cell = grid.order[slot], coded = slot % (main ? 96 : 24);
         const bit = WORD_BITS[header[Math.floor(coded / 12)] * 12 + coded % 12];
         const x = patch.x + cell % grid.columns * grid.cell, y = patch.y + Math.floor(cell / grid.columns) * grid.cell;
-        const gain = amplitude * locatorGain(grid, cell) * (main ? 1 : 0.65), kernel = grid.kernels[bit];
+        const gain = amplitude * blendedLocatorGain(version, grid, cell, main), kernel = grid.kernels[bit];
         for (let channel = 0; channel < 3; channel++) {
           let target = 0;
           for (let i = 0; i < count; i++) {
@@ -1004,7 +1019,7 @@
         }) };
       }),
       layout: (w, h) => locatorLayout(w, h, version),
-      references: version === CARRIER_V4 ? (matrix, dimensions) => checkReferences(pixels, width, height, matrix, dimensions) : undefined,
+      references: version === CARRIER_V5 ? (matrix, dimensions) => checkReferences(pixels, width, height, matrix, dimensions) : undefined,
       read: (matrix, id) => readVisualLocator(pixels, width, height, matrix, id, version),
       confirm: (matrix, id, dimensions) => {
         const read = readVisualLocator(pixels, width, height, matrix, id, version);
@@ -1032,7 +1047,7 @@
       }
     }
     const offsets = nativeOnly ? [0] : quickOnly ? [0, -0.5, 0.5] : [0, -0.5, 0.5, -1, 1];
-    for (const version of [CARRIER_V4, CARRIER_V3]) for (const scale of scales) {
+    for (const version of RECOVERY_CARRIERS) for (const scale of scales) {
       if (signal?.aborted) throw new DOMException("Search cancelled.", "AbortError");
       const guessedWidth = Math.round(width / scale), guessedHeight = Math.round(height / scale);
       const layout = locatorLayout(guessedWidth, guessedHeight, version);
@@ -1164,7 +1179,7 @@
 
   function searchInWorker(pixels, width, height, options, operation = "geometry") {
     return new Promise((resolve, reject) => {
-      const url = new URL("pixelstow-transform-worker.js?v=20261013-markers-v4-2", codecScriptUrl);
+      const url = new URL("pixelstow-transform-worker.js?v=20261013-balanced-v4-v5-1", codecScriptUrl);
       const worker = new Worker(url);
       let finished = false;
       const abort = () => { if (finished) return; cleanup(); reject(new DOMException("Search cancelled.", "AbortError")); };
@@ -1214,7 +1229,7 @@
     // The same detector can run on the page, yielding between chunks for cancel/UI.
     const search = canUseReaderWorker(options)
       ? await searchInWorker(pixels, width, height, options)
-      : await root.PixelStowTransform.find(pixels, width, height, options, [CARRIER_V4, CARRIER_V3].map((version) => visualAdapter(pixels, width, height, version)));
+      : await root.PixelStowTransform.find(pixels, width, height, options, RECOVERY_CARRIERS.map((version) => visualAdapter(pixels, width, height, version)));
     return search;
   }
 
@@ -1650,7 +1665,7 @@
   }
 
   function cleanLocators(pixels, width, height, output, version = CARRIER_V3) {
-    if (version === CARRIER_V4) return cleanBlendedLocators(pixels, width, height, output);
+    if (version !== CARRIER_V3) return cleanBlendedLocators(pixels, width, height, output, version);
     const profile = locatorProfile(version);
     const { order: locatorOrder, columns: LOCATOR_COLUMNS, cell: LOCATOR_CELL } = profile;
     for (const patch of locatorLayout(width, height, version)) {
@@ -1674,11 +1689,12 @@
     }
   }
 
-  function cleanBlendedLocators(pixels, width, height, output) {
-    const profile = locatorProfile(CARRIER_V4);
-    for (const patch of [...locatorLayout(width, height, CARRIER_V4), ...referenceLayout(width, height)]) {
+  function cleanBlendedLocators(pixels, width, height, output, version) {
+    const profile = locatorProfile(version);
+    const patches = locatorLayout(width, height, version).concat(version === CARRIER_V5 ? referenceLayout(width, height) : []);
+    for (const patch of patches) {
       const main = profile.ids.includes(patch.id), p = main ? profile : referenceProfile();
-      const header = locatorHeader(width, height, patch.id, CARRIER_V4);
+      const header = locatorHeader(width, height, patch.id, version);
       for (let slot = 0; slot < p.order.length; slot++) {
         const cell = p.order[slot], coded = slot % (main ? 96 : 24);
         const bit = WORD_BITS[header[Math.floor(coded / 12)] * 12 + coded % 12], kernel = p.kernels[bit];
@@ -1689,7 +1705,8 @@
           projection += (pixels[index] + pixels[index + 1] + pixels[index + 2]) / 3 * kernel[i];
           energy += kernel[i] ** 2;
         }
-        const amount = Math.max(0, Math.min(12 / 16 * locatorGain(p, cell) * (main ? 1 : 0.65), projection / energy));
+        const maximum = (version === CARRIER_V4 ? 1 : 12 / 16) * blendedLocatorGain(version, p, cell, main);
+        const amount = Math.max(0, Math.min(maximum, projection / energy));
         for (let i = 0; i < kernel.length; i++) {
           const index = (x + i % p.cell + (y + Math.floor(i / p.cell)) * width) * 4;
           for (let c = 0; c < 3; c++) output[index + c] = clampChannel(pixels[index + c] - amount * kernel[i]);
@@ -2018,6 +2035,7 @@
       if (options.carrierVersion) return readNative(pixels, width, height, options.carrierVersion, options.strength, options.signal);
       return (await readNative(pixels, width, height, CARRIER_V4, options.strength, options.signal)) ||
         (await readNative(pixels, width, height, CARRIER_V3, options.strength, options.signal)) ||
+        (await readNative(pixels, width, height, CARRIER_V5, options.strength, options.signal)) ||
         readNative(pixels, width, height, CARRIER_V1, options.strength, options.signal);
     }
     const visual = visualMappings.get(pixels);
@@ -2034,7 +2052,8 @@
       return readVisualMapping(pixels, width, height, visual.geometry, options.signal);
     }
     const direct = (await readNative(pixels, width, height, CARRIER_V4, undefined, options.signal)) ||
-      (await readNative(pixels, width, height, CARRIER_V3, undefined, options.signal));
+      (await readNative(pixels, width, height, CARRIER_V3, undefined, options.signal)) ||
+      (await readNative(pixels, width, height, CARRIER_V5, undefined, options.signal));
     if (direct) return direct;
     const native = await findLocator(pixels, width, height, true, false, options.signal);
     if (native) {
@@ -2653,7 +2672,7 @@
     scanMarkers,
     readMarkerCandidates,
     clearVisualTransform(pixels) { visualMappings.delete(pixels); },
-    setCarrierVersion(version) { preferredCarrier = [CARRIER_V1, CARRIER_V3, CARRIER_V4].includes(version) ? version : CARRIER_V4; },
+    setCarrierVersion(version) { preferredCarrier = [CARRIER_V1, ...RECOVERY_CARRIERS].includes(version) ? version : CARRIER_V4; },
     getCarrierVersion() { return preferredCarrier; },
     getLimits() { return { inputPixels: MAX_INPUT_PIXELS, encodingPixels: MAX_PIXELS }; },
     readImageFile,

@@ -2,9 +2,9 @@
 
 Carrier 3 remains readable and selectable under **Encoding format: Version 3**.
 The browser now defaults to [carrier 4](CarrierV4.md) for evaluation. Versions 1,
-3 and 4 are read automatically; the writer choice never limits reading. Carrier
+3, 4 and 5 are read automatically; the writer choice never limits reading. Carrier
 3's layout and pixel writer remain unchanged. Its original preference key was
-`pixelstow-carrier-v3`; the new UI uses `pixelstow-carrier-v4`.
+`pixelstow-carrier-v3`; the new UI uses `pixelstow-carrier-v4-balanced`.
 
 This is a new **image carrier**, separate from PCF1's existing text, password and
 attachment-envelope versions. PCF1 framing, DEFLATE, encryption, attachment
