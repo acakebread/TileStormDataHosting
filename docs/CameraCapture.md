@@ -95,6 +95,15 @@ is absent from the live feed and remains available when live access fails. It
 also has a shortcut inside the live-camera dialog, using the same input and import
 flow as the page's **Take photo** button.
 
+A high-confidence marker fit can start a read before every image scale was
+visited. If its payload fails, live reading now resumes the unvisited marker
+scales on that same retained raster, then ranks and reads the resulting fits.
+This matches the fallback used by ordinary file recovery. The discovery retry
+and payload work share the existing 30-second live-read limit; a stronger new
+capture or cancellation still terminates that worker. Inspect this capture also
+uses the fallback. Saving to Photos is not required by the decoder, and this
+change does not make the video feed equivalent to a native still photograph.
+
 Live access requires browser camera permission and a secure context. HTTPS and
 localhost are the supported live-scanning routes; plain HTTP to a machine's LAN
 address will not grant camera access. Direct `file://` opening cannot use this

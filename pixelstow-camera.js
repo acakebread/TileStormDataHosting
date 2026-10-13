@@ -454,12 +454,13 @@
       session.readAbort = controller;
       // A bad capture cannot monopolize the reader indefinitely. Fresh marker
       // scans continue independently; their best result is next in rank order.
-      const timer = setTimeout(() => controller.abort(), 30000);
+      const deadline = Date.now() + 30000;
+      const timer = setTimeout(() => controller.abort(), Math.max(0, deadline - Date.now()));
       this.showBestFrame(session);
       try {
         const { image, scan, frameNumber } = entry;
         const inspection = await PixelStow.readMarkerCandidates(image.pixels, image.width, image.height, scan, {
-          signal: controller.signal,
+          signal: controller.signal, deadline, resumeDiscovery: true,
           onProgress: (text) => { if (this.session === session && !controller.signal.aborted)
             this.progress.textContent = "Reading best capture · frame " + frameNumber + ": " + text; }
         });

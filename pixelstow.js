@@ -1203,7 +1203,7 @@
 
   function searchInWorker(pixels, width, height, options, operation = "geometry") {
     return new Promise((resolve, reject) => {
-      const url = new URL("pixelstow-transform-worker.js?v=20261013-voice-repetition1", codecScriptUrl);
+      const url = new URL("pixelstow-transform-worker.js?v=20261013-camera-resume1", codecScriptUrl);
       const worker = new Worker(url);
       let finished = false;
       const abort = () => { if (finished) return; cleanup(); reject(new DOMException("Search cancelled.", "AbortError")); };
@@ -1229,6 +1229,7 @@
           corners: options.corners, seed: options.seed, deadline: options.deadline,
           seedDeadline: options.seedDeadline, camera: options.camera, scan: options.scan,
           searchState: options.searchState, stopOnHighConfidence: options.stopOnHighConfidence,
+          resumeDiscovery: options.resumeDiscovery,
           strength: options.strength, visual: options.visual }, [copy.buffer]);
       } catch (error) { cleanup(); reject(error); }
     });
@@ -1749,6 +1750,20 @@
         return result;
       }
       if (i === 0) best = result;
+    }
+    // Live scans can stop on a high-confidence fit before visiting every scale.
+    // If its body fails, keep this exact frame and use the remaining scales,
+    // just as ordinary file recovery does. Never borrow the next frame's pixels.
+    if (options.resumeDiscovery && scan.searchState?.pending.length) {
+      const deadline = options.deadline || Date.now() + 60000;
+      if (Date.now() < deadline) {
+        options.onProgress?.("The marker fit did not decode. Checking the remaining scales of this capture…");
+        const remaining = await scanMarkers(pixels, width, height, { ...options,
+          searchState: { ...scan.searchState, deadline }, deadline, stopOnHighConfidence: false });
+        checkCancelled(options.signal);
+        const retried = await readMarkerCandidates(pixels, width, height, remaining, { ...options, resumeDiscovery: false });
+        if (retried.found && !retried.unreadable || (retried.markers?.length || 0) > (best.markers?.length || 0)) return retried;
+      }
     }
     retainVisualResult(pixels, width, height, best);
     return best;
