@@ -209,7 +209,7 @@
     .preview-panel::backdrop { background: #000; }
     .preview-screen { position: absolute; inset: 0; }
     .preview-screen > .preview { position: relative; height: 100%; margin: 0; }
-    .preview-screen .viewport { height: 100%; border-radius: 0; background: #000; }
+    .preview-screen .viewport { height: 100%; border-radius: 0; background: #000; touch-action: none; overscroll-behavior: contain; }
     .preview-screen .preview-toolbar,
     .preview-screen #preview-note,
     .preview-screen #image-repetition { display: none !important; }
@@ -235,8 +235,8 @@
       overflow: hidden;
       border-radius: 12px;
       background: rgba(0, 0, 0, 0.28);
-      touch-action: none;
-      overscroll-behavior: contain;
+      touch-action: pan-y;
+      overscroll-behavior: auto;
       user-select: none;
       -webkit-user-select: none;
     }
@@ -541,13 +541,14 @@
           <button id="paste-image" type="button">Paste image</button>
           <button id="open-camera" type="button">Open camera</button>
           <button id="take-photo" type="button">Take photo</button>
+          <button id="camera-source" type="button">Photograph to encode</button>
           <input id="camera-file" class="file-input" type="file" accept="image/*" capture="environment" aria-label="Take a photo with the camera">
         </div>
         <dialog class="camera-panel" id="camera-panel" hidden aria-labelledby="camera-title">
           <header class="camera-header">
             <div>
               <h2 id="camera-title">Camera scanner</h2>
-              <p class="hint">Keep all four picture corners inside the guides. Move closer and hold steady.</p>
+              <p class="hint" id="camera-help">Keep all four picture corners inside the guides. Move closer and hold steady.</p>
             </div>
             <button id="close-camera" type="button" autofocus>Close camera</button>
           </header>
@@ -821,7 +822,7 @@
   <script src="./pixelstow-voice.js?v=20261013-voice-clock2"></script>
   <script src="./pixelstow-media.js?v=20261013-voice-clock2"></script>
   <script src="./pixelstow-sharing.js?v=20261011-png-clipboard"></script>
-  <script src="./pixelstow-camera.js?v=20261013-camera-resume1"></script>
+  <script src="./pixelstow-camera.js?v=20261013-camera-source1"></script>
   <script src="./pixelstow-preview.js?v=20261013-full-preview1"></script>
   <script>
     const fileInput = document.querySelector("#file");
@@ -1299,7 +1300,8 @@
 
     function previewHelp(comparing) {
       if (window.matchMedia("(pointer: coarse)").matches) {
-        return "Pinch to zoom. Use two fingers to pan." + (comparing ? " Drag the divider to compare." : "");
+        return "Swipe with one finger to scroll the page. Pinch to zoom; use two fingers to pan the image." +
+          (comparing ? " Drag the handle or use the slider to compare." : "");
       }
       return (comparing ? "Left-click or drag the picture to compare. " : "") + "Scroll to zoom. Hold the right mouse button to pan.";
     }
@@ -1545,20 +1547,22 @@
           hasFingerprint: false,
           passwordProtected: false
         };
-        loadedImage.textContent = origin === "camera" ? "Captured with camera" + (file.name ? " · " + file.name : "")
+        loadedImage.textContent = origin === "camera" ? (captured?.sourceOnly ? "Source photo captured with camera" : "Captured with camera") + (file.name ? " · " + file.name : "")
           : origin === "clipboard" ? "Pasted from clipboard" : file.name ? "Loaded file: " + file.name : "Loaded image";
         loadedImage.hidden = false;
         showPreview(image.pixels, image.width, image.height);
         const room = PixelStow.estimatePayloadBytes(image.width, image.height);
         const exactNote = image.exact ? "" : " Browser colour conversion was used, so an existing fingerprint may not read.";
         capacity.textContent = capacityLabel(image, room, exactNote);
-        // Show the supplied photo before automatic recovery starts. Progress and
-        // cancellation remain visible without opening the recovery options.
+        // An explicit source capture needs only the inexpensive native check:
+        // don't spend a photographic recovery search on a new scene. Existing
+        // native fingerprints (including locked ones) still cannot be encoded.
         transformAbort = new AbortController();
-        recoveryVisible = true;
+        recoveryVisible = !captured?.sourceOnly;
         setBusy(true);
-        const readerOptions = { ...recoveryOptions(transformAbort), automatic: true, background: true,
-          resumeDiscovery: Boolean(captured?.markerScan) };
+        const readerOptions = captured?.sourceOnly ? { nativeOnly: true, automatic: false, signal: transformAbort.signal }
+          : { ...recoveryOptions(transformAbort), automatic: true, background: true,
+            resumeDiscovery: Boolean(captured?.markerScan) };
         const found = captured?.inspection || (captured?.markerScan
           ? await PixelStow.readMarkerCandidates(image.pixels, image.width, image.height, captured.markerScan, readerOptions)
           : await PixelStow.inspect(image.pixels, image.width, image.height, readerOptions));
@@ -1583,7 +1587,7 @@
             setStatus("A fingerprint was found, but its text could not be read.", true);
           }
         } else {
-          setStatus(found.signature?.likely
+          setStatus(captured?.sourceOnly ? "Source photo ready. Enter a message, attach a file or record some audio, then encode the image." : found.signature?.likely
             ? "No readable fingerprint was recovered. You can retry with Image recovery options below, or choose another image."
             : "No fingerprint found. Enter a message, attach a file or record some audio. If you expected encoded contents, try Image recovery options below.");
         }
@@ -1626,9 +1630,6 @@
 
     function clearPreviewTouches() {
       endSplit();
-      for (const id of previewTouches.keys()) {
-        if (viewport.hasPointerCapture(id)) viewport.releasePointerCapture(id);
-      }
       previewTouches.clear();
       touchView = null;
     }
@@ -1642,28 +1643,30 @@
         imageX: (x - originX) / viewScale, imageY: (y - originY) / viewScale };
     }
 
-    // Capture both fingers before the comparison handler. Pinching takes over
-    // from a one-finger divider drag; dropping to one finger does not move it.
-    viewport.addEventListener("pointerdown", (event) => {
-      if (event.pointerType !== "touch" || !imagePixels().w) return;
-      const onButton = event.target.closest("button") && !splitHandle.contains(event.target);
-      previewTouches.set(event.pointerId, { x: event.clientX, y: event.clientY });
-      // A normal tap must still reach the preview's Play audio button.
-      if (!onButton || previewTouches.size >= 2) {
-        event.preventDefault();
-        viewport.setPointerCapture(event.pointerId);
+    function trackPreviewTouches(event) {
+      previewTouches.clear();
+      for (const touch of event.touches) {
+        if (viewport.contains(touch.target)) previewTouches.set(touch.identifier, { x: touch.clientX, y: touch.clientY });
       }
+    }
+
+    // Leave a single finger to native page scrolling (and button taps). Touch
+    // events keep the two-finger view usable when pan-y cancels pointer events.
+    // Only the comparison handle captures a single pointer.
+    viewport.addEventListener("touchstart", (event) => {
+      if (!imagePixels().w) return;
+      trackPreviewTouches(event);
       if (previewTouches.size >= 2) {
+        if (event.cancelable) event.preventDefault();
         endSplit();
-        for (const id of previewTouches.keys()) viewport.setPointerCapture(id);
         startTouchView();
       }
-    });
-    viewport.addEventListener("pointermove", (event) => {
-      if (!previewTouches.has(event.pointerId)) return;
-      previewTouches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    }, { passive: false });
+    viewport.addEventListener("touchmove", (event) => {
+      trackPreviewTouches(event);
       if (!touchView) return;
-      event.preventDefault();
+      if (previewTouches.size < 2) { touchView = null; return; }
+      if (event.cancelable) event.preventDefault();
       const [a, b] = [...previewTouches.values()], rect = viewport.getBoundingClientRect();
       const x = (a.x + b.x) / 2 - rect.left, y = (a.y + b.y) / 2 - rect.top;
       fitMode = false;
@@ -1671,14 +1674,13 @@
       originX = x - touchView.imageX * viewScale;
       originY = y - touchView.imageY * viewScale;
       applyView();
-    });
+    }, { passive: false });
     function endPreviewTouch(event) {
-      if (!previewTouches.delete(event.pointerId)) return;
-      if (viewport.hasPointerCapture(event.pointerId)) viewport.releasePointerCapture(event.pointerId);
+      trackPreviewTouches(event);
       startTouchView();
     }
-    viewport.addEventListener("pointerup", endPreviewTouch);
-    viewport.addEventListener("pointercancel", endPreviewTouch);
+    viewport.addEventListener("touchend", endPreviewTouch);
+    viewport.addEventListener("touchcancel", endPreviewTouch);
     window.addEventListener("blur", clearPreviewTouches);
     // Also suppress Safari's native gesture events within this viewer only.
     ["gesturestart", "gesturechange"].forEach((name) => viewport.addEventListener(name, (event) => event.preventDefault(), { passive: false }));

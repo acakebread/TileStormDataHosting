@@ -7,9 +7,13 @@
       this.session = null;
       this.captureCanvas = document.createElement("canvas");
       this.openButton = document.querySelector("#open-camera");
+      this.sourceButton = document.querySelector("#camera-source");
       this.photoButton = document.querySelector("#take-photo");
       this.input = document.querySelector("#camera-file");
       this.panel = document.querySelector("#camera-panel");
+      this.title = document.querySelector("#camera-title");
+      this.help = document.querySelector("#camera-help");
+      this.target = document.querySelector(".camera-target");
       this.video = document.querySelector("#camera-video");
       this.view = document.querySelector("#camera-view");
       this.frame = document.querySelector("#camera-frame");
@@ -30,13 +34,17 @@
       // worker. Keep that route manual rather than continuously loading the UI.
       this.backgroundAvailable = typeof Worker !== "undefined" && ["https:", "http:"].includes(location.protocol);
       this.openButton.addEventListener("click", () => this.open());
+      this.sourceButton.addEventListener("click", () => this.open("environment", "source"));
       this.photoButton.addEventListener("click", () => this.takePhoto());
-      this.nativePhotoButton.addEventListener("click", () => this.takePhoto());
+      this.nativePhotoButton.addEventListener("click", () => this.takePhoto(this.session?.purpose));
       this.input.addEventListener("change", () => {
         const file = this.input.files?.[0];
+        const sourceOnly = this.inputPurpose === "source";
+        this.inputPurpose = "read";
         this.input.value = "";
-        if (file && !this.working()) this.importImage(file, "camera");
+        if (file && !this.working()) this.importImage(file, "camera", sourceOnly ? { sourceOnly: true } : undefined);
       });
+      this.input.addEventListener("cancel", () => { this.inputPurpose = "read"; });
       this.captureButton.addEventListener("click", () => {
         const session = this.session;
         if (!session || session.handingOff || this.working()) return;
@@ -55,14 +63,16 @@
         session.rotation = (session.rotation + 90) % 360;
         this.cancelSearches(session, true);
         this.layoutPreview();
-        this.progress.textContent = "View rotated. Keep all four picture corners inside the guides and hold steady.";
+        this.progress.textContent = session.purpose === "source" ? "View rotated. Frame your source photo, then capture it."
+          : "View rotated. Keep all four picture corners inside the guides and hold steady.";
         this.schedule(session, 900);
       });
       this.switchButton.addEventListener("click", () => {
         if (!this.session || this.session.handingOff || this.working()) return;
         const facing = this.session.facing === "environment" ? "user" : "environment";
+        const purpose = this.session.purpose;
         this.close();
-        this.open(facing);
+        this.open(facing, purpose);
       });
       this.closeButton.addEventListener("click", () => {
         this.close();
@@ -105,9 +115,10 @@
 
     get active() { return Boolean(this.session); }
 
-    takePhoto() {
+    takePhoto(purpose = "read") {
       if (this.working() || this.session?.handingOff) return;
       this.close();
+      this.inputPurpose = purpose;
       this.input.value = "";
       this.input.click(); // Remain in the user gesture for iPhone's picker.
     }
@@ -163,7 +174,8 @@
         session.adjusting = false;
         if (this.session === session && !session.handingOff) {
           session.portrait = portrait;
-          this.progress.textContent = session.paused ? "Scanning paused. Reframe, then resume or capture and read."
+          this.progress.textContent = session.purpose === "source" ? "Camera ready. Frame your source photo, then tap Use photo for encoding."
+            : session.paused ? "Scanning paused. Reframe, then resume or capture and read."
             : "Camera ready. Keep all four picture corners inside the guides and hold steady…";
           this.sync();
           // A second rotation during applyConstraints is handled in order.
@@ -178,10 +190,19 @@
       const ready = Boolean(session?.ready && !session.adjusting && this.video.readyState >= 2 && this.video.videoWidth && this.video.videoHeight);
       this.panel.hidden = !session;
       this.openButton.disabled = locked || Boolean(session);
+      this.sourceButton.disabled = locked || Boolean(session);
       this.photoButton.disabled = this.input.disabled = locked || Boolean(session?.handingOff);
       this.nativePhotoButton.disabled = locked || Boolean(session?.handingOff);
       this.captureButton.disabled = locked || !ready || Boolean(session?.handingOff);
-      this.pauseButton.hidden = !this.backgroundAvailable;
+      const source = session?.purpose === "source";
+      this.title.textContent = source ? "Camera source photo" : "Camera scanner";
+      this.help.textContent = source ? "Frame a new photo to put your message and files inside. The whole outlined view is captured."
+        : "Keep all four picture corners inside the guides. Move closer and hold steady.";
+      this.captureButton.textContent = source ? "Use photo for encoding" : "Capture and read";
+      this.nativePhotoButton.textContent = source ? "Take source photo with phone camera" : "Take photo with phone camera";
+      this.target.hidden = source;
+      this.signature.hidden = source;
+      this.pauseButton.hidden = source || !this.backgroundAvailable;
       this.pauseButton.disabled = locked || !session?.ready || !this.backgroundAvailable || Boolean(session?.handingOff);
       this.pauseButton.textContent = session?.paused ? "Resume scanning" : "Pause scanning";
       this.switchButton.disabled = this.rotateButton.disabled = locked || !ready || Boolean(session?.handingOff);
@@ -189,13 +210,14 @@
       this.layoutPreview();
     }
 
-    async open(facing = "environment") {
+    async open(facing = "environment", purpose = "read") {
       if (this.active || this.working()) return;
       if (!navigator.mediaDevices?.getUserMedia) {
+        if (purpose === "source") { this.takePhoto("source"); return; }
         this.report("Live camera needs a supported browser on HTTPS or localhost. Use Take photo instead.", true);
         return;
       }
-      const session = { facing, ready: false, paused: !this.backgroundAvailable, frames: 0, lastTime: -1,
+      const session = { facing, purpose, ready: false, paused: purpose === "source" || !this.backgroundAvailable, frames: 0, lastTime: -1,
         rotation: 0, portrait: this.isPortrait(), history: [], appraised: 0 };
       this.session = session;
       this.signature.textContent = "";
@@ -225,7 +247,8 @@
         if (this.session !== session) return;
         session.ready = true;
         this.sync();
-        this.progress.textContent = this.backgroundAvailable
+        this.progress.textContent = purpose === "source" ? "Camera ready. Frame your source photo, then tap Use photo for encoding."
+          : this.backgroundAvailable
           ? "Camera ready. Keep all four picture corners inside the guides and hold steady while frames are checked…"
           : "Preview ready. Tap Capture and read. Automatic background scanning needs HTTPS or localhost.";
         this.refreshOrientation(session);
@@ -264,7 +287,7 @@
 
     togglePause() {
       const session = this.session;
-      if (!session?.ready || session.handingOff || !this.backgroundAvailable || this.working()) return;
+      if (!session?.ready || session.purpose === "source" || session.handingOff || !this.backgroundAvailable || this.working()) return;
       session.paused = !session.paused;
       clearTimeout(session.timer);
       if (session.paused) {
@@ -278,7 +301,7 @@
     }
 
     schedule(session, delay = 700) {
-      if (this.session !== session || session.paused || session.adjusting || session.handingOff) return;
+      if (this.session !== session || session.purpose === "source" || session.paused || session.adjusting || session.handingOff) return;
       clearTimeout(session.timer);
       session.timer = setTimeout(() => this.scan(session), delay);
     }
@@ -366,7 +389,7 @@
     }
 
     scan(session) {
-      if (this.session !== session || session.paused || session.adjusting || session.handingOff) return;
+      if (this.session !== session || session.purpose === "source" || session.paused || session.adjusting || session.handingOff) return;
       if (this.video.readyState < 2 || this.video.currentTime === session.lastTime) {
         this.schedule(session);
         return;
@@ -387,7 +410,7 @@
     }
 
     async scanMarkers(session) {
-      if (this.session !== session || session.paused || session.adjusting || session.scanning || session.handingOff || !session.pending) return;
+      if (this.session !== session || session.purpose === "source" || session.paused || session.adjusting || session.scanning || session.handingOff || !session.pending) return;
       session.scanning = true;
       const entry = session.pending;
       session.pending = null;
@@ -441,7 +464,7 @@
     }
 
     async readBestFrame(session) {
-      if (this.session !== session || session.paused || session.adjusting || session.reading || session.handingOff) return;
+      if (this.session !== session || session.purpose === "source" || session.paused || session.adjusting || session.reading || session.handingOff) return;
       const entry = session.history.find((frame) => !frame.attempted && frame.scan.candidates?.length && Date.now() - frame.capturedAt < 45000);
       if (!entry) return; // Never spend a payload read on a marker-free capture.
       if (session.appraised < 2 && !entry.scan.highConfidence) return;
@@ -510,7 +533,7 @@
         const name = "camera-capture-" + new Date().toISOString().replace(/[:.]/g, "-") + ".png";
         const file = new File([blob], name, { type: "image/png" });
         this.close();
-        await this.importImage(file, "camera", { image, inspection, markerScan });
+        await this.importImage(file, "camera", { image, inspection, markerScan, sourceOnly: session.purpose === "source" });
       } catch (error) {
         if (this.session !== session) return;
         this.close();
