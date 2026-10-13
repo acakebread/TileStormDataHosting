@@ -199,6 +199,36 @@
       margin-top: 14px;
     }
 
+    .preview-toolbar { display: flex; justify-content: flex-end; margin: 0 0 8px; }
+    html.preview-modal-open, body.preview-modal-open { overflow: hidden; overscroll-behavior: none; }
+    .preview-panel {
+      box-sizing: border-box; position: fixed; inset: 0; width: 100%; height: 100%; height: 100dvh;
+      max-width: none; max-height: none; margin: 0; padding: 0; border: 0; border-radius: 0;
+      background: #000; color: var(--text); overflow: hidden;
+    }
+    .preview-panel::backdrop { background: #000; }
+    .preview-screen { position: absolute; inset: 0; }
+    .preview-screen > .preview { position: relative; height: 100%; margin: 0; }
+    .preview-screen .viewport { height: 100%; border-radius: 0; background: #000; }
+    .preview-screen .preview-toolbar,
+    .preview-screen #preview-note,
+    .preview-screen #image-repetition { display: none !important; }
+    .preview-screen .comparison-control {
+      position: absolute; bottom: max(12px, env(safe-area-inset-bottom)); left: 4%; width: 92%;
+      box-sizing: border-box; padding: 4px 12px; border-radius: 12px; background: rgba(0, 0, 0, 0.8);
+    }
+    .preview-screen-toolbar {
+      position: absolute; z-index: 2; top: max(10px, env(safe-area-inset-top));
+      left: max(10px, env(safe-area-inset-left)); right: max(10px, env(safe-area-inset-right));
+      display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px;
+    }
+    .preview-screen-toolbar button { background: rgba(10, 18, 26, 0.92); }
+    .preview-panel.clean #preview-source,
+    .preview-panel.clean #transform-outline,
+    .preview-panel.clean #compare-ui,
+    .preview-panel.clean #comparison-control,
+    .preview-panel.clean #preview-audio { display: none !important; }
+
     .viewport {
       position: relative;
       width: 100%;
@@ -552,6 +582,7 @@
         <p class="loaded-image" id="loaded-image" hidden></p>
         <p class="hint" id="capacity">Choose or paste a PNG or JPEG, or open the camera. Your original stays unchanged.</p>
         <div class="preview" id="preview" hidden>
+          <div class="preview-toolbar"><button id="full-preview" type="button">Full screen preview</button></div>
           <div class="viewport" id="viewport">
             <div class="compare" id="compare">
               <canvas id="preview-encoded"></canvas>
@@ -694,6 +725,7 @@
         <button id="share-image" type="button" hidden>Send via WhatsApp / Share</button>
         <button id="share-message" type="button" hidden>Opening link / WhatsApp message</button>
         <button id="post-facebook" type="button" hidden>Post to Facebook</button>
+        <button id="preview-encoded-image" type="button" hidden>Preview encoded image</button>
       </div>
       <p class="hint" id="share-help" hidden>Choose WhatsApp in the share menu. Include the opening link; send the PNG as a Document / original file if WhatsApp offers that option. Photo sharing can resize it and lose its contents.</p>
 
@@ -720,6 +752,15 @@
       </div>
     </section>
   </main>
+  <dialog class="preview-panel" id="preview-panel" aria-label="Full screen image preview. Tap the image to show controls; press Escape to close." tabindex="-1">
+    <div class="preview-screen" id="preview-screen"></div>
+    <div class="preview-screen-toolbar" id="preview-screen-toolbar">
+      <button id="preview-screen-fit" type="button">Fit image</button>
+      <button id="preview-screen-actual" type="button">100%</button>
+      <button id="preview-screen-hide" type="button">Hide controls</button>
+      <button id="preview-screen-close" type="button">Close preview</button>
+    </div>
+  </dialog>
   <dialog class="export-dialog" id="paste-dialog" aria-labelledby="paste-title">
     <h2 id="paste-title">Paste a photo</h2>
     <p id="paste-help">Copy the actual photo first. Touch and hold in the box, then choose Paste (or press Ctrl / Cmd + V).</p>
@@ -777,14 +818,16 @@
   <script src="./pixelstow-lattice.js?v=20261013-marker-follow2"></script>
   <script src="./pixelstow.js?v=20261013-voice-repetition1"></script>
   <script src="./pixelstow-export.js?v=20261011-exports"></script>
-  <script src="./pixelstow-voice.js?v=20261013-voice-repetition1"></script>
-  <script src="./pixelstow-media.js?v=20261013-voice-repetition1"></script>
+  <script src="./pixelstow-voice.js?v=20261013-voice-clock2"></script>
+  <script src="./pixelstow-media.js?v=20261013-voice-clock2"></script>
   <script src="./pixelstow-sharing.js?v=20261011-png-clipboard"></script>
   <script src="./pixelstow-camera.js?v=20261013-marker-follow2"></script>
+  <script src="./pixelstow-preview.js?v=20261013-full-preview1"></script>
   <script>
     const fileInput = document.querySelector("#file");
     const drop = document.querySelector("#drop");
     const preview = document.querySelector("#preview");
+    const previewEncodedButton = document.querySelector("#preview-encoded-image");
     const viewport = document.querySelector("#viewport");
     const compare = document.querySelector("#compare");
     const previewEncoded = document.querySelector("#preview-encoded");
@@ -858,6 +901,23 @@
     let blockPanMenu = false;
     const previewTouches = new Map();
     let touchView = null;
+    const fullPreview = new PixelStowPreview({
+      preview, viewport,
+      captureView: () => ({ fitMode, viewScale, originX, originY }),
+      restoreView: (view) => {
+        clearPreviewTouches();
+        if (view) ({ fitMode, viewScale, originX, originY } = view);
+        sizeViewport();
+      },
+      fit: resetView,
+      actualSize: () => {
+        clearPreviewTouches(); fitMode = false; viewScale = 1 / (window.devicePixelRatio || 1);
+        const img = imagePixels(), box = viewBox();
+        originX = (box.w - img.w * viewScale) / 2; originY = (box.h - img.h * viewScale) / 2;
+        applyView();
+      },
+      resize: sizeViewport
+    });
     const exports = new PixelStowExportDialog();
     const media = new PixelStowMediaPanel({
       save: saveBlob,
@@ -1006,6 +1066,7 @@
       downloadLink.hidden = true;
       downloadLink.removeAttribute("href");
       saveEncodedJpegButton.hidden = true;
+      previewEncodedButton.hidden = true;
       sharing.setFile(null);
     }
 
@@ -1059,6 +1120,8 @@
       sharing.sync();
       camera?.sync();
       saveEncodedJpegButton.disabled = working;
+      previewEncodedButton.hidden = !encodedPng;
+      previewEncodedButton.disabled = working;
       downloadLink.setAttribute("aria-disabled", String(working));
       saveMessageButton.hidden = !hasMessage;
       saveSourceButton.hidden = !hasDecoded;
@@ -1162,7 +1225,8 @@
     function clampScale(value, img, box) {
       const fit = fittedScale(img, box);
       const max = Math.max(fit * 16, 16 / (window.devicePixelRatio || 1));
-      return Math.max(fit, Math.min(max, value));
+      const min = fullPreview.openNow ? Math.min(fit, 1 / (window.devicePixelRatio || 1)) : fit;
+      return Math.max(min, Math.min(max, value));
     }
 
     function clampOrigin(img, box) {
@@ -1203,7 +1267,8 @@
       const width = viewport.clientWidth;
       if (!img.w || !img.h || !width) return;
       const maxHeight = window.matchMedia("(max-width: 620px)").matches ? Math.min(360, window.innerHeight * 0.42) : 420;
-      const height = Math.max(120, Math.min(maxHeight, width * img.h / img.w));
+      const height = fullPreview.openNow ? document.querySelector("#preview-screen").clientHeight :
+        Math.max(120, Math.min(maxHeight, width * img.h / img.w));
       const next = height + "px";
       if (viewport.style.height !== next) viewport.style.height = next;
       applyView();
@@ -1625,7 +1690,7 @@
     }
     viewport.addEventListener("pointerdown", (event) => {
       const onHandle = splitHandle.contains(event.target);
-      if (event.button !== 0 || compareUi.hidden || panning || splitPointer !== null || previewTouches.size > 1) return;
+      if (event.button !== 0 || fullPreview.clean || compareUi.hidden || panning || splitPointer !== null || previewTouches.size > 1) return;
       if (!onHandle && (event.pointerType === "touch" || !compare.contains(event.target))) return;
       event.preventDefault();
       splitPointer = event.pointerId;

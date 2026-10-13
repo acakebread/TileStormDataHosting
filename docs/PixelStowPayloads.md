@@ -97,9 +97,14 @@ and [Opus configuration](https://www.w3.org/TR/webcodecs-opus-codec-registration
 
 **Make voice smaller** applies the same conversion to an existing audio attachment
 (up to 60 seconds / 1 MiB), using 8 kbit/s unless Smallest voice is selected.
-The source is mixed to mono at 16 kHz offline. Encoder delay and final padding
+The source is mixed to mono offline and encoded with a 48 kHz sample clock,
+matching Opus timing and avoiding input-rate priming differences in Cocoa's
+encoder. This does not raise the compressed bitrate. Encoder delay and final padding
 are recorded in a finite WebM with an explicit duration. One-second laced blocks
-reduce container overhead while retaining each encoded packet. Container rules
+reduce container overhead while retaining each encoded packet. If the native
+decoder rejects their timing, the same packets are remuxed into individual blocks
+and checked again. A duration mismatch reports the actual and expected times;
+it still keeps the original. Container rules
 follow the [Matroska Opus mapping](https://www.matroska.org/technical/codec_specs.html#a_opus).
 Ogg/Opus was avoided because of [Safari's reported Ogg timing bug](https://bugs.webkit.org/show_bug.cgi?id=293310).
 Before replacing the attachment, the conversion is decoded to check its duration
@@ -108,6 +113,14 @@ conversion fails or produces a larger file. Cancel/import discards pending work;
 the encoder closes on cancellation or a stalled queue/flush. Users should listen
 to the converted recording before encoding. Native Chrome checks verify encoding,
 playback duration and fallback; actual iPhone Safari use still needs device testing.
+
+**Full screen preview** beside the image uses the existing zoom, pan and comparison
+canvases in a viewport-filling dialog. Fit and 100% controls are available; closing
+restores the previous page view. **Preview encoded image** at the end of the export
+actions opens a clean presentation of the generated image, hiding the comparison
+divider, recovery overlay, audio button and toolbar. Tap to reveal controls or
+press Escape to close. Pinch/two-finger pan still work. Browsers with element
+fullscreen can also hide their chrome; iPhones use the viewport dialog fallback.
 
 Browser WebM/Opus recordings receive a final Matroska `Info/Duration`, calculated
 from cluster/block timestamps and Opus packet durations. This gives the native

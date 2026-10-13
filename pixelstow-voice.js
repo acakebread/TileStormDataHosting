@@ -2,7 +2,10 @@
 // WebCodecs supplies Opus packets; a finite WebM carries exact playback timing.
 (function (root) {
   "use strict";
-  const RATE = 16000, FRAME = 320, TYPE = "audio/webm;codecs=opus";
+  // Use Opus's 48 kHz clock for both input and container timing. Cocoa's encoder
+  // can report priming in input-rate samples; 16 kHz makes that ambiguous.
+  // The compressed bitrate, rather than the PCM rate, determines the file size.
+  const RATE = 48000, FRAME = 960, TYPE = "audio/webm;codecs=opus";
   const pause = () => new Promise((resolve) => setTimeout(resolve, 0));
   const cancelled = (signal) => { if (signal?.aborted) throw new DOMException("Voice compression cancelled.", "AbortError"); };
   const config = (bitrate, format) => ({ codec: "opus", sampleRate: RATE, numberOfChannels: 1, bitrate,
@@ -68,12 +71,12 @@
     return ms * count * 48;
   }
 
-  function mux(head, packets, samples) {
+  function mux(head, packets, samples, lace = true) {
     if (!head || head.length !== 19 || new TextDecoder().decode(head.subarray(0, 8)) !== "OpusHead" ||
       head[8] !== 1 || head[9] !== 1 || head[18] !== 0 || !packets.length)
       throw new Error("The browser did not supply a mono Opus header.");
     const view = new DataView(head.buffer, head.byteOffset, head.byteLength), preSkip = view.getUint16(10, true);
-    const end = preSkip + samples * 3, used = []; let total = 0;
+    const end = preSkip + samples, used = []; let total = 0;
     for (const packet of packets) { used.push(packet); total += packetSamples(packet); if (total >= end) break; }
     if (total < end) throw new Error("The voice encoder did not finish the full recording.");
     const header = element(0x1a45dfa3, join([integer(0x4286, 1), integer(0x42f7, 1), integer(0x42f2, 4),
@@ -84,8 +87,9 @@
       text(0x86, "A_OPUS"), element(0x63a2, head), integer(0x56aa, Math.round(preSkip * 1000000000 / 48000)),
       integer(0x56bb, 80000000), element(0xe1, join([float(0xb5, view.getUint32(12, true) || RATE), integer(0x9f, 1)]))])));
     const clusters = []; let position = 0;
-    for (let i = 0; i < used.length; i += 50) {
-      const group = used.slice(i, i + 50), last = i + group.length === used.length;
+    const groupSize = lace ? 50 : 1;
+    for (let i = 0; i < used.length; i += groupSize) {
+      const group = used.slice(i, i + groupSize), last = i + group.length === used.length;
       let content = block(group, !last);
       if (last) {
         // CodecDelay removes priming at the start; DiscardPadding trims the
@@ -150,11 +154,27 @@
         })]);
       } finally { clearTimeout(flushTimer); }
       cancelled(signal); if (failed) throw failed;
-      const bytes = mux(head, packets, length);
       // Verify actual output playback, duration and non-silent signal before
       // replacing anything. A successful configuration alone proves little.
-      const verified = await decode.decodeAudioData(bytes.slice().buffer); cancelled(signal);
-      if (Math.abs(verified.duration - length / RATE) > 0.08) throw new Error("The smaller voice file has an incorrect duration.");
+      let bytes, verified, failure;
+      for (const lace of [true, false]) {
+        cancelled(signal);
+        bytes = mux(head, packets, length, lace);
+        try {
+          verified = await decode.decodeAudioData(bytes.slice().buffer); cancelled(signal);
+          if (Math.abs(verified.duration - length / RATE) > 0.08)
+            throw new Error("The smaller voice file has an incorrect duration (" + verified.duration.toFixed(2) +
+              " s instead of " + (length / RATE).toFixed(2) + " s).");
+          failure = null;
+          break;
+        } catch (error) {
+          cancelled(signal);
+          failure = error;
+          // Retry identical packets with separate WebM blocks if the native
+          // decoder cannot handle lacing. No second conversion or quality loss.
+        }
+      }
+      if (failure) throw failure;
       const peak = (data) => { let p = 0; for (const v of data) p = Math.max(p, Math.abs(v)); return p; };
       if (peak(pcm) > 0.01 && peak(verified.getChannelData(0)) < 0.001) throw new Error("The smaller voice file was silent.");
       if (bytes.length >= file.bytes.length) return { file, saved: 0, duration: verified.duration };

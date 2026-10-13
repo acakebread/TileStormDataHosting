@@ -689,7 +689,7 @@
                     : " The original was already smaller.";
                 } catch (error) {
                   if (job.cancelled || generation !== this.generation) return;
-                  compactNote = " Conversion did not succeed; the original recording was kept.";
+                  compactNote = " The original recording was kept. " + (error.message || "Voice conversion failed.");
                 }
               }
               if (job.cancelled || generation !== this.generation) return;
