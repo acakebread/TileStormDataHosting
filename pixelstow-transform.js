@@ -697,7 +697,11 @@
         options.onProgress?.("Refining " + model + " alignment from " + ranked[0].inliers.length + " markers and their local directions…");
         matrix = await refineGlobal(matrix, ranked[0].inliers.map((p) => p.marker), seed, adapter, width, height, options);
       }
-      if (!validGeometry(matrix, seed.originalWidth, seed.originalHeight, width, height)) return {
+      // Permit a small framing/fit overshoot at the image edge. The inset patches
+      // can be intact when a handful of outer pixels lie beyond the photograph;
+      // only the complete payload checksum can accept that recovered plane.
+      const framingMargin = Math.max(3, Math.min(12, Math.max(width, height) * 0.01));
+      if (!validGeometry(matrix, seed.originalWidth, seed.originalHeight, width, height, framingMargin)) return {
         geometry: null, markers, signature, reason: "The marker fit places image corners outside the supplied picture or folds the plane." };
       return { geometry: geometryFor(matrix, seed, markers, adapter, model), markers, signature };
     } catch (error) {

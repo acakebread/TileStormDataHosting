@@ -709,12 +709,14 @@
     }
   }
 
-  function sampleLuma(pixels, width, height, x, y) {
+  function sampleLuma(pixels, width, height, x, y, channel) {
     x = Math.max(0, Math.min(width - 1, x)); y = Math.max(0, Math.min(height - 1, y));
     const x0 = Math.floor(x), y0 = Math.floor(y), x1 = Math.min(width - 1, x0 + 1), y1 = Math.min(height - 1, y0 + 1);
     const fx = x - x0, fy = y - y0;
     const a = (x0 + y0 * width) * 4, b = (x1 + y0 * width) * 4;
     const c = (x0 + y1 * width) * 4, d = (x1 + y1 * width) * 4;
+    if (channel !== undefined) return pixels[a + channel] * (1 - fx) * (1 - fy) + pixels[b + channel] * fx * (1 - fy) +
+      pixels[c + channel] * (1 - fx) * fy + pixels[d + channel] * fx * fy;
     return ((pixels[a] + pixels[a + 1] + pixels[a + 2]) * (1 - fx) * (1 - fy) +
       (pixels[b] + pixels[b + 1] + pixels[b + 2]) * fx * (1 - fy) +
       (pixels[c] + pixels[c + 1] + pixels[c + 2]) * (1 - fx) * fy +
@@ -902,9 +904,9 @@
         const pixel = (x + dx + (y + dy) * width) * 4;
         if (fit?.matrix) {
           const point = mappedPoint(fit.matrix, x + dx, y + dy);
-          block[k] = sampleLuma(pixels, width, height, point.x, point.y);
+          block[k] = sampleLuma(pixels, width, height, point.x, point.y, fit.channel);
         } else {
-          block[k] = fit ? sampleLuma(pixels, width, height, fit.scaleX * (x + dx) + fit.phaseX, fit.scaleY * (y + dy) + fit.phaseY)
+          block[k] = fit ? sampleLuma(pixels, width, height, fit.scaleX * (x + dx) + fit.phaseX, fit.scaleY * (y + dy) + fit.phaseY, fit.channel)
             : (pixels[pixel] + pixels[pixel + 1] + pixels[pixel + 2]) / 3;
         }
         projection += block[k] * difference[k];
@@ -945,19 +947,19 @@
     return { locatorOnly: true, origWidth: originalWidth, origHeight: originalHeight, scaleX, scaleY };
   }
 
-  async function readVisualMapping(pixels, width, height, geometry, signal) {
+  async function readVisualMapping(pixels, width, height, geometry, signal, readOptions = {}) {
     const map = locatorBlockMap(geometry.originalWidth, geometry.originalHeight);
-    const offsets = [0, -0.25, 0.25, -0.5, 0.5];
+    const offsets = readOptions.offsets || [0, -0.25, 0.25, -0.5, 0.5];
     for (const oy of offsets) for (const ox of offsets) {
       if (signal?.aborted) throw new DOMException("Search cancelled.", "AbortError");
       const matrix = geometry.matrix.slice();
       // Offset in observed space, including the projective denominator.
       for (let i = 0; i < 3; i++) { matrix[i] += ox * matrix[i + 6]; matrix[i + 3] += oy * matrix[i + 6]; }
-      let fit = { matrix, signal };
+      let fit = { matrix, signal, channel: readOptions.channel };
       if (Math.abs(matrix[1]) < 1e-12 && Math.abs(matrix[3]) < 1e-12 && Math.abs(matrix[6]) + Math.abs(matrix[7]) < 1e-12) {
-        fit = { scaleX: matrix[0] / matrix[8], scaleY: matrix[4] / matrix[8], phaseX: matrix[2] / matrix[8], phaseY: matrix[5] / matrix[8], signal };
+        fit = { scaleX: matrix[0] / matrix[8], scaleY: matrix[4] / matrix[8], phaseX: matrix[2] / matrix[8], phaseY: matrix[5] / matrix[8], signal, channel: readOptions.channel };
       }
-      for (const strength of STRENGTHS) {
+      for (const strength of readOptions.strengths || STRENGTHS) {
         const probe = await scoreMapped(pixels, width, height, map, geometry.originalWidth, strength, fit, PREAMBLE_BLOCKS);
         const preamble = tryReadPreamble(probe.scores) || tryReadPreamble(probe.bounded);
         if (!preamble || preamble.version !== CARRIER_V3) continue;
@@ -965,7 +967,7 @@
         const found = (await tryLayout(scored.scores, signal)) || (await tryLayout(scored.bounded, signal));
         if (found && found.carrierVersion === CARRIER_V3) return {
           ...found, origWidth: geometry.originalWidth, origHeight: geometry.originalHeight,
-          matrix, geometry: { ...geometry, matrix,
+          matrix, readChannel: readOptions.channel, geometry: { ...geometry, matrix,
             corners: [[0, 0], [geometry.originalWidth - 1, 0], [geometry.originalWidth - 1, geometry.originalHeight - 1], [0, geometry.originalHeight - 1]]
               .map(([x, y]) => mappedPoint(matrix, x, y)) }, visualTransform: geometry.model
         };
@@ -983,7 +985,7 @@
 
   function searchInWorker(pixels, width, height, options, operation = "geometry") {
     return new Promise((resolve, reject) => {
-      const url = new URL("pixelstow-transform-worker.js?v=20261012-encode-fast1", codecScriptUrl);
+      const url = new URL("pixelstow-transform-worker.js?v=20261013-photo-phase2", codecScriptUrl);
       const worker = new Worker(url);
       let finished = false;
       const abort = () => { if (finished) return; cleanup(); reject(new DOMException("Search cancelled.", "AbortError")); };
@@ -1039,12 +1041,17 @@
       return search;
     }
     options.onProgress?.("Checking the recovered pixel grid…");
-    const recovered = await readVisualMapping(pixels, width, height, search.geometry, options.signal);
+    let recovered = await readVisualMapping(pixels, width, height, search.geometry, options.signal);
+    if (recovered.locatorOnly && search.geometry.model !== "translation") {
+      recovered = await readPhotoMapping(pixels, width, height, search.geometry, options.signal, options.onProgress);
+    }
     if (options.signal?.aborted) throw new DOMException("Search cancelled.", "AbortError");
-    visualMappings.set(pixels, { width, height, geometry: recovered.geometry });
     const inspection = describeRecovery(recovered);
-    return { ...inspection, found: true, unreadable: Boolean(recovered.locatorOnly) || !inspection.found,
-      carrierVersion: CARRIER_V3, geometry: recovered.geometry, markers: search.markers, signature: search.signature };
+    const result = { ...inspection, found: true, unreadable: Boolean(recovered.locatorOnly) || !inspection.found,
+      carrierVersion: CARRIER_V3, geometry: recovered.geometry, readResolution: recovered.readResolution,
+      markers: search.markers, signature: search.signature };
+    retainVisualResult(pixels, width, height, result, recovered.readImage);
+    return result;
   }
 
   async function reducePhoto(pixels, width, height, targetWidth, targetHeight, signal) {
@@ -1105,7 +1112,89 @@
         matrix[6], matrix[7], matrix[8] + matrix[6] * p.x + matrix[7] * p.y] })) };
   }
 
-  async function rectifyPhoto(pixels, width, height, nativeWidth, nativeHeight, matrix, signal) {
+  function photoPhaseAt(field, x, y) {
+    const gx = Math.max(0, Math.min(field.columns - 1, (x - field.step / 2) / field.step));
+    const gy = Math.max(0, Math.min(field.rows - 1, (y - field.step / 2) / field.step));
+    const ix = Math.floor(gx), iy = Math.floor(gy), jx = Math.min(field.columns - 1, ix + 1), jy = Math.min(field.rows - 1, iy + 1);
+    const fx = gx - ix, fy = gy - iy, values = field.offsets;
+    const a = (ix + iy * field.columns) * 2, b = (jx + iy * field.columns) * 2;
+    const c = (ix + jy * field.columns) * 2, d = (jx + jy * field.columns) * 2;
+    return { x: (values[a] * (1 - fx) + values[b] * fx) * (1 - fy) + (values[c] * (1 - fx) + values[d] * fx) * fy,
+      y: (values[a + 1] * (1 - fx) + values[b + 1] * fx) * (1 - fy) + (values[c + 1] * (1 - fx) + values[d + 1] * fx) * fy };
+  }
+
+  async function measurePhotoPhase(image, signal) {
+    // Both symbols share a central 2x2 lobe on the four-pixel lattice. Its
+    // horizontal/vertical Fourier phase locates pixels without knowing the bits.
+    // Markers establish the plane; this only corrects small remaining grid errors.
+    const { pixels, width, height } = image, step = 32, radius = 32;
+    if (width < radius * 4 || height < radius * 4) return null;
+    const columns = Math.ceil(width / step), rows = Math.ceil(height / step);
+    const offsets = new Float32Array(columns * rows * 2), luma = new Float32Array(width * height);
+    for (let y = 0; y < height; y++) {
+      if ((y & 31) === 0) { checkCancelled(signal); await yieldNow(); }
+      for (let x = 0; x < width; x++) {
+        const i = x + y * width;
+        luma[i] = (pixels[i * 4] + pixels[i * 4 + 1] + pixels[i * 4 + 2]) / 3;
+      }
+    }
+    const cosine = [1, 0, -1, 0], sine = [0, -1, 0, 1];
+    const weights = Float64Array.from({ length: radius * 2 }, (_, i) => 0.5 + 0.5 * Math.cos((i - radius) * Math.PI / radius));
+    const phase = (real, imaginary) => {
+      let angle = -3 * Math.PI / 4 - Math.atan2(imaginary, real);
+      if (angle > Math.PI) angle -= 2 * Math.PI;
+      if (angle < -Math.PI) angle += 2 * Math.PI;
+      return angle * 2 / Math.PI;
+    };
+    let strong = 0;
+    for (let gy = 0; gy < rows; gy++) {
+      checkCancelled(signal); await yieldNow();
+      for (let gx = 0; gx < columns; gx++) {
+        const cx = step / 2 + gx * step, cy = step / 2 + gy * step;
+        let xr = 0, xi = 0, yr = 0, yi = 0;
+        for (let y = Math.max(1, cy - radius); y < Math.min(height - 1, cy + radius); y++) {
+          const wy = weights[y - cy + radius];
+          for (let x = Math.max(1, cx - radius); x < Math.min(width - 1, cx + radius); x++) {
+            const weight = weights[x - cx + radius] * wy, i = x + y * width;
+            // Second differences remove slowly varying photo content before
+            // measuring the carrier, including at partially covered edge windows.
+            const vx = (2 * luma[i] - luma[i - 1] - luma[i + 1]) * weight;
+            const vy = (2 * luma[i] - luma[i - width] - luma[i + width]) * weight;
+            xr += vx * cosine[x & 3]; xi += vx * sine[x & 3];
+            yr += vy * cosine[y & 3]; yi += vy * sine[y & 3];
+          }
+        }
+        if (Math.min(Math.hypot(xr, xi), Math.hypot(yr, yi)) > 512) strong++;
+        let ox = phase(xr, xi), oy = phase(yr, yi);
+        const index = (gx + gy * columns) * 2;
+        let ax = 0, ay = 0, neighbours = 0;
+        if (gx) { ax += offsets[index - 2]; ay += offsets[index - 1]; neighbours++; }
+        if (gy) { ax += offsets[index - columns * 2]; ay += offsets[index - columns * 2 + 1]; neighbours++; }
+        // Fourier phase wraps every four pixels. Continue from neighbouring
+        // windows rather than allowing a discontinuous four-pixel jump.
+        if (neighbours) {
+          ox += Math.round((ax / neighbours - ox) / BLOCK) * BLOCK;
+          oy += Math.round((ay / neighbours - oy) / BLOCK) * BLOCK;
+        }
+        if (!Number.isFinite(ox + oy) || Math.max(Math.abs(ox), Math.abs(oy)) > 8) return null;
+        offsets[index] = ox; offsets[index + 1] = oy;
+      }
+    }
+    return strong >= columns * rows * 0.7 ? { columns, rows, step, offsets } : null;
+  }
+
+  function composePhotoPhase(previous, residual) {
+    if (!previous) return residual;
+    for (let y = 0; y < residual.rows; y++) for (let x = 0; x < residual.columns; x++) {
+      const i = (x + y * residual.columns) * 2, rx = residual.offsets[i], ry = residual.offsets[i + 1];
+      const prior = photoPhaseAt(previous, (x + 0.5) * residual.step + rx, (y + 0.5) * residual.step + ry);
+      if (Math.max(Math.abs(rx + prior.x), Math.abs(ry + prior.y)) > 8) return null;
+      residual.offsets[i] = rx + prior.x; residual.offsets[i + 1] = ry + prior.y;
+    }
+    return residual;
+  }
+
+  async function rectifyPhoto(pixels, width, height, nativeWidth, nativeHeight, matrix, signal, phaseCorrection) {
     // Each output pixel is on the original carrier lattice. A single homography
     // maps its footprint into the full capture; no triangles or preview resize.
     const out = new Uint8Array(nativeWidth * nativeHeight * 4), sum = new Float64Array(4);
@@ -1122,9 +1211,10 @@
         // Subsamples still use the exact projective denominator at their position.
         const nx = Math.min(8, Math.max(1, Math.ceil(Math.hypot(matrix[0] - cx * matrix[6], matrix[3] - cy * matrix[6]) / Math.abs(d))));
         const ny = Math.min(8, Math.max(1, Math.ceil(Math.hypot(matrix[1] - cx * matrix[7], matrix[4] - cy * matrix[7]) / Math.abs(d))));
+        const correction = phaseCorrection ? photoPhaseAt(phaseCorrection, x, y) : { x: 0, y: 0 };
         sum.fill(0);
         for (let iy = 0; iy < ny; iy++) for (let ix = 0; ix < nx; ix++) {
-          const px = x + (ix + 0.5) / nx - 0.5, py = y + (iy + 0.5) / ny - 0.5;
+          const px = x + correction.x + (ix + 0.5) / nx - 0.5, py = y + correction.y + (iy + 0.5) / ny - 0.5;
           const divisor = matrix[6] * px + matrix[7] * py + matrix[8];
           const sx = Math.max(0, Math.min(width - 1, (matrix[0] * px + matrix[1] * py + matrix[2]) / divisor));
           const sy = Math.max(0, Math.min(height - 1, (matrix[3] * px + matrix[4] * py + matrix[5]) / divisor));
@@ -1151,14 +1241,43 @@
       for (let k = 0; k < 3; k++) matrix[r * 3 + c] += h[r * 3 + k] * q[k * 3 + c];
     }
     return { ...recovered, matrix, geometry: geometryAt(photoGeometry, matrix),
-      readResolution: { width: image.width, height: image.height, geometry: recovered.geometry, photoMatrix: h },
+      readResolution: { width: image.width, height: image.height, geometry: recovered.geometry, photoMatrix: h,
+        phaseCorrection: image.phaseCorrection, channel: recovered.readChannel },
       readImage: { ...image, matrix: q } };
   }
 
-  async function readPhotoMapping(pixels, width, height, geometry, signal) {
-    const image = await rectifyPhoto(pixels, width, height, geometry.originalWidth, geometry.originalHeight, geometry.matrix, signal);
+  async function readPhotoMapping(pixels, width, height, geometry, signal, onProgress) {
+    let image = await rectifyPhoto(pixels, width, height, geometry.originalWidth, geometry.originalHeight, geometry.matrix, signal);
     const nativeGeometry = geometryAt(geometry, [1, 0, 0, 0, 1, 0, 0, 0, 1]);
-    const recovered = await readVisualMapping(image.pixels, image.width, image.height, nativeGeometry, signal);
+    // A correct native grid needs one template. Avoid repeatedly decoding a
+    // whole damaged compressed payload at every strength and nearby phase.
+    const fast = { offsets: [0], strengths: [16] };
+    let recovered = await readVisualMapping(image.pixels, image.width, image.height, nativeGeometry, signal, fast);
+    if (recovered.locatorOnly) {
+      let working = image, previous;
+      // Residual phase can be measured again after the first correction. Every
+      // reconstruction still samples the full original; no resampling cascade.
+      for (let pass = 0; pass < 3; pass++) {
+        onProgress?.("Refining the photographed pixel grid from its carrier pattern (" + (pass + 1) + "/3)…");
+        const measured = await measurePhotoPhase(working, signal);
+        const phaseCorrection = measured && composePhotoPhase(previous, measured);
+        if (!phaseCorrection) {
+          if (!previous) recovered = await readVisualMapping(image.pixels, image.width, image.height, nativeGeometry, signal);
+          break;
+        }
+        const corrected = await rectifyPhoto(pixels, width, height, image.width, image.height, geometry.matrix, signal, phaseCorrection);
+        // Screen/camera colour channels can have different interference. Keep
+        // the colour raster intact and verify each alternate through the same CRC.
+        for (const channel of [undefined, 1, 0, 2]) {
+          const retried = await readVisualMapping(corrected.pixels, corrected.width, corrected.height, nativeGeometry, signal, { ...fast, channel });
+          if (!retried.locatorOnly) {
+            image = { ...corrected, phaseCorrection }; recovered = retried;
+            return photoReadResult(recovered, image, geometry);
+          }
+        }
+        previous = phaseCorrection; working = corrected;
+      }
+    }
     return photoReadResult(recovered, image, geometry);
   }
 
@@ -1205,7 +1324,7 @@
       let nativeImage;
       if (lifted.geometry) {
         options.onProgress?.("Rectifying the full capture to its original " + lifted.geometry.originalWidth + " × " + lifted.geometry.originalHeight + " pixel grid…");
-        const recovered = await readPhotoMapping(pixels, width, height, lifted.geometry, options.signal);
+        const recovered = await readPhotoMapping(pixels, width, height, lifted.geometry, options.signal, options.onProgress);
         if (options.signal?.aborted) throw new DOMException("Search cancelled.", "AbortError");
         const inspection = describeRecovery(recovered);
         nativeImage = recovered.readImage;
@@ -1595,9 +1714,10 @@
       if (visual.unreadable) return { locatorOnly: true, carrierVersion: CARRIER_V3 };
       if (visual.readResolution) {
         const resolution = visual.readResolution;
-        const image = visual.workingImage || await rectifyPhoto(pixels, width, height, resolution.width, resolution.height, resolution.photoMatrix, options.signal);
+        const image = visual.workingImage || { ...await rectifyPhoto(pixels, width, height, resolution.width, resolution.height,
+          resolution.photoMatrix, options.signal, resolution.phaseCorrection), phaseCorrection: resolution.phaseCorrection };
         visual.workingImage = image;
-        const recovered = await readVisualMapping(image.pixels, image.width, image.height, resolution.geometry, options.signal);
+        const recovered = await readVisualMapping(image.pixels, image.width, image.height, resolution.geometry, options.signal, { channel: resolution.channel });
         return photoReadResult(recovered, image, geometryAt(visual.geometry, resolution.photoMatrix));
       }
       return readVisualMapping(pixels, width, height, visual.geometry, options.signal);
@@ -2068,11 +2188,23 @@
   async function forwardSample(source, sourceW, sourceH, pixels, width, height, fit) {
     const out = pixels.slice();
     const inverse = fit.matrix ? root.PixelStowTransform.invert(fit.matrix) : null;
+    const correction = fit.readResolution?.phaseCorrection;
+    const photoInverse = correction ? root.PixelStowTransform.invert(fit.readResolution.photoMatrix) : null;
+    const readInverse = correction ? root.PixelStowTransform.invert(fit.readImage.matrix) : null;
     for (let y = 0; y < height; y++) {
       if ((y & 15) === 15) await yieldNow();
       const originY = inverse ? 0 : (y - fit.phaseY) / fit.scaleY;
       for (let x = 0; x < width; x++) {
-        const point = inverse ? mappedPoint(inverse, x, y) : { x: (x - fit.phaseX) / fit.scaleX, y: originY };
+        let point = inverse ? mappedPoint(inverse, x, y) : { x: (x - fit.phaseX) / fit.scaleX, y: originY };
+        if (correction) {
+          const observed = mappedPoint(photoInverse, x, y);
+          let native = observed;
+          for (let iteration = 0; iteration < 3; iteration++) {
+            const delta = photoPhaseAt(correction, native.x, native.y);
+            native = { x: observed.x - delta.x, y: observed.y - delta.y };
+          }
+          point = mappedPoint(readInverse, native.x, native.y);
+        }
         if (point.x < 0 || point.y < 0 || point.x > sourceW - 1 || point.y > sourceH - 1) continue;
         const sample = bilinearSample(source, sourceW, sourceH, point.x, point.y);
         const index = (x + y * width) * 4;

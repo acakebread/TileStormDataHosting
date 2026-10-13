@@ -88,6 +88,49 @@ The existing wavelet reader checks this native raster, starting with its repeate
 preamble, with a small phase refinement before accepting the full frame checksum.
 Phase adjustments are composed in native space on the right of the homography.
 
+If that read fails, the photograph reader now measures local carrier phase on
+the reconstructed native raster. The two symbols share a central 2 × 2 lobe,
+which supplies horizontal and vertical four-pixel frequency components without
+knowing any payload bits. Hann-windowed measurements on a 32-pixel grid use
+second differences to suppress the underlying photo; neighbour continuity unwraps
+the four-pixel phase. Weak measurements or corrections exceeding eight native
+pixels are rejected. The interpolated offsets correct small residual grid errors
+that a single marker homography cannot remove. They add no encoded markers and
+change no carrier bytes.
+
+The reader then reconstructs the native raster again from the **original full
+capture**, applying these offsets before the continuous perspective transform.
+It does not warp the already resampled preview. The correction is retained only
+after complete frame and payload validation, and travels with the geometry from
+the worker for subsequent decoding/unlocking and approximate source comparison.
+Up to three residual measurements compose these small corrections; every sampling
+pass uses the full original rather than cascading resizes. If an averaged-colour
+read fails, green, red and blue channels are checked individually with the same
+frame/payload checksum. The chosen channel is retained for later reads, while the
+colour image stays intact. Correction attempts use one waveform template at the
+native phase instead of repeatedly decoding a damaged compressed payload at every
+nearby phase and strength. An ordinary successful photograph read skips this
+fallback; direct generated-image verification is unchanged. Both measurement and
+reconstruction yield for cancellation.
+The final geometry check also permits a small edge overshoot (one percent, capped
+at twelve working pixels), while retaining convexity and denominator checks.
+Small framing loss still has to survive the payload checksum; it is not general
+support for cropped photographs.
+
+The supplied full-resolution 4032 × 3024 photograph of the Millmead image passed
+with this fallback at its recorded 1280 × 960 resolution, including its audio
+attachment. The subsequently supplied `IMG_2359.png` (also 4032 × 3024) passed at
+960 × 960 with two correction passes and a green-channel read, including its audio.
+Both also passed a repeat read after transferring only the recovered geometry,
+correction and channel metadata to a fresh codec instance, as the worker/page
+handoff does. The earlier `IMG_2353.png` still passes at 640 × 480 without local
+correction or an alternate channel. Their previous marker-only/global-phase fits
+failed. The marker fitting
+and refinement routines were unchanged from the earlier successful photograph
+reader (`6675dc8`); this adds local alignment recovery rather than changing the
+writer or weakening frame validation. Personal captures and their contents remain
+in ignored diagnosis artifacts, not versioned fixtures.
+
 Input pixels, files and displayed dimensions remain unchanged. The rectified native
 raster and its sampling transform are retained for later checksum-verified reads
 and source extraction. Camera workers return the dimensions, homography and phase
