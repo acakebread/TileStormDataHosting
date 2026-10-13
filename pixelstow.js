@@ -834,14 +834,7 @@
           id, matrix: Array.from(matrix), quality, verification: "pattern" };
       },
       quality: (matrix, id, dimensions) => locatorAgreement(locatorScores(pixels, width, height, matrix, dimensions ? 96 : 24),
-        locatorHeader(dimensions?.originalWidth || 0, dimensions?.originalHeight || 0, id)),
-      verifyGeometry: async (geometry, signal) => {
-        const recovered = await readVisualMapping(pixels, width, height, geometry, signal);
-        const inspection = describeRecovery(recovered);
-        // Only geometry and inspection metadata leave the worker. A plausible
-        // simple fit never short-circuits search without complete frame validation.
-        return inspection.found && !inspection.unreadable ? { ...inspection, geometry: recovered.geometry } : null;
-      }
+        locatorHeader(dimensions?.originalWidth || 0, dimensions?.originalHeight || 0, id))
     };
   }
 
@@ -985,7 +978,7 @@
 
   function searchInWorker(pixels, width, height, options, operation = "geometry") {
     return new Promise((resolve, reject) => {
-      const url = new URL("pixelstow-transform-worker.js?v=20261013-discovery3", codecScriptUrl);
+      const url = new URL("pixelstow-transform-worker.js?v=20261013-ranked2", codecScriptUrl);
       const worker = new Worker(url);
       let finished = false;
       const abort = () => { if (finished) return; cleanup(); reject(new DOMException("Search cancelled.", "AbortError")); };
@@ -1008,8 +1001,9 @@
       try {
         const copy = new Uint8Array(pixels);
         worker.postMessage({ pixels: copy, width, height, operation, mode: options.mode, forceSearch: options.forceSearch,
-          corners: options.corners, seed: options.seed, simplerFirst: options.simplerFirst, deadline: options.deadline,
-          seedDeadline: options.seedDeadline }, [copy.buffer]);
+          corners: options.corners, seed: options.seed, deadline: options.deadline,
+          seedDeadline: options.seedDeadline, camera: options.camera, scan: options.scan,
+          searchState: options.searchState, stopOnHighConfidence: options.stopOnHighConfidence }, [copy.buffer]);
       } catch (error) { cleanup(); reject(error); }
     });
   }
@@ -1018,40 +1012,23 @@
     assertImage(pixels, width, height);
     checkCancelled(options.signal);
     if (!root.PixelStowTransform) throw new Error("The visual transform reader script is missing. Reload this page.");
-    // A high-resolution camera image can enlarge the stored six-pixel symbols
-    // beyond the local reader's scale range. Locate on smaller working rasters,
-    // then rectify the full capture onto the dimensions recorded in the markers.
-    if (!options.geometryOnly && !options.singleResolution && options.mode !== "padding" && Math.max(width, height) > 1800) {
-      return findPhotoTransform(pixels, width, height, options);
+    if (!options.geometryOnly) {
+      const scan = await scanMarkers(pixels, width, height, options);
+      const read = await readMarkerCandidates(pixels, width, height, scan, options);
+      if (!read.unreadable || !scan.searchState?.pending.length) return read;
+      // Strong markers permit an early read, never acceptance without the body
+      // checksum. Resume unvisited scales if that promising fit cannot decode.
+      options.onProgress?.("The strong marker fit did not decode. Comparing the remaining image scales…");
+      const remaining = await scanMarkers(pixels, width, height, { ...options, searchState: scan.searchState, stopOnHighConfidence: false });
+      const retried = await readMarkerCandidates(pixels, width, height, remaining, options);
+      return retried.found && !retried.unreadable || (retried.markers?.length || 0) > (read.markers?.length || 0) ? retried : read;
     }
     // A page opened from disk has an opaque origin and cannot start this worker.
     // The same detector can run on the page, yielding between chunks for cancel/UI.
     const search = canUseReaderWorker(options)
       ? await searchInWorker(pixels, width, height, options)
       : await root.PixelStowTransform.find(pixels, width, height, options, visualAdapter(pixels, width, height));
-    if (options.geometryOnly) return search;
-    if (options.signal?.aborted) throw new DOMException("Search cancelled.", "AbortError");
-    if (!search?.geometry) {
-      const found = Boolean(search?.markers?.length);
-      if (found) visualMappings.set(pixels, { width, height, unreadable: true });
-      return { found, unreadable: found, markers: search?.markers || [], reason: search?.reason, signature: search?.signature };
-    }
-    if (search.payloadVerified) {
-      visualMappings.set(pixels, { width, height, geometry: search.geometry });
-      return search;
-    }
-    options.onProgress?.("Checking the recovered pixel grid…");
-    let recovered = await readVisualMapping(pixels, width, height, search.geometry, options.signal);
-    if (recovered.locatorOnly && search.geometry.model !== "translation") {
-      recovered = await readPhotoMapping(pixels, width, height, search.geometry, options.signal, options.onProgress);
-    }
-    if (options.signal?.aborted) throw new DOMException("Search cancelled.", "AbortError");
-    const inspection = describeRecovery(recovered);
-    const result = { ...inspection, found: true, unreadable: Boolean(recovered.locatorOnly) || !inspection.found,
-      carrierVersion: CARRIER_V3, geometry: recovered.geometry, readResolution: recovered.readResolution,
-      markers: search.markers, signature: search.signature };
-    retainVisualResult(pixels, width, height, result, recovered.readImage);
-    return result;
+    return search;
   }
 
   async function reducePhoto(pixels, width, height, targetWidth, targetHeight, signal) {
@@ -1095,10 +1072,12 @@
     const sx = width / readWidth, sy = height / readHeight, ox = (sx - 1) / 2, oy = (sy - 1) / 2;
     const lift = (h) => [sx * h[0] + ox * h[6], sx * h[1] + ox * h[7], sx * h[2] + ox * h[8],
       sy * h[3] + oy * h[6], sy * h[4] + oy * h[7], sy * h[5] + oy * h[8], h[6], h[7], h[8]];
-    const geometry = result.geometry ? { ...result.geometry, matrix: lift(result.geometry.matrix),
-      corners: result.geometry.corners.map((p) => ({ x: sx * p.x + ox, y: sy * p.y + oy })),
-      expectedMarkers: result.geometry.expectedMarkers.map((m) => ({ ...m, matrix: lift(m.matrix) })) } : undefined;
+    const liftGeometry = (geometry) => ({ ...geometry, matrix: lift(geometry.matrix),
+      corners: geometry.corners.map((p) => ({ x: sx * p.x + ox, y: sy * p.y + oy })),
+      expectedMarkers: geometry.expectedMarkers.map((m) => ({ ...m, matrix: lift(m.matrix) })) });
+    const geometry = result.geometry && liftGeometry(result.geometry);
     return { ...result, geometry, markers: result.markers?.map((m) => ({ ...m, matrix: lift(m.matrix) })),
+      candidates: result.candidates?.map(liftGeometry),
       localizationResolution: { width: readWidth, height: readHeight } };
   }
 
@@ -1288,26 +1267,91 @@
     else if (result.unreadable) visualMappings.set(pixels, { width, height, unreadable: true });
   }
 
-  async function findPhotoTransform(pixels, width, height, options) {
-    const deadline = Math.min(options.deadline || Infinity, Date.now() + 60000);
-    let best = null, bestImage = null, known = null;
-    // Start with cheap coarse images, then double the working resolution. A
-    // missing spectral signature or marker at one scale does not reject another.
-    // Every level comes directly from the full capture, without accumulated blur.
+  function rankMarkerCandidates(candidates) {
+    const sorted = candidates.slice().sort((a, b) => (b.geometry.rank || 0) - (a.geometry.rank || 0));
+    const distinct = [];
+    for (const candidate of sorted) {
+      const g = candidate.geometry;
+      if (distinct.some(({ geometry: other }) => other.originalWidth === g.originalWidth && other.originalHeight === g.originalHeight &&
+        other.corners.every((p, i) => Math.hypot(p.x - g.corners[i].x, p.y - g.corners[i].y) < 0.5))) continue;
+      distinct.push(candidate);
+      if (distinct.length === 8) break;
+    }
+    return distinct;
+  }
+
+  function markerBasis(matrix) {
+    const centre = mappedPoint(matrix, LOCATOR_WIDTH / 2, LOCATOR_HEIGHT / 2);
+    const x = mappedPoint(matrix, LOCATOR_WIDTH / 2 + 1, LOCATOR_HEIGHT / 2);
+    const y = mappedPoint(matrix, LOCATOR_WIDTH / 2, LOCATOR_HEIGHT / 2 + 1);
+    return Math.min(Math.hypot(x.x - centre.x, x.y - centre.y), Math.hypot(y.x - centre.x, y.y - centre.y));
+  }
+
+  function nextMarkerScale(pending, samples, start, sizes, seed) {
+    if (!samples.length) return pending.reduce((best, i) => Math.abs(i - start) < Math.abs(best - start) ? i : best, pending[0]);
+    const best = samples.slice().sort((a, b) => b.score - a.score)[0];
+    // Measured neighbours supply a warmer/colder slope. Weak pilot correlations
+    // guide scheduling only: they never verify encoding or eliminate a branch.
+    const priority = (index) => {
+      const direction = Math.sign(index - best.index);
+      const neighbour = samples.filter((s) => Math.sign(s.index - best.index) === direction)
+        .sort((a, b) => Math.abs(a.index - best.index) - Math.abs(b.index - best.index))[0];
+      const colder = neighbour && neighbour.score < best.score ? 2 : 0;
+      const targetDivisor = seed ? markerBasis(seed.matrix) / 1.2 : sizes[best.index].divisor;
+      const spacing = seed ? Math.abs(Math.log2(sizes[index].divisor / targetDivisor)) : Math.abs(index - best.index);
+      return spacing + colder + (index < best.index ? 0.05 : 0);
+    };
+    return pending.reduce((bestIndex, index) => priority(index) < priority(bestIndex) ? index : bestIndex, pending[0]);
+  }
+
+  // Pure discovery: only locator symbols are read. No carrier preamble, body,
+  // decompression or payload verification is performed by this operation.
+  async function scanMarkers(pixels, width, height, options = {}) {
+    options = { mode: "perspective", ...options };
+    assertImage(pixels, width, height);
+    checkCancelled(options.signal);
+    if (canUseReaderWorker(options)) return searchInWorker(pixels, width, height, options, "markers");
+    const native = await findLocator(pixels, width, height, true, false, options.signal);
+    if (native) {
+      const patch = locatorLayout(width, height).find((p) => p.id === native.id);
+      const seed = readVisualLocator(pixels, width, height, [1, 0, patch.x, 0, 1, patch.y, 0, 0, 1], native.id);
+      const result = await findVisualTransform(pixels, width, height, { ...options, mode: "padding", seed,
+        worker: false, geometryOnly: true });
+      const candidates = rankMarkerCandidates((result.candidates || []).map((geometry) => ({ geometry, markers: result.markers })));
+      return { ...result, candidates, geometry: candidates[0]?.geometry, highConfidence: Boolean(candidates[0]?.geometry.highConfidence), width, height };
+    }
+    if (options.singleResolution || options.mode === "padding" || Math.max(width, height) < 640) {
+      const result = await findVisualTransform(pixels, width, height, { ...options, worker: false, geometryOnly: true });
+      const candidates = rankMarkerCandidates((result.candidates || []).map((geometry) => ({ geometry, markers: result.markers })));
+      return { ...result, candidates, geometry: candidates[0]?.geometry, highConfidence: Boolean(candidates[0]?.geometry.highConfidence), width, height };
+    }
+    const deadline = Math.min(options.searchState?.deadline || Infinity, options.deadline || Infinity, Date.now() + 60000);
+    let best = null, known = options.searchState?.seed || options.seed || null;
+    let verifiedCurrent = Boolean(options.searchState?.seed);
+    const candidates = [];
+    // Start near a useful middle size. Marker agreement and measured spacing
+    // choose the next level; both directions remain available after a weak miss.
+    // Every working image comes directly from the original, never a resize chain.
     const sizes = [16, 8, 4, 2, 1].map((divisor) => ({ divisor,
       width: Math.round(width / divisor), height: Math.round(height / divisor) }))
-      .filter((size, i, all) => size.width >= BLOCK && size.height >= BLOCK &&
+      .filter((size, i, all) => (size.divisor === 1 || size.width >= 128 && size.height >= 96) &&
         all.findIndex((s) => s.width === size.width && s.height === size.height) === i);
-    for (let pass = 0; pass < sizes.length; pass++) {
+    const startDivisor = known ? markerBasis(known.matrix) / 1.2 : Math.max(width, height) / 1000;
+    const start = sizes.reduce((best, size, i) => Math.abs(Math.log2(size.divisor / startDivisor)) <
+      Math.abs(Math.log2(sizes[best].divisor / startDivisor)) ? i : best, 0);
+    const pending = options.searchState?.pending.slice() || sizes.map((_, i) => i);
+    const samples = options.searchState?.samples.slice() || [];
+    while (pending.length) {
       if (options.signal?.aborted) throw new DOMException("Search cancelled.", "AbortError");
       if (Date.now() >= deadline) {
-        best = { ...(best || { found: false }), reason: "Image recovery stopped at the shared 60-second limit. Retry a specific search if needed." };
+        best = { ...(best || { found: false }), reason: "Marker discovery reached its search time limit. Retry image recovery if needed." };
         break;
       }
-      const { width: rw, height: rh, divisor } = sizes[pass], full = divisor === 1;
+      const index = nextMarkerScale(pending, samples, start, sizes, known);
+      pending.splice(pending.indexOf(index), 1);
+      const { width: rw, height: rh, divisor } = sizes[index], full = divisor === 1;
       const label = (full ? "Full size" : "1/" + divisor + " size") + " (" + rw + " × " + rh + ")";
       options.onProgress?.("Locating photo markers: " + label + "…");
-      const image = full ? { pixels, width, height } : await reducePhoto(pixels, width, height, rw, rh, options.signal);
       const corners = options.corners?.map((p) => ({ x: (p.x + 0.5) * rw / width - 0.5, y: (p.y + 0.5) * rh / height - 0.5 }));
       const scaleMatrix = (h) => [(rw / width) * h[0] + (rw / width - 1) / 2 * h[6],
         (rw / width) * h[1] + (rw / width - 1) / 2 * h[7], (rw / width) * h[2] + (rw / width - 1) / 2 * h[8],
@@ -1315,38 +1359,79 @@
         (rh / height) * h[5] + (rh / height - 1) / 2 * h[8], h[6], h[7], h[8]];
       const seed = known ? { ...known, matrix: scaleMatrix(known.matrix),
         initialMatrix: known.initialMatrix && scaleMatrix(known.initialMatrix) } : undefined;
-      // Limit unproductive seed searches so they cannot starve later levels.
-      // A checksum-valid marker earns the rest of the shared budget to fit the
-      // plane, rather than throwing away a promising search at a scale timeout.
+      // Dimensions from a verified header reveal the actual symbol spacing.
+      // Avoid levels that put this patch outside the local detector's range.
+      if (seed && verifiedCurrent) {
+        const basis = markerBasis(seed.matrix);
+        if (basis > 3 || basis < 0.4) continue;
+      }
+      const image = full ? { pixels, width, height } : await reducePhoto(pixels, width, height, rw, rh, options.signal);
       const remaining = deadline - Date.now();
-      const seedBudget = divisor >= 8 ? (divisor === 16 ? 5000 : 8000)
-        : Math.max(5000, remaining * (divisor === 4 ? 0.7 : divisor === 2 ? 0.7 : 1));
+      const seedBudget = Math.max(1500, remaining / Math.min(3, pending.length + 1));
       const result = await findVisualTransform(image.pixels, rw, rh, { ...options, corners, seed, singleResolution: true,
-        geometryOnly: true, simplerFirst: options.simplerFirst !== false, deadline,
+        worker: false, geometryOnly: true, deadline,
         seedDeadline: Math.min(deadline, Date.now() + seedBudget),
         onProgress: (text) => options.onProgress?.(label + ": " + text) });
       const lifted = full ? result : liftPhotoResult(result, width, height, rw, rh);
       const header = lifted.markers?.filter((m) => m.verification === "header").sort((a, b) => b.quality - a.quality)[0];
-      if (header) known = { ...header, initialMatrix: lifted.geometry?.matrix };
-      let candidate = { ...lifted, found: Boolean(lifted.geometry || lifted.markers?.length), unreadable: Boolean(lifted.geometry || lifted.markers?.length) };
-      let nativeImage;
-      if (lifted.geometry) {
-        options.onProgress?.("Rectifying the full capture to its original " + lifted.geometry.originalWidth + " × " + lifted.geometry.originalHeight + " pixel grid…");
-        const recovered = await readPhotoMapping(pixels, width, height, lifted.geometry, options.signal, options.onProgress);
-        if (options.signal?.aborted) throw new DOMException("Search cancelled.", "AbortError");
-        const inspection = describeRecovery(recovered);
-        nativeImage = recovered.readImage;
-        candidate = { ...lifted, ...inspection, found: true, unreadable: Boolean(recovered.locatorOnly) || !inspection.found,
-          carrierVersion: CARRIER_V3, geometry: recovered.geometry, readResolution: recovered.readResolution };
-        if (!candidate.unreadable) {
-          retainVisualResult(pixels, width, height, candidate, nativeImage);
-          return candidate;
-        }
-      }
+      if (header) { known = { ...header, initialMatrix: lifted.geometry?.matrix }; verifiedCurrent = true; }
+      for (const geometry of lifted.candidates || []) candidates.push({ geometry, markers: lifted.markers,
+        localizationResolution: { width: rw, height: rh }, photo: true });
+      const markerScore = lifted.geometry?.rank ?? (lifted.markers?.length ? 30 + lifted.markers.length * 3 :
+        Math.min(20, 20 * Math.max(0, lifted.evidence?.pilotQuality || 0)));
+      samples.push({ index, score: markerScore });
       const rank = (r) => (r?.geometry ? 16 : 0) + (r?.markers?.length || 0);
-      if (!best || rank(candidate) >= rank(best)) { best = candidate; bestImage = nativeImage; }
+      if (!best || rank(lifted) >= rank(best)) best = lifted;
+      if (options.stopOnHighConfidence !== false && lifted.geometry?.highConfidence) {
+        options.onProgress?.("All eight markers agree strongly. Reading the most promising pixel grid…");
+        break;
+      }
     }
-    retainVisualResult(pixels, width, height, best, bestImage);
+    const ranked = rankMarkerCandidates(candidates);
+    return { ...best, width, height, candidates: ranked, geometry: ranked[0]?.geometry,
+      highConfidence: Boolean(ranked[0]?.geometry.highConfidence),
+      searchState: { pending, samples, seed: verifiedCurrent ? known : undefined, deadline },
+      markers: ranked[0]?.markers || best?.markers || [] };
+  }
+
+  async function readMarkerCandidates(pixels, width, height, scan, options = {}) {
+    assertImage(pixels, width, height);
+    checkCancelled(options.signal);
+    // A scan is tied to one raster. Camera buffers must never use a previous
+    // frame's geometry as if it had been measured in the newly captured pixels.
+    if (!scan || scan.width !== width || scan.height !== height) throw new Error("The marker scan does not match this image.");
+    if (canUseReaderWorker(options)) {
+      const result = await searchInWorker(pixels, width, height, { ...options, scan }, "read-candidates");
+      checkCancelled(options.signal);
+      retainVisualResult(pixels, width, height, result);
+      return result;
+    }
+    const candidates = rankMarkerCandidates(scan.candidates || []);
+    let best = { found: Boolean(scan.markers?.length), unreadable: Boolean(scan.markers?.length),
+      markers: scan.markers || [], signature: scan.signature, reason: scan.reason };
+    for (let i = 0; i < candidates.length; i++) {
+      checkCancelled(options.signal);
+      const candidate = candidates[i], geometry = candidate.geometry;
+      options.onProgress?.("Reading ranked candidate " + (i + 1) + "/" + candidates.length +
+        " (" + geometry.inlierCount + "/8 aligned markers)…");
+      let recovered = candidate.photo
+        ? await readPhotoMapping(pixels, width, height, geometry, options.signal, options.onProgress)
+        : await readVisualMapping(pixels, width, height, geometry, options.signal);
+      if (!candidate.photo && recovered.locatorOnly && geometry.model !== "translation")
+        recovered = await readPhotoMapping(pixels, width, height, geometry, options.signal, options.onProgress);
+      checkCancelled(options.signal);
+      const inspection = describeRecovery(recovered);
+      const result = { ...inspection, found: true, unreadable: Boolean(recovered.locatorOnly) || !inspection.found,
+        carrierVersion: CARRIER_V3, geometry: recovered.geometry, readResolution: recovered.readResolution,
+        markers: candidate.markers, signature: scan.signature,
+        reason: inspection.found && !recovered.locatorOnly ? undefined : "Recovery markers were found, but the payload did not pass its checks." };
+      if (!result.unreadable) {
+        retainVisualResult(pixels, width, height, result, recovered.readImage);
+        return result;
+      }
+      if (i === 0) best = result;
+    }
+    retainVisualResult(pixels, width, height, best);
     return best;
   }
 
@@ -1771,9 +1856,8 @@
   async function inspect(pixels, width, height, options = {}) {
     assertImage(pixels, width, height);
     if (options.signal?.aborted) throw new DOMException("Search cancelled.", "AbortError");
-    // Camera frames run the entire inspection off the page, including native
-    // reads and final frame checks. Later decoding uses the same captured pixels
-    // and the recovered geometry, and still validates the payload again.
+    // Ordinary file imports retain the cheap direct reader. Camera discovery
+    // uses scanMarkers instead, and reads only the ranked retained captures.
     if (options.background && canUseReaderWorker(options)) {
       const result = await searchInWorker(pixels, width, height, options, "inspect");
       if (options.signal?.aborted) throw new DOMException("Search cancelled.", "AbortError");
@@ -1788,7 +1872,7 @@
     // One perspective search also retains translation/affine estimates. Running
     // the three manual modes in sequence would repeat the FFT and seed searches.
     options.onProgress?.("Looking for encoded contents in a resized, padded or photographed image…");
-    const transformed = await findVisualTransform(pixels, width, height, { ...options, mode: "perspective", simplerFirst: true });
+    const transformed = await findVisualTransform(pixels, width, height, { ...options, mode: "perspective" });
     if (transformed.found || !direct.found) return transformed;
     // A weak spectral signature must not erase a checksum-valid native marker.
     return { ...transformed, ...direct };
@@ -2325,6 +2409,8 @@
     encodePayload,
     extractCarrier,
     findVisualTransform,
+    scanMarkers,
+    readMarkerCandidates,
     clearVisualTransform(pixels) { visualMappings.delete(pixels); },
     setCarrierVersion(version) { preferredCarrier = version === CARRIER_V1 ? CARRIER_V1 : CARRIER_V3; },
     getCarrierVersion() { return preferredCarrier; },

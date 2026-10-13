@@ -692,7 +692,7 @@
         <p>For WhatsApp, send the image as a Document / original file where possible and include the PixelStow opening link. The recipient can save it to Files and use Choose image, or copy it and use Paste image. A link opens this page but cannot automatically read a WhatsApp attachment. Screenshots, resized copies and ordinary photo sharing may not keep the payload.</p>
         <p>On iPhone, allow Safari's Paste prompt after tapping Paste image. If needed, use the touch-and-hold paste box. Safari may require a tap on Play voice message before sound is allowed; the full audio player is also available under Attached files. Audio format support varies by browser.</p>
         <p>PixelStow automatically attempts recovery from resized, padded, rotated or photographed encoded images. Recovery remains experimental: blur, cropping, print quality and heavy recompression can still prevent reading. Keep the original encoded file where possible.</p>
-        <p>Open camera scans one captured frame at a time while the preview stays live. A difficult frame can take up to a minute; pause scanning to reposition, or use Take photo for a sharper still. Live scanning needs HTTPS or localhost and camera permission. The camera closes when you leave the page. All captures and decoding stay on your device.</p>
+        <p>Open camera checks markers in recent captures and reads the most promising frame while the preview stays live. A stronger capture replaces an ongoing read. Keep all four picture corners visible and hold steady, or use Take photo for a sharper still. Live scanning needs HTTPS or localhost and camera permission. The camera closes when you leave the page. All captures and decoding stay on your device.</p>
       </section>
 
       <div class="links">
@@ -760,13 +760,13 @@
       </div>
     </form>
   </dialog>
-  <script src="./pixelstow-spectrum.js?v=20261013-discovery3"></script>
-  <script src="./pixelstow-transform.js?v=20261013-discovery3"></script>
-  <script src="./pixelstow.js?v=20261013-discovery3"></script>
+  <script src="./pixelstow-spectrum.js?v=20261013-ranked2"></script>
+  <script src="./pixelstow-transform.js?v=20261013-ranked2"></script>
+  <script src="./pixelstow.js?v=20261013-ranked2"></script>
   <script src="./pixelstow-export.js?v=20261011-exports"></script>
   <script src="./pixelstow-media.js?v=20261011-webm-duration"></script>
   <script src="./pixelstow-sharing.js?v=20261011-png-clipboard"></script>
-  <script src="./pixelstow-camera.js?v=20261013-discovery3"></script>
+  <script src="./pixelstow-camera.js?v=20261013-ranked2"></script>
   <script>
     const fileInput = document.querySelector("#file");
     const drop = document.querySelector("#drop");
@@ -1363,9 +1363,10 @@
         transformAbort = new AbortController();
         recoveryVisible = true;
         setBusy(true);
-        const found = captured?.inspection || await PixelStow.inspect(image.pixels, image.width, image.height, {
-          ...recoveryOptions(transformAbort), automatic: true, background: true
-        });
+        const readerOptions = { ...recoveryOptions(transformAbort), automatic: true, background: true };
+        const found = captured?.inspection || (captured?.markerScan
+          ? await PixelStow.readMarkerCandidates(image.pixels, image.width, image.height, captured.markerScan, readerOptions)
+          : await PixelStow.inspect(image.pixels, image.width, image.height, readerOptions));
         if (found.signature) transformSignature.textContent = found.signature.message;
         recordRecovery(current, found);
         current.passwordProtected = found.passwordProtected;

@@ -9,7 +9,7 @@ visible ruler, border reservation, upload or service is added.
 
 ## Local use
 
-The main page also provides **Open camera** for sequential background capture
+The main page also provides **Open camera** for ranked background capture
 and **Take photo** for native still capture. See [CameraCapture.md](CameraCapture.md)
 for acquisition, worker scheduling, near-miss feedback and browser requirements.
 
@@ -24,17 +24,30 @@ outside the options panel. The pipeline stops at the first readable payload:
 
 1. Direct full-frame reading, including previous carrier 1 images.
 2. A small set of common full-frame resize ratios and phases for carrier 3.
-3. One shared geometric search with the existing FFT gate, outline proposals and
-   frequency-derived local search. Two agreeing markers can propose a translation,
-   and three non-collinear markers an affine fit; the complete frame is checked
-   before either short-circuits discovery. If those fail, localization continues
-   toward the existing four-marker perspective fit.
+3. Marker-only geometric discovery with the existing FFT gate, outline proposals
+   and frequency-derived local search. Two agreeing markers can propose a
+   translation, three non-collinear markers an affine fit, and four independently
+   measured markers a perspective fit. Remaining markers are located before any
+   payload is read.
+4. Rank the resulting fits, then read their payloads in that order, stopping at
+   the first complete checksum-valid result.
 
 Running the padding, affine and perspective modes as three separate fallback
 passes would repeat FFT analysis and seed localization. Automatic reading uses
 the working perspective reader once instead, after the inexpensive full-frame
-checks. Each simpler model gets at most one payload attempt; its failure keeps
-the same marker/search state for the perspective fit. The successful verification
+checks. Translation, affine and perspective fits share the same marker evidence.
+`scanMarkers` reads only locator symbols; `readMarkerCandidates` performs body
+reads afterwards. Candidates are rated by agreement with all 96 known symbols,
+independently aligned marker count, spatial coverage, verified headers and fit
+error. Near-identical geometries are deduplicated, with at most eight retained.
+A marker-search timeout retains viable fits rather than discarding them.
+An immediate-read threshold requires all eight markers to be independent fit
+inliers, at least two CRC-valid headers, at least 0.9 known-pattern agreement,
+coverage of at least 0.6 of the native image area and mean fit error at most 0.6
+working pixels. This is a scheduling heuristic, not a guarantee of readable data.
+If that early read fails, ordinary file recovery resumes the unvisited scales
+using its retained seed and measurements. The body checksum remains mandatory.
+The successful verification
 returns geometry and inspection metadata without sending payload bytes from the
 worker, and avoids a duplicate verification before initial inspection returns.
 Unlocking and subsequent decoding reuse recovered geometry and verify
@@ -55,18 +68,28 @@ the broad resize scan. A genuine capacity error reports framed bytes required
 and available, including compressed body and framing, rather than blaming every
 verification failure on image space.
 
-For inputs larger than 1800 pixels on the longest side, the geometric stage
-searches a coarse-to-fine pyramid: 1/16, 1/8, 1/4, 1/2 and full size, stopping
-at the first readable result. Duplicate sizes are skipped. Every working raster
+For geometric inputs at least 640 pixels on the longest side, available working
+sizes are 1/16, 1/8, 1/4, 1/2 and full size, omitting tiny or duplicate rasters.
+Search starts near a 1000-pixel longest side, or the scale predicted by a tracking
+header. The measured score at each attempted size chooses the next: verified
+marker agreement and fit rank take precedence, with weak 24-symbol pilot scores
+used only when no header verifies. Neighbouring sizes that improve the score are
+favoured; a colder neighbour lowers that direction's priority. A verified header
+also supplies actual symbol spacing, favouring approximately 1.2 working pixels
+per stored pixel and skipping levels outside the local detector's basis range.
+Both directions remain available after weak evidence: scores are not monotonic
+enough to justify an irreversible binary-search rejection.
+
+Marker fits are ranked before payload reads, except that a complete high-confidence
+fit stops further scale discovery and starts its read immediately. Every working raster
 is reduced directly from the original capture using pixel-area averaging, without
 cascaded resizes or accumulated rounding. These passes share the 60-second
-discovery budget. Unproductive seed searches at 1/16 and 1/8 stop after five and
-eight seconds respectively; subsequent levels reserve some time for larger
-ones. Once a checksum-valid marker header is found, its geometry search can use
+discovery budget. Unproductive seed searches receive a share of the remaining
+time, preserving time for other levels. Once a checksum-valid marker header is found, its geometry search can use
 the remainder of the shared budget without discarding the localization state.
-The same verified translation and affine shortcuts used by ordinary imports
-remain enabled. Verification at a working scale can establish a geometry proposal;
-the accepted payload still comes from the rectified full capture.
+No payload read runs while individual markers are still being collected. Working-scale
+verification establishes only geometry proposals; the accepted payload still
+comes from the rectified full capture.
 Large photographs can enlarge carrier symbols beyond the existing detector's
 scale range; area filtering makes their geometry easier to locate. A weak FFT
 signature, missing header or failed payload at one level does not reject the

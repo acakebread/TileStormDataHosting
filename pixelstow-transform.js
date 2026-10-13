@@ -288,6 +288,7 @@
           const patch = layout.find((p) => p.id === id), matrix = patchMatrix(fit, patch);
           for (const dy of [0, -1.5, 1.5]) for (const dx of [0, -1.5, 1.5]) {
             const trial = offsetMatrix(matrix, dx, dy), score = adapter.quality(trial, id);
+            options.pilotQuality = Math.max(options.pilotQuality || 0, score);
             if (score > 0.2) proposals.push({ matrix: trial, id, score, corners });
           }
         }
@@ -317,6 +318,7 @@
       const basis = banks[bank];
       options.onProgress?.("Locating patches using the frequency estimate (" + (bank + 1) + "/" + banks.length + ")…");
       const peaks = await globalCandidates(luma, width, height, basis, adapter, options);
+      for (const peak of peaks) options.pilotQuality = Math.max(options.pilotQuality || 0, peak.score);
       for (const peak of peaks.slice(0, 32)) {
         const direct = adapter.read(peak.matrix, peak.id);
         if (direct) return direct;
@@ -461,7 +463,8 @@
       for (const marker of markers) score += adapter.quality(patchMatrix(candidate.matrix, layout.find((p) => p.id === marker.id)), marker.id, seed);
       if (!Number.isFinite(score)) continue;
       const inliers = pairs.filter((pair) => measurementError(candidate.matrix, pair) < 2.5);
-      if (inliers.length >= minimum) ranked.push({ ...candidate, score: score / markers.length, inliers });
+      if (inliers.length >= (typeof minimum === "function" ? minimum(candidate.model) : minimum))
+        ranked.push({ ...candidate, score: score / markers.length, inliers });
     }
     ranked.sort((a, b) => b.score - a.score);
     const distinct = [];
@@ -561,24 +564,30 @@
 
   function geometryFor(matrix, seed, markers, adapter, model) {
     const layout = adapter.layout(seed.originalWidth, seed.originalHeight);
+    const pairs = markers.map((marker) => centrePair(marker, layout, adapter));
+    const inliers = pairs.filter((pair) => measurementError(matrix, pair) < 2.5);
+    const positions = inliers.map((p) => p.source);
+    const coverage = positions.length ?
+      (Math.max(...positions.map((p) => p.x)) - Math.min(...positions.map((p) => p.x))) / seed.originalWidth *
+      (Math.max(...positions.map((p) => p.y)) - Math.min(...positions.map((p) => p.y))) / seed.originalHeight : 0;
+    const patternQuality = markers.reduce((sum, marker) => sum +
+      adapter.quality(patchMatrix(matrix, layout.find((p) => p.id === marker.id)), marker.id, seed), 0) / markers.length;
+    const fitError = inliers.length ? inliers.reduce((sum, pair) => sum + measurementError(matrix, pair), 0) / inliers.length : 2.5;
+    const headerCount = inliers.filter((p) => p.marker.verification === "header").length;
     return { matrix, originalWidth: seed.originalWidth, originalHeight: seed.originalHeight,
       model, markerCount: markers.length, headerCount: markers.filter((m) => m.verification === "header").length,
       patternCount: markers.filter((m) => m.verification === "pattern").length,
+      inlierCount: inliers.length, patternQuality, coverage, fitError,
+      rank: 100 * patternQuality + 3 * inliers.length + 10 * coverage + headerCount - 2 * fitError,
+      highConfidence: inliers.length === 8 && headerCount >= 2 && patternQuality >= 0.9 && coverage >= 0.6 && fitError <= 0.6,
       expectedMarkers: layout.map((p) => ({ id: p.id, matrix: patchMatrix(matrix, p) })),
       corners: quad(matrix, seed.originalWidth, seed.originalHeight) };
   }
 
-  async function trySimpleGeometry(markers, seed, adapter, width, height, options, attempted) {
-    const verify = async (matrix, model, confirmed) => {
-      if (!validGeometry(matrix, seed.originalWidth, seed.originalHeight, width, height)) return null;
-      attempted.add(model);
-      options.onProgress?.("Checking the payload with a " + model + " transform (" + confirmed.length + " markers)…");
-      const verified = await adapter.verifyGeometry(geometryFor(matrix, seed, confirmed, adapter, model), options.signal);
-      if (verified) return { ...verified, payloadVerified: true };
-      check(options);
-      return null;
-    };
-    if (!attempted.has("translation") && markers.length >= 2) {
+  function geometryCandidates(markers, seed, predictions, adapter, width, height, mode) {
+    if (!seed) return [];
+    const proposals = [];
+    if (markers.length >= 2) {
       const layout = adapter.layout(seed.originalWidth, seed.originalHeight);
       const translations = markers.map((marker) => {
         const pair = centrePair(marker, layout, adapter);
@@ -588,20 +597,25 @@
       if (agreeing.length >= 2) {
         const matrix = [1, 0, agreeing.reduce((s, p) => s + p.x, 0) / agreeing.length,
           0, 1, agreeing.reduce((s, p) => s + p.y, 0) / agreeing.length, 0, 0, 1];
-        const verified = await verify(matrix, "translation", agreeing.map((p) => p.marker));
-        if (verified) return verified;
+        proposals.push({ matrix, model: "translation" });
       }
     }
-    if (!attempted.has("affine") && markers.length >= 3) {
+    if (mode !== "padding" && markers.length >= 3) {
       const fit = chooseFit(markers, seed, adapter, false, width, height);
-      if (fit) {
-        attempted.add("affine");
-        const confirmed = fit.inliers.map((p) => p.marker);
-        const matrix = await refineGlobal(fit.matrix, confirmed, seed, adapter, width, height, { ...options, mode: "affine" });
-        return verify(matrix, "affine", confirmed);
-      }
+      if (fit) proposals.push({ matrix: fit.matrix, model: "affine" });
     }
-    return null;
+    if (mode === "perspective") {
+      const fit = chooseFit(markers, seed, adapter, true, width, height);
+      if (fit) proposals.push({ matrix: fit.matrix, model: "perspective" });
+    }
+    proposals.push(...predictions);
+    const minimum = (model) => model === "translation" ? 2 : model === "affine" ? 3 : 4;
+    const margin = Math.max(3, Math.min(12, Math.max(width, height) * 0.01));
+    return rankMappings(proposals, markers, seed, adapter, width, height, minimum)
+      .filter((p) => p.inliers.length >= minimum(p.model) &&
+        validGeometry(p.matrix, seed.originalWidth, seed.originalHeight, width, height, margin))
+      .map((p) => geometryFor(p.matrix, seed, markers, adapter, p.model))
+      .sort((a, b) => b.rank - a.rank);
   }
 
   async function find(pixels, width, height, requested, adapter) {
@@ -611,7 +625,8 @@
     options.check = () => check(options);
     let signature = null;
     const markers = [];
-    const simpleAttempts = new Set();
+    let seed = null, predictions = [];
+    const evidence = () => ({ pilotQuality: options.pilotQuality || 0 });
     try {
       const luma = new Float32Array(width * height);
       options.onProgress?.("Preparing wavelet search…");
@@ -619,31 +634,31 @@
       // A previous pyramid level may already have read a checksum-valid header.
       // Confirm it against these pixels before reusing its dimensions/position;
       // this avoids rediscovering the same patch from scratch at every scale.
-      let seed = requested.seed && adapter.confirm(requested.seed.matrix, requested.seed.id, requested.seed);
+      seed = requested.seed && adapter.confirm(requested.seed.matrix, requested.seed.id, requested.seed);
       if (seed) seed = { ...requested.seed, ...seed };
       else {
         signature = await root.PixelStowSpectrum.analyze(luma, width, height, options);
         options.onSignature?.(signature);
-        if (!signature.likely && !options.forceSearch && !options.corners?.length) return { geometry: null, markers, signature, reason: signature.message };
+        if (!signature.likely && !options.forceSearch && !options.corners?.length) return { geometry: null, markers, signature, evidence: evidence(), reason: signature.message };
         seed = await seedSearch(pixels, luma, width, height, adapter, options, signature);
       }
-      if (!seed) return { geometry: null, markers,
+      if (!seed) return { geometry: null, markers, evidence: evidence(),
         signature: { ...signature, confirmed: false, message: "No checksum-valid markers found. Frequency evidence alone does not confirm an encoded image." },
         reason: "No checksum-valid wavelet patch was found using the outline/frequency estimates." };
       signature = { ...signature, likely: true, confirmed: true,
-        message: "Recovery marker verified. Checking image alignment and the payload checksum…" };
+        message: "Recovery marker verified. Locating the remaining markers before reading contents…" };
       options.onSignature?.(signature);
       // Coarse pyramid levels have a short seed allowance. Once a header is
       // verified, keep its search state and use the remaining overall budget.
       options.deadline = deadline;
+      markers.push(seed);
       if (options.mode !== "padding") {
         const localized = await refine(seed, adapter, seed, options);
-        if (localized) seed = { ...seed, ...localized };
+        if (localized) { seed = { ...seed, ...localized }; markers[0] = seed; }
       }
-      markers.push(seed);
       let matrix = seed.initialMatrix || fromSeed(seed, adapter), model = "translation";
       const layout = adapter.layout(seed.originalWidth, seed.originalHeight);
-      let predictions = [{ matrix, model }];
+      predictions = [{ matrix, model: options.mode === "padding" ? "translation" : matrix[6] || matrix[7] ? "perspective" : "affine" }];
       if (seed.initialMatrix) predictions.push({ matrix: fromSeed(seed, adapter), model: "affine" });
       for (let round = 0; round < (options.mode === "padding" ? 1 : 2); round++) {
         const pending = layout.filter((patch) => !markers.some((m) => m.id === patch.id));
@@ -682,42 +697,29 @@
             const ranked = rankMappings(candidates, markers, seed, adapter, width, height);
             if (ranked.length) { predictions = ranked; matrix = ranked[0].matrix; model = ranked[0].model; }
           }
-          if (options.simplerFirst && adapter.verifyGeometry) {
-            const simple = await trySimpleGeometry(markers, seed, adapter, width, height, options, simpleAttempts);
-            if (simple) return { ...simple, markers, signature };
-          }
         }
       }
-      if (options.mode === "padding") {
-        // In this first milestone there is no scale/angle estimation to extrapolate.
-        // Match exact translations and require agreement from another distant patch.
-        const translations = markers.map((m) => fromSeed(m, adapter));
-        const agreeing = translations.filter((h) => Math.hypot(h[2] - translations[0][2], h[5] - translations[0][5]) < 0.6);
-        if (agreeing.length < 2) return { geometry: null, markers, signature, reason: "A patch was found, but a second patch did not confirm the image bounds." };
-        matrix = [1, 0, agreeing.reduce((s, h) => s + h[2], 0) / agreeing.length,
-          0, 1, agreeing.reduce((s, h) => s + h[5], 0) / agreeing.length, 0, 0, 1];
-        model = "translation";
-      } else {
-        const fit = chooseFit(markers, seed, adapter, options.mode === "perspective", width, height);
-        if (!fit) return { geometry: null, markers, signature, reason: "The detected marker positions and local directions did not establish a stable " + options.mode + " transform." };
-        const candidates = [{ matrix: fit.matrix, model: options.mode }];
-        if (options.mode === "perspective") candidates.push(...predictions);
-        const ranked = rankMappings(candidates,
-          markers, seed, adapter, width, height, options.mode === "perspective" ? 4 : 3);
-        if (!ranked.length) return { geometry: null, markers, signature, reason: "The fitted transform did not agree with enough independently measured markers." };
-        matrix = ranked[0].matrix; model = options.mode;
-        options.onProgress?.("Refining " + model + " alignment from " + ranked[0].inliers.length + " markers and their local directions…");
-        matrix = await refineGlobal(matrix, ranked[0].inliers.map((p) => p.marker), seed, adapter, width, height, options);
+      const candidates = geometryCandidates(markers, seed, predictions, adapter, width, height, options.mode);
+      for (const candidate of candidates.slice()) {
+        if (candidate.model === "translation") continue;
+        options.onProgress?.("Refining " + candidate.model + " alignment from " + candidate.inlierCount + " markers…");
+        const layout = adapter.layout(seed.originalWidth, seed.originalHeight);
+        const inliers = markers.filter((m) => measurementError(candidate.matrix, centrePair(m, layout, adapter)) < 2.5);
+        const refined = await refineGlobal(candidate.matrix, inliers, seed, adapter, width, height, { ...options, mode: candidate.model });
+        if (validGeometry(refined, seed.originalWidth, seed.originalHeight, width, height,
+          Math.max(3, Math.min(12, Math.max(width, height) * 0.01))))
+          candidates.push(geometryFor(refined, seed, markers, adapter, candidate.model));
       }
-      // Permit a small framing/fit overshoot at the image edge. The inset patches
-      // can be intact when a handful of outer pixels lie beyond the photograph;
-      // only the complete payload checksum can accept that recovered plane.
-      const framingMargin = Math.max(3, Math.min(12, Math.max(width, height) * 0.01));
-      if (!validGeometry(matrix, seed.originalWidth, seed.originalHeight, width, height, framingMargin)) return {
-        geometry: null, markers, signature, reason: "The marker fit places image corners outside the supplied picture or folds the plane." };
-      return { geometry: geometryFor(matrix, seed, markers, adapter, model), markers, signature };
+      candidates.sort((a, b) => b.rank - a.rank);
+      return { geometry: candidates[0] || null, candidates, markers, signature, evidence: evidence(),
+        reason: candidates.length ? undefined : "The verified markers did not establish a stable image transform." };
     } catch (error) {
-      if (error?.name === "SearchLimit") return { geometry: null, markers, signature, reason: error.message };
+      if (error?.name === "SearchLimit") {
+        // A bounded camera scan can still return useful fits. It never reads a
+        // payload, and it must not discard the already verified marker evidence.
+        const candidates = geometryCandidates(markers, seed, predictions, adapter, width, height, options.mode);
+        return { geometry: candidates[0] || null, candidates, markers, signature, evidence: evidence(), reason: error.message };
+      }
       throw error;
     }
   }

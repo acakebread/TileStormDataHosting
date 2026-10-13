@@ -25,16 +25,43 @@ merely turn the CSS preview while leaving captures sideways. Scanning resumes
 with a fresh frame after the adjustment. These controls do not modify the native
 **Take photo** path.
 
-On HTTP/HTTPS, one disposable worker runs the entire automatic inspection:
-native reading, common resize checks, FFT gate, shared translation/affine/
-perspective localization, and final payload validation. Large frames also use the
-coarse-to-fine 1/16, 1/8, 1/4, 1/2 and full-size localization described in
+On HTTP/HTTPS, a disposable marker worker checks the FFT gate and locates the
+eight patches, retaining translation/affine/perspective fits without reading any
+payload. Large frames use the
+adaptive scale localization described in
 [VisualTransformReader.md](VisualTransformReader.md),
 then rectify the full capture onto the encoded dimensions for wavelet reading.
 The captured raster and marker guides remain in original-resolution coordinates.
-There is no frame queue or overlapping search. After a failed read, the next fresh
-frame is captured after a short delay. Geometric discovery retains its existing 60-second budget
-per attempt; this is continuous capture, rather than decoding at video frame rate.
+The camera captures a fresh full-resolution raster every 900 ms into one pending
+slot. That slot is replaced while a marker worker is busy; there is no growing
+queue of stale camera frames. Initial marker acquisition has a 24-second budget;
+subsequent scans with a verified tracking header have 12 seconds. The tracking
+header is confirmed against the new pixels before reuse, and cleared after a
+scan without a verified header. Known patches below the detector's basis range
+skip unusably small pyramid levels. These are maximum discovery allowances,
+not a promise of video-frame-rate decoding.
+
+After two marker scans, the best eligible capture in recent history is read in
+a separate disposable payload worker. History retains at most three marker-bearing
+frames and 48 MiB of RGBA, allowing one larger frame alone, and expires captures
+after 45 seconds. Fits within a frame and frames within history use the same
+marker quality/coverage/error rating described in
+[VisualTransformReader.md](VisualTransformReader.md). Frames without a stable fit
+never enter automatic payload decoding. Attempted frames do not fill every
+history slot and block new captures.
+A complete high-confidence eight-marker fit bypasses the two-scan wait and is
+read immediately. Its threshold and the measured warmer/colder scale scheduling
+are shared with ordinary geometric image recovery; full checksums are still
+required. A bad early camera read yields to fresher captures rather than
+continuing to exhaust the same frozen image.
+
+One marker worker and one payload worker may run together. Capture and marker
+appraisal continue during a payload read. A newly scanned frame with a stronger
+rating terminates the older frame's payload worker immediately; the strongest
+unattempted retained frame is then read. Payload attempts have a 30-second
+limit and failed frames are skipped instead of repeatedly parsed. Ordinary
+image imports use the same discovery/ranking stages after their inexpensive
+native/full-frame checks, without the camera's frame-history scheduling.
 The camera UI does not bypass the weak-signature gate. **Capture and read** opens
 a single frame with the ordinary image recovery controls, including the option
 to override that gate if required.
@@ -46,17 +73,17 @@ exports/sharing. Later decoding/unlocking still verifies the complete frame.
 Workers return inspection metadata/geometry only, not decrypted text, attachment
 bytes or passwords. Original carrier and payload formats do not change.
 
-Near misses retain one captured frame with confirmed markers and its guides.
-That frozen frame is shown separately from the live preview: coordinates from
+The best retained marker-bearing capture is shown with its guides and appraisal/
+read status. That frozen frame is separate from the live preview: coordinates from
 an old frame must not be painted over a moving camera view. **Inspect this
-capture** opens it in the ordinary recovery UI. A frame with more confirmed
-markers replaces the previous retained miss; ties prefer the latest capture.
-Other failed frames are discarded rather than collected into a history.
+capture** reads its ranked fits in the ordinary recovery UI without repeating
+marker discovery. It still requires the full payload checksum before displaying
+contents. Equal-rated captures prefer the newer frame.
 
-**Pause scanning** cancels the current worker but leaves the preview running for
+**Pause scanning** cancels both workers and clears the pending slot, leaving the preview running for
 reframing. **Switch camera** stops the current stream/search before requesting
 the other facing mode. **Close camera**, dismissing the dialog, leaving the page, or hiding the tab
-stops tracks, clears retained frames and terminates in-progress inspection.
+stops tracks, clears retained frames and terminates both in-progress workers.
 Session identity and abort checks discard late permission and worker results.
 The user must reopen the camera after returning to the page.
 
@@ -81,6 +108,8 @@ References: [getUserMedia and secure contexts](https://developer.mozilla.org/en-
 [updating video constraints](https://developer.mozilla.org/en-US/docs/Web/API/MediaStreamTrack/applyConstraints),
 [modal top-layer dialogs](https://developer.mozilla.org/en-US/docs/Web/API/HTMLDialogElement/showModal).
 
-Implementation is for local user evaluation. No camera/device tests, generated
-fixtures, commit or deployment were performed for this change. Actual decoding
+Implementation is for local user evaluation. Focused checks verified marker-only
+discovery, ranked payload recovery on the supplied full-resolution `IMG_2353.png`,
+and scheduler appraisal/preemption/pause behavior with controlled worker results.
+No camera/device tests, commit or deployment were performed for this change. Actual decoding
 speed and printed-image recovery remain dependent on device and input quality.

@@ -45,14 +45,15 @@
       });
       this.useNearButton.addEventListener("click", () => {
         const session = this.session;
-        if (session?.best && !session.handingOff && !this.working()) this.accept(session, session.best.image, session.best.inspection);
+        if (session?.best && !session.handingOff && !this.working())
+          this.accept(session, session.best.image, undefined, session.best.scan);
       });
       this.pauseButton.addEventListener("click", () => this.togglePause());
       this.rotateButton.addEventListener("click", () => {
         const session = this.session;
         if (!session?.ready || session.adjusting || session.handingOff || this.working()) return;
         session.rotation = (session.rotation + 90) % 360;
-        session.abort?.abort();
+        this.cancelSearches(session, true);
         this.layoutPreview();
         this.progress.textContent = "View rotated. Keep all four picture corners inside the guides and hold steady.";
         this.schedule(session, 900);
@@ -148,7 +149,7 @@
       session.adjusting = true;
       session.rotation = 0;
       clearTimeout(session.timer);
-      session.abort?.abort();
+      this.cancelSearches(session, true);
       this.progress.textContent = "Adjusting camera to the phone's orientation…";
       this.signature.textContent = "";
       this.sync();
@@ -195,7 +196,7 @@
         return;
       }
       const session = { facing, ready: false, paused: !this.backgroundAvailable, frames: 0, lastTime: -1,
-        rotation: 0, portrait: this.isPortrait() };
+        rotation: 0, portrait: this.isPortrait(), history: [], appraised: 0 };
       this.session = session;
       this.signature.textContent = "";
       this.progress.textContent = "Allow camera access to start the preview…";
@@ -247,7 +248,7 @@
       this.session = null;
       clearTimeout(session.timer);
       clearTimeout(session.orientationTimer);
-      session.abort?.abort();
+      this.cancelSearches(session, true);
       session.stream?.getTracks().forEach((track) => track.stop());
       this.video.pause();
       this.video.srcObject = null;
@@ -267,17 +268,17 @@
       session.paused = !session.paused;
       clearTimeout(session.timer);
       if (session.paused) {
-        session.abort?.abort();
+        this.cancelSearches(session);
         this.progress.textContent = "Scanning paused. Reframe the live view, then resume or capture and read.";
       } else {
         this.progress.textContent = "Scanning resumed. Hold the picture steady…";
-        if (!session.scanning) this.schedule(session, 400);
+        this.schedule(session, 400);
       }
       this.sync();
     }
 
     schedule(session, delay = 700) {
-      if (this.session !== session || session.paused || session.adjusting || session.handingOff || session.scanning) return;
+      if (this.session !== session || session.paused || session.adjusting || session.handingOff) return;
       clearTimeout(session.timer);
       session.timer = setTimeout(() => this.scan(session), delay);
     }
@@ -301,72 +302,194 @@
       return { pixels: new Uint8Array(context.getImageData(0, 0, width, height).data.buffer), width, height, exact: true };
     }
 
-    showNearMiss(session, image, inspection, frameNumber) {
-      if (!inspection.unreadable || !inspection.markers?.length) return;
-      // Retain one useful miss, not a growing history of camera-sized buffers.
-      if (session.best && session.best.inspection.markers.length > inspection.markers.length) return;
-      session.best = { image, inspection };
-      this.still.width = image.width; this.still.height = image.height;
-      this.still.getContext("2d").putImageData(new ImageData(new Uint8ClampedArray(image.pixels.buffer,
-        image.pixels.byteOffset, image.pixels.byteLength), image.width, image.height), 0, 0);
-      this.drawGuides(this.guides, inspection, image.width, image.height);
-      this.nearSummary.textContent = "Frame " + frameNumber + ": " + inspection.markers.length + "/8 markers found; contents not yet readable";
+    cancelSearches(session, clearHistory = false) {
+      session.abort?.abort();
+      session.readAbort?.abort();
+      session.pending = null;
+      session.appraised = 0;
+      if (clearHistory) {
+        session.history = []; session.best = null;
+        session.tracking = null;
+        this.displayedFrame = null;
+        this.nearMiss.hidden = true;
+        this.still.width = this.still.height = this.guides.width = this.guides.height = 0;
+      }
+    }
+
+    retainFrame(session, entry) {
+      // Only marker-bearing frames enter history. Keep at most three, and at
+      // most 48 MiB of retained RGBA (one oversized frame may be retained alone).
+      const history = session.history.filter((frame) => Date.now() - frame.capturedAt < 45000);
+      if (entry.scan.markers?.length) history.push(entry);
+      // Keep an attempted frame for feedback, but don't let old failed captures
+      // occupy every history slot and starve newer candidates of a payload read.
+      const attempted = history.filter((frame) => frame.attempted).sort((a, b) => b.score - a.score)[0];
+      const retained = history.filter((frame) => !frame.attempted || frame === attempted);
+      retained.sort((a, b) => Number(a.attempted || false) - Number(b.attempted || false) || b.score - a.score || b.frameNumber - a.frameNumber);
+      let bytes = 0;
+      session.history = retained.filter((frame, index) => {
+        bytes += frame.image.pixels.byteLength;
+        return index < 3 && (index === 0 || bytes <= 48 * 1024 * 1024);
+      });
+      session.best = session.history[0];
+      this.showBestFrame(session);
+    }
+
+    showBestFrame(session) {
+      const entry = session.best;
+      if (!entry) {
+        this.nearMiss.hidden = true;
+        this.displayedFrame = null;
+        this.still.width = this.still.height = this.guides.width = this.guides.height = 0;
+        return;
+      }
+      const { image, scan, frameNumber } = entry;
+      if (this.displayedFrame !== entry) {
+        this.still.width = image.width; this.still.height = image.height;
+        this.still.getContext("2d").putImageData(new ImageData(new Uint8ClampedArray(image.pixels.buffer,
+          image.pixels.byteOffset, image.pixels.byteLength), image.width, image.height), 0, 0);
+        this.drawGuides(this.guides, scan, image.width, image.height);
+        this.displayedFrame = entry;
+      }
+      this.nearSummary.textContent = "Best capture · frame " + frameNumber + ": " + scan.markers.length +
+        "/8 markers; " + (entry.state || (entry.inspection?.unreadable ? "contents did not pass their checks" : entry.attempted ? "reading contents" : "waiting for frame appraisal"));
       this.nearMiss.hidden = false;
       this.sync();
     }
 
-    async scan(session) {
-      if (this.session !== session || session.paused || session.adjusting || session.scanning || session.handingOff) return;
+    scan(session) {
+      if (this.session !== session || session.paused || session.adjusting || session.handingOff) return;
       if (this.video.readyState < 2 || this.video.currentTime === session.lastTime) {
         this.schedule(session);
         return;
       }
-      session.scanning = true;
       session.lastTime = this.video.currentTime;
+      try {
+        // Refresh this one slot even during a long payload read. The next marker
+        // scan starts from the current framing, rather than an old queued frame.
+        session.pending = { image: this.captureFrame(), frameNumber: ++session.frames, capturedAt: Date.now() };
+        this.scanMarkers(session);
+      } catch (error) {
+        session.paused = true;
+        this.cancelSearches(session);
+        this.progress.textContent = error.message;
+        this.sync();
+      }
+      this.schedule(session, 900);
+    }
+
+    async scanMarkers(session) {
+      if (this.session !== session || session.paused || session.adjusting || session.scanning || session.handingOff || !session.pending) return;
+      session.scanning = true;
+      const entry = session.pending;
+      session.pending = null;
+      const { image, frameNumber } = entry;
       const controller = new AbortController();
       session.abort = controller;
-      const frameNumber = ++session.frames;
       try {
-        const image = this.captureFrame();
         const prefix = "Frame " + frameNumber + " · " + image.width + " × " + image.height + ": ";
-        this.signature.textContent = "";
-        const inspection = await PixelStow.inspect(image.pixels, image.width, image.height, {
-          automatic: true, background: true, signal: controller.signal,
-          onProgress: (text) => { if (this.session === session && !controller.signal.aborted) this.progress.textContent = prefix + text; },
+        if (!session.reading) this.signature.textContent = "";
+        const previous = session.tracking?.scan;
+        const header = previous?.markers?.find((m) => m.verification === "header");
+        const scan = await PixelStow.scanMarkers(image.pixels, image.width, image.height, {
+          mode: "perspective", camera: true, deadline: Date.now() + (header ? 12000 : 24000), signal: controller.signal,
+          seed: previous?.width === image.width && previous?.height === image.height && header
+            ? { ...header, initialMatrix: previous.geometry?.matrix } : undefined,
+          onProgress: (text) => { if (this.session === session && !controller.signal.aborted && !session.reading) this.progress.textContent = prefix + text; },
           onSignature: (signature) => { if (this.session === session && !controller.signal.aborted) this.signature.textContent = signature.message; }
         });
         if (this.session !== session || controller.signal.aborted) return;
-        if (inspection.found && !inspection.unreadable) {
-          await this.accept(session, image, inspection);
-          return;
+        entry.scan = scan;
+        session.tracking = scan.markers?.some((m) => m.verification === "header") ? { scan } : null;
+        entry.score = scan.candidates?.[0]?.geometry.rank ?? (scan.markers?.length || 0);
+        this.retainFrame(session, entry);
+        session.appraised++;
+        if (scan.candidates?.length && session.readEntry && !session.readAbort?.signal.aborted && entry.score > session.readEntry.score) {
+          session.readEntry.state = "replaced by a stronger capture";
+          session.appraised = Math.max(2, session.appraised);
+          session.readAbort.abort(); // Terminates the payload worker, not just its UI updates.
+          this.progress.textContent = "A stronger marker fit was found. Switching to frame " + frameNumber + "…";
         }
-        this.signature.textContent = inspection.markers?.length
-          ? "Recovery markers verified, but the contents could not be read."
-          : inspection.signature?.likely ? "Frequency hints were found, but no verified encoding was recovered."
+        this.signature.textContent = scan.highConfidence
+          ? "All eight markers agree strongly. Reading the most promising capture."
+          : scan.markers?.length ? "Recovery markers verified. Comparing captures before reading contents."
+          : scan.signature?.likely ? "Frequency hints found; no verified markers in this capture."
             : "No encoding signature or checksum-valid markers found.";
-        this.showNearMiss(session, image, inspection, frameNumber);
-        this.progress.textContent = prefix + (inspection.unreadable
-          ? "Markers found, but contents could not be read. Reframe and hold steady for the next capture."
-          : inspection.signature?.likely ? "Possible frequency pattern, but no verified encoding. Trying a fresh frame…"
-            : "No readable encoding found. Point at the encoded picture; another frame will be checked…");
+        if (!session.reading) this.progress.textContent = prefix + (scan.candidates?.length
+          ? "Marker scan complete. Ranking the recent captures…"
+          : "No stable marker fit. Reframe and hold steady; checking a fresh capture…");
+        this.readBestFrame(session);
       } catch (error) {
         if (this.session !== session || controller.signal.aborted) return;
         session.paused = true;
+        this.cancelSearches(session);
         this.progress.textContent = (error?.message || "The camera scan could not finish.") + " Scanning paused; resume or use Take photo.";
         this.sync();
       } finally {
         session.scanning = false;
         if (session.abort === controller) session.abort = null;
-        this.schedule(session);
+        if (this.session === session && !session.paused && !session.adjusting && !session.handingOff) this.scanMarkers(session);
       }
     }
 
-    async accept(session, image, inspection) {
+    async readBestFrame(session) {
+      if (this.session !== session || session.paused || session.adjusting || session.reading || session.handingOff) return;
+      const entry = session.history.find((frame) => !frame.attempted && frame.scan.candidates?.length && Date.now() - frame.capturedAt < 45000);
+      if (!entry) return; // Never spend a payload read on a marker-free capture.
+      if (session.appraised < 2 && !entry.scan.highConfidence) return;
+      session.appraised = 0;
+      session.reading = true;
+      session.readEntry = entry;
+      entry.attempted = true;
+      entry.state = undefined;
+      const controller = new AbortController();
+      session.readAbort = controller;
+      // A bad capture cannot monopolize the reader indefinitely. Fresh marker
+      // scans continue independently; their best result is next in rank order.
+      const timer = setTimeout(() => controller.abort(), 30000);
+      this.showBestFrame(session);
+      try {
+        const { image, scan, frameNumber } = entry;
+        const inspection = await PixelStow.readMarkerCandidates(image.pixels, image.width, image.height, scan, {
+          signal: controller.signal,
+          onProgress: (text) => { if (this.session === session && !controller.signal.aborted)
+            this.progress.textContent = "Reading best capture · frame " + frameNumber + ": " + text; }
+        });
+        if (this.session !== session || controller.signal.aborted) return;
+        entry.inspection = inspection;
+        if (inspection.found && !inspection.unreadable) {
+          await this.accept(session, image, inspection);
+          return;
+        }
+        this.progress.textContent = "This capture's contents did not pass their checks. Comparing fresher captures…";
+        this.showBestFrame(session);
+      } catch (error) {
+        if (this.session !== session) return;
+        if (controller.signal.aborted) {
+          // Pause/orientation cancellation permits a retry; a time-limited bad
+          // frame is skipped while newer marker-bearing frames are considered.
+          if (session.paused || session.adjusting) entry.attempted = false;
+          else if (!entry.state) entry.state = "read time limit reached";
+        } else {
+          entry.state = "read could not finish";
+          this.progress.textContent = error?.message || "Could not read this capture. Trying another promising frame…";
+        }
+      } finally {
+        clearTimeout(timer);
+        session.reading = false;
+        session.readEntry = null;
+        if (session.readAbort === controller) session.readAbort = null;
+        if (this.session === session && !session.handingOff) this.showBestFrame(session);
+        this.readBestFrame(session);
+      }
+    }
+
+    async accept(session, image, inspection, markerScan) {
       if (this.session !== session || session.handingOff) return;
       session.handingOff = true;
       session.paused = true;
       clearTimeout(session.timer);
-      session.abort?.abort();
+      this.cancelSearches(session);
       session.stream?.getTracks().forEach((track) => track.stop());
       this.progress.textContent = inspection?.found && !inspection.unreadable ? "Encoded contents found. Opening this capture…" : "Opening this capture…";
       this.sync();
@@ -378,7 +501,7 @@
         const name = "camera-capture-" + new Date().toISOString().replace(/[:.]/g, "-") + ".png";
         const file = new File([blob], name, { type: "image/png" });
         this.close();
-        await this.importImage(file, "camera", { image, inspection });
+        await this.importImage(file, "camera", { image, inspection, markerScan });
       } catch (error) {
         if (this.session !== session) return;
         this.close();
