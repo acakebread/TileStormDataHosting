@@ -1179,7 +1179,7 @@
 
   function searchInWorker(pixels, width, height, options, operation = "geometry") {
     return new Promise((resolve, reject) => {
-      const url = new URL("pixelstow-transform-worker.js?v=20261013-lattice1", codecScriptUrl);
+      const url = new URL("pixelstow-transform-worker.js?v=20261013-marker-follow2", codecScriptUrl);
       const worker = new Worker(url);
       let finished = false;
       const abort = () => { if (finished) return; cleanup(); reject(new DOMException("Search cancelled.", "AbortError")); };
@@ -1452,22 +1452,31 @@
     const profile = locatorProfile(geometry.carrierVersion || CARRIER_V3);
     const layout = locatorLayout(geometry.originalWidth, geometry.originalHeight, profile.version);
     const maximum = Math.min(48, Math.max(geometry.originalWidth, geometry.originalHeight) * 0.04);
-    return (markers || []).filter((m) => m.matrix && (m.verification === "header" || m.verification === "pattern") && m.quality >= 0.6)
+    return (markers || []).filter((m) => m.matrix && (m.verification === "header" ||
+      m.verification === "pattern" && m.localized) && m.quality >= 0.6)
       .flatMap((m) => {
         const patch = layout.find((p) => p.id === m.id);
         if (!patch) return [];
-        const x = patch.x + profile.width / 2, y = patch.y + profile.height / 2;
-        const observed = mappedPoint(m.matrix, profile.width / 2, profile.height / 2);
-        const predicted = mappedPoint(inverse, observed.x, observed.y);
-        const dx = predicted.x - x, dy = predicted.y - y;
-        return Number.isFinite(dx + dy) && Math.max(Math.abs(dx), Math.abs(dy)) <= maximum
-          ? [{ x, y, dx, dy, weight: m.quality }] : [];
+        const cx = (profile.width - 1) / 2, cy = (profile.height - 1) / 2;
+        const controls = [[cx, cy, 1]];
+        // Independently refined axes give curvature information between marker
+        // centres. A prediction-only pattern match supplies no measured slope.
+        if (m.localized && m.quality >= 0.85) controls.push([cx * 0.35, cy, 0.25], [cx * 1.65, cy, 0.25],
+          [cx, cy * 0.35, 0.25], [cx, cy * 1.65, 0.25]);
+        return controls.flatMap(([u, v, weight]) => {
+          const x = patch.x + u, y = patch.y + v, observed = mappedPoint(m.matrix, u, v);
+          const predicted = mappedPoint(inverse, observed.x, observed.y);
+          const dx = predicted.x - x, dy = predicted.y - y;
+          return Number.isFinite(dx + dy) && Math.max(Math.abs(dx), Math.abs(dy)) <= maximum
+            ? [{ x, y, dx, dy, markerId: m.id, control: weight < 1,
+              weight: weight * m.quality ** 2 * (m.verification === "header" ? 1 : 0.75) }] : [];
+        });
       });
   }
 
   async function readTrackedPhoto(pixels, width, height, geometry, signal, onProgress, markers, options, nativeGeometry, fast) {
     const anchors = photoMarkerAnchors(geometry, markers);
-    if (!root.PixelStowLattice || anchors.length < 3) return null;
+    if (!root.PixelStowLattice || new Set(anchors.map((a) => a.markerId)).size < 3) return null;
     const deadline = Math.min(options.deadline || Infinity, Date.now() + 8000);
     let previous;
     for (let pass = 0; pass < 2 && Date.now() < deadline; pass++) {
@@ -1480,6 +1489,14 @@
       const corrected = await rectifyPhoto(pixels, width, height, geometry.originalWidth, geometry.originalHeight, geometry.matrix, signal, field);
       for (const channel of [undefined, 1, 0, 2]) {
         const retried = await readVisualMapping(corrected.pixels, corrected.width, corrected.height, nativeGeometry, signal, { ...fast, channel });
+        if (!retried.locatorOnly) return photoReadResult(retried, { ...corrected, phaseCorrection: field }, geometry);
+      }
+      // Fourier phase is an estimate. Check small fractional shifts cheaply at
+      // the repeated preamble before undertaking any full payload read.
+      onProgress?.("Checking subpixel alignment of the tracked grid…");
+      for (const channel of [undefined, 1]) {
+        const retried = await readVisualMapping(corrected.pixels, corrected.width, corrected.height, nativeGeometry, signal,
+          { ...fast, channel, offsets: [0, -0.25, 0.25] });
         if (!retried.locatorOnly) return photoReadResult(retried, { ...corrected, phaseCorrection: field }, geometry);
       }
       previous = field;
@@ -1594,12 +1611,12 @@
       const seed = readVisualLocator(pixels, width, height, [1, 0, patch.x, 0, 1, patch.y, 0, 0, 1], native.id, native.carrierVersion);
       const result = await findVisualTransform(pixels, width, height, { ...options, mode: "padding", seed,
         worker: false, geometryOnly: true });
-      const candidates = rankMarkerCandidates((result.candidates || []).map((geometry) => ({ geometry, markers: result.markers })));
+      const candidates = rankMarkerCandidates((result.candidates || []).map((geometry) => ({ geometry, markers: result.markers, markerSearch: result.markerSearch })));
       return { ...result, candidates, geometry: candidates[0]?.geometry, highConfidence: Boolean(candidates[0]?.geometry.highConfidence), width, height };
     }
     if ((options.singleResolution || options.mode === "padding" || Math.max(width, height) < 640) && width * height <= MAX_PIXELS) {
       const result = await findVisualTransform(pixels, width, height, { ...options, worker: false, geometryOnly: true });
-      const candidates = rankMarkerCandidates((result.candidates || []).map((geometry) => ({ geometry, markers: result.markers })));
+      const candidates = rankMarkerCandidates((result.candidates || []).map((geometry) => ({ geometry, markers: result.markers, markerSearch: result.markerSearch })));
       return { ...result, candidates, geometry: candidates[0]?.geometry, highConfidence: Boolean(candidates[0]?.geometry.highConfidence), width, height };
     }
     const deadline = Math.min(options.searchState?.deadline || Infinity, options.deadline || Infinity, Date.now() + 60000);
@@ -1653,7 +1670,7 @@
       const lifted = full ? result : liftPhotoResult(result, width, height, rw, rh);
       const header = lifted.markers?.filter((m) => m.verification === "header").sort((a, b) => b.quality - a.quality)[0];
       if (header) { known = { ...header, initialMatrix: lifted.geometry?.matrix }; verifiedCurrent = true; }
-      for (const geometry of lifted.candidates || []) candidates.push({ geometry, markers: lifted.markers,
+      for (const geometry of lifted.candidates || []) candidates.push({ geometry, markers: lifted.markers, markerSearch: lifted.markerSearch,
         localizationResolution: { width: rw, height: rh }, photo: true });
       const markerScore = lifted.geometry?.rank ?? (lifted.markers?.length ? 30 + lifted.markers.length * 3 :
         Math.min(20, 20 * Math.max(0, lifted.evidence?.pilotQuality || 0)));
@@ -1669,7 +1686,7 @@
     return { ...best, width, height, candidates: ranked, geometry: ranked[0]?.geometry,
       highConfidence: Boolean(ranked[0]?.geometry.highConfidence),
       searchState: { pending, samples, seed: verifiedCurrent ? known : undefined, deadline },
-      markers: ranked[0]?.markers || best?.markers || [] };
+      markers: ranked[0]?.markers || best?.markers || [], markerSearch: ranked[0]?.markerSearch || best?.markerSearch };
   }
 
   async function readMarkerCandidates(pixels, width, height, scan, options = {}) {
@@ -1686,7 +1703,7 @@
     }
     const candidates = rankMarkerCandidates(scan.candidates || []);
     let best = { found: Boolean(scan.markers?.length), unreadable: Boolean(scan.markers?.length),
-      markers: scan.markers || [], signature: scan.signature, reason: scan.reason };
+      markers: scan.markers || [], markerSearch: scan.markerSearch, signature: scan.signature, reason: scan.reason };
     for (let i = 0; i < candidates.length; i++) {
       checkCancelled(options.signal);
       const candidate = candidates[i], geometry = candidate.geometry;
@@ -1701,7 +1718,7 @@
       const inspection = describeRecovery(recovered);
       const result = { ...inspection, found: true, unreadable: Boolean(recovered.locatorOnly) || !inspection.found,
         carrierVersion: geometry.carrierVersion || CARRIER_V3, geometry: recovered.geometry, readResolution: recovered.readResolution,
-        markers: candidate.markers, signature: scan.signature,
+        markers: candidate.markers, markerSearch: candidate.markerSearch || scan.markerSearch, signature: scan.signature,
         reason: inspection.found && !recovered.locatorOnly ? undefined : "Recovery markers were found, but the payload did not pass its checks." };
       if (!result.unreadable) {
         retainVisualResult(pixels, width, height, result, recovered.readImage);

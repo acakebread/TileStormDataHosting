@@ -210,6 +210,25 @@ with an unreadable payload block re-encoding.
 
 ### Curved carrier tracking (experimental)
 
+Follow-up marker search now retains a confirmed header/pattern if optional local
+refinement reaches its time limit. Previously that exception could discard an
+already confirmed last patch and return seven detections. Cancellation still
+aborts the operation; retaining a marker does not accept its payload.
+
+Nearby searches rank complete 96-symbol patterns once dimensions are known,
+after their cheaper pilot shortlist. After global refinement, missing patches
+receive a bounded final retry, including a prediction from neighbouring measured
+positions/axes and a small full-pattern search. Missing-marker passes reserve
+1.5 seconds from global refinement; each final patch retry is capped at 1.2 seconds
+and stays within the existing overall deadline. No missing marker is invented.
+Metadata records missing IDs, plane outliers, and unfinished/timed-out searches.
+The image recovery and camera near-miss UI show missing positions and time limits.
+
+Seven detections do not block decoding: geometric stability and the payload
+checksum decide it. Eight individual detection opportunities also make one miss
+quite common even with a good per-marker success rate. Repeated missing positions
+or unfinished searches provide more useful diagnostic evidence than count alone.
+
 `pixelstow-lattice.js` adds a photograph-only fallback after the native read and
 first existing local-phase attempt fail. The remaining original phase attempts
 are retained if this fallback cannot verify a payload. Generated-image reading,
@@ -228,8 +247,19 @@ phase in both directions. Its spacing bank covers 0.84 to 1.16 times the expecte
 carrier frequency; transverse offsets cover -0.12 to 0.12. The shared component
 of the two payload symbols supplies phase without deciding their unknown bits.
 CRC-verified/known-pattern marker fits anchor native displacement. At least three
-reliable marker measurements are required; a tentative FFT signature cannot start
+reliable independent marker patches are required; a tentative FFT signature cannot start
 this recovery by itself.
+
+Only independently localized known-pattern fits act as curved-map anchors;
+prediction-only pattern matches supply no independent displacement. Strong local
+marker axes also supply soft interior controls. When at least two patches supply
+these measured axes, the tracker fits a bounded coarse deformation before its
+first frequency measurement, so a poor straight-plane reconstruction need not
+erase that measurement. Marker constraints are weighted by reliability rather
+than pinning every weak match equally. Seven measured patches can supply this
+initialization; eight are not required. After a tracked native read fails, a small
+fractional-pixel phase bank (-0.25, 0, +0.25) checks the repeated preamble before
+full body reading. Full frame/payload checks remain mandatory.
 
 Phase is periodic by four pixels. Tracking starts near marker anchors and follows
 reliable neighbouring measurements using their estimated spacing/direction. Weak
@@ -264,6 +294,11 @@ The same case checks real marker-header anchors, full payload checksum, worker-s
 geometry replay, the inverse preview map and cancellation/budget handling. An older
 supplied saved capture still fails with its recorded marker fit. These results do
 not establish general camera, print, lens-calibration or high-resolution support.
+
+`node tests/pixelstow-marker-search-checks.mjs` adds focused search-control checks
+for the eighth-marker retry, full-pattern ranking, retention of an already verified
+marker at the time limit, a genuinely missing marker, and cancellation. The curved
+capture check also exercises recovery from seven independently fitted marker grids.
 
 `pixelstow-spectrum.js` implements a radix-2, two-dimensional FFT without external
 libraries. It analyzes luminance across the supplied frame, emphasizing high

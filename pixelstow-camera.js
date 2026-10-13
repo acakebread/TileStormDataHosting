@@ -353,6 +353,14 @@
       }
       this.nearSummary.textContent = "Best capture · frame " + frameNumber + ": " + scan.markers.length +
         "/" + (entry.scan?.geometry?.markerTotal || entry.inspection?.geometry?.markerTotal || 8) + " markers; " + (entry.state || (entry.inspection?.unreadable ? "contents did not pass their checks" : entry.attempted ? "reading contents" : "waiting for frame appraisal"));
+      const geometry = entry.inspection?.geometry || scan.geometry;
+      if (geometry?.missingMarkerIds?.length) {
+        const positions = { 0: "top-left", 1: "top-middle", 2: "top-right", 3: "left-middle",
+          5: "right-middle", 6: "bottom-left", 7: "bottom-middle", 8: "bottom-right" };
+        this.nearSummary.textContent += ". Missing: " + geometry.missingMarkerIds.map((id) => positions[id] || id).join(", ");
+      }
+      if (scan.markerSearch?.some((m) => !m.found && ["time-limit", "not-searched"].includes(m.reason)))
+        this.nearSummary.textContent += ". Some marker searches reached their time limit";
       this.nearMiss.hidden = false;
       this.sync();
     }

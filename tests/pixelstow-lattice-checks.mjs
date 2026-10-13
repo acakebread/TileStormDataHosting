@@ -51,11 +51,14 @@ const markers=layout.map(p=>{
  return I.readVisualLocator(photo,W,H,m,p.id,4);
 }).filter(Boolean);
 assert(markers.length>=3);
-const integrated=await I.readTrackedPhoto(photo,W,H,geometry,undefined,undefined,markers,{},
+// Seven independently fitted patches are sufficient; no eighth-marker gate.
+const seven=markers.slice(0,7).map(m=>({...m,localized:true}));
+assert.equal(seven.length,7);
+const integrated=await I.readTrackedPhoto(photo,W,H,geometry,undefined,undefined,seven,{},
  I.geometryAt(geometry,[1,0,0,0,1,0,0,0,1]),{offsets:[0],strengths:[16]});
 assert(integrated&&!integrated.locatorOnly);
 assert.equal(integrated.readResolution.phaseCorrection.kind,'spline');
-console.log('PASS: verified marker anchors enter the photograph recovery path');
+console.log('PASS: seven verified local marker fits seed curved photograph recovery');
 
 
 // Recreate only from serialized geometry in a new codec, as the worker/UI do.

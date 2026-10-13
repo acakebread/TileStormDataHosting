@@ -503,25 +503,98 @@
     return multiply(seed.matrix, [1, 0, -patch.x, 0, 1, -patch.y, 0, 0, 1]);
   }
 
-  async function findNear(matrix, patch, seed, adapter, options, radius) {
+  async function refineConfirmation(confirmed, adapter, seed, options) {
+    if (options.signal?.aborted) check(options);
+    if (Date.now() >= options.deadline) return confirmed;
+    try { return await refine(confirmed, adapter, seed, options) || confirmed; }
+    catch (error) {
+      // Refining a confirmed header/pattern is optional. A time limit must not
+      // discard the patch we have already read; cancellation must still abort.
+      if (error?.name === "SearchLimit") return confirmed;
+      throw error;
+    }
+  }
+
+  async function findNear(matrix, patch, seed, adapter, options, radius, fullPattern = false) {
+    if (options.signal?.aborted) check(options);
     const prediction = patchMatrix(matrix, patch), peaks = [];
     const direct = adapter.confirm(prediction, patch.id, seed);
-    if (direct) return await refine(direct, adapter, seed, options) || direct;
+    if (direct) return refineConfirmation(direct, adapter, seed, options);
     const stride = radius > 30 ? 4 : 2;
     for (let y = -radius; y <= radius; y += stride) {
       check(options);
       for (let x = -radius; x <= radius; x += stride) {
         const trial = offsetMatrix(prediction, x, y);
-        const score = adapter.quality(trial, patch.id);
-        if (score > 0.32) keepPeak(peaks, { matrix: trial, id: patch.id, x, y, score }, 12, 5);
+        const score = adapter.quality(trial, patch.id, fullPattern ? seed : undefined);
+        if (score > 0.32) keepPeak(peaks, { matrix: trial, id: patch.id, x, y, score }, fullPattern ? 12 : 32, 5);
       }
       await pause();
     }
-    for (const peak of peaks) {
+    // The dimensions are known here. Rank the complete 96-symbol pattern,
+    // rather than letting a convincing 24-symbol prefix consume every fit.
+    if (!fullPattern) for (const peak of peaks) peak.score = adapter.quality(peak.matrix, patch.id, seed);
+    peaks.sort((a, b) => b.score - a.score);
+    for (const peak of peaks.slice(0, 8)) {
       const read = await refine(peak, adapter, seed, options, true);
       if (read) return read;
     }
     return null;
+  }
+
+  function localPrediction(matrix, patch, markers, seed, adapter) {
+    const layout = adapter.layout(seed.originalWidth, seed.originalHeight);
+    const predicted = patchMatrix(matrix, patch), b = matrixBasis(predicted, adapter), residual = new Array(6).fill(0);
+    let total = 0;
+    for (const marker of markers) {
+      if (!marker.localized || marker.quality < 0.6) continue;
+      const other = layout.find((p) => p.id === marker.id);
+      const measured = matrixBasis(marker.matrix, adapter), expected = matrixBasis(patchMatrix(matrix, other), adapter);
+      const distance = ((patch.x - other.x) / seed.originalWidth) ** 2 + ((patch.y - other.y) / seed.originalHeight) ** 2;
+      const weight = marker.quality ** 2 / Math.max(0.005, distance);
+      for (let i = 0; i < 6; i++) residual[i] += weight * (measured[i] - expected[i]);
+      total += weight;
+    }
+    if (!total) return null;
+    for (let i = 0; i < 6; i++) b[i] += residual[i] / total;
+    if (!reasonableBasis(b) || Math.hypot(residual[0], residual[1]) / total > 32) return null;
+    return basisMatrix(b, adapter);
+  }
+
+  async function retryMissing(markers, seed, adapter, candidates, width, height, options, attempts) {
+    let added = false;
+    const layout = adapter.layout(seed.originalWidth, seed.originalHeight);
+    for (const patch of layout.filter((p) => !markers.some((m) => m.id === p.id))) {
+      if (options.signal?.aborted) check(options);
+      if (Date.now() >= options.deadline) break;
+      const localOptions = { ...options, deadline: Math.min(options.deadline, Date.now() + 1200) };
+      attempts.set(patch.id, { ...attempts.get(patch.id), finalRetry: true, reason: "not-confirmed" });
+      options.onProgress?.("Rechecking missing marker " + patch.id + " with the refined alignment (" + markers.length + "/" + adapter.ids.length + ")…");
+      try {
+        for (const candidate of candidates.slice(0, 2)) {
+          // A lens-deformed patch may follow neighbouring measured axes more
+          // closely than the global plane. Both trials must verify its pattern.
+          const local = localPrediction(candidate.matrix, patch, markers, seed, adapter);
+          const starts = [patchMatrix(candidate.matrix, patch), ...(local ? [local] : [])];
+          let found;
+          for (const prediction of starts) {
+            const direct = adapter.confirm(prediction, patch.id, seed);
+            found = direct ? await refineConfirmation(direct, adapter, seed, localOptions)
+              : await refine({ matrix: prediction, id: patch.id }, adapter, seed, localOptions, true);
+            if (found) break;
+          }
+          if (!found) found = await findNear(candidate.matrix, patch, seed, adapter, localOptions, 12, true);
+          if (found) {
+            markers.push(found); added = true;
+            attempts.set(patch.id, { ...attempts.get(patch.id), reason: "confirmed" });
+            break;
+          }
+        }
+      } catch (error) {
+        if (error?.name !== "SearchLimit") throw error;
+        attempts.set(patch.id, { ...attempts.get(patch.id), reason: "time-limit" });
+      }
+    }
+    return added;
   }
 
   function quad(matrix, width, height) {
@@ -599,6 +672,8 @@
       model, markerCount: markers.length, headerCount: markers.filter((m) => m.verification === "header").length,
       patternCount: markers.filter((m) => m.verification === "pattern").length,
       inlierCount: inliers.length, patternQuality, coverage, fitError,
+      missingMarkerIds: adapter.ids.filter((id) => !markers.some((m) => m.id === id)),
+      misalignedMarkerIds: markers.filter((m) => !inliers.some((p) => p.marker.id === m.id)).map((m) => m.id),
       rank: 100 * patternQuality + 3 * inliers.length + 10 * coverage + headerCount - 2 * fitError,
       highConfidence: inliers.length === adapter.ids.length && headerCount >= 2 && patternQuality >= 0.9 && coverage >= 0.6 && fitError <= 0.6,
       expectedMarkers: layout.map((p) => ({ id: p.id, patchWidth: adapter.patchWidth, patchHeight: adapter.patchHeight, matrix: patchMatrix(matrix, p) })),
@@ -648,6 +723,7 @@
     options.check = () => check(options);
     let signature = null;
     const markers = [];
+    const attempts = new Map();
     let seed = null, predictions = [];
     const evidence = () => ({ pilotQuality: options.pilotQuality || 0 });
     try {
@@ -676,6 +752,7 @@
       // verified, keep its search state and use the remaining overall budget.
       options.deadline = deadline;
       markers.push(seed);
+      attempts.set(seed.id, { rounds: 0, reason: "seed" });
       if (options.mode !== "padding") {
         const localized = await refine(seed, adapter, seed, options);
         if (localized) { seed = { ...seed, ...localized }; markers[0] = seed; }
@@ -694,6 +771,7 @@
           // Prefer distant confirmations rather than first collecting a whole row.
           if (options.mode !== "padding") pending.sort((a, b) => spread(b) - spread(a));
           const patch = pending.shift();
+          attempts.set(patch.id, { rounds: round + 1, reason: "searching" });
           options.onProgress?.("Found " + markers.length + "/" + adapter.ids.length + " markers. Locating marker " + patch.id + "…");
           let found = null;
           if (options.mode === "padding") {
@@ -708,6 +786,7 @@
               if (found) break;
             }
           }
+          attempts.set(patch.id, { rounds: round + 1, reason: found ? "confirmed" : "not-confirmed" });
           if (!found) continue;
           markers.push(found);
           if (options.mode !== "padding") {
@@ -723,32 +802,55 @@
           }
         }
       }
-      const candidates = geometryCandidates(markers, seed, predictions, adapter, width, height, options.mode);
+      let candidates = geometryCandidates(markers, seed, predictions, adapter, width, height, options.mode);
+      const refinementDeadline = markers.length < adapter.ids.length ? deadline - 1500 : deadline;
       for (const candidate of candidates.slice()) {
         if (candidate.model === "translation") continue;
+        if (Date.now() >= refinementDeadline) break;
         options.onProgress?.("Refining " + candidate.model + " alignment from " + candidate.inlierCount + " markers…");
         const layout = adapter.layout(seed.originalWidth, seed.originalHeight);
         const inliers = markers.filter((m) => measurementError(candidate.matrix, centrePair(m, layout, adapter)) < 2.5);
-        const refined = await refineGlobal(candidate.matrix, inliers, seed, adapter, width, height, { ...options, mode: candidate.model });
+        let refined;
+        try {
+          refined = await refineGlobal(candidate.matrix, inliers, seed, adapter, width, height,
+            { ...options, deadline: refinementDeadline, mode: candidate.model });
+        } catch (error) {
+          if (error?.name !== "SearchLimit") throw error;
+          break; // Preserve time for the missing patch instead of consuming it all.
+        }
         if (validGeometry(refined, seed.originalWidth, seed.originalHeight, width, height,
           Math.max(3, Math.min(12, Math.max(width, height) * 0.01))))
           candidates.push(geometryFor(refined, seed, markers, adapter, candidate.model));
       }
       candidates.sort((a, b) => b.rank - a.rank);
+      if (options.mode !== "padding" && candidates.length && markers.length < adapter.ids.length &&
+        await retryMissing(markers, seed, adapter, candidates, width, height, options, attempts)) {
+        // Re-evaluate refined planes with the new measured patch and include the
+        // fit it enables; do not leave the newly recovered marker out of ranking.
+        candidates = geometryCandidates(markers, seed, candidates.concat(predictions), adapter, width, height, options.mode);
+      }
+      const markerSearch = adapter.ids.map((id) => ({ id, found: markers.some((m) => m.id === id), ...attempts.get(id) }));
+      options.onProgress?.("Marker scan complete: " + markers.length + "/" + adapter.ids.length +
+        (candidates[0]?.missingMarkerIds.length ? "; missing IDs " + candidates[0].missingMarkerIds.join(", ") : "") + ".");
       // Small side references are optional cross-checks after corner discovery.
       // They do not inflate header counts, confidence or payload acceptance.
       if (candidates[0] && adapter.references) {
         candidates[0].referenceMarkers = adapter.references(candidates[0].matrix, seed);
         candidates[0].referenceCount = candidates[0].referenceMarkers.length;
       }
-      return { geometry: candidates[0] || null, candidates, markers, signature, evidence: evidence(),
+      return { geometry: candidates[0] || null, candidates, markers, markerSearch, signature, evidence: evidence(),
         reason: candidates.length ? undefined : "The verified markers did not establish a stable image transform." };
     } catch (error) {
       if (error?.name === "SearchLimit") {
         // A bounded camera scan can still return useful fits. It never reads a
         // payload, and it must not discard the already verified marker evidence.
         const candidates = geometryCandidates(markers, seed, predictions, adapter, width, height, options.mode);
-        return { geometry: candidates[0] || null, candidates, markers, signature, evidence: evidence(), reason: error.message };
+        const markerSearch = adapter.ids.map((id) => {
+          const attempt = attempts.get(id);
+          return { id, found: markers.some((m) => m.id === id), ...attempt,
+            reason: attempt?.reason === "searching" ? "time-limit" : attempt?.reason || "not-searched" };
+        });
+        return { geometry: candidates[0] || null, candidates, markers, markerSearch, signature, evidence: evidence(), reason: error.message };
       }
       throw error;
     }

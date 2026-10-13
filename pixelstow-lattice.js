@@ -317,7 +317,7 @@
       for (const { a, nodes } of pins) for (let c = 0; c < 2; c++) {
         const observed = nodes.reduce((sum, [i, w]) => sum + field.offsets[i * 2 + c] * w, 0);
         const denominator = nodes.reduce((sum, [, w]) => sum + w * w, 0);
-        const residual = ((c ? a.dy : a.dx) - observed) * 0.75;
+        const residual = ((c ? a.dy : a.dx) - observed) * 0.75 * clamp(a.weight ?? 1, 0.05, 1);
         for (const [i, w] of nodes) field.offsets[i * 2 + c] += residual * w / denominator;
       }
     }
@@ -336,12 +336,27 @@
     const field = { kind: "spline", columns, rows, stepX: (nativeW - 1) / (columns - 1), stepY: (nativeH - 1) / (rows - 1),
       offsets: new Float32Array(columns * rows * 2), channel: options.channel };
     const measurements = new Array(columns * rows), maximum = Math.min(48, Math.max(nativeW, nativeH) * 0.04);
-    const previous = options.previous;
-    const residualAnchors = anchors.map((a) => {
-      const v = previous ? at(previous, a.x, a.y) : { x: 0, y: 0 };
-      return { ...a, dx: a.dx - v.x, dy: a.dy - v.y };
-    });
     try {
+      let previous = options.previous;
+      if (!previous && anchors.filter((a) => a.control).length >= 8) {
+        // Start with the coarse deformation measured by the marker centres and
+        // local axes, instead of sampling a straight plane that may erase phase.
+        const coarse = { ...field, offsets: new Float32Array(field.offsets.length) };
+        await fit(coarse, new Array(columns * rows), new Float64Array(field.offsets.length), anchors, check);
+        const probe = new Float64Array(12);
+        let safe = true;
+        for (let y = 0; y < rows && safe; y++) for (let x = 0; x < columns; x++) {
+          evaluate(coarse, x * field.stepX, y * field.stepY, probe);
+          const det = (1 + probe[2]) * (1 + probe[5]) - probe[3] * probe[4];
+          if (!Number.isFinite(det) || det < 0.6 || det > 1.6 || Math.max(Math.abs(probe[0]), Math.abs(probe[1])) > maximum ||
+            Math.max(...probe.subarray(2, 6).map(Math.abs)) > 0.25) { safe = false; break; }
+        }
+        if (safe) previous = coarse;
+      }
+      const residualAnchors = anchors.map((a) => {
+        const v = previous ? at(previous, a.x, a.y) : { x: 0, y: 0 };
+        return { ...a, dx: a.dx - v.x, dy: a.dy - v.y };
+      });
       let good = 0;
       for (let y = 0; y < rows; y++) {
         options.onProgress?.("Following wavelets in the original capture: " + Math.round(y * 100 / rows) + "%…");
