@@ -707,12 +707,12 @@
 
       <label for="carrier-version">Encoding format</label>
       <select id="carrier-version">
-        <option value="4">Version 4 — eight brightness-balanced markers (default)</option>
+        <option value="4">Version 4 — adaptive contrast, balanced markers (default)</option>
         <option value="5">Version 5 — smaller corner markers (experimental)</option>
         <option value="3">Version 3 — original eight recovery markers</option>
         <option value="1">Previous format (version 1)</option>
       </select>
-      <p class="hint">Version 4 keeps version 3’s eight recovery markers and balances their brightness with the surrounding picture. Version 5 tests smaller markers and is experimental. Photo and resize recovery remain experimental; version 3 is available for comparison. Use version 1 for desktop and TileStorm readers until they are upgraded.</p>
+      <p class="hint">Version 4 balances marker brightness and boosts contrast in textured areas. Below 5× redundancy, stronger encoding spends more image quality on recovery. Version 5 tests smaller markers and is experimental. Photo and resize recovery remain experimental; version 3 is available for comparison. Use version 1 for desktop and TileStorm readers until they are upgraded.</p>
 
       <div class="actions">
         <button id="encode" type="button" disabled>Encode into a new image</button>
@@ -817,7 +817,7 @@
   <script src="./pixelstow-spectrum.js?v=20261013-marker-follow2"></script>
   <script src="./pixelstow-transform.js?v=20261013-marker-follow2"></script>
   <script src="./pixelstow-lattice.js?v=20261013-marker-follow2"></script>
-  <script src="./pixelstow.js?v=20261013-camera-resume1"></script>
+  <script src="./pixelstow.js?v=20261013-texture-boost1"></script>
   <script src="./pixelstow-export.js?v=20261011-exports"></script>
   <script src="./pixelstow-voice.js?v=20261013-voice-clock2"></script>
   <script src="./pixelstow-media.js?v=20261013-voice-clock2"></script>

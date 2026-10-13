@@ -24,6 +24,8 @@
   const CARRIER_V3 = 3;
   const CARRIER_V4 = 4;
   const CARRIER_V5 = 5;
+  const V4_PAYLOAD_PEAK = 64;
+  const V4_MARKER_PEAK = 32;
   let preferredCarrier = CARRIER_V4;
   const RECOVERY_CARRIERS = [CARRIER_V4, CARRIER_V3, CARRIER_V5];
   const codecScriptUrl = typeof document !== "undefined" ? document.currentScript?.src : null;
@@ -612,13 +614,39 @@
     return 0;
   }
 
-  function applyBit(reference, image, width, column, blockRow, bit, strength, amplitudeCache) {
+  function v4SignalPolicy(ratio, strength) {
+    // Use the actual fractional repetition budget, not its rounded copy count.
+    // Five copies is the restrained case; near one copy spends more contrast.
+    const pressure = Math.max(0, Math.min(1, (5 - ratio) / 4));
+    return { strength: Math.max(strength, Math.round(8 + 24 * pressure)),
+      textureGain: 0.35 + 1.65 * pressure };
+  }
+
+  function textureAmplitude(reference, width, x, y, side, policy, ceiling) {
+    // Measure source detail after removing a plane. A smooth slope or a bright
+    // flat sky is not noise. No encoded pixels or payload bits enter this test.
+    let sum = 0, squares = 0, slopeX = 0, slopeY = 0;
+    const middle = (side - 1) / 2, count = side * side;
+    for (let dy = 0; dy < side; dy++) for (let dx = 0; dx < side; dx++) {
+      const index = (x + dx + (y + dy) * width) * 4;
+      const value = (reference[index] + reference[index + 1] + reference[index + 2]) / 3;
+      sum += value; squares += value * value;
+      slopeX += value * (dx - middle); slopeY += value * (dy - middle);
+    }
+    const axisEnergy = count * (side * side - 1) / 12;
+    const residual = Math.max(0, squares - sum * sum / count - (slopeX * slopeX + slopeY * slopeY) / axisEnergy);
+    const rms = Math.sqrt(residual / count);
+    return Math.min(ceiling, policy.strength + Math.round(rms * policy.textureGain));
+  }
+
+  function applyBit(reference, image, width, column, blockRow, bit, strength, amplitudeCache, signalPolicy) {
     const originX = column * BLOCK;
     const originY = blockRow * BLOCK;
     const cacheIndex = amplitudeCache ? column + blockRow * (width / BLOCK | 0) : -1;
     let amplitude = cacheIndex >= 0 ? amplitudeCache[cacheIndex] : -1;
     if (amplitude < 0) {
-      amplitude = resolveAmplitude(reference, width, originX, originY, strength);
+      const requested = signalPolicy ? textureAmplitude(reference, width, originX, originY, BLOCK, signalPolicy, V4_PAYLOAD_PEAK) : strength;
+      amplitude = resolveAmplitude(reference, width, originX, originY, requested);
       if (cacheIndex >= 0) amplitudeCache[cacheIndex] = amplitude;
     }
     if (amplitude === 0) return;
@@ -648,18 +676,18 @@
     return order;
   }
 
-  async function writeBits(reference, image, width, columns, slots, bitAt, strength, amplitudeCache) {
+  async function writeBits(reference, image, width, columns, slots, bitAt, strength, amplitudeCache, signalPolicy) {
     for (let slot = 0; slot < slots.length; slot++) {
       if ((slot & 8191) === 8191) await yieldNow();
       const bit = bitAt(slot);
       const block = slots[slot];
-      applyBit(reference, image, width, block % columns, Math.floor(block / columns), bit, strength, amplitudeCache);
+      applyBit(reference, image, width, block % columns, Math.floor(block / columns), bit, strength, amplitudeCache, signalPolicy);
     }
   }
 
   // Versioned geometry profiles. Payload/encryption envelopes are independent.
-  // V3 is frozen. V4 keeps its eight patches, wavelets and strength, correcting
-  // their local brightness. V5 experiments with smaller, softer corner patches.
+  // V3 is frozen. V4 keeps its eight patches and wavelets, balances brightness
+  // and adapts contrast to source detail/redundancy. V5 experiments with smaller patches.
   const LOCATOR_INSET = 8;
   const LOCATOR_STRENGTH = 16;
   const LOCATOR_PROFILES = new Map([
@@ -769,8 +797,8 @@
     return bytes;
   }
 
-  function paintLocators(reference, output, width, height, strength, version = CARRIER_V3) {
-    if (version !== CARRIER_V3) return paintBlendedLocators(reference, output, width, height, strength, version);
+  function paintLocators(reference, output, width, height, strength, version = CARRIER_V3, signalPolicy) {
+    if (version !== CARRIER_V3) return paintBlendedLocators(reference, output, width, height, strength, version, signalPolicy);
     const p = locatorProfile(version);
     const amplitude = Math.min(LOCATOR_STRENGTH, strength);
     for (const patch of locatorLayout(width, height, version)) {
@@ -850,7 +878,7 @@
     return version === CARRIER_V4 ? 1 : locatorGain(grid, cell) * (main ? 1 : 0.65);
   }
 
-  function paintBlendedLocators(reference, output, width, height, strength, version) {
+  function paintBlendedLocators(reference, output, width, height, strength, version, signalPolicy) {
     const p = locatorProfile(version), amplitude = Math.min(version === CARRIER_V4 ? LOCATOR_STRENGTH : 12, strength) / 16;
     const side = referenceProfile();
     const reserved = reservedLocators(width, height, version);
@@ -886,7 +914,8 @@
         const cell = grid.order[slot], coded = slot % (main ? 96 : 24);
         const bit = WORD_BITS[header[Math.floor(coded / 12)] * 12 + coded % 12];
         const x = patch.x + cell % grid.columns * grid.cell, y = patch.y + Math.floor(cell / grid.columns) * grid.cell;
-        const gain = amplitude * blendedLocatorGain(version, grid, cell, main), kernel = grid.kernels[bit];
+        const localAmplitude = signalPolicy ? textureAmplitude(reference, width, x, y, grid.cell, signalPolicy, V4_MARKER_PEAK) / 16 : amplitude;
+        const gain = localAmplitude * blendedLocatorGain(version, grid, cell, main), kernel = grid.kernels[bit];
         for (let channel = 0; channel < 3; channel++) {
           let target = 0;
           for (let i = 0; i < count; i++) {
@@ -1203,7 +1232,7 @@
 
   function searchInWorker(pixels, width, height, options, operation = "geometry") {
     return new Promise((resolve, reject) => {
-      const url = new URL("pixelstow-transform-worker.js?v=20261013-camera-resume1", codecScriptUrl);
+      const url = new URL("pixelstow-transform-worker.js?v=20261013-texture-boost1", codecScriptUrl);
       const worker = new Worker(url);
       let finished = false;
       const abort = () => { if (finished) return; cleanup(); reject(new DOMException("Search cancelled.", "AbortError")); };
@@ -1834,7 +1863,7 @@
           projection += (pixels[index] + pixels[index + 1] + pixels[index + 2]) / 3 * kernel[i];
           energy += kernel[i] ** 2;
         }
-        const maximum = (version === CARRIER_V4 ? 1 : 12 / 16) * blendedLocatorGain(version, p, cell, main);
+        const maximum = (version === CARRIER_V4 ? V4_MARKER_PEAK / 16 : 12 / 16) * blendedLocatorGain(version, p, cell, main);
         const amount = Math.max(0, Math.min(maximum, projection / energy));
         for (let i = 0; i < kernel.length; i++) {
           const index = (x + i % p.cell + (y + Math.floor(i / p.cell)) * width) * 4;
@@ -1844,7 +1873,7 @@
     }
   }
 
-  async function writeSignal(reference, image, width, height, framed, strength, version, map = null) {
+  async function writeSignal(reference, image, width, height, framed, strength, version, map = null, signalPolicy = null) {
     const columns = Math.floor(width / BLOCK);
     const blockCount = map ? map.length : columns * Math.floor(height / BLOCK);
     const payloadBlocks = blockCount - PREAMBLE_BLOCKS;
@@ -1873,14 +1902,14 @@
     await writeBits(reference, image, width, columns, map ? preambleOrder.map((block) => map[block]) : preambleOrder, (slot) => {
       const bitIndex = slot % 72;
       return (bytes[bitIndex >> 3] >> (7 - (bitIndex & 7))) & 1;
-    }, strength, amplitudeCache);
+    }, strength, amplitudeCache, signalPolicy);
     const payloadOrder = scatterOrder(payloadBlocks, SEED);
     const payloadSlots = new Uint32Array(payloadBlocks);
     for (let slot = 0; slot < payloadBlocks; slot++) {
       const block = PREAMBLE_BLOCKS + payloadOrder[slot];
       payloadSlots[slot] = map ? map[block] : block;
     }
-    await writeBits(reference, image, width, columns, payloadSlots, (slot) => codedBit(framed, slot % (framed.length * bitsPerByte), bitsPerByte), strength, amplitudeCache);
+    await writeBits(reference, image, width, columns, payloadSlots, (slot) => codedBit(framed, slot % (framed.length * bitsPerByte), bitsPerByte), strength, amplitudeCache, signalPolicy);
     return {
       ...repetitionBudget(payloadBlocks, framed.length, bitsPerByte)
     };
@@ -2296,7 +2325,8 @@
     const probe = await packFrame(payload, 8, passwordProtected, bundle);
     const columns = Math.floor(width / BLOCK);
     const blockCount = map ? map.length : columns * Math.floor(height / BLOCK);
-    if (adaptive) {
+    let signalPolicy = null;
+    if (adaptive || version === CARRIER_V4) {
       const available = blockCount - PREAMBLE_BLOCKS;
       let bitsPerByte = 0;
       if (probe.length * 12 <= available) bitsPerByte = 12;
@@ -2305,15 +2335,19 @@
         throw new Error("The framed payload needs " + probe.length.toLocaleString("en-GB") + " bytes, but this image holds " +
           Math.max(0, Math.floor(available / 9)).toLocaleString("en-GB") + ". Use a larger picture, smaller files or a shorter recording.");
       }
-      const copies = Math.max(1, Math.floor(available / (probe.length * bitsPerByte)));
-      const multiplier = copies >= 4 ? 1 : copies === 3 ? 1.5 : copies === 2 ? 2 : 4;
-      const adjusted = Math.min(32, Math.max(strength, roundHalfToEven(strength * multiplier)));
-      if (adjusted !== strength) strength = adjusted;
+      if (version === CARRIER_V4) {
+        signalPolicy = v4SignalPolicy(available / (probe.length * bitsPerByte), strength);
+        strength = signalPolicy.strength;
+      } else {
+        const copies = Math.max(1, Math.floor(available / (probe.length * bitsPerByte)));
+        const multiplier = copies >= 4 ? 1 : copies === 3 ? 1.5 : copies === 2 ? 2 : 4;
+        strength = Math.min(32, Math.max(strength, roundHalfToEven(strength * multiplier)));
+      }
     }
     const framed = await packFrame(payload, strength, passwordProtected, bundle);
     const output = reference.slice();
-    const written = await writeSignal(reference, output, width, height, framed, strength, version, map);
-    if (map) paintLocators(reference, output, width, height, strength, version);
+    const written = await writeSignal(reference, output, width, height, framed, strength, version, map, signalPolicy);
+    if (map) paintLocators(reference, output, width, height, strength, version, signalPolicy);
     return {
       pixels: output,
       strength,
@@ -2730,15 +2764,17 @@
     } else restored = identity
       ? pixels.slice()
       : await resampleReadSpace(pixels, width, height, origW, origH, fit.scaleX, fit.scaleY, fit.phaseX, fit.phaseY);
-    const cleaned = await extractBlind(restored, origW, origH, fit.strength, locatorBlockMap(origW, origH, Infinity, fit.carrierVersion));
+    const cleaned = await extractBlind(restored, origW, origH, fit.strength, locatorBlockMap(origW, origH, Infinity, fit.carrierVersion),
+      fit.carrierVersion === CARRIER_V4 ? V4_PAYLOAD_PEAK : fit.strength);
     cleanLocators(restored, origW, origH, cleaned, fit.carrierVersion);
     if (identity) return cleaned;
     return forwardSample(cleaned, origW, origH, pixels, width, height, fit, options.signal);
   }
 
-  async function extractBlind(pixels, width, height, strength, map = null) {
+  async function extractBlind(pixels, width, height, strength, map = null, peakStrength = strength) {
     assertImage(pixels, width, height);
     strength = Math.max(1, Math.min(32, strength | 0));
+    const maximum = Math.max(1, peakStrength / strength);
     const common = new Float64Array(16);
     const difference = new Float64Array(16);
     let mean = 0;
@@ -2782,8 +2818,8 @@
             bit += brightness * difference[k];
           }
         }
-        marker = clampRange(marker / commonEnergy, 0, 1);
-        bit = clampRange(bit / differenceEnergy, -0.5, 0.5);
+        marker = clampRange(marker / commonEnergy, 0, maximum);
+        bit = clampRange(bit / differenceEnergy, -maximum / 2, maximum / 2);
         for (let y = 0; y < 4; y++) {
           for (let x = 0; x < 4; x++) {
             const k = x + y * 4;

@@ -160,6 +160,12 @@ Comparison offers a visible native slider and a pointer-captured touch handle.
 Left-clicking or dragging anywhere on the comparison image moves the divider,
 including after zooming or panning it offscreen. Right-button dragging pans;
 touch gestures outside the divider handle remain available for page scrolling.
+The page preview uses `touch-action: pan-y` and leaves the first finger uncaptured.
+Two-finger touch events take over for image pinch/pan; full-screen preview retains
+`touch-action: none`. Ordinary taps still reach playback buttons. Focused native
+Chrome touch checks verified page scrolling, divider dragging, page/full-screen
+pinch without browser zoom, and camera-source import; actual iPhone use remains
+subject to device evaluation.
 The header keeps the larger logo beside the title, with the shortened introduction
 across the full width below. Technical notes are at the bottom of the page.
 

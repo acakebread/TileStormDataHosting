@@ -1,5 +1,19 @@
 # Browser camera acquisition
 
+**Photograph to encode** opens the same camera preview for taking a new source
+image on phones or desktops with a camera. **Use photo for encoding** imports the
+complete video raster into the message/file composer; no marker worker or
+photographic recovery search runs in this mode. Only the inexpensive native
+fingerprint check runs on import, so existing native locked/encoded images are
+still rejected for re-encoding. The normal writer also retains its fingerprint
+guard. Switching cameras or rotating the view preserves source mode.
+
+Inside that preview, **Take source photo with phone camera** opens the native
+still-camera/picker with the same source purpose. On browsers without live camera
+access, Photograph to encode uses that picker directly. The picker purpose is
+cleared after selection or cancellation; the ordinary Take photo button continues
+to import images through the reader. Captured image pixels are preserved.
+
 **Open camera** requests video only, preferring the rear camera and a 1920 × 2560
 portrait or 2560 × 1920 landscape feed, according to the device's orientation.
 Constraints are ideals: actual resolution depends on the browser/device.

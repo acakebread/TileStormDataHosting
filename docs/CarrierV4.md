@@ -1,7 +1,7 @@
 # Browser carrier 4: brightness-balanced carrier 3 markers
 
 Carrier 4 is the default browser writer. It keeps carrier 3's eight recovery
-patches, their positions, dimensions, six-pixel wavelets, full marker strength
+patches, their positions, dimensions, six-pixel wavelets
 and payload exclusions. The change is local brightness correction, not smaller
 or softer markers. The [smaller-marker experiment](CarrierV5.md) is selectable
 as carrier 5. Carrier 3 remains a comparison and rollback option.
@@ -36,8 +36,8 @@ unchanged. Generated-image verification uses the inexpensive native reader.
 ## Brightness correction
 
 The expanded marker kernel's mean is removed without reducing its diagonal
-contrast. There is no edge taper or reduced strength cap: amplitude follows
-the payload strength and is capped at 16, as in carrier 3.
+contrast. There is no edge taper. Payload and marker amplitude now adapt as
+described below; the V3 writer retains its original strength rules.
 
 Before painting any markers, each patch measures the written payload's average
 RGB shift from the original in a 12-pixel ring, excluding all marker
@@ -52,6 +52,33 @@ Brightness preservation and clipping can still reduce the signal on difficult
 colours; the markers remain visible wavelets. The style change does not add
 lens correction or establish camera/print reliability. Real photographs still
 need user evaluation. Carrier 3's writer remains frozen for comparison.
+
+## Adaptive contrast
+
+The V4 writer uses actual fractional repetition rather than a rounded count of
+complete copies. At 5x redundancy or above, the nominal amplitude starts at 8.
+Below 5x it rises continuously toward 32 at 1x; native verification can also
+raise the nominal amplitude if required. This spends more image quality on
+payloads with fewer repeated symbols. It does not create extra redundancy.
+
+Each payload block and each six-pixel marker cell measures RMS source detail
+after subtracting a local brightness plane. Flat regions and smooth brightness
+slopes do not trigger a texture boost. Source detail adds bounded contrast, with
+more allowance below 5x. Payload peaks are limited to 64 amplitude units and
+marker peaks to 32; payload clipping still uses the existing fitted-shift/sign
+check, and markers retain their exact local brightness targets. Neither input
+pixels nor alpha are modified. Stronger wavelets will be visible on dense or
+textured images; this is a deliberate quality/recovery tradeoff.
+
+The geometry, symbol signs, preamble, envelope, repetition and marker CRCs remain
+unchanged. The existing signed-correlation reader accepts varying amplitudes
+without requiring an amplitude map. Frame strength records the nominal value;
+source extraction allows for the larger V4 local peaks. No migration for earlier
+V4 output is added. V1/V3/V5 writing is unchanged, including the frozen V3 digest.
+Checks cover native payloads and all eight marker CRCs at both high and low
+redundancy, clipped colours and unchanged source/alpha:
+`node tests/pixelstow-v4-boost-checks.mjs`. They do not establish a camera success
+rate; local phone/print tests must evaluate the optical benefit.
 
 ## Limits and evaluation
 
