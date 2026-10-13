@@ -9,7 +9,7 @@ process.chdir(fileURLToPath(new URL('../', import.meta.url)));
 const context=vm.createContext({window:{},Uint8Array,Uint8ClampedArray,TextEncoder,TextDecoder,
  Blob,Response,CompressionStream,DecompressionStream,crypto:webcrypto,setTimeout,DOMException});
 vm.runInContext((await fs.readFile('pixelstow.js','utf8')).replace('root.PixelStow = {',
- 'root.boostChecks = { locatorLayout, locatorBlockMap, readVisualLocator }; root.PixelStow = {'),context);
+ 'root.boostChecks = { locatorLayout, locatorBlockMap, readVisualLocator, applyBit, v4SignalPolicy }; root.PixelStow = {'),context);
 const codec=context.window.PixelStow,internals=context.window.boostChecks,w=640,h=480;
 let state=127;
 function random(){state^=state<<13;state^=state>>>17;state^=state<<5;return(state>>>0)/4294967296;}
@@ -34,7 +34,7 @@ function errors(image){
  return sums.map((v,i)=>Math.sqrt(v/counts[i]));
 }
 const sparseError=errors(sparse),denseError=errors(dense);
-assert(sparseError[1]>sparseError[0]*1.3,'source detail must receive more contrast at the same redundancy');
+assert(sparseError[1]>sparseError[0]*1.15,'source detail must retain a restrained contrast boost at the same redundancy');
 assert(denseError[0]>sparseError[0]*2,'low redundancy must increase smooth-area strength too');
 assert(denseError[1]>sparseError[1]*1.7,'low redundancy must increase textured-area strength');
 for(const [image,payload] of [[sparse,sparseContent],[dense,denseContent]]){
@@ -50,6 +50,28 @@ assert.deepEqual(input,original);
 console.log('PASS: adaptive texture/low-redundancy contrast, all eight CRC headers, exact native payloads and source/alpha preservation');
 console.log(JSON.stringify({highRedundancy:sparse.repetitionRatio,lowRedundancy:dense.repetitionRatio,
  highRms:sparseError,lowRms:denseError}));
+
+// Bright glints in near-black, warm-coloured material must not purchase extra
+// signal by lifting the surrounding block or adding an unequal RGB bias.
+const glint=new Uint8Array(4*4*4);
+for(let i=0;i<glint.length;i+=4)glint.set([8,4,2,143],i);
+glint.set([245,190,134,143],20);
+const policy=internals.v4SignalPolicy(2.7,8);
+function means(output){
+ const sum=[0,0,0];for(let i=0;i<output.length;i+=4)for(let c=0;c<3;c++)sum[c]+=output[i+c]-glint[i+c];
+ return sum.map(v=>v/16);
+}
+for(const bit of [0,1]){
+ const nominal=glint.slice(),boosted=glint.slice(),cache=new Int16Array(1).fill(-1);
+ internals.applyBit(glint,nominal,4,0,0,bit,policy.strength);
+ internals.applyBit(glint,boosted,4,0,0,bit,policy.strength,cache,policy);
+ const before=means(nominal),after=means(boosted),extra=after.map((v,c)=>v-before[c]);
+ assert(extra.every(v=>Math.abs(v)<=4),'boost must not lift a dark block substantially beyond its nominal fit');
+ assert(Math.max(...extra)-Math.min(...extra)<=2,'boost must not introduce an unequal channel bias');
+ assert(cache[0]<48,'glint must prevent the maximum-amplitude texture boost');
+ for(let i=3;i<glint.length;i+=4)assert.equal(boosted[i],143);
+}
+console.log('PASS: dark/highlight blocks limit added brightness and RGB bias for both bit orientations');
 
 // Stronger markers must retain the brightness treatment even on clipped input.
 for(const colour of [0,255]){

@@ -24,8 +24,8 @@
   const CARRIER_V3 = 3;
   const CARRIER_V4 = 4;
   const CARRIER_V5 = 5;
-  const V4_PAYLOAD_PEAK = 64;
-  const V4_MARKER_PEAK = 32;
+  const V4_PAYLOAD_PEAK = 48;
+  const V4_MARKER_PEAK = 24;
   let preferredCarrier = CARRIER_V4;
   const RECOVERY_CARRIERS = [CARRIER_V4, CARRIER_V3, CARRIER_V5];
   const codecScriptUrl = typeof document !== "undefined" ? document.currentScript?.src : null;
@@ -618,8 +618,8 @@
     // Use the actual fractional repetition budget, not its rounded copy count.
     // Five copies is the restrained case; near one copy spends more contrast.
     const pressure = Math.max(0, Math.min(1, (5 - ratio) / 4));
-    return { strength: Math.max(strength, Math.round(8 + 24 * pressure)),
-      textureGain: 0.35 + 1.65 * pressure };
+    return { strength: Math.max(strength, Math.round(8 + 12 * pressure)),
+      textureGain: 0.175 + 0.825 * pressure };
   }
 
   function textureAmplitude(reference, width, x, y, side, policy, ceiling) {
@@ -639,13 +639,41 @@
     return Math.min(ceiling, policy.strength + Math.round(rms * policy.textureGain));
   }
 
+  function limitBoostHeadroom(reference, width, x, y, requested, nominal) {
+    if (requested <= nominal) return requested;
+    const raised = [0, 1].map((bit) => fitBias(reference, width, x, y, bit, requested));
+    // Ordinary unclipped blocks need no further work. Increasing amplitude
+    // cannot reduce an already-required shift to zero, so their nominal fit
+    // will also be neutral.
+    if (raised.every((bias) => bias.fit.every(Boolean) && bias.shift.every((value) => value === 0))) return requested;
+    const baseline = [0, 1].map((bit) => fitBias(reference, width, x, y, bit, nominal));
+    // A per-channel sign flip is the legacy last resort on extreme colours.
+    // Never increase its amplitude as a texture boost.
+    if (baseline.some((bias) => bias.fit.some((value) => !value))) return nominal;
+    const acceptable = (biases) => biases.every((bias, bit) => {
+      if (bias.fit.some((value) => !value)) return false;
+      const added = bias.shift.map((value, channel) => value - baseline[bit].shift[channel]);
+      return added.every((value) => Math.abs(value) <= 4) && Math.max(...added) - Math.min(...added) <= 2;
+    });
+    if (acceptable(raised)) return requested;
+    // Select a conservative valid amplitude without a long decrement sweep.
+    let low = nominal, high = requested;
+    while (high - low > 1) {
+      const middle = (low + high) >> 1;
+      if (acceptable([0, 1].map((bit) => fitBias(reference, width, x, y, bit, middle)))) low = middle;
+      else high = middle;
+    }
+    return low;
+  }
+
   function applyBit(reference, image, width, column, blockRow, bit, strength, amplitudeCache, signalPolicy) {
     const originX = column * BLOCK;
     const originY = blockRow * BLOCK;
     const cacheIndex = amplitudeCache ? column + blockRow * (width / BLOCK | 0) : -1;
     let amplitude = cacheIndex >= 0 ? amplitudeCache[cacheIndex] : -1;
     if (amplitude < 0) {
-      const requested = signalPolicy ? textureAmplitude(reference, width, originX, originY, BLOCK, signalPolicy, V4_PAYLOAD_PEAK) : strength;
+      const requested = signalPolicy ? limitBoostHeadroom(reference, width, originX, originY,
+        textureAmplitude(reference, width, originX, originY, BLOCK, signalPolicy, V4_PAYLOAD_PEAK), strength) : strength;
       amplitude = resolveAmplitude(reference, width, originX, originY, requested);
       if (cacheIndex >= 0) amplitudeCache[cacheIndex] = amplitude;
     }
@@ -1232,7 +1260,7 @@
 
   function searchInWorker(pixels, width, height, options, operation = "geometry") {
     return new Promise((resolve, reject) => {
-      const url = new URL("pixelstow-transform-worker.js?v=20261013-texture-boost1", codecScriptUrl);
+      const url = new URL("pixelstow-transform-worker.js?v=20261014-shadow-boost1", codecScriptUrl);
       const worker = new Worker(url);
       let finished = false;
       const abort = () => { if (finished) return; cleanup(); reject(new DOMException("Search cancelled.", "AbortError")); };
