@@ -1179,7 +1179,7 @@
 
   function searchInWorker(pixels, width, height, options, operation = "geometry") {
     return new Promise((resolve, reject) => {
-      const url = new URL("pixelstow-transform-worker.js?v=20261013-balanced-v4-v5-1", codecScriptUrl);
+      const url = new URL("pixelstow-transform-worker.js?v=20261013-lattice1", codecScriptUrl);
       const worker = new Worker(url);
       let finished = false;
       const abort = () => { if (finished) return; cleanup(); reject(new DOMException("Search cancelled.", "AbortError")); };
@@ -1295,6 +1295,7 @@
   }
 
   function photoPhaseAt(field, x, y) {
+    if (field.kind === "spline") return root.PixelStowLattice.at(field, x, y);
     const gx = Math.max(0, Math.min(field.columns - 1, (x - field.step / 2) / field.step));
     const gy = Math.max(0, Math.min(field.rows - 1, (y - field.step / 2) / field.step));
     const ix = Math.floor(gx), iy = Math.floor(gy), jx = Math.min(field.columns - 1, ix + 1), jy = Math.min(field.rows - 1, iy + 1);
@@ -1380,6 +1381,7 @@
     // Each output pixel is on the original carrier lattice. A single homography
     // maps its footprint into the full capture; no triangles or preview resize.
     const out = new Uint8Array(nativeWidth * nativeHeight * 4), sum = new Float64Array(4);
+    const curved = phaseCorrection?.kind === "spline", local = new Float64Array(12);
     for (let y = 0; y < nativeHeight; y++) {
       if ((y & 7) === 0) {
         if (signal?.aborted) throw new DOMException("Search cancelled.", "AbortError");
@@ -1391,12 +1393,29 @@
         const cy = (matrix[3] * x + matrix[4] * y + matrix[5]) / d;
         // Local derivatives determine quadrature density, not the mapping itself.
         // Subsamples still use the exact projective denominator at their position.
-        const nx = Math.min(8, Math.max(1, Math.ceil(Math.hypot(matrix[0] - cx * matrix[6], matrix[3] - cy * matrix[6]) / Math.abs(d))));
-        const ny = Math.min(8, Math.max(1, Math.ceil(Math.hypot(matrix[1] - cx * matrix[7], matrix[4] - cy * matrix[7]) / Math.abs(d))));
-        const correction = phaseCorrection ? photoPhaseAt(phaseCorrection, x, y) : { x: 0, y: 0 };
+        let nx = Math.min(8, Math.max(1, Math.ceil(Math.hypot(matrix[0] - cx * matrix[6], matrix[3] - cy * matrix[6]) / Math.abs(d))));
+        let ny = Math.min(8, Math.max(1, Math.ceil(Math.hypot(matrix[1] - cx * matrix[7], matrix[4] - cy * matrix[7]) / Math.abs(d))));
+        let correction;
+        if (curved) {
+          root.PixelStowLattice.evaluate(phaseCorrection, x, y, local);
+          correction = { x: local[0], y: local[1] };
+          const qx = x + local[0], qy = y + local[1], divisor = matrix[6] * qx + matrix[7] * qy + matrix[8];
+          const sx = (matrix[0] * qx + matrix[1] * qy + matrix[2]) / divisor;
+          const sy = (matrix[3] * qx + matrix[4] * qy + matrix[5]) / divisor;
+          const ax = (matrix[0] - sx * matrix[6]) / divisor, ay = (matrix[3] - sy * matrix[6]) / divisor;
+          const bx = (matrix[1] - sx * matrix[7]) / divisor, by = (matrix[4] - sy * matrix[7]) / divisor;
+          nx = Math.min(8, Math.max(1, Math.ceil(Math.hypot(ax * (1 + local[2]) + bx * local[4], ay * (1 + local[2]) + by * local[4]))));
+          ny = Math.min(8, Math.max(1, Math.ceil(Math.hypot(ax * local[3] + bx * (1 + local[5]), ay * local[3] + by * (1 + local[5])))));
+        } else correction = phaseCorrection ? photoPhaseAt(phaseCorrection, x, y) : { x: 0, y: 0 };
         sum.fill(0);
         for (let iy = 0; iy < ny; iy++) for (let ix = 0; ix < nx; ix++) {
-          const px = x + correction.x + (ix + 0.5) / nx - 0.5, py = y + correction.y + (iy + 0.5) / ny - 0.5;
+          const u = (ix + 0.5) / nx - 0.5, v = (iy + 0.5) / ny - 0.5;
+          // A local quadratic expansion of the spline follows the curved pixel
+          // footprint, including its Jacobian, without re-evaluating 16 controls
+          // for every subpixel. The projective denominator remains continuous.
+          const ox = curved ? local[0] + local[2] * u + local[3] * v + (local[6] * u * u + 2 * local[7] * u * v + local[8] * v * v) / 2 : correction.x;
+          const oy = curved ? local[1] + local[4] * u + local[5] * v + (local[9] * u * u + 2 * local[10] * u * v + local[11] * v * v) / 2 : correction.y;
+          const px = x + ox + u, py = y + oy + v;
           const divisor = matrix[6] * px + matrix[7] * py + matrix[8];
           const sx = Math.max(0, Math.min(width - 1, (matrix[0] * px + matrix[1] * py + matrix[2]) / divisor));
           const sy = Math.max(0, Math.min(height - 1, (matrix[3] * px + matrix[4] * py + matrix[5]) / divisor));
@@ -1428,7 +1447,47 @@
       readImage: { ...image, matrix: q } };
   }
 
-  async function readPhotoMapping(pixels, width, height, geometry, signal, onProgress) {
+  function photoMarkerAnchors(geometry, markers) {
+    const inverse = root.PixelStowTransform.invert(geometry.matrix);
+    const profile = locatorProfile(geometry.carrierVersion || CARRIER_V3);
+    const layout = locatorLayout(geometry.originalWidth, geometry.originalHeight, profile.version);
+    const maximum = Math.min(48, Math.max(geometry.originalWidth, geometry.originalHeight) * 0.04);
+    return (markers || []).filter((m) => m.matrix && (m.verification === "header" || m.verification === "pattern") && m.quality >= 0.6)
+      .flatMap((m) => {
+        const patch = layout.find((p) => p.id === m.id);
+        if (!patch) return [];
+        const x = patch.x + profile.width / 2, y = patch.y + profile.height / 2;
+        const observed = mappedPoint(m.matrix, profile.width / 2, profile.height / 2);
+        const predicted = mappedPoint(inverse, observed.x, observed.y);
+        const dx = predicted.x - x, dy = predicted.y - y;
+        return Number.isFinite(dx + dy) && Math.max(Math.abs(dx), Math.abs(dy)) <= maximum
+          ? [{ x, y, dx, dy, weight: m.quality }] : [];
+      });
+  }
+
+  async function readTrackedPhoto(pixels, width, height, geometry, signal, onProgress, markers, options, nativeGeometry, fast) {
+    const anchors = photoMarkerAnchors(geometry, markers);
+    if (!root.PixelStowLattice || anchors.length < 3) return null;
+    const deadline = Math.min(options.deadline || Infinity, Date.now() + 8000);
+    let previous;
+    for (let pass = 0; pass < 2 && Date.now() < deadline; pass++) {
+      const field = await root.PixelStowLattice.track(pixels, width, height, geometry, {
+        signal, onProgress, deadline, anchors, previous, channel: pass ? 1 : undefined,
+        reservations: reservedLocators(geometry.originalWidth, geometry.originalHeight, geometry.carrierVersion || CARRIER_V3)
+      });
+      if (!field) continue;
+      onProgress?.("Sampling the original capture through the curved wavelet grid…");
+      const corrected = await rectifyPhoto(pixels, width, height, geometry.originalWidth, geometry.originalHeight, geometry.matrix, signal, field);
+      for (const channel of [undefined, 1, 0, 2]) {
+        const retried = await readVisualMapping(corrected.pixels, corrected.width, corrected.height, nativeGeometry, signal, { ...fast, channel });
+        if (!retried.locatorOnly) return photoReadResult(retried, { ...corrected, phaseCorrection: field }, geometry);
+      }
+      previous = field;
+    }
+    return null;
+  }
+
+  async function readPhotoMapping(pixels, width, height, geometry, signal, onProgress, markers, options = {}) {
     let image = await rectifyPhoto(pixels, width, height, geometry.originalWidth, geometry.originalHeight, geometry.matrix, signal);
     const nativeGeometry = geometryAt(geometry, [1, 0, 0, 0, 1, 0, 0, 0, 1]);
     // A correct native grid needs one template. Avoid repeatedly decoding a
@@ -1436,7 +1495,7 @@
     const fast = { offsets: [0], strengths: [16] };
     let recovered = await readVisualMapping(image.pixels, image.width, image.height, nativeGeometry, signal, fast);
     if (recovered.locatorOnly) {
-      let working = image, previous;
+      let working = image, previous, tracked = false;
       // Residual phase can be measured again after the first correction. Every
       // reconstruction still samples the full original; no resampling cascade.
       for (let pass = 0; pass < 3; pass++) {
@@ -1457,7 +1516,21 @@
             return photoReadResult(recovered, image, geometry);
           }
         }
+        // Try original-pixel tracking after the first inexpensive phase attempt.
+        // Retain the remaining proven phase passes if a curved fit cannot verify.
+        if (pass === 0) {
+          tracked = true;
+          const followed = await readTrackedPhoto(pixels, width, height, geometry, signal, onProgress, markers, options, nativeGeometry, fast);
+          if (followed) return followed;
+        }
         previous = phaseCorrection; working = corrected;
+      }
+      // If native reconstruction destroyed the usable phase, measure smaller,
+      // oversampled windows directly in the original capture. Keep the proven
+      // reader above and its successful fast path; no writer/format change.
+      if (recovered.locatorOnly && !tracked) {
+        const followed = await readTrackedPhoto(pixels, width, height, geometry, signal, onProgress, markers, options, nativeGeometry, fast);
+        if (followed) return followed;
       }
     }
     return photoReadResult(recovered, image, geometry);
@@ -1620,10 +1693,10 @@
       options.onProgress?.("Reading ranked candidate " + (i + 1) + "/" + candidates.length +
         " (" + geometry.inlierCount + "/" + geometry.markerTotal + " aligned markers)…");
       let recovered = candidate.photo
-        ? await readPhotoMapping(pixels, width, height, geometry, options.signal, options.onProgress)
+        ? await readPhotoMapping(pixels, width, height, geometry, options.signal, options.onProgress, candidate.markers, options)
         : await readVisualMapping(pixels, width, height, geometry, options.signal);
       if (!candidate.photo && recovered.locatorOnly && geometry.model !== "translation")
-        recovered = await readPhotoMapping(pixels, width, height, geometry, options.signal, options.onProgress);
+        recovered = await readPhotoMapping(pixels, width, height, geometry, options.signal, options.onProgress, candidate.markers, options);
       checkCancelled(options.signal);
       const inspection = describeRecovery(recovered);
       const result = { ...inspection, found: true, unreadable: Boolean(recovered.locatorOnly) || !inspection.found,
@@ -2527,21 +2600,22 @@
     return rounded;
   }
 
-  async function forwardSample(source, sourceW, sourceH, pixels, width, height, fit) {
+  async function forwardSample(source, sourceW, sourceH, pixels, width, height, fit, signal) {
     const out = pixels.slice();
     const inverse = fit.matrix ? root.PixelStowTransform.invert(fit.matrix) : null;
     const correction = fit.readResolution?.phaseCorrection;
     const photoInverse = correction ? root.PixelStowTransform.invert(fit.readResolution.photoMatrix) : null;
     const readInverse = correction ? root.PixelStowTransform.invert(fit.readImage.matrix) : null;
+    const curvedInverse = correction?.kind === "spline" ? await root.PixelStowLattice.inverse(correction, signal) : null;
     for (let y = 0; y < height; y++) {
-      if ((y & 15) === 15) await yieldNow();
+      if ((y & 15) === 15) { checkCancelled(signal); await yieldNow(); }
       const originY = inverse ? 0 : (y - fit.phaseY) / fit.scaleY;
       for (let x = 0; x < width; x++) {
         let point = inverse ? mappedPoint(inverse, x, y) : { x: (x - fit.phaseX) / fit.scaleX, y: originY };
         if (correction) {
           const observed = mappedPoint(photoInverse, x, y);
-          let native = observed;
-          for (let iteration = 0; iteration < 3; iteration++) {
+          let native = curvedInverse ? root.PixelStowLattice.inverseAt(curvedInverse, observed.x, observed.y) : observed;
+          if (!curvedInverse) for (let iteration = 0; iteration < 3; iteration++) {
             const delta = photoPhaseAt(correction, native.x, native.y);
             native = { x: observed.x - delta.x, y: observed.y - delta.y };
           }
@@ -2591,7 +2665,7 @@
     const cleaned = await extractBlind(restored, origW, origH, fit.strength, locatorBlockMap(origW, origH, Infinity, fit.carrierVersion));
     cleanLocators(restored, origW, origH, cleaned, fit.carrierVersion);
     if (identity) return cleaned;
-    return forwardSample(cleaned, origW, origH, pixels, width, height, fit);
+    return forwardSample(cleaned, origW, origH, pixels, width, height, fit, options.signal);
   }
 
   async function extractBlind(pixels, width, height, strength, map = null) {

@@ -208,6 +208,63 @@ with an unreadable payload block re-encoding.
 
 ## Detection and geometry
 
+### Curved carrier tracking (experimental)
+
+`pixelstow-lattice.js` adds a photograph-only fallback after the native read and
+first existing local-phase attempt fail. The remaining original phase attempts
+are retained if this fallback cannot verify a payload. Generated-image reading,
+encoding verification and all carrier writers are unchanged, including default
+carrier 4. Both camera candidates and ordinary geometric image imports use it.
+
+The tracker samples the full original capture around the predicted native grid,
+before reducing it to one sample per original pixel. Local windows span 24 native
+pixels and are sampled at half-pixel spacing. Footprint averaging suppresses
+capture detail above that sampling rate without constructing a full-size floating
+point raster. Marker reservations are excluded: their different frequency must
+not pull the payload's grid out of alignment.
+
+A separable complex-frequency search measures spacing, transverse frequency and
+phase in both directions. Its spacing bank covers 0.84 to 1.16 times the expected
+carrier frequency; transverse offsets cover -0.12 to 0.12. The shared component
+of the two payload symbols supplies phase without deciding their unknown bits.
+CRC-verified/known-pattern marker fits anchor native displacement. At least three
+reliable marker measurements are required; a tentative FFT signature cannot start
+this recovery by itself.
+
+Phase is periodic by four pixels. Tracking starts near marker anchors and follows
+reliable neighbouring measurements using their estimated spacing/direction. Weak
+windows do not drive raster-order phase unwrapping. Inconsistent neighbouring
+cycles receive less weight. A confidence-weighted thin-plate fit fills a 40-pixel
+control grid, with marker constraints fixing the global phase branch. A continuous
+Catmull-Rom spline supplies offsets and first/second derivatives between controls.
+Fields with excessive displacement, gradients or folded/extreme local area changes
+are rejected before sampling.
+
+The native raster is reconstructed from the original capture through the combined
+curved mapping and perspective transform. Local derivatives choose footprint
+sampling density; a quadratic expansion within each pixel follows its curvature.
+The exact projective denominator is still evaluated at every subsample. Previous
+corrected rasters are never resampled into the next attempt. There are at most two
+tracking attempts (averaged colour, then green), sharing an eight-second tracking
+budget and respecting the caller's deadline and cancellation. Existing payload
+worker termination/preemption applies to this step as well.
+
+Only the usual preamble, frame and payload checksums accept the result. Accepted
+geometry includes the typed spline controls and chosen read channel, so a fresh
+worker/page can reconstruct it for decoding or unlocking. Approximate source
+comparison solves an inverse map once on an eight-pixel native grid instead of
+iterating the spline for every high-resolution camera pixel. That inverse lookup
+is for the preview only; decoded contents use the forward footprint mapping.
+
+Focused validation: `node tests/pixelstow-lattice-checks.mjs`. A controlled
+640 x 480 carrier-4 image with smooth nonlinear displacement (up to five native
+pixels horizontally and three vertically), captured into a 2112 x 1600 raster,
+fails the perspective-only read and passes through original-capture tracking.
+The same case checks real marker-header anchors, full payload checksum, worker-style
+geometry replay, the inverse preview map and cancellation/budget handling. An older
+supplied saved capture still fails with its recorded marker fit. These results do
+not establish general camera, print, lens-calibration or high-resolution support.
+
 `pixelstow-spectrum.js` implements a radix-2, two-dimensional FFT without external
 libraries. It analyzes luminance across the supplied frame, emphasizing high
 frequencies and tapering edges without discarding outer marker evidence. Large

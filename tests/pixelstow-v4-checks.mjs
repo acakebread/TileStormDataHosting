@@ -113,7 +113,7 @@ const stripped = await codec.readImageFile(new Blob([Uint8Array.of(1, 2, 3)]));
 assert.deepEqual(stripped.pixels, expected); assert.equal(crops, 3); assert(closed);
 console.log('PASS: 1:1 canvas strip loading including the final partial strip');
 
-for (const name of ['pixelstow-spectrum.js', 'pixelstow-transform.js', 'pixelstow-transform-worker.js', 'pixelstow-camera.js'])
+for (const name of ['pixelstow-spectrum.js', 'pixelstow-transform.js', 'pixelstow-lattice.js', 'pixelstow-transform-worker.js', 'pixelstow-camera.js'])
   new vm.Script(await fs.readFile(name, 'utf8'), { filename: name });
 const html = await fs.readFile('pixelstow.html', 'utf8');
 for (const match of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)) new vm.Script(match[1]);
