@@ -760,13 +760,13 @@
       </div>
     </form>
   </dialog>
-  <script src="./pixelstow-spectrum.js?v=20261012-spectrum1"></script>
-  <script src="./pixelstow-transform.js?v=20261013-photo-phase2"></script>
-  <script src="./pixelstow.js?v=20261013-photo-phase2"></script>
+  <script src="./pixelstow-spectrum.js?v=20261013-discovery3"></script>
+  <script src="./pixelstow-transform.js?v=20261013-discovery3"></script>
+  <script src="./pixelstow.js?v=20261013-discovery3"></script>
   <script src="./pixelstow-export.js?v=20261011-exports"></script>
   <script src="./pixelstow-media.js?v=20261011-webm-duration"></script>
   <script src="./pixelstow-sharing.js?v=20261011-png-clipboard"></script>
-  <script src="./pixelstow-camera.js?v=20261012-camera2"></script>
+  <script src="./pixelstow-camera.js?v=20261013-discovery3"></script>
   <script>
     const fileInput = document.querySelector("#file");
     const drop = document.querySelector("#drop");
@@ -1202,6 +1202,12 @@
 
     function recordRecovery(job, result) {
       job.transformResult = { ...result, markers: result.markers || (result.geometry ? job.transformResult?.markers : null) || [] };
+      // Frequency evidence is tentative. Replace the running precheck message
+      // with the actual result, including failed searches and native reads.
+      transformSignature.textContent = result.found && !result.unreadable ? "Encoded contents verified."
+        : job.transformResult.markers.length ? "Recovery markers verified, but the contents could not be read."
+          : result.signature?.likely ? "Frequency hints were found, but no checksum-valid markers or contents were recovered."
+            : result.signature ? "No encoding signature or checksum-valid markers found." : "";
       const nearMiss = Boolean(result.unreadable && job.transformResult.markers.length);
       recoveryFraming.hidden = !nearMiss;
       // Automatic guides belong to a failed read, not to the next successful
@@ -1224,6 +1230,7 @@
     cancelTransformButton.addEventListener("click", () => {
       transformAbort?.abort();
       transformStatus.textContent = "Cancelling search…";
+      transformSignature.textContent = "";
     });
     findTransformButton.addEventListener("click", async () => {
       if (!current || busy || media.active || camera?.active) return;
@@ -1262,6 +1269,7 @@
       } catch (error) {
         const text = error?.name === "AbortError" ? "Visual transform search cancelled." : error?.message || "Visual transform search failed.";
         transformStatus.textContent = text;
+        transformSignature.textContent = "";
         setStatus(text, error?.name !== "AbortError");
       } finally {
         transformAbort = null;
@@ -1386,6 +1394,7 @@
       } catch (error) {
         if (current) {
           recoveryVisible = true;
+          transformSignature.textContent = "";
           transformStatus.textContent = error?.name === "AbortError" ? "Image recovery cancelled. Retry recovery or choose another image."
             : error?.message || "Image recovery failed. Retry recovery or choose another image.";
           setStatus(transformStatus.textContent, error?.name !== "AbortError");

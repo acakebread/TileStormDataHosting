@@ -985,7 +985,7 @@
 
   function searchInWorker(pixels, width, height, options, operation = "geometry") {
     return new Promise((resolve, reject) => {
-      const url = new URL("pixelstow-transform-worker.js?v=20261013-photo-phase2", codecScriptUrl);
+      const url = new URL("pixelstow-transform-worker.js?v=20261013-discovery3", codecScriptUrl);
       const worker = new Worker(url);
       let finished = false;
       const abort = () => { if (finished) return; cleanup(); reject(new DOMException("Search cancelled.", "AbortError")); };
@@ -1008,7 +1008,7 @@
       try {
         const copy = new Uint8Array(pixels);
         worker.postMessage({ pixels: copy, width, height, operation, mode: options.mode, forceSearch: options.forceSearch,
-          corners: options.corners, simplerFirst: options.simplerFirst, deadline: options.deadline,
+          corners: options.corners, seed: options.seed, simplerFirst: options.simplerFirst, deadline: options.deadline,
           seedDeadline: options.seedDeadline }, [copy.buffer]);
       } catch (error) { cleanup(); reject(error); }
     });
@@ -1290,7 +1290,7 @@
 
   async function findPhotoTransform(pixels, width, height, options) {
     const deadline = Math.min(options.deadline || Infinity, Date.now() + 60000);
-    let best = null, bestImage = null;
+    let best = null, bestImage = null, known = null;
     // Start with cheap coarse images, then double the working resolution. A
     // missing spectral signature or marker at one scale does not reject another.
     // Every level comes directly from the full capture, without accumulated blur.
@@ -1309,17 +1309,25 @@
       options.onProgress?.("Locating photo markers: " + label + "…");
       const image = full ? { pixels, width, height } : await reducePhoto(pixels, width, height, rw, rh, options.signal);
       const corners = options.corners?.map((p) => ({ x: (p.x + 0.5) * rw / width - 0.5, y: (p.y + 0.5) * rh / height - 0.5 }));
+      const scaleMatrix = (h) => [(rw / width) * h[0] + (rw / width - 1) / 2 * h[6],
+        (rw / width) * h[1] + (rw / width - 1) / 2 * h[7], (rw / width) * h[2] + (rw / width - 1) / 2 * h[8],
+        (rh / height) * h[3] + (rh / height - 1) / 2 * h[6], (rh / height) * h[4] + (rh / height - 1) / 2 * h[7],
+        (rh / height) * h[5] + (rh / height - 1) / 2 * h[8], h[6], h[7], h[8]];
+      const seed = known ? { ...known, matrix: scaleMatrix(known.matrix),
+        initialMatrix: known.initialMatrix && scaleMatrix(known.initialMatrix) } : undefined;
       // Limit unproductive seed searches so they cannot starve later levels.
       // A checksum-valid marker earns the rest of the shared budget to fit the
       // plane, rather than throwing away a promising search at a scale timeout.
       const remaining = deadline - Date.now();
       const seedBudget = divisor >= 8 ? (divisor === 16 ? 5000 : 8000)
         : Math.max(5000, remaining * (divisor === 4 ? 0.7 : divisor === 2 ? 0.7 : 1));
-      const result = await findVisualTransform(image.pixels, rw, rh, { ...options, corners, singleResolution: true,
+      const result = await findVisualTransform(image.pixels, rw, rh, { ...options, corners, seed, singleResolution: true,
         geometryOnly: true, simplerFirst: options.simplerFirst !== false, deadline,
         seedDeadline: Math.min(deadline, Date.now() + seedBudget),
         onProgress: (text) => options.onProgress?.(label + ": " + text) });
       const lifted = full ? result : liftPhotoResult(result, width, height, rw, rh);
+      const header = lifted.markers?.filter((m) => m.verification === "header").sort((a, b) => b.quality - a.quality)[0];
+      if (header) known = { ...header, initialMatrix: lifted.geometry?.matrix };
       let candidate = { ...lifted, found: Boolean(lifted.geometry || lifted.markers?.length), unreadable: Boolean(lifted.geometry || lifted.markers?.length) };
       let nativeImage;
       if (lifted.geometry) {

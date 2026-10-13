@@ -64,6 +64,24 @@
     return values;
   }
 
+  function reducedBasis(basis) {
+    // The common carrier has both axis and diagonal peaks. An axis/diagonal
+    // pair describes the same lattice with a sheared basis. Reduce that lattice
+    // before trying it, while retaining the unreduced estimate for real shear.
+    let [ux, uy, vx, vy] = basis;
+    for (let pass = 0; pass < 4; pass++) {
+      if (ux * ux + uy * uy > vx * vx + vy * vy) [ux, uy, vx, vy] = [vx, vy, -ux, -uy];
+      const multiple = Math.round((ux * vx + uy * vy) / (ux * ux + uy * uy));
+      if (!multiple) break;
+      vx -= multiple * ux; vy -= multiple * uy;
+    }
+    return [ux, uy, vx, vy];
+  }
+
+  function rotations([ux, uy, vx, vy]) {
+    return [[ux, uy, vx, vy], [vx, vy, -ux, -uy], [-ux, -uy, -vx, -vy], [-vx, -vy, ux, uy]];
+  }
+
   async function analyze(luma, width, height, options) {
     let stride = Math.max(1, Math.ceil(Math.max(width, height) / 2048));
     if (stride % 2 === 0) stride++; // Even decimation can erase a four-pixel lattice.
@@ -142,23 +160,30 @@
         const diagonalBand = Math.max(strongestNear(real, fw, fh, (a.fx + bx) * stride, (a.fy + by) * stride, floor),
           strongestNear(real, fw, fh, (a.fx - bx) * stride, (a.fy - by) * stride, floor)) >= 7;
         const score = Math.sqrt(a.score * b.score) * separation * (markerBand ? 1.5 : 1) * (diagonalBand ? 2 : 1);
+        // Ordinary photographs have many isolated FFT peaks. Require both
+        // independent directions to stand above the whole-spectrum noise floor,
+        // rather than accepting any pair of locally prominent texture peaks.
+        const prominence = Math.min(a.score / Math.min(a.contrast, 80), b.score / Math.min(b.contrast, 80)) / Math.max(mean, 1e-8);
+        if (prominence < 32 || !diagonalBand) continue;
         candidates.push({ basis, score, markerBand });
       }
     }
     candidates.sort((a, b) => b.score - a.score);
     const bases = [], selected = [];
     for (const candidate of candidates) {
-      if (selected.some((b) => candidate.basis.every((v, i) => Math.abs(v - b[i]) < 0.025))) continue;
-      selected.push(candidate.basis);
-      const [ux, uy, vx, vy] = candidate.basis;
-      bases.push([ux, uy, vx, vy], [vx, vy, -ux, -uy], [-ux, -uy, -vx, -vy], [-vx, -vy, ux, uy]);
+      for (const basis of [reducedBasis(candidate.basis), candidate.basis]) {
+        const turns = rotations(basis);
+        if (selected.some((b) => turns.some((t) => t.every((v, i) => Math.abs(v - b[i]) < 0.025)))) continue;
+        selected.push(basis); bases.push(...turns);
+        if (selected.length === 3) break;
+      }
       if (selected.length === 3) break;
     }
     const likely = bases.length > 0;
-    return { likely, markerBand: Boolean(candidates[0]?.markerBand), bases, stride,
-      message: likely ? "Likely encoded image: carrier-frequency pattern detected" + (candidates[0].markerBand ? "; coarser marker-frequency band also present." : "; the marker-frequency band is weak.")
+    return { likely, confirmed: false, markerBand: Boolean(candidates[0]?.markerBand), bases, stride,
+      message: likely ? "Possible carrier frequencies found. Checking marker headers; encoding is not yet confirmed."
         : (options.forceSearch || options.corners?.length) ? "No clear encoding frequency signature detected. Continuing with the precheck overridden."
-          : "No clear encoding frequency signature detected. Search stopped early; select Search anyway to override." };
+          : "No clear encoding frequency signature detected at this scale." };
   }
 
   root.PixelStowSpectrum = { analyze };

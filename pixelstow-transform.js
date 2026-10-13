@@ -616,11 +616,23 @@
       const luma = new Float32Array(width * height);
       options.onProgress?.("Preparing wavelet search…");
       for (let i = 0; i < luma.length; i++) luma[i] = (pixels[i * 4] + pixels[i * 4 + 1] + pixels[i * 4 + 2]) / 3;
-      signature = await root.PixelStowSpectrum.analyze(luma, width, height, options);
+      // A previous pyramid level may already have read a checksum-valid header.
+      // Confirm it against these pixels before reusing its dimensions/position;
+      // this avoids rediscovering the same patch from scratch at every scale.
+      let seed = requested.seed && adapter.confirm(requested.seed.matrix, requested.seed.id, requested.seed);
+      if (seed) seed = { ...requested.seed, ...seed };
+      else {
+        signature = await root.PixelStowSpectrum.analyze(luma, width, height, options);
+        options.onSignature?.(signature);
+        if (!signature.likely && !options.forceSearch && !options.corners?.length) return { geometry: null, markers, signature, reason: signature.message };
+        seed = await seedSearch(pixels, luma, width, height, adapter, options, signature);
+      }
+      if (!seed) return { geometry: null, markers,
+        signature: { ...signature, confirmed: false, message: "No checksum-valid markers found. Frequency evidence alone does not confirm an encoded image." },
+        reason: "No checksum-valid wavelet patch was found using the outline/frequency estimates." };
+      signature = { ...signature, likely: true, confirmed: true,
+        message: "Recovery marker verified. Checking image alignment and the payload checksum…" };
       options.onSignature?.(signature);
-      if (!signature.likely && !options.forceSearch && !options.corners?.length) return { geometry: null, markers, signature, reason: signature.message };
-      let seed = await seedSearch(pixels, luma, width, height, adapter, options, signature);
-      if (!seed) return { geometry: null, markers, signature, reason: "No checksum-valid wavelet patch was found using the outline/frequency estimates." };
       // Coarse pyramid levels have a short seed allowance. Once a header is
       // verified, keep its search state and use the remaining overall budget.
       options.deadline = deadline;

@@ -340,10 +340,14 @@
           await this.accept(session, image, inspection);
           return;
         }
+        this.signature.textContent = inspection.markers?.length
+          ? "Recovery markers verified, but the contents could not be read."
+          : inspection.signature?.likely ? "Frequency hints were found, but no verified encoding was recovered."
+            : "No encoding signature or checksum-valid markers found.";
         this.showNearMiss(session, image, inspection, frameNumber);
         this.progress.textContent = prefix + (inspection.unreadable
           ? "Markers found, but contents could not be read. Reframe and hold steady for the next capture."
-          : inspection.signature?.likely ? "Encoding pattern detected, but no readable contents. Trying a fresh frame…"
+          : inspection.signature?.likely ? "Possible frequency pattern, but no verified encoding. Trying a fresh frame…"
             : "No readable encoding found. Point at the encoded picture; another frame will be checked…");
       } catch (error) {
         if (this.session !== session || controller.signal.aborted) return;

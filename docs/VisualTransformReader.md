@@ -195,6 +195,31 @@ Four possible quarter-turn orientations are tried for each selected basis. These
 are heuristic proposals, not calibrated probabilities or format verification.
 The global magnitude spectrum cannot count or locate eight individual patches.
 
+The frequency gate now requires both independent peaks to exceed the mean
+spectral power by a factor of 32, with sum/difference support. Local contrast
+alone previously accepted ordinary photographic texture at every pyramid level.
+Frequency evidence is described as tentative until a locator header passes its
+checksum; final UI feedback replaces that provisional message with verified
+contents, verified markers with unreadable contents, or no verified encoding.
+Cancelled searches clear provisional feedback. Neither FFT peaks nor an outline
+block encoding or establish a valid payload by themselves.
+
+Axis/diagonal peak pairs can represent the same lattice with a sheared basis.
+Lattice reduction proposes the shorter axes first, retaining the original basis
+for genuinely sheared images. Equivalent quarter-turn families are deduplicated
+within the existing twelve-bank limit. Once a pyramid level reads a valid
+header, later levels first reconfirm that patch against their own pixels and
+reuse its dimensions and plane proposal, avoiding a repeated seed search.
+
+Focused local checks rejected a supplied unencoded 2016 × 1512 photograph at
+all five frequency scales, and retained message/audio recovery on a previously
+read 4032 × 3024 photo. A separate saved 4032 × 3024 camera capture now yields
+marker headers but still fails complete payload validation. It remains a
+recovery limitation, not a successful fixture. Its PNG decode/write/decode
+round trip preserved every RGBA byte. Camera import reuses the successful
+frame's geometry; reopening an ordinary PNG starts discovery again. The PNG
+contains no saved transform, so those paths need not arrive at the same fit.
+
 The codec supplies locator definitions, parity/header decoding and known-pattern
 scores to `pixelstow-transform.js`. The first 24 coded locator bits form a known
 pilot (magic and patch identifier). A diagonal response field samples original
