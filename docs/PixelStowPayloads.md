@@ -93,8 +93,14 @@ Recording needs HTTPS or localhost, browser microphone permission and
 MediaRecorder support. Playback is attempted on import/unlock, with ordinary
 audio controls and a prominent Play button when autoplay is blocked. Phones also
 have a Play audio button on the preview, without scrolling to the file list. The button
-calls play directly from the tap and reuses the loaded player; iOS can refuse
-audible autoplay after asynchronous import/decryption. Unsupported formats can still be
+calls play directly from the tap and replaces a pending autoplay request if it
+never reached playback. The main player is retained across image/camera imports;
+image, camera and unlock gestures first play a brief silent clip on that same
+element to prepare Safari's media permission. Pause is shown only after playback
+actually starts. iOS can still refuse audible autoplay after asynchronous
+import/decryption. Comparison source extraction runs in a disposable worker on
+HTTPS/localhost so its processing does not block the playback controls; changing
+images or locking cancels that worker. Unsupported formats can still be
 downloaded. Only the first audio attachment autoplays, so clips do not overlap.
 Loading another image, discarding a recording or locking again stops playback,
 releases microphone tracks and revokes object URLs. Passwords clear after success.

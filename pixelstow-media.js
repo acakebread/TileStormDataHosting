@@ -172,12 +172,20 @@
       this.previewVoiceButton = document.querySelector("#preview-audio");
       this.voiceStatus = document.querySelector("#voice-status");
       this.voiceAudio = null;
+      // Safari grants playback permission per media element. Retain the main
+      // player when a camera capture or another imported image replaces its source.
+      this.messageAudio = document.createElement("audio");
+      this.audioVoices = new WeakMap();
       const toggleVoice = () => {
         if (this.busy || !this.voiceAudio) return;
-        if (!this.voiceAudio.audio.paused) this.voiceAudio.audio.pause();
+        const voice = this.voiceAudio;
+        if (voice.playing && !voice.audio.paused && !voice.audio.ended) voice.audio.pause();
         else {
-          if (this.voiceAudio.audio.ended) this.voiceAudio.audio.currentTime = 0;
-          this.playVoice(this.voiceAudio);
+          // An autoplay request can leave paused=false without ever reaching
+          // audible playback. Replace that pending request inside this same tap.
+          if (!voice.audio.paused) voice.audio.pause();
+          if (voice.audio.ended) voice.audio.currentTime = 0;
+          this.playVoice(voice);
         }
       };
       this.voiceButton.addEventListener("click", toggleVoice);
@@ -196,11 +204,48 @@
       this.recordButton.addEventListener("click", () => this.startRecording());
       this.stopButton.addEventListener("click", () => this.stopRecording());
       this.cancelButton.addEventListener("click", () => this.stopRecording(true));
-      window.addEventListener("pagehide", () => this.reset());
+      window.addEventListener("pagehide", () => {
+        this.reset();
+        this.messageAudio.pause();
+        this.messageAudio.removeAttribute("src");
+        this.messageAudio.load();
+        if (this.primerUrl) URL.revokeObjectURL(this.primerUrl);
+        this.primerUrl = null;
+        this.priming = false;
+      });
       this.sync();
     }
 
     get active() { return this.pending || Boolean(this.recording); }
+
+    preparePlayback() {
+      // Called directly by image/camera/unlock gestures, before asynchronous
+      // decoding. A short silent PCM clip lets this same player acquire Safari's
+      // media permission; it is replaced by the recovered attachment afterwards.
+      if (this.voiceAudio || this.priming) return;
+      if (!this.primerUrl) {
+        const bytes = new Uint8Array(444), view = new DataView(bytes.buffer);
+        const word = (offset, text) => { for (let i = 0; i < text.length; i++) bytes[offset + i] = text.charCodeAt(i); };
+        word(0, "RIFF"); view.setUint32(4, bytes.length - 8, true); word(8, "WAVEfmt ");
+        view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+        view.setUint32(24, 8000, true); view.setUint32(28, 8000, true);
+        view.setUint16(32, 1, true); view.setUint16(34, 8, true); word(36, "data");
+        view.setUint32(40, bytes.length - 44, true); bytes.fill(128, 44);
+        this.primerUrl = URL.createObjectURL(new Blob([bytes], { type: "audio/wav" }));
+      }
+      const audio = this.messageAudio, url = this.primerUrl;
+      audio.muted = audio.defaultMuted = false;
+      audio.volume = 1;
+      audio.setAttribute("playsinline", "");
+      audio.src = url;
+      this.priming = true;
+      const finish = () => {
+        this.priming = false;
+        if (audio.src === url && !this.voiceAudio) audio.pause();
+      };
+      try { Promise.resolve(audio.play()).then(finish, finish); }
+      catch { finish(); } // Autoplay policies may still require the explicit Play button.
+    }
 
     sync() {
       const disabled = this.busy || this.locked || this.active;
@@ -254,6 +299,7 @@
 
     clearUrls(group, container) {
       if (group === "decoded") {
+        if (this.voiceAudio) this.voiceAudio.playAttempt++;
         this.voiceAudio = null;
         this.audioAction.hidden = true;
         this.previewVoiceButton.hidden = true;
@@ -262,6 +308,8 @@
         this.previewVoiceButton.textContent = "Play audio";
       }
       container.querySelectorAll("audio").forEach((audio) => {
+        this.audioVoices.get(audio)?.dispose();
+        this.audioVoices.delete(audio);
         audio.pause();
         audio.removeAttribute("src");
         audio.load();
@@ -316,42 +364,64 @@
           const playbackBytes = /webm/i.test(file.type) ? finalizeWebmAudio(file.bytes) : file.bytes;
           const url = URL.createObjectURL(new Blob([playbackBytes], { type: file.type }));
           this.urls[group].push(url);
-          const audio = document.createElement("audio");
+          const audio = group === "decoded" && !firstAudio ? this.messageAudio : document.createElement("audio");
           audio.controls = true;
           audio.preload = group === "decoded" ? "auto" : "metadata";
           audio.muted = false;
+          audio.defaultMuted = false;
           audio.volume = 1;
           audio.src = url;
           audio.setAttribute("aria-label", "Play " + file.name);
           row.appendChild(audio);
           const hint = document.createElement("p");
           hint.className = "hint";
-          const voice = { audio, hint, name: file.name, playAttempt: 0 };
-          audio.addEventListener("error", () => {
+          const voice = { audio, hint, name: file.name, playAttempt: 0, playing: false };
+          const listeners = [];
+          const listen = (name, handler) => { audio.addEventListener(name, handler); listeners.push([name, handler]); };
+          voice.dispose = () => {
+            voice.playAttempt++;
+            voice.playing = false;
+            for (const [name, handler] of listeners) audio.removeEventListener(name, handler);
+          };
+          this.audioVoices.set(audio, voice);
+          listen("error", () => {
             if (!audio.error) return;
+            voice.playing = false;
             hint.textContent = audio.error.code === 3 || audio.error.code === 4
               ? "This browser cannot play this audio format. Download the file to listen in another player."
               : "Playback was interrupted. Press Play to try again.";
-            if (this.voiceAudio === voice) this.voiceStatus.textContent = hint.textContent;
+            if (this.voiceAudio === voice) {
+              this.voiceButton.textContent = "Play voice message";
+              this.previewVoiceButton.textContent = "Play audio";
+              this.voiceStatus.textContent = hint.textContent;
+            }
           });
           if (group === "decoded") {
-            audio.addEventListener("play", () => {
+            listen("play", () => {
               if (!this.decoded.contains(audio)) return;
-              voice.playAttempt++;
               this.decoded.querySelectorAll("audio").forEach((other) => { if (other !== audio) other.pause(); });
               this.voiceAudio = voice;
-              this.voiceButton.textContent = "Pause voice message";
-              this.previewVoiceButton.textContent = "Pause audio";
-              this.voiceStatus.textContent = "Playing " + file.name;
+              voice.playing = false;
+              this.voiceButton.textContent = "Play voice message";
+              this.previewVoiceButton.textContent = "Play audio";
+              this.voiceStatus.textContent = "Starting " + file.name + "…";
               hint.textContent = "";
             });
-            audio.addEventListener("playing", () => {
-              hint.textContent = "";
-              if (this.voiceAudio === voice) this.voiceStatus.textContent = "Playing " + file.name;
-            });
-            ["pause", "ended"].forEach((event) => audio.addEventListener(event, () => {
+            listen("playing", () => this.voiceStarted(voice));
+            listen("waiting", () => {
+              voice.playing = false;
               if (this.voiceAudio !== voice) return;
+              this.voiceButton.textContent = "Play voice message";
+              this.previewVoiceButton.textContent = "Play audio";
+              this.voiceStatus.textContent = "Audio buffering. Tap Play to retry if it does not start.";
+            });
+            ["pause", "ended"].forEach((event) => listen(event, () => {
+              // A queued pause from replacing a blocked request must not cancel
+              // the new play request made later in the same user gesture.
+              if (!audio.paused && !audio.ended) return;
+              voice.playing = false;
               voice.playAttempt++;
+              if (this.voiceAudio !== voice) return;
               this.voiceButton.textContent = "Play voice message";
               this.previewVoiceButton.textContent = "Play audio";
               this.voiceStatus.textContent = audio.ended ? "Message finished. Tap Play to hear it again." : "Message paused.";
@@ -372,6 +442,16 @@
       this.sync();
     }
 
+    voiceStarted(voice) {
+      const audio = voice.audio;
+      if (this.voiceAudio !== voice || !this.decoded.contains(audio) || audio.paused || audio.ended || audio.currentSrc !== audio.src) return;
+      voice.playing = true;
+      voice.hint.textContent = "";
+      this.voiceButton.textContent = "Pause voice message";
+      this.previewVoiceButton.textContent = "Pause audio";
+      this.voiceStatus.textContent = "Playing " + voice.name;
+    }
+
     playVoice(voice) {
       // Keep play in the tap handler: awaiting anything first loses iOS permission
       // to start audible media. Reuse the loaded player rather than replacing it.
@@ -381,8 +461,10 @@
       if (voice.audio.error) voice.audio.load();
       const attempt = ++voice.playAttempt;
       voice.hint.textContent = "";
-      voice.audio.play().catch((error) => {
-        if (this.voiceAudio !== voice || voice.playAttempt !== attempt || !voice.audio.paused) return;
+      voice.playing = false;
+      this.voiceStatus.textContent = "Starting " + voice.name + "…";
+      const failed = (error) => {
+        if (this.voiceAudio !== voice || voice.playAttempt !== attempt || voice.playing) return;
         this.voiceButton.textContent = "Play voice message";
         this.previewVoiceButton.textContent = "Play audio";
         const hint = voice.audio.error?.code === 3 || voice.audio.error?.code === 4 || error.name === "NotSupportedError"
@@ -391,7 +473,12 @@
           : "Press Play to hear the message. Your browser did not start playback automatically.";
         voice.hint.textContent = hint;
         this.voiceStatus.textContent = hint;
-      });
+      };
+      try {
+        Promise.resolve(voice.audio.play()).then(() => {
+          if (voice.playAttempt === attempt) this.voiceStarted(voice);
+        }, failed);
+      } catch (error) { failed(error); }
     }
 
     showDecoded(files, autoplay = true) {

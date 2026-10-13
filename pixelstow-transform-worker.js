@@ -1,5 +1,5 @@
 // Dedicated disposable worker; its input is a copy, never the UI's pixel buffer.
-importScripts("./pixelstow-spectrum.js?v=20261013-ranked2", "./pixelstow-transform.js?v=20261013-ranked2", "./pixelstow.js?v=20261013-ranked2");
+importScripts("./pixelstow-spectrum.js?v=20261013-ranked2", "./pixelstow-transform.js?v=20261013-ranked2", "./pixelstow.js?v=20261013-audio-start1");
 self.onmessage = async ({ data }) => {
   try {
     const options = {
@@ -13,6 +13,11 @@ self.onmessage = async ({ data }) => {
       onProgress: (progress) => self.postMessage({ progress })
     };
     let result;
+    if (data.operation === "extract-carrier") {
+      result = await self.PixelStow.extractCarrier(data.pixels, data.width, data.height, data.strength, { visual: data.visual, worker: false });
+      self.postMessage({ result }, [result.buffer]);
+      return;
+    }
     if (data.operation === "inspect") result = await self.PixelStow.inspect(data.pixels, data.width, data.height, { ...options, geometryOnly: false, automatic: true });
     else if (data.operation === "markers") result = await self.PixelStow.scanMarkers(data.pixels, data.width, data.height, options);
     else if (data.operation === "read-candidates") result = await self.PixelStow.readMarkerCandidates(data.pixels, data.width, data.height, data.scan, options);

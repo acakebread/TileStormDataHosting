@@ -978,7 +978,7 @@
 
   function searchInWorker(pixels, width, height, options, operation = "geometry") {
     return new Promise((resolve, reject) => {
-      const url = new URL("pixelstow-transform-worker.js?v=20261013-ranked2", codecScriptUrl);
+      const url = new URL("pixelstow-transform-worker.js?v=20261013-audio-start1", codecScriptUrl);
       const worker = new Worker(url);
       let finished = false;
       const abort = () => { if (finished) return; cleanup(); reject(new DOMException("Search cancelled.", "AbortError")); };
@@ -1003,7 +1003,8 @@
         worker.postMessage({ pixels: copy, width, height, operation, mode: options.mode, forceSearch: options.forceSearch,
           corners: options.corners, seed: options.seed, deadline: options.deadline,
           seedDeadline: options.seedDeadline, camera: options.camera, scan: options.scan,
-          searchState: options.searchState, stopOnHighConfidence: options.stopOnHighConfidence }, [copy.buffer]);
+          searchState: options.searchState, stopOnHighConfidence: options.stopOnHighConfidence,
+          strength: options.strength, visual: options.visual }, [copy.buffer]);
       } catch (error) { cleanup(); reject(error); }
     });
   }
@@ -2309,8 +2310,18 @@
     return out;
   }
 
-  async function extractCarrier(pixels, width, height, strength) {
-    const fit = await recover(pixels, width, height);
+  async function extractCarrier(pixels, width, height, strength, options = {}) {
+    checkCancelled(options.signal);
+    if (options.background && canUseReaderWorker(options)) {
+      const saved = visualMappings.get(pixels);
+      // Preserve the verified photo transform without copying its cached working
+      // raster. The disposable worker reconstructs it from the full input copy.
+      const visual = saved ? { width, height, geometry: saved.geometry,
+        readResolution: saved.readResolution, unreadable: saved.unreadable } : undefined;
+      return searchInWorker(pixels, width, height, { ...options, strength, visual }, "extract-carrier");
+    }
+    if (options.visual) visualMappings.set(pixels, options.visual);
+    const fit = await recover(pixels, width, height, { signal: options.signal });
     if (!fit || fit.locatorOnly || fit.carrierVersion !== CARRIER_V3) return extractBlind(pixels, width, height, strength);
     const origW = fit.origWidth, origH = fit.origHeight;
     const identity = !fit.matrix && origW === width && origH === height && fit.phaseX === 0 && fit.phaseY === 0;

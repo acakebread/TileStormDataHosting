@@ -762,9 +762,9 @@
   </dialog>
   <script src="./pixelstow-spectrum.js?v=20261013-ranked2"></script>
   <script src="./pixelstow-transform.js?v=20261013-ranked2"></script>
-  <script src="./pixelstow.js?v=20261013-ranked2"></script>
+  <script src="./pixelstow.js?v=20261013-audio-start1"></script>
   <script src="./pixelstow-export.js?v=20261011-exports"></script>
-  <script src="./pixelstow-media.js?v=20261011-webm-duration"></script>
+  <script src="./pixelstow-media.js?v=20261013-audio-start1"></script>
   <script src="./pixelstow-sharing.js?v=20261011-png-clipboard"></script>
   <script src="./pixelstow-camera.js?v=20261013-ranked2"></script>
   <script>
@@ -854,6 +854,14 @@
       }
     });
     media.setState(false, true);
+    // Acquire playback permission in the actual gesture, before a picker,
+    // camera scan or password decrypt delays discovery of the audio attachment.
+    document.addEventListener("click", (event) => {
+      if (event.isTrusted && event.target.closest('label[for="file"], #file, #paste-image, #open-camera, #take-photo, #camera-take-photo, #capture-frame, #use-camera-near-miss, #find-transform, #decode, #unlock'))
+        media.preparePlayback();
+    }, true);
+    unlockForm.addEventListener("submit", (event) => { if (event.isTrusted) media.preparePlayback(); });
+    document.addEventListener("paste", (event) => { if (event.isTrusted) media.preparePlayback(); }, true);
     const sharing = new PixelStowSharing({
       importImage: useFile, save: saveBlob, report: setStatus, working: () => busy || media.active || Boolean(camera?.active), setBusy,
       hasImage: () => Boolean(current),
@@ -1020,6 +1028,7 @@
       current.strength = decoded.strength;
       media.showDecoded(decoded.attachments, autoplay);
       sharing.setFile(encodedPng ? new File([encodedPng], downloadLink.download, { type: "image/png" }) : current.hasFingerprint ? current.file : null);
+      current.carrierAbort?.abort();
       current.carrierPromise = null;
       setBusy(busy);
       startComparison();
@@ -1138,6 +1147,11 @@
 
     function hideComparison() {
       previewGeneration += 1;
+      current?.carrierAbort?.abort();
+      if (current) {
+        current.carrierAbort = null;
+        current.carrierPromise = null;
+      }
       previewSource.hidden = true;
       compareUi.hidden = true;
       comparisonControl.hidden = true;
@@ -1281,8 +1295,16 @@
 
     function carrierFor(job) {
       if (!job.carrierPromise) {
-        job.carrierPromise = PixelStow.extractCarrier(job.recoverPixels, job.width, job.height, job.strength).catch((error) => {
-          job.carrierPromise = null;
+        const controller = new AbortController();
+        job.carrierAbort = controller;
+        // Preparing the comparison must not run the carrier read/extraction on
+        // the same thread that is starting the recovered voice message.
+        job.carrierPromise = PixelStow.extractCarrier(job.recoverPixels, job.width, job.height, job.strength,
+          { background: true, signal: controller.signal }).catch((error) => {
+          if (job.carrierAbort === controller) {
+            job.carrierAbort = null;
+            job.carrierPromise = null;
+          }
           throw error;
         });
       }
@@ -1317,6 +1339,7 @@
     async function useFile(file, origin = "file", captured = null) {
       if (!file || busy || media.active) return;
       camera?.close();
+      hideComparison();
       media.reset();
       clearDownload();
       readout.value = "";
@@ -1415,6 +1438,8 @@
         if (!unlockForm.hidden) unlockPassword.focus({ preventScroll: true });
       }
     }
+
+    window.addEventListener("pagehide", () => current?.carrierAbort?.abort());
 
     split.addEventListener("input", () => setSplit(split.value));
     let splitPointer = null;

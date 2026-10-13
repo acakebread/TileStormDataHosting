@@ -311,7 +311,7 @@
         return Promise.resolve();
       };
       element("play-voice").click();
-      check(tappedPlay && voice.src === voiceUrl && !voice.muted && voice.volume === 1 && element("voice-status").textContent.startsWith("Playing"), "The prominent Play button synchronously reuses the unmuted loaded audio player");
+      check(tappedPlay && voice.src === voiceUrl && !voice.muted && voice.volume === 1 && element("voice-status").textContent.startsWith("Starting"), "The prominent Play button synchronously reuses the unmuted loaded player without claiming playback before it starts");
       tappedPlay = false; element("preview-audio").click();
       check(tappedPlay && !element("preview-audio").hidden && voice.src === voiceUrl, "The phone preview's audio button plays the same loaded message without scrolling to the files");
       app.HTMLMediaElement.prototype.play = function () { return Promise.reject(new app.DOMException("Unsupported audio", "NotSupportedError")); };
