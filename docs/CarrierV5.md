@@ -96,6 +96,21 @@ round-trips and controlled geometric checks are development evidence; actual
 version 5 camera/print reliability needs evaluation. Carriers 3 and 4 provide
 the full-size marker comparison while version 5 remains experimental.
 
+Geometry discovery keeps an affine prediction from the verified corner's local
+centre and axes alongside outline/projective predictions. A detected outline
+can include part of the surrounding scene: its curvature can agree with one
+small corner patch while projecting the other corners outside their search
+windows. Independent corner measurements still establish and rank the final
+transform, and the payload checksum remains required.
+
+A supplied 4032 x 3024 V5 capture reproduced this failure, while its 1375 x 1031
+clipboard copy decoded. With the alternate local prediction, both recovered
+the same contents as the original 640 x 480 encoded image. Full-resolution
+pixels remain the source for native-grid reconstruction; only discovery uses
+reduced working images. This case did not require enlarging or strengthening
+V5's markers. Outline predictions also retain pixel-centre coordinates when
+carried between working scales, including when only some corners were found.
+
 ## Large camera inputs
 
 Photo input now accepts up to 32 megapixels, including 5712 x 4284 (24,470,208
@@ -111,5 +126,6 @@ the full original. Pixel buffers and exported captures keep their resolution.
 Marker overlays also use bounded display canvases. Device memory still limits
 very large files; no particular iPhone model's performance is guaranteed.
 
-Focused checks: `node tests/pixelstow-v4-checks.mjs`. The existing resize suite
+Focused checks: `node tests/pixelstow-v4-checks.mjs` and
+`node tests/pixelstow-v5-photo-checks.mjs`. The existing resize suite
 explicitly selects carrier 3 to keep its measured baseline separate.

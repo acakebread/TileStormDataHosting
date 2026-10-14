@@ -498,9 +498,14 @@
     return distinct;
   }
 
-  function fromSeed(seed, adapter) {
+  function fromSeed(seed, adapter, tangent = false) {
     const patch = adapter.layout(seed.originalWidth, seed.originalHeight).find((p) => p.id === seed.id);
-    return multiply(seed.matrix, [1, 0, -patch.x, 0, 1, -patch.y, 0, 0, 1]);
+    // An outline can include a piece of the surrounding scene. Its projective
+    // terms may still fit one small verified patch but extrapolate far outside
+    // the other corners. The measured local centre/axes give a second, affine
+    // prediction without treating that unverified curvature as established.
+    const matrix = tangent ? basisMatrix(matrixBasis(seed.matrix, adapter), adapter) : seed.matrix;
+    return multiply(matrix, [1, 0, -patch.x, 0, 1, -patch.y, 0, 0, 1]);
   }
 
   async function refineConfirmation(confirmed, adapter, seed, options) {
@@ -761,6 +766,8 @@
       const layout = adapter.layout(seed.originalWidth, seed.originalHeight);
       predictions = [{ matrix, model: options.mode === "padding" ? "translation" : matrix[6] || matrix[7] ? "perspective" : "affine" }];
       if (seed.initialMatrix) predictions.push({ matrix: fromSeed(seed, adapter), model: "affine" });
+      if (options.mode !== "padding" && (seed.matrix[6] || seed.matrix[7]))
+        predictions.push({ matrix: fromSeed(seed, adapter, true), model: "affine" });
       for (let round = 0; round < (options.mode === "padding" ? 1 : 2); round++) {
         const pending = layout.filter((patch) => !markers.some((m) => m.id === patch.id));
         const spread = (patch) => Math.min(...markers.map((marker) => {

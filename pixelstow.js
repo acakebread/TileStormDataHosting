@@ -1266,7 +1266,7 @@
 
   function searchInWorker(pixels, width, height, options, operation = "geometry") {
     return new Promise((resolve, reject) => {
-      const url = new URL("pixelstow-transform-worker.js?v=20261014-margin-ui1", codecScriptUrl);
+      const url = new URL("pixelstow-transform-worker.js?v=20261014-v5-outline1", codecScriptUrl);
       const worker = new Worker(url);
       let finished = false;
       const abort = () => { if (finished) return; cleanup(); reject(new DOMException("Search cancelled.", "AbortError")); };
@@ -1367,7 +1367,8 @@
       expectedMarkers: geometry.expectedMarkers.map((m) => ({ ...m, matrix: lift(m.matrix) })),
       referenceMarkers: geometry.referenceMarkers?.map((m) => ({ ...m, matrix: lift(m.matrix), expectedMatrix: lift(m.expectedMatrix) })) });
     const geometry = result.geometry && liftGeometry(result.geometry);
-    return { ...result, geometry, markers: result.markers?.map((m) => ({ ...m, matrix: lift(m.matrix) })),
+    return { ...result, geometry, markers: result.markers?.map((m) => ({ ...m, matrix: lift(m.matrix),
+      initialMatrix: m.initialMatrix && lift(m.initialMatrix) })),
       candidates: result.candidates?.map(liftGeometry),
       localizationResolution: { width: readWidth, height: readHeight } };
   }
@@ -1757,7 +1758,7 @@
         onProgress: (text) => options.onProgress?.(label + ": " + text) });
       const lifted = full ? result : liftPhotoResult(result, width, height, rw, rh);
       const header = lifted.markers?.filter((m) => m.verification === "header").sort((a, b) => b.quality - a.quality)[0];
-      if (header) { known = { ...header, initialMatrix: lifted.geometry?.matrix }; verifiedCurrent = true; }
+      if (header) { known = { ...header, initialMatrix: lifted.geometry?.matrix || header.initialMatrix }; verifiedCurrent = true; }
       for (const geometry of lifted.candidates || []) candidates.push({ geometry, markers: lifted.markers, markerSearch: lifted.markerSearch,
         localizationResolution: { width: rw, height: rh }, photo: true });
       const markerScore = lifted.geometry?.rank ?? (lifted.markers?.length ? 30 + lifted.markers.length * 3 :
