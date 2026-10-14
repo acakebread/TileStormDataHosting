@@ -1,7 +1,7 @@
 # Browser carrier 4: brightness-balanced carrier 3 markers
 
-Carrier 4 remains selectable as an older browser writer. It keeps carrier 3's eight recovery
-patches, their positions, dimensions, six-pixel wavelets
+Carrier 4 remains selectable as an older browser writer. It keeps carrier 3's
+eight recovery patches, their positions, dimensions, six-pixel wavelets
 and payload exclusions. The change is local brightness correction, not smaller
 or softer markers. [Carrier 5](CarrierV5.md) is now the default writer and reader.
 Carrier 3 remains a comparison and rollback option.
@@ -112,8 +112,8 @@ Marker localization uses bounded working images; final perspective sampling
 uses the full original capture. Canvas loading retains 1:1 source pixels in
 strips, and large display previews use bounded backing canvases.
 
-Focused checks: `node tests/pixelstow-v4-checks.mjs`. These explicitly enable V4 and cover
-eight independent marker headers, the shared V3/V4 layout, brightness treatment,
+Focused checks: `node tests/pixelstow-v4-checks.mjs`. These explicitly enable V4
+and cover eight independent marker headers, the shared V3/V4 layout, brightness treatment,
 V5 selection, source/alpha preservation, attachment/password round trips, frozen
 V3 pixels, V1 reading and large-input boundaries. They do not certify camera
 performance. The existing resize suite explicitly selects carrier 3.
