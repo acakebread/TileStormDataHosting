@@ -11,6 +11,7 @@ const context=vm.createContext({window:{},Uint8Array,Uint8ClampedArray,TextEncod
 vm.runInContext((await fs.readFile('pixelstow.js','utf8')).replace('root.PixelStow = {',
  'root.boostChecks = { locatorLayout, locatorBlockMap, readVisualLocator, applyBit, v4SignalPolicy, redundancyUplift }; root.PixelStow = {'),context);
 const codec=context.window.PixelStow,internals=context.window.boostChecks,w=640,h=480;
+codec.setCarrierVersion(4);codec.setLegacyRecovery(true);
 assert(Math.abs(internals.redundancyUplift(2)-1.15)<1e-12);
 assert(internals.redundancyUplift(2.4)>1&&internals.redundancyUplift(2.4)<1.15);
 assert(internals.redundancyUplift(5)<internals.redundancyUplift(2.4));

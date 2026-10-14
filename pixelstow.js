@@ -29,8 +29,20 @@
   const V5_MARKER_PEAK = 32;
   const REDUNDANCY_UPLIFT_AT_TWO = 0.15;
   const REDUNDANCY_UPLIFT_DENOMINATOR = 1;
-  let preferredCarrier = CARRIER_V4;
-  const RECOVERY_CARRIERS = [CARRIER_V4, CARRIER_V3, CARRIER_V5];
+  let preferredCarrier = CARRIER_V5;
+  let legacyRecovery = false;
+  const RECOVERY_CARRIERS = [CARRIER_V5, CARRIER_V4, CARRIER_V3];
+  function recoveryVersions(options = {}) {
+    if (options.carrierVersion !== undefined)
+      return [CARRIER_V1, ...RECOVERY_CARRIERS].includes(options.carrierVersion) ? [options.carrierVersion] : [];
+    return (options.includeLegacy ?? legacyRecovery) ? [...RECOVERY_CARRIERS, CARRIER_V1] : [CARRIER_V5];
+  }
+  function recoveryOptions(options) {
+    const selected = recoveryVersions(options);
+    return { ...options, includeLegacy: options.includeLegacy ?? legacyRecovery,
+      seed: selected.includes(options.seed?.carrierVersion) ? options.seed : undefined,
+      searchState: !options.searchState?.seed || selected.includes(options.searchState.seed.carrierVersion) ? options.searchState : undefined };
+  }
   const codecScriptUrl = typeof document !== "undefined" ? document.currentScript?.src : null;
   // Store geometry and, for photographs, the rectified native pixel grid. Payload
   // bytes are never cached; every later read still verifies the carrier/frame.
@@ -213,6 +225,7 @@
   function estimatePayloadBytes(width, height, passwordProtected = false, carrierVersion = preferredCarrier) {
     if (width < BLOCK || height < BLOCK || width * height > MAX_PIXELS) return 0;
     const profile = locatorProfile(carrierVersion);
+    if (carrierVersion === CARRIER_V5 && !locatorFits(width, height, carrierVersion)) return 0;
     const blocks = Math.floor(width / BLOCK) * Math.floor(height / BLOCK) -
       (profile && locatorFits(width, height, carrierVersion) ? locatorArea(carrierVersion) / 16 : 0);
     if (blocks <= PREAMBLE_BLOCKS || blocks > MAX_BLOCKS) return 0;
@@ -314,6 +327,7 @@
   }
 
   async function estimateRepetition(width, height, content, passwordProtected = false) {
+    if (preferredCarrier === CARRIER_V5 && !locatorFits(width, height, preferredCarrier)) return null;
     const { text = "", attachments = [] } = content, bundle = attachments.length > 0;
     const plain = bundle ? packBundle(text, attachments) : strictUtf8(text);
     try {
@@ -1140,7 +1154,7 @@
     };
   }
 
-  async function findLocator(pixels, width, height, nativeOnly = false, quickOnly = false, signal) {
+  async function findLocator(pixels, width, height, nativeOnly = false, quickOnly = false, signal, options = {}) {
     const scales = nativeOnly ? [1] : quickOnly ? [0.95, 2, 0.5, 1.05, 0.75, 1.5, 1.25] : [0.95, 2, 0.5, 1.05, 0.75, 1.5, 1.25, 1];
     if (!nativeOnly && !quickOnly) {
       for (let i = 20; i <= 80; i++) {
@@ -1149,7 +1163,7 @@
       }
     }
     const offsets = nativeOnly ? [0] : quickOnly ? [0, -0.5, 0.5] : [0, -0.5, 0.5, -1, 1];
-    for (const version of RECOVERY_CARRIERS) for (const scale of scales) {
+    for (const version of recoveryVersions(options).filter((version) => locatorProfile(version))) for (const scale of scales) {
       if (signal?.aborted) throw new DOMException("Search cancelled.", "AbortError");
       const guessedWidth = Math.round(width / scale), guessedHeight = Math.round(height / scale);
       const layout = locatorLayout(guessedWidth, guessedHeight, version);
@@ -1304,6 +1318,7 @@
       try {
         const copy = new Uint8Array(pixels);
         worker.postMessage({ pixels: copy, width, height, operation, mode: options.mode, forceSearch: options.forceSearch,
+          includeLegacy: options.includeLegacy ?? legacyRecovery, carrierVersion: options.carrierVersion, nativeOnly: options.nativeOnly,
           corners: options.corners, seed: options.seed, deadline: options.deadline,
           seedDeadline: options.seedDeadline, camera: options.camera, scan: options.scan,
           searchState: options.searchState, stopOnHighConfidence: options.stopOnHighConfidence,
@@ -1314,6 +1329,7 @@
   }
 
   async function findVisualTransform(pixels, width, height, options = {}) {
+    options = recoveryOptions(options);
     assertImage(pixels, width, height);
     checkCancelled(options.signal);
     if (!root.PixelStowTransform) throw new Error("The visual transform reader script is missing. Reload this page.");
@@ -1330,9 +1346,12 @@
     }
     // A page opened from disk has an opaque origin and cannot start this worker.
     // The same detector can run on the page, yielding between chunks for cancel/UI.
+    const versions = recoveryVersions(options).filter((version) => locatorProfile(version));
+    if (!versions.length) return { found: false, geometry: null, candidates: [], markers: [],
+      reason: "The selected format has no photographic recovery markers." };
     const search = canUseReaderWorker(options)
       ? await searchInWorker(pixels, width, height, options)
-      : await root.PixelStowTransform.find(pixels, width, height, options, RECOVERY_CARRIERS.map((version) => visualAdapter(pixels, width, height, version)));
+      : await root.PixelStowTransform.find(pixels, width, height, options, versions.map((version) => visualAdapter(pixels, width, height, version)));
     return search;
   }
 
@@ -1661,7 +1680,8 @@
     if (!result) return;
     if (result.geometry) visualMappings.set(pixels, { width, height, geometry: result.geometry,
       readResolution: result.readResolution, carrierVersion: result.carrierVersion || result.markers?.[0]?.carrierVersion, workingImage });
-    else if (result.unreadable) visualMappings.set(pixels, { width, height, unreadable: true });
+    else if (result.unreadable) visualMappings.set(pixels, { width, height, unreadable: true,
+      carrierVersion: result.carrierVersion || result.markers?.[0]?.carrierVersion });
   }
 
   function rankMarkerCandidates(candidates) {
@@ -1705,11 +1725,12 @@
   // Pure discovery: only locator symbols are read. No carrier preamble, body,
   // decompression or payload verification is performed by this operation.
   async function scanMarkers(pixels, width, height, options = {}) {
+    options = recoveryOptions(options);
     options = { mode: "perspective", ...options };
     assertImage(pixels, width, height);
     checkCancelled(options.signal);
     if (canUseReaderWorker(options)) return searchInWorker(pixels, width, height, options, "markers");
-    const native = await findLocator(pixels, width, height, true, false, options.signal);
+    const native = await findLocator(pixels, width, height, true, false, options.signal, options);
     if (native) {
       const patch = locatorLayout(width, height, native.carrierVersion).find((p) => p.id === native.id);
       const seed = readVisualLocator(pixels, width, height, [1, 0, patch.x, 0, 1, patch.y, 0, 0, 1], native.id, native.carrierVersion);
@@ -1794,6 +1815,7 @@
   }
 
   async function readMarkerCandidates(pixels, width, height, scan, options = {}) {
+    options = recoveryOptions(options);
     assertImage(pixels, width, height);
     checkCancelled(options.signal);
     // A scan is tied to one raster. Camera buffers must never use a previous
@@ -1805,9 +1827,11 @@
       retainVisualResult(pixels, width, height, result);
       return result;
     }
-    const candidates = rankMarkerCandidates(scan.candidates || []);
-    let best = { found: Boolean(scan.markers?.length), unreadable: Boolean(scan.markers?.length),
-      markers: scan.markers || [], markerSearch: scan.markerSearch, signature: scan.signature, reason: scan.reason };
+    const selected = recoveryVersions(options);
+    const candidates = rankMarkerCandidates((scan.candidates || []).filter((c) => selected.includes(c.geometry.carrierVersion || CARRIER_V3)));
+    const markers = (scan.markers || []).filter((m) => selected.includes(m.carrierVersion || scan.geometry?.carrierVersion || CARRIER_V3));
+    let best = { found: Boolean(markers.length), unreadable: Boolean(markers.length),
+      markers, markerSearch: scan.markerSearch, signature: scan.signature, reason: scan.reason };
     for (let i = 0; i < candidates.length; i++) {
       checkCancelled(options.signal);
       const candidate = candidates[i], geometry = candidate.geometry;
@@ -2235,18 +2259,21 @@
   }
 
   async function recover(pixels, width, height, options = {}) {
+    options = recoveryOptions(options);
     checkCancelled(options.signal);
     if (!pixels || pixels.length !== width * height * 4 || width < BLOCK || height < BLOCK) return null;
     if (width * height > MAX_INPUT_PIXELS) throw new Error("This photo exceeds the 32 megapixel input limit.");
+    const versions = recoveryVersions(options);
     if (options.nativeOnly) {
-      if (options.carrierVersion) return readNative(pixels, width, height, options.carrierVersion, options.strength, options.signal);
-      return (await readNative(pixels, width, height, CARRIER_V4, options.strength, options.signal)) ||
-        (await readNative(pixels, width, height, CARRIER_V3, options.strength, options.signal)) ||
-        (await readNative(pixels, width, height, CARRIER_V5, options.strength, options.signal)) ||
-        readNative(pixels, width, height, CARRIER_V1, options.strength, options.signal);
+      for (const version of versions) {
+        const found = await readNative(pixels, width, height, version, options.strength, options.signal);
+        if (found) return found;
+      }
+      return null;
     }
     const visual = visualMappings.get(pixels);
-    if (visual && visual.width === width && visual.height === height) {
+    if (visual && visual.width === width && visual.height === height &&
+      versions.includes(visual.carrierVersion || visual.geometry?.carrierVersion || CARRIER_V3)) {
       if (visual.unreadable) return { locatorOnly: true, carrierVersion: visual.carrierVersion || visual.geometry?.carrierVersion || CARRIER_V3 };
       if (visual.readResolution) {
         const resolution = visual.readResolution;
@@ -2258,21 +2285,19 @@
       }
       return readVisualMapping(pixels, width, height, visual.geometry, options.signal);
     }
-    const direct = (await readNative(pixels, width, height, CARRIER_V4, undefined, options.signal)) ||
-      (await readNative(pixels, width, height, CARRIER_V3, undefined, options.signal)) ||
-      (await readNative(pixels, width, height, CARRIER_V5, undefined, options.signal));
-    if (direct) return direct;
-    const native = await findLocator(pixels, width, height, true, false, options.signal);
+    for (const version of versions) {
+      const direct = await readNative(pixels, width, height, version, undefined, options.signal);
+      if (direct) return direct;
+    }
+    const native = await findLocator(pixels, width, height, true, false, options.signal, options);
     if (native) {
       const found = await readMapped(pixels, width, height, native, true, options.signal);
       if (!found.locatorOnly) return found;
       return readMapped(pixels, width, height, native, false, options.signal);
     }
-    const previous = await readNative(pixels, width, height, CARRIER_V1, undefined, options.signal);
-    if (previous && previous.carrierVersion === CARRIER_V1) return previous;
     if (options.signal?.aborted) throw new DOMException("Search cancelled.", "AbortError");
     options.onProgress?.("Checking common image resize ratios…");
-    const locator = await findLocator(pixels, width, height, false, options.quickOnly, options.signal);
+    const locator = await findLocator(pixels, width, height, false, options.quickOnly, options.signal, options);
     return locator ? readMapped(pixels, width, height, locator, false, options.signal) : null;
   }
 
@@ -2303,6 +2328,7 @@
   }
 
   async function inspect(pixels, width, height, options = {}) {
+    options = recoveryOptions(options);
     assertImage(pixels, width, height);
     if (options.signal?.aborted) throw new DOMException("Search cancelled.", "AbortError");
     // Ordinary file imports retain the cheap direct reader. Camera discovery
@@ -2317,7 +2343,7 @@
     const recovery = await recover(pixels, width, height, { ...options, quickOnly: options.quickOnly || options.automatic === true });
     if (options.signal?.aborted) throw new DOMException("Search cancelled.", "AbortError");
     const direct = describeRecovery(recovery);
-    if (!options.automatic || (direct.found && !direct.unreadable)) return direct;
+    if (options.nativeOnly || !options.automatic || (direct.found && !direct.unreadable)) return direct;
     // One perspective search also retains translation/affine estimates. Running
     // the three manual modes in sequence would repeat the FFT and seed searches.
     options.onProgress?.("Looking for encoded contents in a resized, padded or photographed image…");
@@ -2425,12 +2451,16 @@
     try {
       assertImage(pixels, width, height, MAX_PIXELS);
       await yieldNow();
-      const existing = await inspect(pixels, width, height, { quickOnly: true });
+      // Input protection is independent of the user's active recovery formats.
+      // A locked/native older fingerprint must still never be encoded again.
+      const existing = await inspect(pixels, width, height, { quickOnly: true, includeLegacy: true });
       if (existing.found) {
         throw new Error("This image already contains a fingerprint. Choose a picture that does not have one.");
       }
       const locked = typeof password === "string" && password.length > 0;
       const wantLocators = Boolean(locatorProfile(preferredCarrier));
+      if (preferredCarrier === CARRIER_V5 && !locatorFits(width, height, preferredCarrier))
+        throw new Error("This picture is too small for version 5 recovery markers. Use a larger picture or select an older encoding format explicitly.");
       const usedVersion = wantLocators && locatorFits(width, height, preferredCarrier) ? preferredCarrier : CARRIER_V1;
       const payload = locked ? await encryptEnvelope(plain, password, bundle) : plain.slice();
       try {
@@ -2901,8 +2931,11 @@
     scanMarkers,
     readMarkerCandidates,
     clearVisualTransform(pixels) { visualMappings.delete(pixels); },
-    setCarrierVersion(version) { preferredCarrier = [CARRIER_V1, ...RECOVERY_CARRIERS].includes(version) ? version : CARRIER_V4; },
+    setCarrierVersion(version) { preferredCarrier = [CARRIER_V1, ...RECOVERY_CARRIERS].includes(version) ? version : CARRIER_V5; },
     getCarrierVersion() { return preferredCarrier; },
+    setLegacyRecovery(enabled) { legacyRecovery = enabled === true; },
+    getLegacyRecovery() { return legacyRecovery; },
+    getRecoveryVersions: recoveryVersions,
     getLimits() { return { inputPixels: MAX_INPUT_PIXELS, encodingPixels: MAX_PIXELS }; },
     readImageFile,
     decodePng,

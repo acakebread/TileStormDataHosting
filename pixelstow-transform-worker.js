@@ -5,6 +5,7 @@ self.onmessage = async ({ data }) => {
   try {
     const options = {
       mode: data.mode, worker: false, geometryOnly: true, forceSearch: data.forceSearch,
+      includeLegacy: data.includeLegacy, carrierVersion: data.carrierVersion, nativeOnly: data.nativeOnly,
       corners: data.corners, deadline: data.deadline,
       seed: data.seed,
       seedDeadline: data.seedDeadline,
@@ -16,7 +17,8 @@ self.onmessage = async ({ data }) => {
     };
     let result;
     if (data.operation === "extract-carrier") {
-      result = await self.PixelStow.extractCarrier(data.pixels, data.width, data.height, data.strength, { visual: data.visual, worker: false });
+      result = await self.PixelStow.extractCarrier(data.pixels, data.width, data.height, data.strength,
+        { visual: data.visual, worker: false, includeLegacy: data.includeLegacy, carrierVersion: data.carrierVersion });
       self.postMessage({ result }, [result.buffer]);
       return;
     }

@@ -153,7 +153,7 @@
         const basis = [0.25 * by / determinant, -0.25 * bx / determinant, -0.25 * a.fy / determinant, 0.25 * a.fx / determinant];
         const u = Math.hypot(basis[0], basis[1]), v = Math.hypot(basis[2], basis[3]);
         if (u < 0.45 || v < 0.45 || u > 2.4 || v > 2.4) continue;
-        const markerBand = [2 / 3, 4 / 5].some((ratio) => Math.max(
+        const markerBand = (options.markerRatios || [2 / 3, 4 / 5]).some((ratio) => Math.max(
           strongestNear(real, fw, fh, a.fx * stride * ratio, a.fy * stride * ratio, floor),
           strongestNear(real, fw, fh, bx * stride * ratio, by * stride * ratio, floor)) >= 3);
         // Common carrier tiles have axis and diagonal peaks. Prefer an axis pair

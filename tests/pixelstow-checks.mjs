@@ -14,8 +14,10 @@ const context = vm.createContext({
   window: {}, Uint8Array, Uint8ClampedArray, DataView, TextEncoder, TextDecoder,
   Blob, Response, CompressionStream, DecompressionStream, crypto: webcrypto, setTimeout,
 });
-vm.runInContext(source.replace("window.PixelStow = {", "window.internalChecks = { unpackBundle, unpackFrame, packFrame, writeSignal, decryptEnvelope }; window.PixelStow = {"), context);
+vm.runInContext(source.replace("root.PixelStow = {", "root.internalChecks = { unpackBundle, unpackFrame, packFrame, writeSignal, decryptEnvelope }; root.PixelStow = {"), context);
 const codec = context.window.PixelStow;
+// PCF1 compatibility is an explicit older-format selection, separate from V5.
+codec.setCarrierVersion(1);codec.setLegacyRecovery(true);
 const internal = context.window.internalChecks;
 let checks = 0;
 function check(condition, label) { assert.ok(condition, label); console.log("PASS: " + label); checks++; }

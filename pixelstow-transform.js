@@ -724,6 +724,7 @@
     adapter = adapters.find((a) => a.carrierVersion === requested.seed?.carrierVersion) || adapters[0];
     const deadline = Math.min(Date.now() + 60000, requested.deadline || Infinity);
     const options = { ...requested, deadline: Math.min(deadline, requested.seedDeadline || Infinity),
+      markerRatios: [...new Set(adapters.map((a) => 1 / (a.sampleStep || 1.5)))],
       mode: ["padding", "affine", "perspective"].includes(requested.mode) ? requested.mode : "padding" };
     options.check = () => check(options);
     let signature = null;

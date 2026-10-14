@@ -10,6 +10,7 @@ for(const name of ['pixelstow-transform.js','pixelstow-lattice.js','pixelstow.js
  (0,eval)(s);
 }
 const c=window.PixelStow,L=window.PixelStowLattice,T=window.PixelStowTransform,I=window.testGrid;
+c.setCarrierVersion(4);c.setLegacyRecovery(true);
 const w=640,h=480,source=new Uint8Array(w*h*4);
 for(let y=0;y<h;y++)for(let x=0;x<w;x++)source.set([Math.round(130+45*Math.sin(x/29)+35*Math.cos(y/37)),Math.round(135+50*Math.cos((x+y)/45)),Math.round(140+45*Math.sin((x-y)/31)),255],(x+y*w)*4);
 const text='Public curved-grid check, all processing stays in the browser.';
@@ -67,6 +68,7 @@ const resolution=structuredClone({width:w,height:h,photoMatrix:matrix,phaseCorre
 let fresh=await fs.readFile('pixelstow.js','utf8');
 fresh=fresh.replace('root.PixelStow = {','root.handoffChecks = { retainVisualResult }; root.PixelStow = {');
 (0,eval)(fresh);
+window.PixelStow.setLegacyRecovery(true);
 window.handoffChecks.retainVisualResult(photo,W,H,{geometry,carrierVersion:4,readResolution:resolution});
 assert.equal((await window.PixelStow.decode(photo,W,H,'')).text,text);
 console.log('PASS: worker-style geometry handoff recreates the same checksum-valid read');

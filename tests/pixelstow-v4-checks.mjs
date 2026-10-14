@@ -13,6 +13,11 @@ const source = await fs.readFile('pixelstow.js', 'utf8');
 vm.runInContext(source.replace('root.PixelStow = {',
   'root.formatChecks = { assertImage, locatorLayout, locatorBlockMap, readVisualLocator }; root.PixelStow = {'), context);
 const codec = context.window.PixelStow, internals = context.window.formatChecks;
+assert.equal(codec.getCarrierVersion(), 5);
+assert.deepEqual(Array.from(codec.getRecoveryVersions()), [5]);
+// This suite explicitly exercises earlier formats; normal recovery is V5-only.
+codec.setLegacyRecovery(true);
+codec.setCarrierVersion(4);
 const width = 640, height = 480, pixels = new Uint8Array(width * height * 4);
 for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
   pixels.set([Math.round(130 + 45 * Math.sin(x / 29) + 35 * Math.cos(y / 37)),
@@ -42,7 +47,7 @@ headers(image);
 const png = await codec.writePng(image.pixels, width, height);
 const reloaded = await codec.decodePng(new Uint8Array(await png.arrayBuffer()));
 assert(codec.payloadsEqual(await codec.decode(reloaded.pixels, width, height, '', { nativeOnly: true }), content));
-console.log('PASS: default V4, eight CRCs, V3 layout/capacity, source/alpha and PNG bundle round-trip');
+console.log('PASS: explicit V4, eight CRCs, V3 layout/capacity, source/alpha and PNG bundle round-trip');
 
 const locked = await codec.encodePayload(pixels, width, height, content, 'public fixture password');
 assert.equal((await codec.decode(locked.pixels, width, height, '', { nativeOnly: true })).status, 'password');
@@ -118,6 +123,7 @@ for (const name of ['pixelstow-spectrum.js', 'pixelstow-transform.js', 'pixelsto
 const html = await fs.readFile('pixelstow.html', 'utf8');
 for (const match of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)) new vm.Script(match[1]);
 assert.match(html, /<option value="4">/);
-assert.match(html, /<option value="5">Version 5[^<]*experimental/);
-assert.match(html, /pixelstow-carrier-v4-balanced/);
-console.log('PASS: script syntax, V4 default and experimental V5 UI selection');
+assert.match(html, /<option value="5">Version 5[^<]*default/);
+assert.match(html, /pixelstow-carrier-v5-adaptive/);
+assert.match(html, /id="recover-legacy" type="checkbox">/);
+console.log('PASS: script syntax, V5 default and explicit older-format UI selection');
