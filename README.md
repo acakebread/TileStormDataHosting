@@ -37,7 +37,12 @@ contents summary, relocking, and context-menu suppression during image panning.
 Every export offers a filename dialog before downloading, including recovered
 attachments. The image picker identifies the loaded file or a clipboard paste.
 
-**Post to Facebook** prepares the encoded photo and a message with the PixelStow
-link and save/paste instructions. Choose Facebook in the native share sheet when
-available, or download the photo and attach it in Facebook with the copied
-message. Finish posting in Facebook. PixelStow needs no upload/hosting service.
+**Post to Facebook** shares the prepared encoded photo as a file only, with no
+title, text or URL in the native share payload. Choose Facebook in the share
+sheet, then paste the separately copied PixelStow opening instructions into its
+caption or a comment. Alternatively download the photo and attach it in Facebook
+with the copied message. Finish posting in Facebook. PixelStow needs no
+upload/hosting service. `node tests/pixelstow-media-sharing-checks.mjs` uses
+Playwright/Chrome to check real voice conversion/first-tap preview and capture
+the image-only sharing payload without posting; runtime environment overrides
+match the [camera checks](docs/CameraCapture.md).
