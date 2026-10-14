@@ -24,8 +24,8 @@
   const CARRIER_V3 = 3;
   const CARRIER_V4 = 4;
   const CARRIER_V5 = 5;
-  const V4_PAYLOAD_PEAK = 48;
-  const V4_MARKER_PEAK = 24;
+  const V4_PAYLOAD_PEAK = 64;
+  const V4_MARKER_PEAK = 32;
   let preferredCarrier = CARRIER_V4;
   const RECOVERY_CARRIERS = [CARRIER_V4, CARRIER_V3, CARRIER_V5];
   const codecScriptUrl = typeof document !== "undefined" ? document.currentScript?.src : null;
@@ -618,8 +618,14 @@
     // Use the actual fractional repetition budget, not its rounded copy count.
     // Five copies is the restrained case; near one copy spends more contrast.
     const pressure = Math.max(0, Math.min(1, (5 - ratio) / 4));
-    return { strength: Math.max(strength, Math.round(8 + 12 * pressure)),
-      textureGain: 0.175 + 0.825 * pressure };
+    const shortfall = Math.max(0, Math.min(1, 2 - ratio));
+    const urgency = shortfall * (2 - shortfall);
+    // Keep the proven >=2x settings exactly. Below 2x, a curved ramp spends
+    // contrast faster; it is a quality tradeoff, not extra error correction.
+    return { strength: Math.max(strength, Math.round(8 + 12 * pressure + 12 * urgency)),
+      textureGain: (0.175 + 0.825 * pressure) * (1 + urgency),
+      payloadPeak: Math.round(48 + 16 * urgency), markerPeak: Math.round(24 + 8 * urgency),
+      biasLimit: Math.round(4 + 8 * urgency) };
   }
 
   function textureAmplitude(reference, width, x, y, side, policy, ceiling) {
@@ -639,7 +645,7 @@
     return Math.min(ceiling, policy.strength + Math.round(rms * policy.textureGain));
   }
 
-  function limitBoostHeadroom(reference, width, x, y, requested, nominal) {
+  function limitBoostHeadroom(reference, width, x, y, requested, nominal, biasLimit = 4) {
     if (requested <= nominal) return requested;
     const raised = [0, 1].map((bit) => fitBias(reference, width, x, y, bit, requested));
     // Ordinary unclipped blocks need no further work. Increasing amplitude
@@ -653,7 +659,7 @@
     const acceptable = (biases) => biases.every((bias, bit) => {
       if (bias.fit.some((value) => !value)) return false;
       const added = bias.shift.map((value, channel) => value - baseline[bit].shift[channel]);
-      return added.every((value) => Math.abs(value) <= 4) && Math.max(...added) - Math.min(...added) <= 2;
+      return added.every((value) => Math.abs(value) <= biasLimit) && Math.max(...added) - Math.min(...added) <= 2;
     });
     if (acceptable(raised)) return requested;
     // Select a conservative valid amplitude without a long decrement sweep.
@@ -673,7 +679,7 @@
     let amplitude = cacheIndex >= 0 ? amplitudeCache[cacheIndex] : -1;
     if (amplitude < 0) {
       const requested = signalPolicy ? limitBoostHeadroom(reference, width, originX, originY,
-        textureAmplitude(reference, width, originX, originY, BLOCK, signalPolicy, V4_PAYLOAD_PEAK), strength) : strength;
+        textureAmplitude(reference, width, originX, originY, BLOCK, signalPolicy, signalPolicy.payloadPeak), strength, signalPolicy.biasLimit) : strength;
       amplitude = resolveAmplitude(reference, width, originX, originY, requested);
       if (cacheIndex >= 0) amplitudeCache[cacheIndex] = amplitude;
     }
@@ -942,7 +948,7 @@
         const cell = grid.order[slot], coded = slot % (main ? 96 : 24);
         const bit = WORD_BITS[header[Math.floor(coded / 12)] * 12 + coded % 12];
         const x = patch.x + cell % grid.columns * grid.cell, y = patch.y + Math.floor(cell / grid.columns) * grid.cell;
-        const localAmplitude = signalPolicy ? textureAmplitude(reference, width, x, y, grid.cell, signalPolicy, V4_MARKER_PEAK) / 16 : amplitude;
+        const localAmplitude = signalPolicy ? textureAmplitude(reference, width, x, y, grid.cell, signalPolicy, signalPolicy.markerPeak) / 16 : amplitude;
         const gain = localAmplitude * blendedLocatorGain(version, grid, cell, main), kernel = grid.kernels[bit];
         for (let channel = 0; channel < 3; channel++) {
           let target = 0;
@@ -1260,7 +1266,7 @@
 
   function searchInWorker(pixels, width, height, options, operation = "geometry") {
     return new Promise((resolve, reject) => {
-      const url = new URL("pixelstow-transform-worker.js?v=20261014-shadow-boost1", codecScriptUrl);
+      const url = new URL("pixelstow-transform-worker.js?v=20261014-margin-ui1", codecScriptUrl);
       const worker = new Worker(url);
       let finished = false;
       const abort = () => { if (finished) return; cleanup(); reject(new DOMException("Search cancelled.", "AbortError")); };

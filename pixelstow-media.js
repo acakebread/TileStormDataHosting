@@ -179,7 +179,6 @@
         this.recordingHelp(); this.render(this.list, this.files, "compose", false); this.sync();
       });
       this.audioAction = document.querySelector("#audio-action");
-      this.voiceButton = document.querySelector("#play-voice");
       this.previewVoiceButton = document.querySelector("#preview-audio");
       this.voiceStatus = document.querySelector("#voice-status");
       this.voiceAudio = null;
@@ -199,7 +198,6 @@
           this.playVoice(voice);
         }
       };
-      this.voiceButton.addEventListener("click", toggleVoice);
       this.previewVoiceButton.addEventListener("click", toggleVoice);
       this.kind.addEventListener("change", () => {
         this.input.accept = {
@@ -270,8 +268,7 @@
       this.cancelButton.hidden = !this.recording && !this.requestingMic && !this.compressionAbort;
       this.cancelButton.textContent = this.compressionAbort ? "Cancel compression" : "Discard recording";
       this.list.querySelectorAll("button").forEach((button) => { button.disabled = disabled; });
-      this.voiceButton.disabled = this.busy || !this.voiceAudio;
-      this.previewVoiceButton.disabled = this.voiceButton.disabled;
+      this.previewVoiceButton.disabled = this.busy || !this.voiceAudio;
       if (!supported && !this.active) this.recordStatus.textContent = "Microphone recording needs a supported browser on HTTPS or localhost. You can still attach an audio file.";
     }
 
@@ -348,7 +345,6 @@
         this.audioAction.hidden = true;
         this.previewVoiceButton.hidden = true;
         this.voiceStatus.textContent = "";
-        this.voiceButton.textContent = "Play voice message";
         this.previewVoiceButton.textContent = "Play audio";
       }
       container.querySelectorAll("audio").forEach((audio) => {
@@ -440,7 +436,6 @@
               ? "This browser cannot play this audio format. Download the file to listen in another player."
               : "Playback was interrupted. Press Play to try again.";
             if (this.voiceAudio === voice) {
-              this.voiceButton.textContent = "Play voice message";
               this.previewVoiceButton.textContent = "Play audio";
               this.voiceStatus.textContent = hint.textContent;
             }
@@ -451,7 +446,6 @@
               this.decoded.querySelectorAll("audio").forEach((other) => { if (other !== audio) other.pause(); });
               this.voiceAudio = voice;
               voice.playing = false;
-              this.voiceButton.textContent = "Play voice message";
               this.previewVoiceButton.textContent = "Play audio";
               this.voiceStatus.textContent = "Starting " + file.name + "…";
               hint.textContent = "";
@@ -460,7 +454,6 @@
             listen("waiting", () => {
               voice.playing = false;
               if (this.voiceAudio !== voice) return;
-              this.voiceButton.textContent = "Play voice message";
               this.previewVoiceButton.textContent = "Play audio";
               this.voiceStatus.textContent = "Audio buffering. Tap Play to retry if it does not start.";
             });
@@ -471,7 +464,6 @@
               voice.playing = false;
               voice.playAttempt++;
               if (this.voiceAudio !== voice) return;
-              this.voiceButton.textContent = "Play voice message";
               this.previewVoiceButton.textContent = "Play audio";
               this.voiceStatus.textContent = audio.ended ? "Message finished. Tap Play to hear it again." : "Message paused.";
             }));
@@ -485,7 +477,7 @@
         this.voiceAudio = firstAudio;
         this.audioAction.hidden = false;
         this.previewVoiceButton.hidden = false;
-        this.voiceStatus.textContent = "Audio attached. Tap Play voice message to listen.";
+        this.voiceStatus.textContent = "Audio attached. Use Play audio beside the image or the file's player to listen.";
         if (autoplay) this.playVoice(firstAudio);
       }
       this.sync();
@@ -496,7 +488,6 @@
       if (this.voiceAudio !== voice || !this.decoded.contains(audio) || audio.paused || audio.ended || audio.currentSrc !== audio.src) return;
       voice.playing = true;
       voice.hint.textContent = "";
-      this.voiceButton.textContent = "Pause voice message";
       this.previewVoiceButton.textContent = "Pause audio";
       this.voiceStatus.textContent = "Playing " + voice.name;
     }
@@ -514,7 +505,6 @@
       this.voiceStatus.textContent = "Starting " + voice.name + "…";
       const failed = (error) => {
         if (this.voiceAudio !== voice || voice.playAttempt !== attempt || voice.playing) return;
-        this.voiceButton.textContent = "Play voice message";
         this.previewVoiceButton.textContent = "Play audio";
         const hint = voice.audio.error?.code === 3 || voice.audio.error?.code === 4 || error.name === "NotSupportedError"
           ? "This browser cannot play this audio format. Download the file to listen in another player."

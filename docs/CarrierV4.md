@@ -57,26 +57,32 @@ need user evaluation. Carrier 3's writer remains frozen for comparison.
 
 The V4 writer uses actual fractional repetition rather than a rounded count of
 complete copies. At 5x redundancy or above, the nominal amplitude starts at 8.
-Below 5x it rises continuously toward 20 at 1x; native verification can also
-raise the nominal amplitude if required. This spends more image quality on
+Between 5x and 2x it retains the restrained linear increase (8 to 17).
+Below 2x an additional `u * (2 - u)` ramp, where `u = clamp(2 - ratio, 0, 1)`,
+rises quickly toward the stronger low-margin settings: nominal amplitude is
+28 at 1.5x and 32 at 1x. Native verification can also raise it if required.
+This spends more image quality on
 payloads with fewer repeated symbols. It does not create extra redundancy.
 
 Each payload block and each six-pixel marker cell measures RMS source detail
 after subtracting a local brightness plane. Flat regions and smooth brightness
 slopes do not trigger a texture boost. Source detail adds bounded contrast, with
-more allowance below 5x. Both the redundancy-driven increase above 8 and the
-texture gain are halved from the first adaptive trial. Payload peaks are limited
-to 48 amplitude units and marker peaks to 24; payload clipping still uses the existing fitted-shift/sign
+more allowance below 5x. At 2x and above, both the redundancy-driven increase
+above 8 and the texture gain retain the halved settings from the earlier trial.
+Below 2x the texture gain and ceilings also follow the curved ramp. Payload
+peaks rise from 48 to 64 and marker peaks from 24 to 32; payload clipping still
+uses the existing fitted-shift/sign
 check, and markers retain their exact local brightness targets. Neither input
 pixels nor alpha are modified. Stronger wavelets will be visible on dense or
 textured images; this is a deliberate quality/recovery tradeoff.
 
 Texture boost is limited by the *nominal* payload fit. For both bit orientations,
-it may add at most four channel levels of DC correction and at most two levels
+it may add at most four channel levels of DC correction at 2x and above, rising
+to twelve below 2x along the same curve, and at most two levels
 of additional difference between channel corrections. If the nominal fit needs
 the legacy per-channel sign-flip fallback, no texture boost is applied. This
-prevents dark blocks with bright glints from gaining signal by lifting their
-whole background or increasing a colour cast. The chosen amplitude then goes
+limits the additional background lift of dark blocks with bright glints and
+retains the colour-cast constraint even at low redundancy. The chosen amplitude then goes
 through the normal sign validation and final bias/clipping calculations; boost
 is never added after that final fit. Pure black/white still need the nominal
 headroom correction to carry any signal. Marker mean targets remain unchanged.

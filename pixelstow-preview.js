@@ -7,6 +7,8 @@
       this.panel = document.querySelector("#preview-panel");
       this.slot = document.querySelector("#preview-screen");
       this.toolbar = document.querySelector("#preview-screen-toolbar");
+      this.audioButton = document.querySelector("#preview-audio");
+      this.audioPlaceholder = document.createComment("Image audio control returns here");
       this.placeholder = document.createComment("Image preview returns here");
       document.querySelector("#full-preview").addEventListener("click", () => this.open(false));
       document.querySelector("#preview-encoded-image").addEventListener("click", () => this.open(true));
@@ -52,6 +54,10 @@
       this.returnFocus = document.activeElement;
       this.preview.before(this.placeholder);
       this.slot.append(this.preview);
+      // Move the single image audio shortcut into the top toolbar. Reuse its
+      // node/listener/player, and keep the bottom comparison slider unobstructed.
+      this.audioButton.before(this.audioPlaceholder);
+      this.toolbar.prepend(this.audioButton);
       this.panel.classList.toggle("clean", clean);
       this.controls(!clean);
       document.documentElement.classList.add("preview-modal-open");
@@ -75,6 +81,7 @@
       this.nativeFullscreen = false;
       this.tap = null; this.multitouch = false;
       this.placeholder.replaceWith(this.preview);
+      this.audioPlaceholder.replaceWith(this.audioButton);
       document.documentElement.classList.remove("preview-modal-open");
       document.body.classList.remove("preview-modal-open");
       this.restoreView(this.savedView);

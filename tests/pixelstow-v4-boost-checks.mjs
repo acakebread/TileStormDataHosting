@@ -35,7 +35,7 @@ function errors(image){
 }
 const sparseError=errors(sparse),denseError=errors(dense);
 assert(sparseError[1]>sparseError[0]*1.15,'source detail must retain a restrained contrast boost at the same redundancy');
-assert(denseError[0]>sparseError[0]*2,'low redundancy must increase smooth-area strength too');
+assert(denseError[0]>sparseError[0]*3,'the under-2x ramp must increase smooth-area strength substantially');
 assert(denseError[1]>sparseError[1]*1.7,'low redundancy must increase textured-area strength');
 for(const [image,payload] of [[sparse,sparseContent],[dense,denseContent]]){
  assert.equal(image.carrierVersion,4);

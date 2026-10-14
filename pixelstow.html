@@ -115,6 +115,12 @@
       color: var(--muted);
     }
     .hint.repetition-warning { color: #ffe285; border-left: 3px solid #ffe285; padding-left: 10px; }
+    .read-prognosis { margin: 18px 0 12px; padding: 14px; border: 1px solid var(--border); border-radius: 10px; }
+    .read-prognosis p { margin: 0 0 10px; }
+    .prognosis-scale { position: relative; height: 14px; margin: 12px 8px 6px; border-radius: 8px; background: linear-gradient(90deg, #63d79c, #efc66a 55%, #ed7777); }
+    .prognosis-pointer { position: absolute; top: -5px; bottom: -5px; width: 4px; transform: translateX(-50%); border: 2px solid #fff; border-radius: 3px; background: #081016; }
+    .prognosis-labels { display: flex; justify-content: space-between; font-size: 0.82rem; color: var(--muted); }
+    .read-prognosis .hint { margin: 10px 0 0; }
 
     a {
       color: var(--tile-azure);
@@ -199,7 +205,8 @@
       margin-top: 14px;
     }
 
-    .preview-toolbar { display: flex; justify-content: flex-end; margin: 0 0 8px; }
+    .preview-toolbar { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin: 0 0 8px; }
+    .preview-toolbar .preview-audio { margin-right: auto; }
     html.preview-modal-open, body.preview-modal-open { overflow: hidden; overscroll-behavior: none; }
     .preview-panel {
       box-sizing: border-box; position: fixed; inset: 0; width: 100%; height: 100%; height: 100dvh;
@@ -333,9 +340,8 @@
     .more-info { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border); }
     .more-info p:last-child { margin-bottom: 0; }
     .audio-action { margin: 0 0 14px; }
-    .audio-action button { background: #8cebed; color: #081016; }
     .audio-action p { margin: 6px 0 0; }
-    .preview-audio { display: none; position: absolute; left: 10px; bottom: 10px; z-index: 1; background: #8cebed; color: #081016; }
+    .preview-audio { background: #8cebed; color: #081016; }
     .paste-target { min-height: 100px; padding: 16px; border: 2px dashed var(--tile-azure); border-radius: 8px; }
     .paste-target:empty::before { content: "Touch and hold here, then choose Paste"; color: var(--muted); pointer-events: none; }
     #share-link { min-height: 72px; }
@@ -508,7 +514,6 @@
       #capacity { font-size: 0.8rem; margin-bottom: 0; }
       .status { margin-top: 8px; font-size: 0.9rem; }
       .preview-note { font-size: 0.8rem; margin: 4px 0; }
-      .preview-audio { display: inline-flex; }
       .attachment-row { padding: 10px; }
     }
   </style>
@@ -583,7 +588,10 @@
         <p class="loaded-image" id="loaded-image" hidden></p>
         <p class="hint" id="capacity">Choose or paste a PNG or JPEG, or open the camera. Your original stays unchanged.</p>
         <div class="preview" id="preview" hidden>
-          <div class="preview-toolbar"><button id="full-preview" type="button">Full screen preview</button></div>
+          <div class="preview-toolbar">
+            <button class="preview-audio" id="preview-audio" type="button" hidden>Play audio</button>
+            <button id="full-preview" type="button">Full screen preview</button>
+          </div>
           <div class="viewport" id="viewport">
             <div class="compare" id="compare">
               <canvas id="preview-encoded"></canvas>
@@ -595,7 +603,6 @@
               <span class="compare-tag right" id="tag-source">Source</span>
               <div class="split-line" id="split-line"><button class="split-handle" id="split-handle" type="button" tabindex="-1" aria-label="Drag comparison divider">↔</button></div>
             </div>
-            <button class="preview-audio" id="preview-audio" type="button" hidden>Play audio</button>
           </div>
           <div class="comparison-control" id="comparison-control" hidden>
             <span>Encoded</span>
@@ -620,7 +627,6 @@
             <h2>Image contents</h2>
             <p id="contents-summary" role="status" tabindex="-1"></p>
             <div class="audio-action" id="audio-action" hidden>
-              <button id="play-voice" type="button">Play voice message</button>
               <p class="hint" id="voice-status" role="status"></p>
             </div>
             <div id="decoded-message" hidden>
@@ -714,6 +720,13 @@
       </select>
       <p class="hint">Version 4 balances marker brightness and boosts contrast in textured areas. Below 5× redundancy, stronger encoding spends more image quality on recovery. Version 5 tests smaller markers and is experimental. Photo and resize recovery remain experimental; version 3 is available for comparison. Use version 1 for desktop and TileStorm readers until they are upgraded.</p>
 
+      <section class="read-prognosis" id="read-prognosis" hidden aria-label="Estimated camera-read difficulty">
+        <p><strong id="prognosis-title"></strong></p>
+        <div class="prognosis-scale" aria-hidden="true"><span class="prognosis-pointer" id="prognosis-pointer"></span></div>
+        <div class="prognosis-labels" aria-hidden="true"><span>More margin</span><span>Moderate</span><span>Tricky read</span></div>
+        <p class="hint" id="prognosis-detail"></p>
+      </section>
+
       <div class="actions">
         <button id="encode" type="button" disabled>Encode into a new image</button>
         <button id="decode" type="button" disabled>Decode image</button>
@@ -735,7 +748,7 @@
         <p>Everything is processed in this browser and is not uploaded. Encoding saves a new image. The new resize-recovery format currently needs this browser reader. Choose version 1 for existing desktop and TileStorm readers; attachments also need binary-payload support.</p>
         <p>This is a prototype. Short recordings and small attachments work best; heavy payloads can give variable results. Download the verified PNG and keep the original file. Sharing apps may resize or recompress photos, especially large images over about 2,000 pixels, and the hidden contents can disappear. That size is a guideline, not a guaranteed safe limit.</p>
         <p>For WhatsApp, send the image as a Document / original file where possible and include the PixelStow opening link. The recipient can save it to Files and use Choose image, or copy it and use Paste image. A link opens this page but cannot automatically read a WhatsApp attachment. Screenshots, resized copies and ordinary photo sharing may not keep the payload.</p>
-        <p>On iPhone, allow Safari's Paste prompt after tapping Paste image. If needed, use the touch-and-hold paste box. Safari may require a tap on Play voice message before sound is allowed; the full audio player is also available under Attached files. Audio format support varies by browser.</p>
+        <p>On iPhone, allow Safari's Paste prompt after tapping Paste image. If needed, use the touch-and-hold paste box. Safari may require a tap on Play audio beside the image before sound is allowed; the full audio player is also available under Attached files. Audio format support varies by browser.</p>
         <p>PixelStow automatically attempts recovery from resized, padded, rotated or photographed encoded images. Recovery remains experimental: blur, cropping, print quality and heavy recompression can still prevent reading. Keep the original encoded file where possible.</p>
         <p>Open camera checks markers in recent captures and reads the most promising frame while the preview stays live. A stronger capture replaces an ongoing read. Keep all four picture corners visible and hold steady, or use Take photo for a sharper still. Live scanning needs HTTPS or localhost and camera permission. The camera closes when you leave the page. All captures and decoding stay on your device.</p>
       </section>
@@ -817,13 +830,13 @@
   <script src="./pixelstow-spectrum.js?v=20261013-marker-follow2"></script>
   <script src="./pixelstow-transform.js?v=20261013-marker-follow2"></script>
   <script src="./pixelstow-lattice.js?v=20261013-marker-follow2"></script>
-  <script src="./pixelstow.js?v=20261014-shadow-boost1"></script>
+  <script src="./pixelstow.js?v=20261014-margin-ui1"></script>
   <script src="./pixelstow-export.js?v=20261011-exports"></script>
   <script src="./pixelstow-voice.js?v=20261013-voice-clock2"></script>
-  <script src="./pixelstow-media.js?v=20261013-voice-clock2"></script>
+  <script src="./pixelstow-media.js?v=20261014-margin-ui1"></script>
   <script src="./pixelstow-sharing.js?v=20261011-png-clipboard"></script>
-  <script src="./pixelstow-camera.js?v=20261013-camera-source1"></script>
-  <script src="./pixelstow-preview.js?v=20261013-full-preview1"></script>
+  <script src="./pixelstow-camera.js?v=20261014-margin-ui1"></script>
+  <script src="./pixelstow-preview.js?v=20261014-margin-ui1"></script>
   <script>
     const fileInput = document.querySelector("#file");
     const drop = document.querySelector("#drop");
@@ -874,6 +887,10 @@
     const payloadBudget = document.querySelector("#payload-budget");
     const payloadRepetition = document.querySelector("#payload-repetition");
     const imageRepetition = document.querySelector("#image-repetition");
+    const readPrognosis = document.querySelector("#read-prognosis");
+    const prognosisTitle = document.querySelector("#prognosis-title");
+    const prognosisPointer = document.querySelector("#prognosis-pointer");
+    const prognosisDetail = document.querySelector("#prognosis-detail");
     let repetitionGeneration = 0, repetitionTimer;
     const attachmentBytes = document.querySelector("#attachment-bytes");
     const downloadLink = document.querySelector("#download");
@@ -947,7 +964,7 @@
     });
     camera = new PixelStowCamera({
       importImage: useFile, report: setStatus, working: () => busy || media.active,
-      changed: () => setBusy(busy), drawGuides: paintTransform
+      changed: () => setBusy(busy), drawGuides: paintTransform, clearFeedback: clearReadFeedback
     });
 
     const carrierSelect = document.querySelector("#carrier-version");
@@ -1059,11 +1076,35 @@
       status.classList.toggle("error", Boolean(isError));
     }
 
+    function clearReadFeedback() {
+      setStatus("");
+      transformStatus.textContent = "";
+      transformSignature.textContent = "";
+      recoveryFraming.hidden = true;
+      transformOutline.hidden = true;
+      showRepetition(imageRepetition, null);
+    }
+
+    function showReadPrognosis(data) {
+      readPrognosis.hidden = !data || !Number.isFinite(data.repetitionRatio);
+      if (readPrognosis.hidden) { prognosisTitle.textContent = prognosisDetail.textContent = ""; return; }
+      const ratio = data.repetitionRatio, weakParity = data.parityBits === 1;
+      const level = weakParity || ratio < 2 ? "Tricky read" : ratio < 5 ? "Moderate margin" : "Good margin";
+      const risk = weakParity ? 0.95 : ratio < 2 ? 0.7 + 0.3 * Math.max(0, Math.min(1, 2 - ratio))
+        : ratio < 5 ? 0.25 + 0.35 * (5 - ratio) / 3 : Math.max(0.04, 0.2 * 5 / ratio);
+      prognosisTitle.textContent = "Photo-read prognosis: " + level;
+      prognosisPointer.style.left = (100 * risk).toFixed(1) + "%";
+      prognosisDetail.textContent = ratio.toFixed(2) + "× redundancy. " + (weakParity ? "Reduced error correction. " : "") +
+        (ratio < 2 ? "Less repeated data makes camera recovery harder. Smaller attachments or a larger image give more margin. " : "") +
+        "Estimated from redundancy and error correction; focus, glare and source detail also affect recovery.";
+    }
+
     function clearDownload() {
       if (downloadUrl) URL.revokeObjectURL(downloadUrl);
       downloadUrl = "";
       encodedPng = null;
       encodedJpeg = null;
+      showReadPrognosis(null);
       downloadLink.hidden = true;
       downloadLink.removeAttribute("href");
       saveEncodedJpegButton.hidden = true;
@@ -1422,6 +1463,8 @@
     findTransformButton.addEventListener("click", async () => {
       if (!current || busy || media.active || camera?.active) return;
       const job = current;
+      clearReadFeedback();
+      setStatus("Reading the image…");
       clearDecoded();
       transformAbort = new AbortController();
       recoveryVisible = true;
@@ -1511,6 +1554,7 @@
 
     async function useFile(file, origin = "file", captured = null) {
       if (!file || busy || media.active) return;
+      clearReadFeedback();
       camera?.close();
       hideComparison();
       media.reset();
@@ -1794,6 +1838,7 @@
         return;
       }
       clearDownload();
+      clearReadFeedback();
       setBusy(true);
       setStatus("Encoding…");
       try {
@@ -1843,6 +1888,7 @@
         }
         readout.value = message.value;
         rememberMessage(encoded.pixels, verified, false);
+        showReadPrognosis(encoded);
         const lock = encoded.passwordProtected ? "Password-locked" : "Public";
         const formats = encodedJpeg ? "PNG or JPEG" : "PNG";
         const fallback = encoded.locatorFallback ? "This picture is too small for the recovery markers, so version 1 was used. " : "";
@@ -1860,6 +1906,7 @@
 
     async function decodeImage(key = "") {
       if (!current || busy || media.active) return;
+      clearReadFeedback();
       setBusy(true);
       setStatus("Decoding…");
       try {

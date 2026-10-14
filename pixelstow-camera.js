@@ -2,8 +2,8 @@
 // decides whether a frame contains a complete, checksum-valid payload.
 (function () {
   class PixelStowCamera {
-    constructor({ importImage, report, working, changed, drawGuides }) {
-      Object.assign(this, { importImage, report, working, changed, drawGuides });
+    constructor({ importImage, report, working, changed, drawGuides, clearFeedback }) {
+      Object.assign(this, { importImage, report, working, changed, drawGuides, clearFeedback });
       this.session = null;
       this.captureCanvas = document.createElement("canvas");
       this.openButton = document.querySelector("#open-camera");
@@ -220,6 +220,7 @@
       const session = { facing, purpose, ready: false, paused: purpose === "source" || !this.backgroundAvailable, frames: 0, lastTime: -1,
         rotation: 0, portrait: this.isPortrait(), history: [], appraised: 0 };
       this.session = session;
+      this.clearFeedback?.();
       this.signature.textContent = "";
       this.progress.textContent = "Allow camera access to start the preview…";
       this.changed();
@@ -331,6 +332,7 @@
       session.pending = null;
       session.appraised = 0;
       if (clearHistory) {
+        this.signature.textContent = "";
         session.history = []; session.best = null;
         session.tracking = null;
         this.displayedFrame = null;
@@ -419,7 +421,10 @@
       session.abort = controller;
       try {
         const prefix = "Frame " + frameNumber + " · " + image.width + " × " + image.height + ": ";
-        if (!session.reading) this.signature.textContent = "";
+        if (!session.reading) {
+          this.signature.textContent = "";
+          this.progress.textContent = prefix + "Checking markers…";
+        }
         const previous = session.tracking?.scan;
         const header = previous?.markers?.find((m) => m.verification === "header");
         const scan = await PixelStow.scanMarkers(image.pixels, image.width, image.height, {
@@ -471,6 +476,9 @@
       session.appraised = 0;
       session.reading = true;
       session.readEntry = entry;
+      this.clearFeedback?.();
+      this.signature.textContent = "";
+      this.progress.textContent = "Reading best capture · frame " + entry.frameNumber + "…";
       entry.attempted = true;
       entry.state = undefined;
       const controller = new AbortController();
@@ -523,6 +531,7 @@
       clearTimeout(session.timer);
       this.cancelSearches(session);
       session.stream?.getTracks().forEach((track) => track.stop());
+      this.signature.textContent = "";
       this.progress.textContent = inspection?.found && !inspection.unreadable ? "Encoded contents found. Opening this capture…" : "Opening this capture…";
       this.sync();
       try {

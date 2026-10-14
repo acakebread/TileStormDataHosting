@@ -121,6 +121,20 @@ actions opens a clean presentation of the generated image, hiding the comparison
 divider, recovery overlay, audio button and toolbar. Tap to reveal controls or
 press Escape to close. Pinch/two-finger pan still work. Browsers with element
 fullscreen can also hide their chrome; iPhones use the viewport dialog fallback.
+There is one additional image audio button, beside the page preview. The same
+DOM node moves into the full-screen top toolbar, clear of the bottom comparison
+slider, then returns on close. Native attachment players retain their controls;
+there is no second decoded-message Play button. The audio element and tap handler
+are reused rather than recreated, preserving the existing Safari playback flow.
+
+After a successful encode, a **Photo-read prognosis** bar above the export actions
+runs green through amber to red, with a difficulty marker and textual label.
+Five or more repeats show good margin; 2x to 5x show moderate margin; below 2x or
+reduced parity is marked tricky. This is a qualitative estimate from redundancy
+and error correction, not a calibrated camera success percentage. It resets
+with the exported result. Capture focus, glare, source detail and distortion
+still affect recovery. Recovery status/signature, near-miss advice and overlays
+are cleared before a new import, retry, decode/unlock or camera read begins.
 
 Browser WebM/Opus recordings receive a final Matroska `Info/Duration`, calculated
 from cluster/block timestamps and Opus packet durations. This gives the native
@@ -132,8 +146,7 @@ attachment/download bytes remain untouched. M4A recording is unaffected.
 
 Recording needs HTTPS or localhost, browser microphone permission and
 MediaRecorder support. Playback is attempted on import/unlock, with ordinary
-audio controls and a prominent Play button when autoplay is blocked. Phones also
-have a Play audio button on the preview, without scrolling to the file list. The button
+audio controls and the image's Play audio shortcut when autoplay is blocked. The button
 calls play directly from the tap and replaces a pending autoplay request if it
 never reached playback. The main player is retained across image/camera imports;
 image, camera and unlock gestures first play a brief silent clip on that same
