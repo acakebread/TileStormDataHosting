@@ -21,6 +21,16 @@ to import images through the reader. Captured image pixels are preserved.
 **Open camera** requests video only, preferring the rear camera and a 1920 × 2560
 portrait or 2560 × 1920 landscape feed, according to the device's orientation.
 Constraints are ideals: actual resolution depends on the browser/device.
+If camera startup reports a format/read error, acquisition retries the same
+selected device with no resolution/aspect-ratio preferences, then a 640 × 480,
+15 fps preference. Exact device selection and video-only access remain in place.
+An unavailable device or denied permission is not retried as a format failure.
+Successful fallback shows the actual pixel dimensions and retains the compatible
+profile during orientation adjustment. A final failure includes the browser's
+error name/message and any unsatisfied constraint, rather than assuming another
+app holds the camera. Other preview tabs and the Windows Settings camera preview
+may need to release the device before retrying. These retries do not guarantee
+that an incompatible driver can be opened by the browser.
 The preview uses `muted`, `autoplay` and `playsinline` for Safari, displays the
 whole video frame without cropping, and stays live while a captured raster is
 read. Captures use the video's actual pixel dimensions, without resizing or JPEG

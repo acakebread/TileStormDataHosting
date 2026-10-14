@@ -185,10 +185,34 @@
       return window.matchMedia("(orientation: portrait)").matches;
     }
 
-    videoConstraints(facing, portrait = this.isPortrait(), deviceId = null) {
-      return { ...(deviceId ? { deviceId: { exact: deviceId } } : { facingMode: { ideal: facing } }),
+    videoConstraints(facing, portrait = this.isPortrait(), deviceId = null, profile = "preferred") {
+      const selection = deviceId ? { deviceId: { exact: deviceId } } : { facingMode: { ideal: facing } };
+      if (profile === "default") return selection;
+      if (profile === "basic") return { ...selection, width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15 } };
+      return { ...selection,
         width: { ideal: portrait ? 1920 : 2560 },
         height: { ideal: portrait ? 2560 : 1920 }, aspectRatio: { ideal: portrait ? 3 / 4 : 4 / 3 } };
+    }
+
+    async acquireStream(session, facing, deviceId) {
+      // A driver can advertise a format which then fails during startup. Relax
+      // format preferences on this device; an explicit switch keeps its exact ID.
+      for (const profile of ["preferred", "default", "basic"]) {
+        if (this.session !== session) throw new DOMException("Camera closed.", "AbortError");
+        if (profile !== "preferred") this.progress.textContent = profile === "default"
+          ? "Trying the camera's default capture settings…" : "Trying 640 × 480 camera compatibility settings…";
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: false,
+            video: this.videoConstraints(facing, session.portrait, deviceId, profile) });
+          session.captureProfile = profile;
+          return stream;
+        } catch (error) {
+          const missingDevice = error?.name === "NotFoundError" ||
+            (error?.name === "OverconstrainedError" && error.constraint === "deviceId");
+          if (this.session !== session || missingDevice || profile === "basic" ||
+            !["NotReadableError", "AbortError", "OverconstrainedError"].includes(error?.name)) throw error;
+        }
+      }
     }
 
     layoutPreview() {
@@ -221,7 +245,7 @@
       this.sync();
       try {
         const track = session.stream?.getVideoTracks()[0];
-        await track?.applyConstraints(this.videoConstraints(session.facing, portrait, session.deviceId));
+        await track?.applyConstraints(this.videoConstraints(session.facing, portrait, session.deviceId, session.captureProfile));
       } catch {
         // Ideals are advisory. Retain a usable feed if the camera cannot change
         // its format; guides still reflect it and Rotate view remains available.
@@ -280,8 +304,9 @@
           (this.nativePhotoCapture ? "Use Take photo instead." : "Use Choose image to load a saved photo."), true);
         return;
       }
-      const deviceId = options.deviceId === undefined ? this.preferredDeviceId : options.deviceId;
-      const session = { facing, purpose, deviceId, manualCapture: Boolean(options.manualCapture), ready: false,
+      let deviceId = options.deviceId === undefined ? this.preferredDeviceId : options.deviceId;
+      const session = { facing, purpose, deviceId, deviceLabel: this.devices.find(device => device.deviceId === deviceId)?.label || "",
+        manualCapture: Boolean(options.manualCapture), ready: false,
         paused: purpose === "source" || Boolean(options.manualCapture || options.paused) || !this.backgroundAvailable, frames: 0, lastTime: -1,
         rotation: 0, portrait: this.isPortrait(), history: [], appraised: 0 };
       this.session = session;
@@ -297,15 +322,16 @@
         // microphone, crop to the CSS preview, or rescale captured video pixels.
         let stream;
         try {
-          stream = await navigator.mediaDevices.getUserMedia({ audio: false,
-            video: this.videoConstraints(facing, session.portrait, deviceId) });
+          stream = await this.acquireStream(session, facing, deviceId);
         } catch (error) {
           // A remembered camera may have been unplugged since the last session.
           // An explicit switch must fail rather than silently reopen the old one.
-          if (this.session !== session || !deviceId || options.deviceId !== undefined ||
-            !["NotFoundError", "OverconstrainedError"].includes(error?.name)) throw error;
+          const missingDevice = error?.name === "NotFoundError" ||
+            (error?.name === "OverconstrainedError" && error.constraint === "deviceId");
+          if (this.session !== session || !deviceId || options.deviceId !== undefined || !missingDevice) throw error;
           this.preferredDeviceId = null;
-          stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: this.videoConstraints(facing, session.portrait) });
+          deviceId = session.deviceId = null;
+          stream = await this.acquireStream(session, facing, null);
         }
         if (this.session !== session) { stream.getTracks().forEach((track) => track.stop()); return; }
         session.stream = stream;
@@ -339,16 +365,28 @@
           : this.backgroundAvailable
           ? "Frame your picture. Automatic scanning starts in four seconds; Capture and read is available now."
           : "Preview ready. Tap Capture and read. Automatic background scanning needs HTTPS or localhost.";
+        if (session.captureProfile !== "preferred") this.progress.textContent += " Compatibility mode: " +
+          this.video.videoWidth + " × " + this.video.videoHeight + " actual pixels.";
         this.refreshOrientation(session);
         this.schedule(session, 900);
       } catch (error) {
         if (this.session !== session) return;
         this.close();
+        const closePreviews = /Windows/i.test(navigator.userAgent)
+          ? "Close OBS, webcam-test tabs and the Windows Settings camera preview, then retry."
+          : "Close other apps and preview tabs using the camera, then retry.";
         const message = error?.name === "NotAllowedError" ? "Camera permission was denied. Allow camera access in your browser or choose a saved image."
           : ["NotFoundError", "OverconstrainedError"].includes(error?.name) && options.deviceId ? "The selected camera is unavailable. Reopen the camera or choose a saved image."
           : error?.name === "NotFoundError" ? "No camera is available. Choose an image or use Take photo on a phone."
-          : "Could not start the camera. Close other apps using the camera or choose a saved image.";
-        this.report(message, true);
+          : ["NotReadableError", "AbortError"].includes(error?.name)
+            ? "The browser could not start this camera. " + closePreviews + (this.nativePhotoCapture
+              ? " Use Take photo or choose a saved image."
+              : " If it still fails, use OBS Virtual Camera or choose a saved image.")
+            : "Could not start the camera. Close other apps using the camera or choose a saved image.";
+        const clean = value => String(value || "").replace(/[\x00-\x1f\x7f]/g, " ").slice(0, 200);
+        const detail = [clean(error?.name), error?.constraint ? "constraint: " + clean(error.constraint) : "", clean(error?.message)].filter(Boolean).join(" · ");
+        this.report((session.deviceLabel ? clean(session.deviceLabel) + ": " : "") + message +
+          (detail ? " Browser error: " + detail : ""), true);
       }
     }
 

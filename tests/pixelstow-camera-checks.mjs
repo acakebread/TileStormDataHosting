@@ -91,7 +91,7 @@ try {
     const acquire = navigator.mediaDevices.getUserMedia;
     let fail = true;
     navigator.mediaDevices.getUserMedia = constraints => {
-      if (fail && constraints.video.deviceId) { fail = false; cameraRequests.push(constraints); throw new DOMException('Test missing camera', 'OverconstrainedError'); }
+      if (fail && constraints.video.deviceId) { fail = false; cameraRequests.push(constraints); throw new DOMException('Test missing camera', 'NotFoundError'); }
       return acquire(constraints);
     };
   });
@@ -107,6 +107,86 @@ try {
   await page.waitForFunction(() => !camera.active && document.querySelector('#status').textContent.includes('selected camera'));
   assert.equal(filePickers, 0);
   console.log('PASS: unplugged remembered camera permits a fresh default; unavailable explicit switch reports failure rather than reopening the wrong camera');
+
+  const compatibility = await context.newPage(); compatibility.on('pageerror', error => errors.push(error.message));
+  await compatibility.goto(url);
+  await compatibility.evaluate(() => {
+    window.compatibilityRequests = [];
+    window.realAcquire = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+    PixelStow.scanMarkers = async () => ({ found: false, markers: [], candidates: [] });
+  });
+  await compatibility.locator('#take-photo').click();
+  await compatibility.waitForFunction(() => camera.session?.ready && !document.querySelector('#capture-frame').disabled);
+  // Some drivers reject the advertised high-resolution format, but permit the
+  // same exact device at its native default. Exercise that path on real video.
+  await compatibility.evaluate(() => {
+    window.compatibilityTarget = camera.devices.find(device => device.deviceId !== camera.session.deviceId).deviceId;
+    navigator.mediaDevices.getUserMedia = constraints => {
+      compatibilityRequests.push(constraints);
+      if (constraints.video.width) throw new DOMException('Synthetic high-resolution startup failure', 'NotReadableError');
+      return realAcquire(constraints);
+    };
+  });
+  await compatibility.locator('#switch-camera').click();
+  await compatibility.waitForFunction(() => camera.session?.ready && !document.querySelector('#capture-frame').disabled);
+  assert(await compatibility.evaluate(() => camera.session.deviceId === compatibilityTarget && camera.session.captureProfile === 'default'));
+  assert(await compatibility.evaluate(() => compatibilityRequests.length === 2 &&
+    compatibilityRequests.every(request => request.audio === false && request.video.deviceId.exact === compatibilityTarget) &&
+    !compatibilityRequests[1].video.width && !compatibilityRequests[1].video.height && !compatibilityRequests[1].video.aspectRatio));
+  assert.match(await compatibility.locator('#camera-progress').textContent(), /Compatibility mode/);
+  // A driver requiring VGA must receive the final bounded profile, without
+  // dropping the selected device or requesting audio.
+  await compatibility.evaluate(() => {
+    compatibilityRequests.length = 0;
+    navigator.mediaDevices.getUserMedia = constraints => {
+      compatibilityRequests.push(constraints);
+      if (constraints.video.width?.ideal !== 640) throw new DOMException('Synthetic format startup failure', 'AbortError');
+      return realAcquire(constraints);
+    };
+  });
+  await compatibility.locator('#switch-camera').click();
+  await compatibility.waitForFunction(() => camera.session?.ready && !document.querySelector('#capture-frame').disabled);
+  assert(await compatibility.evaluate(() => compatibilityRequests.length === 3 && camera.session.captureProfile === 'basic' &&
+    compatibilityRequests.every(request => request.audio === false && request.video.deviceId.exact === camera.session.deviceId) &&
+    compatibilityRequests.at(-1).video.height.ideal === 480));
+  console.log('PASS: startup failures retry native defaults then VGA on the same exact camera, without microphone access');
+  await compatibility.evaluate(() => {
+    compatibilityRequests.length = 0;
+    navigator.mediaDevices.getUserMedia = constraints => {
+      compatibilityRequests.push(constraints); throw new DOMException('Synthetic driver busy', 'NotReadableError');
+    };
+  });
+  await compatibility.locator('#switch-camera').click();
+  await compatibility.waitForFunction(() => !camera.active && document.querySelector('#status').textContent.includes('Browser error'));
+  assert(await compatibility.evaluate(() => compatibilityRequests.length === 3));
+  assert.match(await compatibility.locator('#status').textContent(), /NotReadableError.*Synthetic driver busy/);
+  assert.match(await compatibility.locator('#status').textContent(), /Windows Settings camera preview/);
+  // Permission denial must not trigger format retries or a default-device open.
+  await compatibility.evaluate(() => {
+    compatibilityRequests.length = 0;
+    navigator.mediaDevices.getUserMedia = constraints => {
+      compatibilityRequests.push(constraints); throw new DOMException('Synthetic denied', 'NotAllowedError');
+    };
+  });
+  await compatibility.locator('#take-photo').click();
+  await compatibility.waitForFunction(() => !camera.active && document.querySelector('#status').textContent.includes('NotAllowedError'));
+  assert(await compatibility.evaluate(() => compatibilityRequests.length === 1));
+  console.log('PASS: exhausted camera retries report the browser error; denied permission is reported without retries');
+  await compatibility.evaluate(() => {
+    compatibilityRequests.length = 0;
+    navigator.mediaDevices.getUserMedia = constraints => {
+      compatibilityRequests.push(constraints); return new Promise((resolve, reject) => { window.rejectPendingCamera = reject; });
+    };
+  });
+  await compatibility.locator('#take-photo').click();
+  await compatibility.waitForFunction(() => Boolean(window.rejectPendingCamera));
+  await compatibility.locator('#close-camera').click();
+  await compatibility.evaluate(async () => {
+    rejectPendingCamera(new DOMException('Synthetic late startup failure', 'NotReadableError'));
+    await new Promise(resolve => setTimeout(resolve, 50));
+  });
+  assert(await compatibility.evaluate(() => !camera.active && compatibilityRequests.length === 1 && !document.querySelector('#camera-panel').open));
+  console.log('PASS: closing during startup prevents late failures from retrying or reopening the camera');
 
   const mobile = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, permissions: ['camera'],
     userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 Version/26.0 Mobile/15E148 Safari/604.1' });
