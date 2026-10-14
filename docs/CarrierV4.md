@@ -1,16 +1,18 @@
 # Browser carrier 4: brightness-balanced carrier 3 markers
 
-Carrier 4 is the default browser writer. It keeps carrier 3's eight recovery
+Carrier 4 remains selectable as an older browser writer. It keeps carrier 3's eight recovery
 patches, their positions, dimensions, six-pixel wavelets
 and payload exclusions. The change is local brightness correction, not smaller
-or softer markers. The [smaller-marker experiment](CarrierV5.md) is selectable
-as carrier 5. Carrier 3 remains a comparison and rollback option.
+or softer markers. [Carrier 5](CarrierV5.md) is now the default writer and reader.
+Carrier 3 remains a comparison and rollback option.
 
-Readers automatically accept carriers 1, 3, 4 and 5; the writer choice never
-limits reading. The new preference key is `pixelstow-carrier-v4-balanced`, so
-previous experimental preferences do not override the new default. There is
-no compatibility shim for the discarded four-corner V4 images. Desktop and
-game readers still require carrier 1 until their signal readers are upgraded.
+Normal recovery searches V5 only. Enable older-format recovery under Image
+recovery options to read carriers 1, 3 and 4. Explicit older writer selections
+still verify and preview their generated images without enabling the general
+older-format detector. Writer choices use `pixelstow-carrier-v5-adaptive`;
+the old V4 preference key is ignored. There is no compatibility shim for the
+discarded four-corner V4 images. Desktop and game readers still require carrier
+1 until their signal readers are upgraded.
 
 ## Geometry and framing
 
@@ -110,7 +112,7 @@ Marker localization uses bounded working images; final perspective sampling
 uses the full original capture. Canvas loading retains 1:1 source pixels in
 strips, and large display previews use bounded backing canvases.
 
-Focused checks: `node tests/pixelstow-v4-checks.mjs`. These cover the new default,
+Focused checks: `node tests/pixelstow-v4-checks.mjs`. These explicitly enable V4 and cover
 eight independent marker headers, the shared V3/V4 layout, brightness treatment,
 V5 selection, source/alpha preservation, attachment/password round trips, frozen
 V3 pixels, V1 reading and large-input boundaries. They do not certify camera

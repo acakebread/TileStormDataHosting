@@ -81,7 +81,7 @@ function protectedBody(plain, password, version) {
 }
 async function imageFromFrame(packed, width = 512, height = 512) {
   const reference = flat(width, height), pixels = reference.slice();
-  await internal.writeSignal(reference, pixels, width, height, packed, 32);
+  await internal.writeSignal(reference, pixels, width, height, packed, 32, 1);
   return { pixels, width, height };
 }
 async function roundTrip(content, password = "", width = 512, height = 512) {
@@ -120,7 +120,7 @@ await rejects(() => codec.encodePayload(publicResult.reloaded.pixels, 512, 512, 
 const largeFiles = [{ name: "large.bin", type: "application/octet-stream", bytes: new Uint8Array(randomBytes(20000)) }];
 const large = await roundTrip({ text: "", attachments: largeFiles }, "", 2049, 1539);
 check(large.encoded.pixels.slice(-4).every((byte, i) => byte === [140, 140, 140, 77][i]), "Partial edge pixels are preserved");
-await rejects(() => codec.encodePayload(flat(128, 128), 128, 128, content, ""), /too small/, "Actual carrier capacity rejects oversized payloads");
+await rejects(() => codec.encodePayload(flat(128, 128), 128, 128, content, ""), /framed payload needs.*image holds/, "Actual carrier capacity rejects oversized payloads");
 await rejects(() => codec.encodePayload(flat(512, 512), 512, 512, { text: "", attachments: [] }, ""), /message or add/, "An empty payload is rejected");
 await rejects(() => codec.encodePayload(flat(512, 512), 512, 512, { text: "", attachments: Array(9).fill(files[0]) }, ""), /eight/, "Attachment count is bounded");
 assert.throws(() => codec.payloadSize("", [{ ...files[0], name: "../secret.bin" }]), /filenames/); checks++;

@@ -6,9 +6,10 @@ locally in the browser; there is no upload or service dependency.
 
 Text without attachments still writes public PCF1 envelope v1 / kind 1 or
 password-protected v2 / kind 2, unchanged. Writing carrier 1 preserves existing
-PixelStow and TileStorm Evolution text-level interchange; the new default
-carrier 4 currently needs the browser reader. Carrier 3 remains available as a
-recovery-format fallback. Readers in the desktop and game need
+PixelStow and TileStorm Evolution text-level interchange; the default carrier
+5 currently needs the browser reader. Carriers 1, 3 and 4 remain selectable for
+writing and require explicit older-format recovery for normal browser reads.
+Readers in the desktop and game need
 the v3 upgrade before importing an image with attachments. A game should use the
 bundle's optional text for level JSON and leave unrelated attachments opaque.
 
@@ -16,10 +17,11 @@ bundle's optional text for level JSON and leave unrelated attachments opaque.
 
 The PCF1 frame shuffle, whitening, 20-byte header, strength, repetition and
 parity are unchanged. The browser now defaults to a separate versioned image
-carrier 4 with the same eight markers as carrier 3 and balanced local brightness.
-Carrier 5 makes the smaller-corner-marker experiment selectable. Carriers 1
-and 3 remain readable and selectable for writing. See [carrier 4](CarrierV4.md),
-[experimental carrier 5](CarrierV5.md) and [carrier 3 resize recovery](ResizeRecovery.md)
+carrier 5 with adaptive contrast and smaller corner markers. Normal file and
+camera recovery searches only V5. Image recovery options contains an unchecked
+older-format recovery switch for carriers 1, 3 and 4; it resets on page load.
+Generated-image verification reads the selected writer's exact format.
+See [carrier 4](CarrierV4.md), [carrier 5](CarrierV5.md) and [carrier 3 resize recovery](ResizeRecovery.md)
 for their layouts and limits.
 Header byte 4 is 3; byte 5 is 3 for a public bundle or 4 for a protected bundle. Public bundles may use raw
 DEFLATE when smaller. Protected outer frames are never compressed. Frame CRC32

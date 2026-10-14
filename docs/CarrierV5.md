@@ -1,16 +1,22 @@
-# Browser carrier 5: experimental smaller recovery markers
+# Browser carrier 5: adaptive contrast and smaller recovery markers
 
-Carrier 5 is selectable for evaluation; [carrier 4](CarrierV4.md), with eight
-full-size brightness-balanced markers, is the default. Readers automatically
-accept carriers 1, 3, 4 and 5. The preference key is
-`pixelstow-carrier-v4-balanced`. Desktop and game readers still require carrier 1
-until upgraded. Payload frames, compression and passwords are unchanged.
+Carrier 5 is the default browser writer and the only format searched during
+normal image and camera recovery. Enable **older-format recovery (versions 1,
+3 and 4)** under Image recovery options to include the earlier readers for the
+current session. All four writer choices remain available; generated-image
+verification and source preview read their explicitly selected format.
+
+The preference key is `pixelstow-carrier-v5-adaptive`. The old V4 preference is
+ignored so existing users start with V5; subsequent explicit writer choices
+are saved. Older-format recovery starts disabled on every page load. Desktop
+and game readers still require carrier 1 until upgraded. Payload frames,
+compression and passwords are unchanged.
 
 This moves the earlier disposable four-corner V4 experiment into a distinct
 carrier 5. It does not retain compatibility with that discarded V4 layout.
-The style experiment is retained for further work: the user reports that its
-camera recovery was substantially worse than carrier 3. CRC-valid marker
-headers alone do not establish accurate enough geometry for payload recovery.
+Adaptive contrast and geometry fixes improved recovery in supplied captures.
+CRC-valid marker headers alone do not establish accurate enough geometry for
+payload recovery; photo and print recovery remain research features.
 
 ## Four corner markers
 
@@ -102,20 +108,25 @@ byte 1 is 5; existing checksum, scattering and seven copies remain unchanged.
 Generated-image verification reads the native grid without photo discovery.
 
 Images must fit disjoint patches, reserve no more than 30% of their area, and
-meet 16-bit dimensions and the 24-megapixel encoding limit. Smaller images
-that do not fit the markers fall back to carrier 1 with the existing notice.
+meet 16-bit dimensions and the 24-megapixel encoding limit. Images that cannot
+fit V5 markers report zero capacity and require a larger source or an explicit
+older writer selection. V5 never silently falls back to carrier 1.
 
 ## Compatibility and evaluation
 
-Carrier 3's writer and eight 72 x 48 patches are retained unchanged. Discovery
-profiles share image preparation, FFT and outline proposals. Cheap checksums
-across all profiles precede expensive local fits. Source extraction uses each
-version's own exclusions; the side references are optional diagnostics.
+Carrier 3's writer and eight 72 x 48 patches are retained unchanged. Default
+discovery evaluates only V5's marker profile and frequency band. With older
+recovery enabled, discovery profiles share image preparation, FFT and outline
+proposals, and cheap checksums precede expensive local fits. Unselected older
+seeds, candidate scans and cached transforms cannot bypass the setting.
+Source extraction uses each version's own exclusions; the side references are
+optional diagnostics. Encoding still checks for existing and locked native
+fingerprints in all formats to prevent re-encoding them.
 
 Smaller, softer corner markers reduce redundancy and resampling margin. Native
 round-trips and controlled geometric checks are development evidence; actual
 version 5 camera/print reliability needs evaluation. Carriers 3 and 4 provide
-the full-size marker comparison while version 5 remains experimental.
+the full-size marker comparison when explicitly enabled.
 
 Geometry discovery keeps an affine prediction from the verified corner's local
 centre and axes alongside outline/projective predictions. A detected outline
@@ -147,7 +158,8 @@ the full original. Pixel buffers and exported captures keep their resolution.
 Marker overlays also use bounded display canvases. Device memory still limits
 very large files; no particular iPhone model's performance is guaranteed.
 
-Focused checks: `node tests/pixelstow-v4-checks.mjs`,
+Focused checks: `node tests/pixelstow-v5-default-checks.mjs`,
+`node tests/pixelstow-v4-checks.mjs`,
 `node tests/pixelstow-v5-boost-checks.mjs` and
 `node tests/pixelstow-v5-photo-checks.mjs`. The existing resize suite
 explicitly selects carrier 3 to keep its measured baseline separate.
