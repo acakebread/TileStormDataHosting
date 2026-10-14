@@ -120,6 +120,15 @@ the encoder closes on cancellation or a stalled queue/flush. Users should listen
 to the converted recording before encoding. Native Chrome checks verify encoding,
 playback duration and fallback; actual iPhone Safari use still needs device testing.
 
+Composition audio players are retained per attachment when an audio conversion
+or list refresh replaces their contents. A successful reduction switches the
+existing player to the new file, requests full preloading and calls load before
+the next Play gesture; the old URL is revoked. Unchanged conversions retain the
+existing source and playback state. Reset/removal stops and releases discarded
+players and their sources. This avoids replacing the media element or starting
+a new load from the first preview tap. Decoded-image playback continues to use
+its existing retained main player and gesture handling.
+
 **Full screen preview** beside the image uses the existing zoom, pan and comparison
 canvases in a viewport-filling dialog. Fit and 100% controls are available; closing
 restores the previous page view. **Preview encoded image** at the end of the export
@@ -244,8 +253,9 @@ message. A static opening link cannot read the recipient's WhatsApp attachment.
 **Post to Facebook** offers the prepared encoded photo and a copyable caption
 containing the PixelStow opening link and save/paste/unlock/audio instructions.
 When file sharing is available, the user chooses Facebook in the native share
-sheet; the same caption is passed as text. The copy button remains available
-because a receiving app may omit that text. Otherwise, download the photo, open
+sheet. That share contains only the prepared image file, with no title, text or
+URL that Facebook could treat as a website preview. Copy and paste the caption
+separately after attaching the photo. Otherwise, download the photo, open
 Facebook, attach it and paste the caption or add it as a comment. Facebook handles
 the final Post action. No Facebook photo URL is needed, and PixelStow does not
 upload or host a copy, use Cloudflare, or include passwords/decoded contents in

@@ -3,7 +3,7 @@
   const openingUrl = "https://www.massivehadron.com/pixelstow.html#open-card";
   const shareText = "There is a message inside this photo! Open it in PixelStow: " + openingUrl + "\nSave the original image to Files and choose it there, or copy the photo and tap Paste image.";
   const facebookText = "There is a message, file or voice recording inside this photo! Open it in PixelStow:\n" + openingUrl +
-    "\n\nOpen the photo on Facebook and save/download the photo itself (not a screenshot). Open the PixelStow link above, tap Choose image and select the saved photo. Or copy the actual photo and tap Paste image.\n\nIf it is locked, enter the password. For audio, tap Play voice message.";
+    "\n\nOpen the photo on Facebook and save/download the photo itself (not a screenshot). Open the PixelStow link above, tap Choose image and select the saved photo. Or copy the actual photo and tap Paste image.\n\nIf it is locked, enter the password. For audio, tap Play audio.";
 
   class Sharing {
     constructor({ importImage, save, report, working, setBusy, hasImage, imageForClipboard }) {
@@ -108,7 +108,7 @@
     showFacebook() {
       if (this.working() || !this.file) return;
       this.facebookStatus.textContent = this.canShareFile()
-        ? "Copy the message first, then share the photo and choose Facebook."
+        ? "Share the photo and choose Facebook. Copy and paste the message into its caption or a comment separately."
         : "Copy the message, download the photo, then open Facebook to attach it and paste the message.";
       if (!this.facebookDialog.open) this.facebookDialog.showModal();
     }
@@ -129,8 +129,10 @@
       if (!this.canShareFile()) { this.showFacebook(); return; }
       try {
         this.facebookStatus.textContent = "Choose Facebook in the share sheet. Paste the message into the caption or a comment if needed.";
-        // Use the prepared photo directly from the tap to retain Safari activation.
-        const sharing = navigator.share({ files: [this.file], title: "PixelStow photo card", text: facebookText });
+        // A URL in shared text can make Facebook choose a website/link preview
+        // instead of the supplied image. Share only the prepared photo, directly
+        // in the tap; the caption has its own copy action.
+        const sharing = navigator.share({ files: [this.file] });
         this.setBusy(true);
         await sharing;
         this.facebookStatus.textContent = "Photo handed to the selected app. Include the message and finish posting in Facebook.";

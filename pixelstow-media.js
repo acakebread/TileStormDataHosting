@@ -185,6 +185,7 @@
       // Safari grants playback permission per media element. Retain the main
       // player when a camera capture or another imported image replaces its source.
       this.messageAudio = document.createElement("audio");
+      this.composePlayers = new Map();
       this.audioVoices = new WeakMap();
       const toggleVoice = () => {
         if (this.busy || !this.voiceAudio) return;
@@ -297,8 +298,17 @@
         const result = await PixelStowVoice.compact(file, this.recordQuality.value === "tiny" ? 6000 : 8000,
           { signal: this.compressionAbort.signal });
         if (generation !== this.generation) return;
-        this.files[index] = result.file;
-        this.render(this.list, this.files, "compose", false);
+        if (result.file !== file) {
+          // Retain Safari's media element/permission across WAV → Opus. Prepare
+          // its new source now, rather than making the first Play tap replace it.
+          const player = this.composePlayers.get(file);
+          if (player) {
+            this.composePlayers.delete(file);
+            this.composePlayers.set(result.file, player);
+          }
+          this.files[index] = result.file;
+          this.render(this.list, this.files, "compose", false);
+        }
         this.report(result.saved ? "Voice reduced from " + file.bytes.length.toLocaleString("en-GB") + " to " +
           result.file.bytes.length.toLocaleString("en-GB") + " bytes. Listen to the smaller version before encoding."
           : "This voice file is already as small as the conversion. The original was kept.");
@@ -338,7 +348,7 @@
       }
     }
 
-    clearUrls(group, container) {
+    clearUrls(group, container, retainedPlayers = new Set()) {
       if (group === "decoded") {
         if (this.voiceAudio) this.voiceAudio.playAttempt++;
         this.voiceAudio = null;
@@ -351,8 +361,10 @@
         this.audioVoices.get(audio)?.dispose();
         this.audioVoices.delete(audio);
         audio.pause();
-        audio.removeAttribute("src");
-        audio.load();
+        if (!retainedPlayers.has(audio)) {
+          audio.removeAttribute("src");
+          audio.load();
+        }
       });
       for (const url of this.urls[group]) URL.revokeObjectURL(url);
       this.urls[group] = [];
@@ -360,7 +372,12 @@
     }
 
     render(container, files, group, autoplay) {
-      this.clearUrls(group, container);
+      const players = new Map();
+      if (group === "compose") for (const file of files) {
+        if (/^audio\//i.test(file.type)) players.set(file, this.composePlayers.get(file) || document.createElement("audio"));
+      }
+      this.clearUrls(group, container, new Set(players.values()));
+      if (group === "compose") this.composePlayers = players;
       let firstAudio = null;
       files.forEach((file, index) => {
         const row = document.createElement("div");
@@ -409,9 +426,9 @@
           const playbackBytes = /webm/i.test(file.type) ? finalizeWebmAudio(file.bytes) : file.bytes;
           const url = URL.createObjectURL(new Blob([playbackBytes], { type: file.type }));
           this.urls[group].push(url);
-          const audio = group === "decoded" && !firstAudio ? this.messageAudio : document.createElement("audio");
+          const audio = group === "decoded" && !firstAudio ? this.messageAudio : players.get(file) || document.createElement("audio");
           audio.controls = true;
-          audio.preload = group === "decoded" ? "auto" : "metadata";
+          audio.preload = "auto";
           audio.muted = false;
           audio.defaultMuted = false;
           audio.volume = 1;
@@ -472,6 +489,9 @@
           if (!firstAudio) firstAudio = voice;
         }
         container.appendChild(row);
+        // Prepare the new source after reattaching its retained player, before
+        // any preview gesture. A load from the play handler can abort play().
+        if (group === "compose") players.get(file)?.load();
       });
       if (group === "decoded" && firstAudio) {
         this.voiceAudio = firstAudio;
@@ -535,6 +555,7 @@
       this.files = [];
       this.input.value = "";
       this.clearUrls("compose", this.list);
+      this.composePlayers.clear();
       this.clearUrls("decoded", this.decoded);
       this.decodedSection.hidden = true;
       this.recordStatus.textContent = "";
