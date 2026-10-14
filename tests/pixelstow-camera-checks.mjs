@@ -270,6 +270,8 @@ try {
   const mobile = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, permissions: ['camera'],
     userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 Version/26.0 Mobile/15E148 Safari/604.1' });
   const phone = await mobile.newPage(); phone.on('pageerror', error => errors.push(error.message));
+  let phoneFilePickers = 0;
+  phone.on('filechooser', () => phoneFilePickers++);
   await phone.goto(url);
   await phone.evaluate(() => { PixelStow.inspect = async () => ({ found: false }); });
   const [picker] = await Promise.all([phone.waitForEvent('filechooser'), phone.locator('#take-photo').click()]);
@@ -308,14 +310,26 @@ try {
   console.log('PASS: phone prognosis accepts taps above/below the bar across a 64px target and drags outside it without scrolling the page');
   await phone.locator('#camera-source').click();
   await phone.waitForFunction(() => camera.session?.ready && !document.querySelector('#capture-frame').disabled);
-  await phone.evaluate(() => { window.phoneTracks = camera.session.stream.getTracks(); });
-  const [sourcePicker] = await Promise.all([phone.waitForEvent('filechooser'), phone.locator('#camera-take-photo').click()]);
-  assert(await phone.evaluate(() => !camera.active && phoneTracks.every(track => track.readyState === 'ended')));
-  await sourcePicker.setFiles({ name: 'public-phone-source.png', mimeType: 'image/png', buffer: bytes });
-  await phone.waitForFunction(() => current?.file.name === 'public-phone-source.png' && !busy);
+  assert(!(await phone.locator('#camera-take-photo').isVisible()));
+  assert.equal(await phone.locator('#capture-frame').textContent(), 'Take source photo');
+  await phone.evaluate(() => {
+    window.phoneTracks = camera.session.stream.getTracks();
+    const importImage = camera.importImage;
+    camera.importImage = (file, origin, captured) => {
+      window.phoneSourceCapture = captured;
+      return importImage(file, origin, captured);
+    };
+  });
+  await phone.locator('#capture-frame').click();
+  await phone.waitForFunction(() => Boolean(window.phoneSourceCapture) && !busy && !camera.active);
+  assert(await phone.evaluate(() => phoneTracks.every(track => track.readyState === 'ended') &&
+    phoneSourceCapture.sourceOnly && current.pixels === phoneSourceCapture.image.pixels));
+  assert.equal(phoneFilePickers, 1, 'New photo must not open another native camera/picker or confirmation screen');
+  assert(await phone.locator('#preview').isVisible());
+  assert(await phone.locator('#composition').isVisible());
   assert(await phone.locator('#scale-source').isChecked());
   assert.equal(await phone.evaluate(() => camera.inputPurpose), 'read');
-  console.log('PASS: phone Take photo keeps its native capture/picker route; source photo shortcut stops live tracks and preserves encoding purpose');
+  console.log('PASS: phone New photo has one direct source shutter, imports the live raster into the preview/composer, stops tracks and enables sizing without a native picker; reader Take photo keeps its native route');
   assert.deepEqual(errors, []);
 } finally {
   await browser?.close(); await new Promise(resolve => server.close(resolve));

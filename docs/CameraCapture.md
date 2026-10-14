@@ -1,16 +1,18 @@
 # Browser camera acquisition
 
 **Photograph to encode** opens the same camera preview for taking a new source
-image on phones or desktops with a camera. **Use photo for encoding** imports the
+image on phones or desktops with a camera. **Take source photo** imports the
 complete video raster into the message/file composer; no marker worker or
 photographic recovery search runs in this mode. Only the inexpensive native
 fingerprint check runs on import, so existing native locked/encoded images are
 still rejected for re-encoding. The normal writer also retains its fingerprint
 guard. Switching cameras or rotating the view preserves source mode.
 
-Inside that preview, **Take source photo with phone camera** opens the native
-still-camera/picker with the same source purpose. On browsers without live camera
-access, Photograph to encode uses that picker directly on phones/tablets.
+The source preview has one **Take source photo** shutter. It captures the live
+frame and opens PixelStow's preview/composer directly, without the iPhone's
+native camera and Use Photo confirmation step. The separate native still-camera
+shortcut is hidden in source mode. On browsers without live camera access,
+Photograph to encode uses the native picker directly on phones/tablets.
 Desktop Take photo opens a manual live preview, with Capture and read as its
 shutter, instead of opening a file chooser. New photo opens the source preview.
 The duplicate phone-camera shortcut is hidden on desktop. Without live camera

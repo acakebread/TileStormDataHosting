@@ -126,7 +126,14 @@
     get active() { return Boolean(this.session || this.switchOperation); }
 
     takePhoto(purpose = "read") {
-      if (this.working() || this.session?.handingOff) return;
+      if (this.working() || this.switchOperation || this.session?.handingOff) return;
+      // New photo is already showing the live source. Its shutter should use
+      // that frame directly, without opening the phone's separate capture UI.
+      if (this.session?.purpose === "source") {
+        try { this.accept(this.session, this.captureFrame()); }
+        catch (error) { this.progress.textContent = error.message; }
+        return;
+      }
       if (!this.nativePhotoCapture) {
         if (this.active) {
           try { this.accept(this.session, this.captureFrame()); }
@@ -293,7 +300,7 @@
         session.adjusting = false;
         if (this.session === session && !session.handingOff) {
           session.portrait = portrait;
-          this.progress.textContent = session.purpose === "source" ? "Camera ready. Frame your source photo, then tap Use photo for encoding."
+          this.progress.textContent = session.purpose === "source" ? "Camera ready. Frame your source photo, then tap Take source photo."
             : session.manualCapture ? "Camera ready. Frame your picture, then tap Capture and read."
             : session.paused ? "Scanning paused. Reframe, then resume or capture and read."
             : "Camera ready. Keep all four picture corners inside the guides and hold steady…";
@@ -319,9 +326,9 @@
       this.help.textContent = source ? "Frame a new photo to put your message and files inside. The whole outlined view is captured."
         : "Keep all four picture corners inside the guides. Move closer and hold steady.";
       if (session?.deviceLabel) this.help.textContent += " Camera: " + session.deviceLabel + ".";
-      this.captureButton.textContent = source ? "Use photo for encoding" : "Capture and read";
-      this.nativePhotoButton.textContent = source ? "Take source photo with phone camera" : "Take photo with phone camera";
-      this.nativePhotoButton.hidden = !this.nativePhotoCapture;
+      this.captureButton.textContent = source ? "Take source photo" : "Capture and read";
+      this.nativePhotoButton.textContent = "Take photo with phone camera";
+      this.nativePhotoButton.hidden = source || !this.nativePhotoCapture;
       this.target.hidden = source;
       this.signature.hidden = source;
       this.pauseButton.hidden = source || Boolean(session?.manualCapture) || !this.backgroundAvailable;
@@ -402,7 +409,7 @@
         // counting camera permission/startup time as time spent framing it.
         session.scanAfter = Date.now() + 4000;
         this.sync();
-        this.progress.textContent = purpose === "source" ? "Camera ready. Frame your source photo, then tap Use photo for encoding."
+        this.progress.textContent = purpose === "source" ? "Camera ready. Frame your source photo, then tap Take source photo."
           : session.manualCapture ? "Camera ready. Frame your picture, then tap Capture and read."
           : session.paused && this.backgroundAvailable ? "Camera ready. Scanning paused; capture a photo or resume scanning."
           : this.backgroundAvailable
