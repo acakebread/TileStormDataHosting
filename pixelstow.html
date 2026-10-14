@@ -348,6 +348,14 @@
     #split::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; width: 36px; height: 36px; margin-top: -14px; border: 2px solid #102028; border-radius: 50%; background: #69dccb; }
     #split::-moz-range-thumb { width: 32px; height: 32px; border: 2px solid #102028; border-radius: 50%; background: #69dccb; }
     #encoding-quality { width: 100%; min-height: 44px; accent-color: #69dccb; }
+    @media (pointer: coarse) {
+      #encoding-quality { appearance: none; -webkit-appearance: none; height: 64px; padding: 0; background: transparent; touch-action: pan-y; }
+      #encoding-quality::-webkit-slider-runnable-track { height: 8px; background: #385762; border-radius: 4px; }
+      #encoding-quality::-moz-range-track { height: 8px; background: #385762; border-radius: 4px; }
+      #encoding-quality::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; box-sizing: border-box; width: 48px; height: 48px; margin-top: -20px; border: 2px solid #102028; border-radius: 50%; background: #69dccb; }
+      #encoding-quality::-moz-range-thumb { box-sizing: border-box; width: 48px; height: 48px; border: 2px solid #102028; border-radius: 50%; background: #69dccb; }
+      #encoding-quality:focus-visible { outline: 2px solid var(--tile-azure); outline-offset: 2px; border-radius: 8px; }
+    }
     .split-handle {
       position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
       width: 44px; height: 44px; padding: 0; background: #69dccb; color: #102028;
