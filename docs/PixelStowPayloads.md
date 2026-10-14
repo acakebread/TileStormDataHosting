@@ -35,8 +35,8 @@ The uncompressed bundle is at most 1,048,576 bytes. The stored frame limit is
 1,048,656 bytes (bundle + 60-byte protection header + 20-byte frame header).
 Actual photo capacity is much smaller: one payload byte needs at least nine
 complete 4×4 pixel blocks, after the 504 preamble blocks. Compression may help
-text; already compressed audio usually saves little. No pixels are resized to
-make more space, and every export is checked before it is offered for download.
+text; already compressed audio usually saves little. Source sizing is optional,
+and every export is checked before it is offered for download.
 
 The bundle uses this layout, with unsigned little-endian lengths:
 
@@ -130,8 +130,10 @@ fullscreen can also hide their chrome; iPhones use the viewport dialog fallback.
 Successful reads start with marker overlays hidden. Failed photographs show
 diagnostic markers; continuous captures start clean. Fullscreen preview has a
 small **Show analysis** checkbox below the image; it is absent from the main
-page. It can reveal the separate overlay without changing captured or exported
-pixels. The comparison range
+page. Native reads, including clipboard pastes and generated images, gather
+diagnostics at the known marker positions on request without a broad search.
+Formats without recovery markers have the control disabled with an explanation.
+The separate overlay never changes captured or exported pixels. The comparison range
 slider has a larger thumb and a 48-pixel-high touch target.
 Choose image becomes Cancel search while automatic image recovery runs, leaving
 the loaded image ready for encoding after cancellation. Continuous camera
@@ -155,6 +157,23 @@ towards green; low repetition and reduced parity retain a minimum risk. 0.8
 keeps the previous baseline. This is a qualitative estimate, not a calibrated
 camera success percentage. If settings change after export, it estimates the
 next encoding and asks the user to re-encode; the saved PNG remains unchanged.
+Dragging the prognosis at a fixed source size adjusts quality within its
+achievable range. Unavailable portions of the scale are shaded.
+
+Optional **Scale source for payload** keeps the selected quality and changes
+carrier dimensions to reach the requested prognosis, using compressed payload
+bytes, error correction and reserved marker space. It selects the smallest
+size meeting the target, preserves the source aspect ratio and bounds output
+to 24 megapixels. If the requested margin exceeds that limit, the interface
+shows the closest available size. Sizing may enlarge a small source if needed.
+The sliders calculate dimensions without resampling. On Encode, a copy of the
+retained original is resized first, the same text and attachment bytes are
+embedded into that resized source, and the exported PNG is verified. Re-encoding
+always starts from the original source rather than resizing a previous result.
+Source exports and the comparison preview use the generated carrier dimensions.
+Camera photos explicitly taken for encoding enable scaling automatically;
+opening a file or pasting an image restores the last manually selected setting.
+
 Capture focus, glare, source detail and distortion
 still affect recovery. Recovery status/signature, near-miss advice and overlays
 are cleared before a new import, retry, decode/unlock or camera read begins.

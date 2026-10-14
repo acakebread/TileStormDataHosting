@@ -119,6 +119,11 @@
     .read-prognosis p { margin: 0 0 10px; }
     .prognosis-scale { position: relative; height: 14px; margin: 12px 8px 6px; border-radius: 8px; background: linear-gradient(90deg, #63d79c, #efc66a 55%, #ed7777); }
     .prognosis-pointer { position: absolute; top: -5px; bottom: -5px; width: 4px; transform: translateX(-50%); border: 2px solid #fff; border-radius: 3px; background: #081016; }
+    #prognosis-target { position: absolute; inset: -15px 0; width: 100%; height: 44px; margin: 0; opacity: 0; cursor: ew-resize; touch-action: none; }
+    .prognosis-scale:focus-within { outline: 2px solid var(--tile-azure); outline-offset: 5px; }
+    .prognosis-limit { position: absolute; inset-block: 0; background: rgba(8,16,22,.6); pointer-events: none; }
+    #prognosis-low-limit { left: 0; border-radius: 8px 0 0 8px; }
+    #prognosis-high-limit { right: 0; border-radius: 0 8px 8px 0; }
     .prognosis-labels { display: flex; justify-content: space-between; font-size: 0.82rem; color: var(--muted); }
     .read-prognosis .hint { margin: 10px 0 0; }
 
@@ -747,10 +752,12 @@
       <input id="encoding-quality" type="range" min="0" max="1" step="0.01" value="0.8">
       <div class="prognosis-labels"><span>More durable · stronger pattern</span><span>Higher image quality</span></div>
       <p class="hint">0.80 uses the current signal strength. Move left to help camera recovery at the cost of appearance. Applies to versions 4 and 5.</p>
+      <label><input id="scale-source" type="checkbox"> Scale source for payload</label>
+      <p class="hint" id="source-size-plan">Resize the source before encoding to meet the selected read margin. Your original stays unchanged.</p>
 
       <section class="read-prognosis" id="read-prognosis" hidden aria-label="Estimated camera-read difficulty">
         <p><strong id="prognosis-title"></strong></p>
-        <div class="prognosis-scale" aria-hidden="true"><span class="prognosis-pointer" id="prognosis-pointer"></span></div>
+        <div class="prognosis-scale"><span class="prognosis-limit" id="prognosis-low-limit" aria-hidden="true"></span><span class="prognosis-limit" id="prognosis-high-limit" aria-hidden="true"></span><span class="prognosis-pointer" id="prognosis-pointer" aria-hidden="true"></span><input id="prognosis-target" type="range" min="0" max="1" step="0.001" value="0.2" aria-label="Desired photo-read margin" aria-describedby="prognosis-detail"></div>
         <div class="prognosis-labels" aria-hidden="true"><span>More margin</span><span>Moderate</span><span>Tricky read</span></div>
         <p class="hint" id="prognosis-detail"></p>
       </section>
@@ -863,7 +870,8 @@
   <script src="./pixelstow-spectrum.js?v=20261014-v5-default1"></script>
   <script src="./pixelstow-transform.js?v=20261014-v5-default1"></script>
   <script src="./pixelstow-lattice.js?v=20261013-marker-follow2"></script>
-  <script src="./pixelstow.js?v=20261014-mobile-layout1"></script>
+  <script src="./pixelstow.js?v=20261014-source-sizing1"></script>
+  <script src="./pixelstow-sizing.js?v=20261014-source-sizing1"></script>
   <script src="./pixelstow-export.js?v=20261011-exports"></script>
   <script src="./pixelstow-voice.js?v=20261013-voice-clock2"></script>
   <script src="./pixelstow-media.js?v=20261014-margin-ui1"></script>
@@ -875,6 +883,8 @@
     const chooseImageButton = document.querySelector("#choose-image");
     const encodingQuality = document.querySelector("#encoding-quality");
     const encodingQualityValue = document.querySelector("#encoding-quality-value");
+    const scaleSource = document.querySelector("#scale-source");
+    const sourceSizePlan = document.querySelector("#source-size-plan");
     const drop = document.querySelector("#drop");
     const preview = document.querySelector("#preview");
     const previewEncodedButton = document.querySelector("#preview-encoded-image");
@@ -928,8 +938,15 @@
     const prognosisTitle = document.querySelector("#prognosis-title");
     const prognosisPointer = document.querySelector("#prognosis-pointer");
     const prognosisDetail = document.querySelector("#prognosis-detail");
+    const prognosisTarget = document.querySelector("#prognosis-target");
+    const prognosisLowLimit = document.querySelector("#prognosis-low-limit");
+    const prognosisHighLimit = document.querySelector("#prognosis-high-limit");
     let repetitionGeneration = 0, repetitionTimer;
     let prognosisBudget = null, encodedPrognosis = null;
+    let frameBudget = null, sourcePlan = null, autoTargetRisk = .2, prognosisBounds = { min: .04, max: .99 };
+    let manualScaleSource = false;
+    try { manualScaleSource = localStorage.getItem("pixelstow-scale-source") === "true"; } catch (_) { /* Session choices still work. */ }
+    scaleSource.checked = manualScaleSource;
     const attachmentBytes = document.querySelector("#attachment-bytes");
     const downloadLink = document.querySelector("#download");
     const saveEncodedJpegButton = document.querySelector("#save-encoded-jpeg");
@@ -981,7 +998,8 @@
       report: setStatus,
       remaining: () => {
         if (!current) return 0;
-        const room = PixelStow.estimatePayloadBytes(current.width, current.height, Boolean(password.value));
+        const size = plannedDimensions(current, true);
+        const room = PixelStow.estimatePayloadBytes(size.width, size.height, Boolean(password.value));
         // Reserve the bundle header and the future recording entry's metadata.
         return Math.max(0, room - PixelStow.payloadSize(message.value, media.files) - (media.files.length ? 0 : 12) - 100);
       }
@@ -998,7 +1016,10 @@
     const sharing = new PixelStowSharing({
       importImage: useFile, save: saveBlob, report: setStatus, working: () => busy || media.active || Boolean(camera?.active), setBusy,
       hasImage: () => Boolean(current),
-      imageForClipboard: () => encodedPng || PixelStow.writePng(current.decodePixels || current.pixels, current.width, current.height)
+      imageForClipboard: () => {
+        const size = resultDimensions(current);
+        return encodedPng || PixelStow.writePng(current.decodePixels || current.pixels, size.width, size.height);
+      }
     });
     camera = new PixelStowCamera({
       importImage: useFile, report: setStatus, working: () => busy || media.active,
@@ -1019,7 +1040,8 @@
       setBusy(busy);
       updateByteCounts();
       if (current) {
-        const room = PixelStow.estimatePayloadBytes(current.width, current.height);
+        const size = plannedDimensions(current);
+        const room = PixelStow.estimatePayloadBytes(size.width, size.height);
         const exactNote = current.exact ? "" : " Browser colour conversion was used, so an existing fingerprint may not read.";
         capacity.textContent = capacityLabel(current, room, exactNote);
       }
@@ -1072,7 +1094,8 @@
       if (!current) { payloadBudget.textContent = "Choose a photo to see how much it can hold."; return; }
       try {
         const used = PixelStow.payloadSize(message.value, media.files);
-        const room = PixelStow.estimatePayloadBytes(current.width, current.height, Boolean(password.value));
+        const size = plannedDimensions(current);
+        const room = PixelStow.estimatePayloadBytes(size.width, size.height, Boolean(password.value));
         payloadBudget.textContent = used.toLocaleString("en-GB") + " payload bytes / about " + room.toLocaleString("en-GB") + " bytes available before compression. Shorter audio and larger photos give more room.";
         payloadBudget.classList.toggle("error", used > room);
       } catch (error) {
@@ -1101,6 +1124,8 @@
       if (!current || current.hasFingerprint || (!message.value && !media.files.length)) {
         showRepetition(payloadRepetition, null);
         if (!encodedPng) showReadPrognosis(null);
+        frameBudget = sourcePlan = null;
+        sourceSizePlan.textContent = "Add a message or file to choose a carrier size. Your original stays unchanged.";
         return;
       }
       payloadRepetition.hidden = false;
@@ -1109,14 +1134,16 @@
       const job = current;
       repetitionTimer = setTimeout(async () => {
         try {
-          const data = await PixelStow.estimateRepetition(job.width, job.height,
-            { text: message.value, attachments: media.files }, Boolean(password.value));
+          const data = await PixelStow.estimatePayloadFrame({ text: message.value, attachments: media.files }, Boolean(password.value));
           if (generation === repetitionGeneration && job === current) {
-            showRepetition(payloadRepetition, data, "Expected redundancy");
-            showReadPrognosis(data);
+            frameBudget = data;
+            refreshEncodingPlan();
           }
         } catch (_) {
-          if (generation === repetitionGeneration && job === current) showRepetition(payloadRepetition, null);
+          if (generation === repetitionGeneration && job === current) {
+            frameBudget = sourcePlan = null;
+            showRepetition(payloadRepetition, null); showReadPrognosis(null);
+          }
         }
       }, 250);
     }
@@ -1140,22 +1167,52 @@
       readPrognosis.hidden = !data || !Number.isFinite(data.repetitionRatio);
       if (readPrognosis.hidden) { prognosisTitle.textContent = prognosisDetail.textContent = ""; return; }
       const ratio = data.repetitionRatio, weakParity = data.parityBits === 1;
-      const baseRisk = weakParity ? 0.95 : ratio < 2 ? 0.7 + 0.3 * Math.max(0, Math.min(1, 2 - ratio))
-        : ratio < 5 ? 0.25 + 0.35 * (5 - ratio) / 3 : Math.max(0.04, 0.2 * 5 / ratio);
       const quality = Number(encodingQuality.value), version = Number(carrierSelect.value);
-      const gain = PixelStow.estimateSignalGain(ratio, quality, version);
-      const risk = data.fits === false ? 0.99 : Math.max(weakParity ? 0.75 : ratio < 2 ? 0.5 : 0.04,
-        Math.min(0.98, baseRisk - 0.2 * Math.log2(gain)));
+      const risk = PixelStowSizing.prognosis(data, quality, version);
+      prognosisBounds = scaleSource.checked && sourcePlan?.fits ? { min: sourcePlan.min, max: sourcePlan.max }
+        : { min: PixelStowSizing.prognosis(data, 0, version), max: PixelStowSizing.prognosis(data, 1, version) };
+      prognosisTarget.value = risk.toFixed(3);
+      prognosisTarget.disabled = busy || prognosisBounds.max - prognosisBounds.min < .001;
+      prognosisTarget.setAttribute("aria-valuetext", risk < .25 ? "Good read margin" : risk < .7 ? "Moderate read margin" : "Tricky read");
+      prognosisLowLimit.style.width = (100 * prognosisBounds.min) + "%";
+      prognosisHighLimit.style.width = (100 * (1 - prognosisBounds.max)) + "%";
       const level = risk >= 0.7 ? "Tricky read" : risk >= 0.25 ? "Moderate margin" : "Good margin";
       const needsEncoding = Boolean(encodedPng && encodedPrognosis && (encodedPrognosis.quality !== quality ||
-        encodedPrognosis.carrierVersion !== version || encodedPrognosis.framedBytes !== data.framedBytes));
+        encodedPrognosis.carrierVersion !== version || encodedPrognosis.framedBytes !== data.framedBytes ||
+        encodedPrognosis.width !== data.width || encodedPrognosis.height !== data.height));
       prognosisTitle.textContent = "Photo-read prognosis: " + level;
       prognosisPointer.style.left = (100 * risk).toFixed(1) + "%";
       prognosisDetail.textContent = ratio.toFixed(2) + "× redundancy. " + (weakParity ? "Reduced error correction. " : "") +
         (ratio < 2 ? "Less repeated data makes camera recovery harder. Smaller attachments or a larger image give more margin. " : "") +
         (data.fits === false ? "The contents do not fit this image. " : "") +
         "Estimated from redundancy, error correction and signal strength; focus, glare and source detail also affect recovery." +
+        (scaleSource.checked ? " Drag to choose the read margin and carrier size." : " Drag within the available range to adjust image quality.") +
         (needsEncoding ? " Re-encode to apply these settings to the picture." : "");
+    }
+
+    function resultDimensions(job) {
+      return { width: job.resultWidth || job.width, height: job.resultHeight || job.height };
+    }
+    function plannedDimensions(job, forRecording = false) {
+      if (!scaleSource.checked) return job;
+      if (!forRecording && sourcePlan?.fits) return sourcePlan;
+      return PixelStowSizing.maxDimensions(job.width, job.height);
+    }
+    function refreshEncodingPlan() {
+      if (!current || !frameBudget || current.hasFingerprint) return;
+      const version = Number(carrierSelect.value), quality = Number(encodingQuality.value);
+      sourcePlan = scaleSource.checked ? PixelStowSizing.plan(current.width, current.height, frameBudget.framedBytes,
+        quality, autoTargetRisk, version) : null;
+      const data = sourcePlan?.fits ? sourcePlan : PixelStow.repetitionForFrame(current.width, current.height, frameBudget.framedBytes, version) ||
+        { ...frameBudget, fits: false, repetitionRatio: 0, parityBits: 1, carrierVersion: version };
+      sourceSizePlan.textContent = scaleSource.checked ? sourcePlan.fits
+        ? "Encode at " + sourcePlan.width + " × " + sourcePlan.height + " (" + Math.round(100 * sourcePlan.width / current.width) +
+          "% of source width). Resize first, then encode the same payload. Your original stays unchanged." +
+          (sourcePlan.limited ? " The selected margin exceeds the size limit; this is the closest available size." : "")
+        : sourcePlan.reason : "Original size: " + current.width + " × " + current.height + ". Enable scaling to resize the source for the selected read margin.";
+      showRepetition(payloadRepetition, data, "Expected redundancy");
+      showReadPrognosis(data);
+      setBusy(busy);
     }
 
     function clearDownload() {
@@ -1180,7 +1237,7 @@
       const protectedTarget = Boolean(current && (current.decodeProtected ?? current.passwordProtected));
       const needsUnlock = protectedTarget && !hasDecoded;
       const canEncode = hasImage && !current.hasFingerprint && !needsUnlock &&
-        current.width * current.height <= PixelStow.getLimits().encodingPixels;
+        (scaleSource.checked ? sourcePlan?.fits !== false : current.width * current.height <= PixelStow.getLimits().encodingPixels);
       const cameraActive = Boolean(camera?.active);
       const working = busy || media.active || cameraActive;
       drop.classList.toggle("camera-open", cameraActive);
@@ -1190,12 +1247,17 @@
       transformMode.disabled = working;
       transformForce.disabled = working;
       legacyRecovery.disabled = working;
-      showTransform.disabled = working || !(current?.transformResult?.geometry || current?.transformResult?.markers?.length);
+      const canAnalyze = Boolean(current?.transformResult?.geometry || current?.transformResult?.markers?.length ||
+        ([3,4,5].includes(current?.carrierVersion) && (current?.hasFingerprint || current?.recoverPixels)));
+      showTransform.disabled = working || !canAnalyze;
+      showTransform.parentElement.title = canAnalyze ? "Show recovery diagnostics for this image" : "No recovery markers are available for this image or format";
       cancelTransformButton.hidden = !transformAbort;
       chooseImageButton.textContent = transformAbort ? "Cancel search" : "Choose image";
       chooseImageButton.disabled = working && !transformAbort;
       carrierSelect.disabled = working;
       encodingQuality.disabled = working || ![4, 5].includes(Number(carrierSelect.value));
+      scaleSource.disabled = working;
+      prognosisTarget.disabled = working || prognosisBounds.max - prognosisBounds.min < .001;
       encodeButton.disabled = working || !canEncode;
       composition.hidden = cameraActive || Boolean(current && current.hasFingerprint) || needsUnlock;
       encodeButton.hidden = composition.hidden;
@@ -1262,9 +1324,11 @@
       }
     }
 
-    function rememberMessage(pixels, decoded, autoplay = true) {
+    function rememberMessage(pixels, decoded, autoplay = true, size = resultDimensions(current)) {
       current.recoverPixels = pixels;
       current.decodePixels = pixels;
+      current.resultWidth = size.width;
+      current.resultHeight = size.height;
       current.decodedText = decoded.text;
       current.decodedProtected = decoded.passwordProtected;
       current.decodeProtected = decoded.passwordProtected;
@@ -1469,14 +1533,28 @@
 
     function drawTransform(result) {
       if (!current) return;
-      paintTransform(transformOutline, result, current.width, current.height);
+      const size = resultDimensions(current);
+      paintTransform(transformOutline, result, size.width, size.height);
       transformOutline.hidden = !showTransform.checked || !(result.geometry || result.markers?.length) ||
         (current.markerGuideOverride !== true && (current.suppressMarkerOverlay || !result.unreadable));
     }
 
-    showTransform.addEventListener("change", () => {
+    showTransform.addEventListener("change", async () => {
       if (current) current.markerGuideOverride = showTransform.checked;
-      const result = current?.transformResult;
+      const job = current;
+      let result = job?.transformResult;
+      if (showTransform.checked && job && !result?.geometry && !result?.markers?.length && [3,4,5].includes(job.carrierVersion)) {
+        const size = resultDimensions(job), pixels = job.recoverPixels || job.decodePixels || job.pixels;
+        try {
+          const analysis = await PixelStow.analyzeNativeMarkers(pixels, size.width, size.height, job.carrierVersion);
+          if (current !== job) return;
+          result = job.transformResult = { ...result, geometry: analysis.geometry, markers: analysis.markers };
+          showTransform.parentElement.title = analysis.found ? "Recovery markers on the native grid" : "No marker headers were confirmed on this image";
+        } catch (_) {
+          if (current !== job) return;
+          showTransform.parentElement.title = "Recovery diagnostics could not be prepared for this image";
+        }
+      }
       if (showTransform.checked && result) drawTransform(result);
       else transformOutline.hidden = true;
     });
@@ -1538,6 +1616,11 @@
       clearReadFeedback();
       setStatus("Reading the image…");
       clearDecoded();
+      // This action reads the imported raster, including after a scaled encode.
+      job.decodePixels = null;
+      job.resultWidth = job.width;
+      job.resultHeight = job.height;
+      showPreview(job.pixels, job.width, job.height);
       transformAbort = new AbortController();
       recoveryVisible = true;
       setBusy(true);
@@ -1587,7 +1670,8 @@
         job.carrierAbort = controller;
         // Preparing the comparison must not run the carrier read/extraction on
         // the same thread that is starting the recovered voice message.
-        job.carrierPromise = PixelStow.extractCarrier(job.recoverPixels, job.width, job.height, job.strength,
+        const size = resultDimensions(job);
+        job.carrierPromise = PixelStow.extractCarrier(job.recoverPixels, size.width, size.height, job.strength,
           { background: true, signal: controller.signal, carrierVersion: job.carrierVersion }).catch((error) => {
           if (job.carrierAbort === controller) {
             job.carrierAbort = null;
@@ -1606,8 +1690,9 @@
       try {
         const carrier = await carrierFor(job);
         if (generation !== previewGeneration || current !== job) return;
-        paintCanvas(previewEncoded, job.recoverPixels, job.width, job.height);
-        paintCanvas(previewSource, carrier, job.width, job.height);
+        const size = resultDimensions(job);
+        paintCanvas(previewEncoded, job.recoverPixels, size.width, size.height);
+        paintCanvas(previewSource, carrier, size.width, size.height);
         split.value = "500";
         previewSource.hidden = false;
         compareUi.hidden = false;
@@ -1637,6 +1722,8 @@
       confirmPassword.value = "";
       unlockPassword.value = "";
       current = null;
+      frameBudget = sourcePlan = null;
+      scaleSource.checked = origin === "camera" && captured?.sourceOnly ? true : manualScaleSource;
       transformOutline.hidden = true;
       transformOutline.width = 0;
       transformOutline.height = 0;
@@ -1885,7 +1972,25 @@
     message.addEventListener("input", updateByteCounts);
     encodingQuality.addEventListener("input", () => {
       encodingQualityValue.value = Number(encodingQuality.value).toFixed(2);
-      showReadPrognosis(prognosisBudget || current?.repetition);
+      if (scaleSource.checked) refreshEncodingPlan();
+      else showReadPrognosis(prognosisBudget || current?.repetition);
+    });
+    scaleSource.addEventListener("change", () => {
+      manualScaleSource = scaleSource.checked;
+      try { localStorage.setItem("pixelstow-scale-source", String(manualScaleSource)); } catch (_) { /* This session still works. */ }
+      refreshEncodingPlan(); setBusy(busy);
+    });
+    prognosisTarget.addEventListener("input", () => {
+      if (!prognosisBudget || busy) return;
+      const target = Math.max(prognosisBounds.min, Math.min(prognosisBounds.max, Number(prognosisTarget.value)));
+      autoTargetRisk = target;
+      if (scaleSource.checked) refreshEncodingPlan();
+      else {
+        const selected = PixelStowSizing.qualityForTarget(prognosisBudget, target, Number(carrierSelect.value));
+        encodingQuality.value = selected.quality.toFixed(2);
+        encodingQualityValue.value = selected.quality.toFixed(2);
+        showReadPrognosis(prognosisBudget);
+      }
     });
 
     fileInput.addEventListener("change", () => {
@@ -1922,7 +2027,15 @@
       setStatus("Encoding…");
       try {
         const content = { text: message.value, attachments: media.files };
-        const encoded = await PixelStow.encodePayload(current.pixels, current.width, current.height, content, password.value,
+        const job = current;
+        let input = { pixels: job.pixels, width: job.width, height: job.height };
+        if (scaleSource.checked) {
+          setStatus("Resizing the source before encoding…");
+          const prepared = await PixelStowSizing.prepare(input, content, Boolean(password.value), Number(encodingQuality.value),
+            autoTargetRisk, Number(carrierSelect.value));
+          input = prepared.image;
+        }
+        const encoded = await PixelStow.encodePayload(input.pixels, input.width, input.height, content, password.value,
           { quality: Number(encodingQuality.value) });
         // The writer knows the exact grid and strength. Export verification must
         // never search for a resized/photographed image or depend on marker fits.
@@ -1967,7 +2080,12 @@
           jpegNote = " The JPEG could not be saved, so only the PNG is ready.";
         }
         readout.value = message.value;
-        rememberMessage(encoded.pixels, verified, false);
+        current.transformResult = null;
+        current.markerGuideOverride = false;
+        showTransform.checked = false;
+        rememberMessage(encoded.pixels, verified, false, encoded);
+        capacity.textContent = encoded.width + " × " + encoded.height + (encoded.width !== current.width || encoded.height !== current.height
+          ? " · source " + current.width + " × " + current.height : "");
         encodedPrognosis = encoded;
         showReadPrognosis(encoded);
         const lock = encoded.passwordProtected ? "Password-locked" : "Public";
@@ -1992,7 +2110,8 @@
       setStatus("Decoding…");
       try {
         const target = current.decodePixels || current.pixels;
-        const decoded = await PixelStow.decode(target, current.width, current.height, key, { carrierVersion: current.carrierVersion });
+        const size = resultDimensions(current);
+        const decoded = await PixelStow.decode(target, size.width, size.height, key, { carrierVersion: current.carrierVersion });
         if (decoded.status === "success") {
           readout.value = decoded.text;
           message.value = decoded.text;
@@ -2093,7 +2212,8 @@
       const job = current;
       saveBlob(async () => {
         const carrier = await carrierFor(job);
-        return kind === "jpeg" ? PixelStow.writeJpeg(carrier, job.width, job.height) : PixelStow.writePng(carrier, job.width, job.height);
+        const size = resultDimensions(job);
+        return kind === "jpeg" ? PixelStow.writeJpeg(carrier, size.width, size.height) : PixelStow.writePng(carrier, size.width, size.height);
       }, fileBase() + (kind === "jpeg" ? "-source.jpg" : "-source.png"));
     }
 

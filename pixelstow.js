@@ -327,23 +327,37 @@
       parityBits: bitsPerByte - 8, framedBytes, fits: codedBits <= payloadBlocks };
   }
 
-  async function estimateRepetition(width, height, content, passwordProtected = false) {
-    if (preferredCarrier === CARRIER_V5 && !locatorFits(width, height, preferredCarrier)) return null;
+  async function estimatePayloadFrame(content, passwordProtected = false) {
     const { text = "", attachments = [] } = content, bundle = attachments.length > 0;
     const plain = bundle ? packBundle(text, attachments) : strictUtf8(text);
     try {
       if (!plain.length) return null;
-      const version = locatorProfile(preferredCarrier) && locatorFits(width, height, preferredCarrier) ? preferredCarrier : CARRIER_V1;
-      const payloadBlocks = Math.floor(width / BLOCK) * Math.floor(height / BLOCK) - PREAMBLE_BLOCKS -
-        (locatorProfile(version) ? locatorArea(version) / 16 : 0);
       // Both paths compress before framing/encryption. The encrypted envelope
       // then adds fixed overhead; no password or encryption is needed here.
       const compressed = await deflateRaw(plain);
       const framedBytes = HEADER + (passwordProtected ? ENVELOPE : 0) + Math.min(plain.length, compressed.length || Infinity);
       compressed.fill(0);
-      const bitsPerByte = framedBytes * 12 <= payloadBlocks ? 12 : 9;
-      return repetitionBudget(Math.max(0, payloadBlocks), framedBytes, bitsPerByte);
+      return { framedBytes };
     } finally { plain.fill(0); }
+  }
+
+  function repetitionForFrame(width, height, framedBytes, version = preferredCarrier) {
+    if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width < BLOCK || height < BLOCK ||
+      width * height > MAX_PIXELS || !Number.isSafeInteger(framedBytes) || framedBytes < HEADER || framedBytes > MAX_FRAMED) return null;
+    if (locatorProfile(version) && !locatorFits(width, height, version)) return null;
+    if (![CARRIER_V1, ...RECOVERY_CARRIERS].includes(version)) return null;
+    const payloadBlocks = Math.floor(width / BLOCK) * Math.floor(height / BLOCK) - PREAMBLE_BLOCKS -
+      (locatorProfile(version) ? locatorArea(version) / 16 : 0);
+    const bitsPerByte = framedBytes * 12 <= payloadBlocks ? 12 : 9;
+    return { ...repetitionBudget(Math.max(0, payloadBlocks), framedBytes, bitsPerByte), carrierVersion: version, width, height };
+  }
+
+  async function estimateRepetition(width, height, content, passwordProtected = false) {
+    if (preferredCarrier === CARRIER_V5 && !locatorFits(width, height, preferredCarrier)) return null;
+    const frame = await estimatePayloadFrame(content, passwordProtected);
+    if (!frame) return null;
+    const version = locatorProfile(preferredCarrier) && locatorFits(width, height, preferredCarrier) ? preferredCarrier : CARRIER_V1;
+    return repetitionForFrame(width, height, frame.framedBytes, version);
   }
 
   function payloadsEqual(left, right) {
@@ -1369,7 +1383,7 @@
 
   function searchInWorker(pixels, width, height, options, operation = "geometry") {
     return new Promise((resolve, reject) => {
-      const url = new URL("pixelstow-transform-worker.js?v=20261014-mobile-layout1", codecScriptUrl);
+      const url = new URL("pixelstow-transform-worker.js?v=20261014-source-sizing1", codecScriptUrl);
       const worker = new Worker(url);
       let finished = false;
       const abort = () => { if (finished) return; cleanup(); reject(new DOMException("Search cancelled.", "AbortError")); };
@@ -1813,6 +1827,8 @@
       const candidates = rankMarkerCandidates((result.candidates || []).map((geometry) => ({ geometry, markers: result.markers, markerSearch: result.markerSearch })));
       return { ...result, candidates, geometry: candidates[0]?.geometry, highConfidence: Boolean(candidates[0]?.geometry.highConfidence), width, height };
     }
+    if (options.nativeOnly) return { found: false, geometry: null, candidates: [], markers: [], width, height,
+      reason: "No recovery marker headers were found on the native pixel grid." };
     if ((options.singleResolution || options.mode === "padding" || Math.max(width, height) < 640) && width * height <= MAX_PIXELS) {
       const result = await findVisualTransform(pixels, width, height, { ...options, worker: false, geometryOnly: true });
       const candidates = rankMarkerCandidates((result.candidates || []).map((geometry) => ({ geometry, markers: result.markers, markerSearch: result.markerSearch })));
@@ -1886,6 +1902,23 @@
       highConfidence: Boolean(ranked[0]?.geometry.highConfidence),
       searchState: { pending, samples, seed: verifiedCurrent ? known : undefined, deadline },
       markers: ranked[0]?.markers || best?.markers || [], markerSearch: ranked[0]?.markerSearch || best?.markerSearch };
+  }
+
+  async function analyzeNativeMarkers(pixels, width, height, version = CARRIER_V5) {
+    assertImage(pixels, width, height);
+    const profile = locatorProfile(version), layout = profile && locatorLayout(width, height, version);
+    if (!layout || !locatorFits(width, height, version)) return { found: false, markers: [], geometry: null };
+    await yieldNow();
+    const expectedMarkers = layout.map(patch => ({ id: patch.id, patchWidth: profile.width, patchHeight: profile.height,
+      matrix: [1, 0, patch.x, 0, 1, patch.y, 0, 0, 1] }));
+    const markers = expectedMarkers.map(patch => readVisualLocator(pixels, width, height, patch.matrix, patch.id, version))
+      .filter(marker => marker && marker.originalWidth === width && marker.originalHeight === height);
+    return { found: Boolean(markers.length), markers, geometry: markers.length ? {
+      carrierVersion: version, model: "native", matrix: [1,0,0,0,1,0,0,0,1], originalWidth: width, originalHeight: height,
+      corners: [{x:0,y:0},{x:width-1,y:0},{x:width-1,y:height-1},{x:0,y:height-1}],
+      expectedMarkers, patchWidth: profile.width, patchHeight: profile.height, markerCount: markers.length,
+      markerTotal: profile.ids.length, headerCount: markers.length, patternCount: 0, inlierCount: markers.length, fitError: 0
+    } : null };
   }
 
   async function readMarkerCandidates(pixels, width, height, scan, options = {}) {
@@ -3016,6 +3049,8 @@
     estimatePayloadBytes,
     payloadSize,
     estimateRepetition,
+    estimatePayloadFrame,
+    repetitionForFrame,
     estimateSignalGain,
     payloadsEqual,
     inspect,
@@ -3025,6 +3060,7 @@
     extractCarrier,
     findVisualTransform,
     scanMarkers,
+    analyzeNativeMarkers,
     readMarkerCandidates,
     clearVisualTransform(pixels) { visualMappings.delete(pixels); },
     setCarrierVersion(version) { preferredCarrier = [CARRIER_V1, ...RECOVERY_CARRIERS].includes(version) ? version : CARRIER_V5; },
