@@ -51,6 +51,18 @@ try {
 } finally { T.find = originalFind; }
 console.log('PASS: default photo discovery runs only the V5 family and discards an unselected older seed');
 
+const spectrum = window.PixelStowSpectrum, originalAnalyze = spectrum.analyze, bands = [];
+spectrum.analyze = async (_pixels, _width, _height, options) => {
+  bands.push(options.markerRatios); return { likely: false, bases: [] };
+};
+try {
+  await c.findVisualTransform(pixels, width, height, { geometryOnly: true, worker: false });
+  assert.deepEqual(bands.at(-1), [4 / 5]);
+  await c.findVisualTransform(pixels, width, height, { geometryOnly: true, worker: false, includeLegacy: true });
+  assert.deepEqual(bands.at(-1), [4 / 5, 2 / 3]);
+} finally { spectrum.analyze = originalAnalyze; }
+console.log('PASS: older marker-frequency bands are considered only when explicitly enabled');
+
 // A previous opt-in must not let a cached older transform bypass an opt-out.
 const geometry = { carrierVersion: 4, originalWidth: width, originalHeight: height, matrix: [1,0,0,0,1,0,0,0,1],
   model: 'translation', rank: 100, markerCount: 8, markerTotal: 8, inlierCount: 8,

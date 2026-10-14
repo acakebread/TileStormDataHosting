@@ -376,8 +376,10 @@
         this.drawGuides(this.guides, scan, image.width, image.height);
         this.displayedFrame = entry;
       }
+      const markerTotal = entry.scan?.geometry?.markerTotal || entry.inspection?.geometry?.markerTotal ||
+        (scan.markers[0]?.carrierVersion && scan.markers[0].carrierVersion !== 5 ? 8 : 4);
       this.nearSummary.textContent = "Best capture · frame " + frameNumber + ": " + scan.markers.length +
-        "/" + (entry.scan?.geometry?.markerTotal || entry.inspection?.geometry?.markerTotal || 8) + " markers; " + (entry.state || (entry.inspection?.unreadable ? "contents did not pass their checks" : entry.attempted ? "reading contents" : "waiting for frame appraisal"));
+        "/" + markerTotal + " markers; " + (entry.state || (entry.inspection?.unreadable ? "contents did not pass their checks" : entry.attempted ? "reading contents" : "waiting for frame appraisal"));
       const geometry = entry.inspection?.geometry || scan.geometry;
       if (geometry?.missingMarkerIds?.length) {
         const positions = { 0: "top-left", 1: "top-middle", 2: "top-right", 3: "left-middle",
@@ -447,7 +449,7 @@
           this.progress.textContent = "A stronger marker fit was found. Switching to frame " + frameNumber + "…";
         }
         this.signature.textContent = scan.highConfidence
-          ? "All eight markers agree strongly. Reading the most promising capture."
+          ? "All markers agree strongly. Reading the most promising capture."
           : scan.markers?.length ? "Recovery markers verified. Comparing captures before reading contents."
           : scan.signature?.likely ? "Frequency hints found; no verified markers in this capture."
             : "No encoding signature or checksum-valid markers found.";
