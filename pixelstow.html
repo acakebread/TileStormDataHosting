@@ -662,7 +662,7 @@
             <button id="find-transform" type="button">Retry image recovery</button>
           </div>
           <label><input id="transform-force" type="checkbox"> Search anyway if the frequency signature is weak</label>
-          <label><input id="show-transform" type="checkbox"> Show detected bounds and markers</label>
+          <label><input id="show-transform" type="checkbox" checked> Show detected bounds and markers</label>
           <p class="hint">Yellow: decoded marker header. Green: confirmed known pattern. Blue: side-reference cross-check. Dashed: expected position, not confirmed. The payload checksum determines whether the message can be read.</p>
         </details>
         <p class="status" id="status" role="status"></p>
@@ -830,7 +830,7 @@
   <script src="./pixelstow-spectrum.js?v=20261013-marker-follow2"></script>
   <script src="./pixelstow-transform.js?v=20261014-v5-outline1"></script>
   <script src="./pixelstow-lattice.js?v=20261013-marker-follow2"></script>
-  <script src="./pixelstow.js?v=20261014-v5-outline1"></script>
+  <script src="./pixelstow.js?v=20261014-v5-boost1"></script>
   <script src="./pixelstow-export.js?v=20261011-exports"></script>
   <script src="./pixelstow-voice.js?v=20261013-voice-clock2"></script>
   <script src="./pixelstow-media.js?v=20261014-margin-ui1"></script>
@@ -1437,9 +1437,9 @@
             : result.signature ? "No encoding signature or checksum-valid markers found." : "";
       const nearMiss = Boolean(result.unreadable && job.transformResult.markers.length);
       recoveryFraming.hidden = !nearMiss;
-      // Automatic guides belong to a failed read, not to the next successful
-      // retry. An explicit checkbox choice is retained for this image only.
-      showTransform.checked = job.markerGuideOverride ?? nearMiss;
+      // Show measured geometry by default; retain an explicit checkbox choice
+      // for this image through successful and unsuccessful retries.
+      showTransform.checked = job.markerGuideOverride ?? true;
       if (showTransform.checked) drawTransform(job.transformResult);
       else transformOutline.hidden = true;
       job.hasFingerprint = job.hasFingerprint || result.found;
@@ -1570,7 +1570,7 @@
       transformOutline.height = 0;
       recoveryVisible = false;
       recoveryFraming.hidden = true;
-      showTransform.checked = false;
+      showTransform.checked = true;
       transformStatus.textContent = "";
       transformSignature.textContent = "";
       loadedImage.hidden = true;

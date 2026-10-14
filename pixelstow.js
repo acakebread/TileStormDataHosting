@@ -26,6 +26,7 @@
   const CARRIER_V5 = 5;
   const V4_PAYLOAD_PEAK = 64;
   const V4_MARKER_PEAK = 32;
+  const V5_MARKER_PEAK = 32;
   let preferredCarrier = CARRIER_V4;
   const RECOVERY_CARRIERS = [CARRIER_V4, CARRIER_V3, CARRIER_V5];
   const codecScriptUrl = typeof document !== "undefined" ? document.currentScript?.src : null;
@@ -914,6 +915,10 @@
 
   function paintBlendedLocators(reference, output, width, height, strength, version, signalPolicy) {
     const p = locatorProfile(version), amplitude = Math.min(version === CARRIER_V4 ? LOCATOR_STRENGTH : 12, strength) / 16;
+    // Header symbols are not repeated as often as the data. Keep the small V5
+    // patch readable in source texture even when the payload has ample copies.
+    const markerPolicy = signalPolicy && version === CARRIER_V5 ? { ...signalPolicy,
+      strength: Math.max(12, signalPolicy.strength), textureGain: Math.max(0.5, signalPolicy.textureGain) } : signalPolicy;
     const side = referenceProfile();
     const reserved = reservedLocators(width, height, version);
     // Match the surrounding carrier's DC correction on clipped colours (pure
@@ -948,7 +953,7 @@
         const cell = grid.order[slot], coded = slot % (main ? 96 : 24);
         const bit = WORD_BITS[header[Math.floor(coded / 12)] * 12 + coded % 12];
         const x = patch.x + cell % grid.columns * grid.cell, y = patch.y + Math.floor(cell / grid.columns) * grid.cell;
-        const localAmplitude = signalPolicy ? textureAmplitude(reference, width, x, y, grid.cell, signalPolicy, signalPolicy.markerPeak) / 16 : amplitude;
+        const localAmplitude = markerPolicy ? textureAmplitude(reference, width, x, y, grid.cell, markerPolicy, markerPolicy.markerPeak) / 16 : amplitude;
         const gain = localAmplitude * blendedLocatorGain(version, grid, cell, main), kernel = grid.kernels[bit];
         for (let channel = 0; channel < 3; channel++) {
           let target = 0;
@@ -1266,7 +1271,7 @@
 
   function searchInWorker(pixels, width, height, options, operation = "geometry") {
     return new Promise((resolve, reject) => {
-      const url = new URL("pixelstow-transform-worker.js?v=20261014-v5-outline1", codecScriptUrl);
+      const url = new URL("pixelstow-transform-worker.js?v=20261014-v5-boost1", codecScriptUrl);
       const worker = new Worker(url);
       let finished = false;
       const abort = () => { if (finished) return; cleanup(); reject(new DOMException("Search cancelled.", "AbortError")); };
@@ -1898,7 +1903,7 @@
           projection += (pixels[index] + pixels[index + 1] + pixels[index + 2]) / 3 * kernel[i];
           energy += kernel[i] ** 2;
         }
-        const maximum = (version === CARRIER_V4 ? V4_MARKER_PEAK / 16 : 12 / 16) * blendedLocatorGain(version, p, cell, main);
+        const maximum = (version === CARRIER_V4 ? V4_MARKER_PEAK / 16 : V5_MARKER_PEAK / 16) * blendedLocatorGain(version, p, cell, main);
         const amount = Math.max(0, Math.min(maximum, projection / energy));
         for (let i = 0; i < kernel.length; i++) {
           const index = (x + i % p.cell + (y + Math.floor(i / p.cell)) * width) * 4;
@@ -2361,7 +2366,7 @@
     const columns = Math.floor(width / BLOCK);
     const blockCount = map ? map.length : columns * Math.floor(height / BLOCK);
     let signalPolicy = null;
-    if (adaptive || version === CARRIER_V4) {
+    if (adaptive || version === CARRIER_V4 || version === CARRIER_V5) {
       const available = blockCount - PREAMBLE_BLOCKS;
       let bitsPerByte = 0;
       if (probe.length * 12 <= available) bitsPerByte = 12;
@@ -2370,7 +2375,7 @@
         throw new Error("The framed payload needs " + probe.length.toLocaleString("en-GB") + " bytes, but this image holds " +
           Math.max(0, Math.floor(available / 9)).toLocaleString("en-GB") + ". Use a larger picture, smaller files or a shorter recording.");
       }
-      if (version === CARRIER_V4) {
+      if (version === CARRIER_V4 || version === CARRIER_V5) {
         signalPolicy = v4SignalPolicy(available / (probe.length * bitsPerByte), strength);
         strength = signalPolicy.strength;
       } else {
@@ -2800,7 +2805,7 @@
       ? pixels.slice()
       : await resampleReadSpace(pixels, width, height, origW, origH, fit.scaleX, fit.scaleY, fit.phaseX, fit.phaseY);
     const cleaned = await extractBlind(restored, origW, origH, fit.strength, locatorBlockMap(origW, origH, Infinity, fit.carrierVersion),
-      fit.carrierVersion === CARRIER_V4 ? V4_PAYLOAD_PEAK : fit.strength);
+      fit.carrierVersion === CARRIER_V4 || fit.carrierVersion === CARRIER_V5 ? V4_PAYLOAD_PEAK : fit.strength);
     cleanLocators(restored, origW, origH, cleaned, fit.carrierVersion);
     if (identity) return cleaned;
     return forwardSample(cleaned, origW, origH, pixels, width, height, fit, options.signal);

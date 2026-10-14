@@ -30,8 +30,8 @@ after a decoded header passes CRC, never by frequency evidence alone.
 
 The four-pixel diagonal wavelet is interpolated symmetrically to five pixels
 at coordinates `(i + 0.5) * 4 / 5 - 0.5`, clamped to 0..3. Each kernel's mean
-is removed. Strength is capped at 12; the outer row and column are multiplied
-by 0.7 each. Reading samples at `1.25 * i + 0.125` with the existing four-pixel
+is removed. The outer row and column are multiplied by 0.7 each. Strength now
+adapts as described below. Reading samples at `1.25 * i + 0.125` with the existing four-pixel
 difference template.
 
 The painter preserves the chosen local colour average through clipping and
@@ -42,6 +42,26 @@ to create signal headroom. Markers match that background shift, measured once
 in a 12-pixel ring excluding every reservation, rather than leaving an empty
 white/black patch or imposing the old large per-symbol brightness correction.
 Alpha is unchanged. These remain embedded signals, not invisible markings.
+
+## Adaptive contrast
+
+V5 shares [V4's adaptive payload contrast](CarrierV4.md#adaptive-contrast): actual
+fractional repetition sets the nominal strength, source texture raises it
+locally, and the stronger nonlinear ramp below 2x applies. The same headroom
+limits prevent extra boost from buying large brightness or unequal RGB shifts
+in dark regions with highlights. This was previously missing from the V5 writer.
+
+Corner markers and side references also adapt to source texture. Their nominal
+strength is at least 12 and texture gain at least 0.5: marker headers do not
+have as many repeats as the payload. Marker strength is capped at 24 at 2x
+redundancy or above, rising toward 32 below 2x. The existing edge taper, square
+patches, small references and local brightness balancing remain in place.
+Carrier extraction accounts for the raised payload and marker peaks.
+
+These are contrast changes within the existing layout and headers. Existing
+V5 images remain readable. Native tests cover high, moderate and low redundancy,
+source preservation and clipped colours; fresh optical captures are required
+to evaluate the improvement in camera recovery.
 
 ## Side references
 
@@ -126,6 +146,7 @@ the full original. Pixel buffers and exported captures keep their resolution.
 Marker overlays also use bounded display canvases. Device memory still limits
 very large files; no particular iPhone model's performance is guaranteed.
 
-Focused checks: `node tests/pixelstow-v4-checks.mjs` and
+Focused checks: `node tests/pixelstow-v4-checks.mjs`,
+`node tests/pixelstow-v5-boost-checks.mjs` and
 `node tests/pixelstow-v5-photo-checks.mjs`. The existing resize suite
 explicitly selects carrier 3 to keep its measured baseline separate.
