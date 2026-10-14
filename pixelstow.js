@@ -29,6 +29,7 @@
   const V5_MARKER_PEAK = 32;
   const REDUNDANCY_UPLIFT_AT_TWO = 0.15;
   const REDUNDANCY_UPLIFT_DENOMINATOR = 1;
+  const DEFAULT_QUALITY = 0.8;
   let preferredCarrier = CARRIER_V5;
   let legacyRecovery = false;
   const RECOVERY_CARRIERS = [CARRIER_V5, CARRIER_V4, CARRIER_V3];
@@ -653,6 +654,62 @@
       (Math.max(1, ratio) + REDUNDANCY_UPLIFT_DENOMINATOR);
   }
 
+  function encodingQuality(value = DEFAULT_QUALITY) {
+    return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : DEFAULT_QUALITY;
+  }
+
+  function qualitySignalPolicy(policy, quality) {
+    // Left spends more contrast on recovery. 0.8 preserves the accepted curve;
+    // 1.0 is about 13% gentler and 0.0 about 74% stronger, before hard ceilings.
+    const gain = Math.pow(2, DEFAULT_QUALITY - quality);
+    return { ...policy,
+      strength: Math.max(8, Math.min(32, Math.round(policy.strength * gain))),
+      textureGain: policy.textureGain * gain,
+      payloadPeak: Math.min(V4_PAYLOAD_PEAK, Math.round(policy.payloadPeak * gain)),
+      markerPeak: Math.min(V4_MARKER_PEAK, Math.round(policy.markerPeak * gain)),
+      biasLimit: Math.min(16, Math.round(policy.biasLimit * gain)),
+      markerMinimum: Math.max(8, Math.round(12 * gain)),
+      markerTextureMinimum: 0.5 * gain };
+  }
+
+  function linearRange(pixels, headroom, inverse = false) {
+    // One symmetric RGB map over the entire image: midpoint stays fixed,
+    // including untouched edge pixels and marker reservations. Alpha is unchanged.
+    const output = pixels.slice(), scale = (255 - 2 * headroom) / 255;
+    for (let i = 0; i < output.length; i += 4) for (let channel = 0; channel < 3; channel++)
+      output[i + channel] = clampChannel(inverse
+        ? (pixels[i + channel] - headroom) / scale
+        : headroom + pixels[i + channel] * scale);
+    return output;
+  }
+
+  function linearAmplitude(reference, width, x, y, requested) {
+    const fits = (amplitude) => [0, 1].every((bit) => {
+      const bias = fitBias(reference, width, x, y, bit, amplitude);
+      return bias.fit.every(Boolean) && bias.shift.every((shift) => shift === 0);
+    });
+    if (fits(requested)) return requested;
+    let low = 0, high = requested;
+    while (high - low > 1) {
+      const middle = (low + high) >> 1;
+      if (fits(middle)) low = middle; else high = middle;
+    }
+    return low;
+  }
+
+  function linearMarkerGain(reference, width, x, y, grid, requested) {
+    let gain = requested;
+    for (const kernel of grid.kernels) for (let i = 0; i < kernel.length; i++) {
+      if (kernel[i] === 0) continue;
+      const index = (x + i % grid.cell + (y + Math.floor(i / grid.cell)) * width) * 4;
+      for (let channel = 0; channel < 3; channel++) {
+        const sample = reference[index + channel];
+        gain = Math.min(gain, kernel[i] > 0 ? (255 - sample) / kernel[i] : sample / -kernel[i]);
+      }
+    }
+    return Math.max(0, gain);
+  }
+
   function textureAmplitude(reference, width, x, y, side, policy, ceiling) {
     // Measure source detail after removing a plane. A smooth slope or a bright
     // flat sky is not noise. No encoded pixels or payload bits enter this test.
@@ -703,9 +760,12 @@
     const cacheIndex = amplitudeCache ? column + blockRow * (width / BLOCK | 0) : -1;
     let amplitude = cacheIndex >= 0 ? amplitudeCache[cacheIndex] : -1;
     if (amplitude < 0) {
-      const requested = signalPolicy ? limitBoostHeadroom(reference, width, originX, originY,
-        textureAmplitude(reference, width, originX, originY, BLOCK, signalPolicy, signalPolicy.payloadPeak), strength, signalPolicy.biasLimit) : strength;
-      amplitude = resolveAmplitude(reference, width, originX, originY, requested);
+      const texture = signalPolicy ? textureAmplitude(signalPolicy.textureSource || reference, width, originX, originY,
+        BLOCK, signalPolicy, signalPolicy.payloadPeak) : strength;
+      const requested = signalPolicy?.linearHeadroom ? texture : signalPolicy
+        ? limitBoostHeadroom(reference, width, originX, originY, texture, strength, signalPolicy.biasLimit) : strength;
+      amplitude = signalPolicy?.linearHeadroom ? linearAmplitude(reference, width, originX, originY, requested)
+        : resolveAmplitude(reference, width, originX, originY, requested);
       if (cacheIndex >= 0) amplitudeCache[cacheIndex] = amplitude;
     }
     if (amplitude === 0) return;
@@ -942,7 +1002,8 @@
     // Header symbols are not repeated as often as the data. Keep the small V5
     // patch readable in source texture even when the payload has ample copies.
     const markerPolicy = signalPolicy && version === CARRIER_V5 ? { ...signalPolicy,
-      strength: Math.max(12, signalPolicy.strength), textureGain: Math.max(0.5, signalPolicy.textureGain) } : signalPolicy;
+      strength: Math.max(signalPolicy.markerMinimum ?? 12, signalPolicy.strength),
+      textureGain: Math.max(signalPolicy.markerTextureMinimum ?? 0.5, signalPolicy.textureGain) } : signalPolicy;
     const side = referenceProfile();
     const reserved = reservedLocators(width, height, version);
     // Match the surrounding carrier's DC correction on clipped colours (pure
@@ -977,8 +1038,11 @@
         const cell = grid.order[slot], coded = slot % (main ? 96 : 24);
         const bit = WORD_BITS[header[Math.floor(coded / 12)] * 12 + coded % 12];
         const x = patch.x + cell % grid.columns * grid.cell, y = patch.y + Math.floor(cell / grid.columns) * grid.cell;
-        const localAmplitude = markerPolicy ? textureAmplitude(reference, width, x, y, grid.cell, markerPolicy, markerPolicy.markerPeak) / 16 : amplitude;
-        const gain = localAmplitude * blendedLocatorGain(version, grid, cell, main), kernel = grid.kernels[bit];
+        const localAmplitude = markerPolicy ? textureAmplitude(markerPolicy.textureSource || reference, width, x, y,
+          grid.cell, markerPolicy, markerPolicy.markerPeak) / 16 : amplitude;
+        let gain = localAmplitude * blendedLocatorGain(version, grid, cell, main);
+        if (signalPolicy?.linearHeadroom) gain = linearMarkerGain(reference, width, x, y, grid, gain);
+        const kernel = grid.kernels[bit];
         for (let channel = 0; channel < 3; channel++) {
           let target = 0;
           for (let i = 0; i < count; i++) {
@@ -989,13 +1053,13 @@
           // Saturated pixels have no symmetric headroom. Solve the clamped mean
           // rather than shifting the whole patch lighter/darker to fit a lobe.
           let low = -64, high = 64;
-          for (let pass = 0; pass < 18; pass++) {
+          for (let pass = 0; !signalPolicy?.linearHeadroom && pass < 18; pass++) {
             const shift = (low + high) / 2;
             let total = 0;
             for (let i = 0; i < count; i++) total += clampByte(samples[i] + gain * kernel[i] + shift);
             if (total < target) low = shift; else high = shift;
           }
-          const shift = (low + high) / 2;
+          const shift = signalPolicy?.linearHeadroom ? 0 : (low + high) / 2;
           let written = 0;
           for (let i = 0; i < count; i++) {
             values[i] = clampByte(samples[i] + gain * kernel[i] + shift);
@@ -1295,7 +1359,7 @@
 
   function searchInWorker(pixels, width, height, options, operation = "geometry") {
     return new Promise((resolve, reject) => {
-      const url = new URL("pixelstow-transform-worker.js?v=20261014-v5-default1", codecScriptUrl);
+      const url = new URL("pixelstow-transform-worker.js?v=20261014-quality-range1", codecScriptUrl);
       const worker = new Worker(url);
       let finished = false;
       const abort = () => { if (finished) return; cleanup(); reject(new DOMException("Search cancelled.", "AbortError")); };
@@ -1961,7 +2025,10 @@
       throw new Error("This image is too small for that message. Use a larger picture or a shorter message.");
     }
     const parityBits = bitsPerByte === 12 ? 4 : 1;
-    const flags = FLAGS | (parityBits === 1 ? ONE_PARITY : 0);
+    // V5's CRC-protected carrier header stores uniform headroom in two-level
+    // increments. This changes no payload frame, password or marker header.
+    const flags = FLAGS | (parityBits === 1 ? ONE_PARITY : 0) |
+      (version === CARRIER_V5 ? ((signalPolicy?.linearHeadroom || 0) / 2) << 2 : 0);
     const bytes = new Uint8Array(9);
     bytes[0] = MAGIC;
     bytes[1] = locatorProfile(version) ? version : CARRIER_V1;
@@ -2118,7 +2185,10 @@
       preamble.framedLength < HEADER || preamble.framedLength > MAX_FRAMED) {
       throw frameError("Unsupported image carrier.");
     }
-    if ((preamble.flags & ~ONE_PARITY) !== FLAGS) throw frameError("The carrier flags do not match this profile.");
+    const allowed = preamble.version === CARRIER_V5 ? (ONE_PARITY | 0xfc) : ONE_PARITY;
+    if ((preamble.flags & ~allowed) !== FLAGS) throw frameError("The carrier flags do not match this profile.");
+    const rangeHeadroom = preamble.version === CARRIER_V5 ? (preamble.flags >>> 2) * 2 : 0;
+    if (rangeHeadroom > 62) throw frameError("Unsupported carrier range adjustment.");
     const bitsPerByte = (preamble.flags & ONE_PARITY) !== 0 ? 9 : 12;
     const payloadBlocks = scores.length - PREAMBLE_BLOCKS;
     const codedBits = preamble.framedLength * bitsPerByte;
@@ -2133,7 +2203,8 @@
       bytes: decoded.bytes,
       corrections: decoded.corrections,
       ...repetitionBudget(payloadBlocks, preamble.framedLength, bitsPerByte),
-      carrierVersion: preamble.version
+      carrierVersion: preamble.version,
+      rangeHeadroom
     };
   }
 
@@ -2208,7 +2279,8 @@
         passwordProtected: unpacked.passwordProtected,
         bundle: unpacked.bundle,
         formatVersion: unpacked.formatVersion,
-        carrierVersion: framed.carrierVersion
+        carrierVersion: framed.carrierVersion,
+        rangeHeadroom: framed.rangeHeadroom
       };
     } catch (error) {
       if (error && error.code === "frame") return null;
@@ -2381,6 +2453,7 @@
           scaleY: recovery.scaleY,
           passwordProtected: recovery.passwordProtected,
           strength: recovery.strength,
+          rangeHeadroom: recovery.rangeHeadroom,
           repetitionRatio: recovery.repetitionRatio,
           copies: recovery.copies,
           parityBits: recovery.parityBits,
@@ -2394,7 +2467,7 @@
     }
   }
 
-  async function encodeAt(reference, width, height, payload, passwordProtected, strength, adaptive, bundle, carrierVersion) {
+  async function encodeAt(reference, width, height, payload, passwordProtected, strength, adaptive, bundle, carrierVersion, quality = DEFAULT_QUALITY) {
     strength = Math.max(1, Math.min(32, strength));
     const version = locatorProfile(carrierVersion) ? carrierVersion : CARRIER_V1;
     const map = locatorProfile(version) ? locatorBlockMap(width, height, Infinity, version) : null;
@@ -2412,7 +2485,8 @@
           Math.max(0, Math.floor(available / 9)).toLocaleString("en-GB") + ". Use a larger picture, smaller files or a shorter recording.");
       }
       if (version === CARRIER_V4 || version === CARRIER_V5) {
-        signalPolicy = v4SignalPolicy(available / (probe.length * bitsPerByte), strength);
+        signalPolicy = qualitySignalPolicy(v4SignalPolicy(available / (probe.length * bitsPerByte), strength), quality);
+        signalPolicy.strength = Math.max(strength, signalPolicy.strength);
         strength = signalPolicy.strength;
       } else {
         const copies = Math.max(1, Math.floor(available / (probe.length * bitsPerByte)));
@@ -2421,9 +2495,15 @@
       }
     }
     const framed = await packFrame(payload, strength, passwordProtected, bundle);
-    const output = reference.slice();
-    const written = await writeSignal(reference, output, width, height, framed, strength, version, map, signalPolicy);
-    if (map) paintLocators(reference, output, width, height, strength, version, signalPolicy);
+    let signalSource = reference;
+    if (version === CARRIER_V5) {
+      const headroom = Math.min(62, 2 * Math.ceil((Math.max(12, strength) * 19 / 16 + signalPolicy.biasLimit) / 2));
+      signalSource = linearRange(reference, headroom);
+      signalPolicy = { ...signalPolicy, linearHeadroom: headroom, textureSource: reference };
+    }
+    const output = signalSource.slice();
+    const written = await writeSignal(signalSource, output, width, height, framed, strength, version, map, signalPolicy);
+    if (map) paintLocators(signalSource, output, width, height, strength, version, signalPolicy);
     return {
       pixels: output,
       strength,
@@ -2433,15 +2513,17 @@
       framedBytes: written.framedBytes,
       passwordProtected,
       carrierVersion: version,
+      rangeHeadroom: signalPolicy?.linearHeadroom || 0,
       map
     };
   }
 
-  async function encode(pixels, width, height, text, password) {
-    return encodePayload(pixels, width, height, { text, attachments: [] }, password);
+  async function encode(pixels, width, height, text, password, options = {}) {
+    return encodePayload(pixels, width, height, { text, attachments: [] }, password, options);
   }
 
-  async function encodePayload(pixels, width, height, content, password) {
+  async function encodePayload(pixels, width, height, content, password, options = {}) {
+    const quality = encodingQuality(options.quality);
     const { text = "", attachments = [] } = content;
     const bundle = attachments.length > 0;
     const plain = bundle ? packBundle(text, attachments) : strictUtf8(text);
@@ -2464,7 +2546,7 @@
       const usedVersion = wantLocators && locatorFits(width, height, preferredCarrier) ? preferredCarrier : CARRIER_V1;
       const payload = locked ? await encryptEnvelope(plain, password, bundle) : plain.slice();
       try {
-        let encoded = await encodeAt(pixels, width, height, payload, locked, STRENGTHS[0], true, bundle, usedVersion);
+        let encoded = await encodeAt(pixels, width, height, payload, locked, STRENGTHS[0], true, bundle, usedVersion, quality);
         for (;;) {
           const recovery = await readNative(encoded.pixels, width, height, usedVersion, encoded.strength, undefined, encoded.map);
           if (recovery && !recovery.locatorOnly && recovery.carrierVersion === usedVersion &&
@@ -2480,6 +2562,8 @@
               framedBytes: encoded.framedBytes,
               passwordProtected: locked,
               carrierVersion: usedVersion,
+              rangeHeadroom: encoded.rangeHeadroom,
+              quality,
               locatorFallback: wantLocators && usedVersion === CARRIER_V1
             };
           }
@@ -2493,7 +2577,7 @@
           if (next === 0) {
             throw new Error("The message could not be verified in this image. Try another picture or a shorter message.");
           }
-          encoded = await encodeAt(pixels, width, height, payload, locked, next, false, bundle, usedVersion);
+          encoded = await encodeAt(pixels, width, height, payload, locked, next, false, bundle, usedVersion, quality);
         }
       } finally { payload.fill(0); }
     } finally { plain.fill(0); }
@@ -2821,12 +2905,12 @@
       const saved = visualMappings.get(pixels);
       // Preserve the verified photo transform without copying its cached working
       // raster. The disposable worker reconstructs it from the full input copy.
-      const visual = saved ? { width, height, geometry: saved.geometry,
+      const visual = saved ? { width, height, geometry: saved.geometry, carrierVersion: saved.carrierVersion,
         readResolution: saved.readResolution, unreadable: saved.unreadable } : undefined;
       return searchInWorker(pixels, width, height, { ...options, strength, visual }, "extract-carrier");
     }
     if (options.visual) visualMappings.set(pixels, options.visual);
-    const fit = await recover(pixels, width, height, { signal: options.signal });
+    const fit = await recover(pixels, width, height, options);
     if (!fit || fit.locatorOnly || !locatorProfile(fit.carrierVersion)) return extractBlind(pixels, width, height, strength);
     const origW = fit.origWidth, origH = fit.origHeight;
     const identity = !fit.matrix && origW === width && origH === height && fit.phaseX === 0 && fit.phaseY === 0;
@@ -2844,9 +2928,10 @@
     } else restored = identity
       ? pixels.slice()
       : await resampleReadSpace(pixels, width, height, origW, origH, fit.scaleX, fit.scaleY, fit.phaseX, fit.phaseY);
-    const cleaned = await extractBlind(restored, origW, origH, fit.strength, locatorBlockMap(origW, origH, Infinity, fit.carrierVersion),
+    let cleaned = await extractBlind(restored, origW, origH, fit.strength, locatorBlockMap(origW, origH, Infinity, fit.carrierVersion),
       fit.carrierVersion === CARRIER_V4 || fit.carrierVersion === CARRIER_V5 ? V4_PAYLOAD_PEAK : fit.strength);
     cleanLocators(restored, origW, origH, cleaned, fit.carrierVersion);
+    if (fit.rangeHeadroom) cleaned = linearRange(cleaned, fit.rangeHeadroom, true);
     if (identity) return cleaned;
     return forwardSample(cleaned, origW, origH, pixels, width, height, fit, options.signal);
   }

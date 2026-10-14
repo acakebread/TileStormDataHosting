@@ -23,6 +23,10 @@ older-format recovery switch for carriers 1, 3 and 4; it resets on page load.
 Generated-image verification reads the selected writer's exact format.
 See [carrier 4](CarrierV4.md), [carrier 5](CarrierV5.md) and [carrier 3 resize recovery](ResizeRecovery.md)
 for their layouts and limits.
+The quality/durability slider defaults to 0.8, preserving the current signal
+curve; moving left increases payload and marker contrast within bounded limits.
+New V5 encoding also uses a recorded linear RGB range compression, reversed
+after wavelet removal in the recovered source preview/export.
 Header byte 4 is 3; byte 5 is 3 for a public bundle or 4 for a protected bundle. Public bundles may use raw
 DEFLATE when smaller. Protected outer frames are never compressed. Frame CRC32
 covers header bytes 0–15 followed by the uncompressed body, as before.
@@ -123,6 +127,15 @@ actions opens a clean presentation of the generated image, hiding the comparison
 divider, recovery overlay, audio button and toolbar. Tap to reveal controls or
 press Escape to close. Pinch/two-finger pan still work. Browsers with element
 fullscreen can also hide their chrome; iPhones use the viewport dialog fallback.
+Successful reads start with marker overlays hidden. Failed photographs show
+diagnostic markers; continuous captures start clean. The preview's Detected
+bounds and markers checkbox can reveal the separate overlay, including in
+fullscreen. It never changes captured or exported pixels. The comparison range
+slider has a larger thumb and a 48-pixel-high touch target.
+Choose image becomes Cancel search while automatic image recovery runs, leaving
+the loaded image ready for encoding after cancellation. Continuous camera
+scanning waits four seconds after the live video starts before buffering or
+checking frames; manual capture remains available during that framing period.
 There is one additional image audio button, beside the page preview. The same
 DOM node moves into the full-screen top toolbar, clear of the bottom comparison
 slider, then returns on close. Native attachment players retain their controls;

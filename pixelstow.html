@@ -207,6 +207,7 @@
 
     .preview-toolbar { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin: 0 0 8px; }
     .preview-toolbar .preview-audio { margin-right: auto; }
+    #preview-markers { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; margin: 0; color: var(--text); font-size: 0.85rem; }
     html.preview-modal-open, body.preview-modal-open { overflow: hidden; overscroll-behavior: none; }
     .preview-panel {
       box-sizing: border-box; position: fixed; inset: 0; width: 100%; height: 100%; height: 100dvh;
@@ -230,11 +231,13 @@
       display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px;
     }
     .preview-screen-toolbar button { background: rgba(10, 18, 26, 0.92); }
+    .preview-screen-toolbar .preview-audio { color: var(--text); }
     .preview-panel.clean #preview-source,
     .preview-panel.clean #transform-outline,
     .preview-panel.clean #compare-ui,
     .preview-panel.clean #comparison-control,
-    .preview-panel.clean #preview-audio { display: none !important; }
+    .preview-panel.clean #preview-audio,
+    .preview-panel.clean #preview-markers { display: none !important; }
 
     .viewport {
       position: relative;
@@ -331,6 +334,12 @@
 
     .comparison-control { display: flex; align-items: center; gap: 10px; font-size: 0.82rem; }
     .comparison-control input { flex: 1; min-width: 0; min-height: 44px; margin: 0; accent-color: #69dccb; }
+    #split { appearance: none; -webkit-appearance: none; height: 48px; background: transparent; cursor: ew-resize; }
+    #split::-webkit-slider-runnable-track { height: 8px; background: #385762; border-radius: 4px; }
+    #split::-moz-range-track { height: 8px; background: #385762; border-radius: 4px; }
+    #split::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; width: 36px; height: 36px; margin-top: -14px; border: 2px solid #102028; border-radius: 50%; background: #69dccb; }
+    #split::-moz-range-thumb { width: 32px; height: 32px; border: 2px solid #102028; border-radius: 50%; background: #69dccb; }
+    #encoding-quality { width: 100%; min-height: 44px; accent-color: #69dccb; }
     .split-handle {
       position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
       width: 44px; height: 44px; padding: 0; background: #69dccb; color: #102028;
@@ -542,7 +551,7 @@
         <label for="file">Image</label>
         <div class="file-row">
           <input id="file" class="file-input" type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg">
-          <label class="choose button-link" for="file">Choose image</label>
+          <button class="choose" id="choose-image" type="button">Choose image</button>
           <button id="paste-image" type="button">Paste image</button>
           <button id="open-camera" type="button">Open camera</button>
           <button id="take-photo" type="button">Take photo</button>
@@ -590,6 +599,7 @@
         <div class="preview" id="preview" hidden>
           <div class="preview-toolbar">
             <button class="preview-audio" id="preview-audio" type="button" hidden>Play audio</button>
+            <label id="preview-markers"><input id="show-transform" type="checkbox" checked> Detected bounds and markers</label>
             <button id="full-preview" type="button">Full screen preview</button>
           </div>
           <div class="viewport" id="viewport">
@@ -663,7 +673,6 @@
           </div>
           <label><input id="recover-legacy" type="checkbox"> Enable older-format recovery (versions 1, 3 and 4)</label>
           <label><input id="transform-force" type="checkbox"> Search anyway if the frequency signature is weak</label>
-          <label><input id="show-transform" type="checkbox" checked> Show detected bounds and markers</label>
           <p class="hint">Yellow: decoded marker header. Green: confirmed known pattern. Blue: side-reference cross-check. Dashed: expected position, not confirmed. The payload checksum determines whether the message can be read.</p>
         </details>
         <p class="status" id="status" role="status"></p>
@@ -720,6 +729,11 @@
         <option value="1">Previous format (version 1)</option>
       </select>
       <p class="hint">Version 5 boosts contrast in textured areas while keeping smaller markers. Below 5× redundancy, stronger encoding spends more image quality on recovery. Older formats remain available; enable older-format recovery to read them. Photo and resize recovery remain experimental. Use version 1 for desktop and TileStorm readers until they are upgraded.</p>
+
+      <label for="encoding-quality">Image quality / durability <output id="encoding-quality-value">0.80</output></label>
+      <input id="encoding-quality" type="range" min="0" max="1" step="0.01" value="0.8">
+      <div class="prognosis-labels"><span>More durable · stronger pattern</span><span>Higher image quality</span></div>
+      <p class="hint">0.80 uses the current signal strength. Move left to help camera recovery at the cost of appearance. Applies to versions 4 and 5.</p>
 
       <section class="read-prognosis" id="read-prognosis" hidden aria-label="Estimated camera-read difficulty">
         <p><strong id="prognosis-title"></strong></p>
@@ -831,15 +845,18 @@
   <script src="./pixelstow-spectrum.js?v=20261014-v5-default1"></script>
   <script src="./pixelstow-transform.js?v=20261014-v5-default1"></script>
   <script src="./pixelstow-lattice.js?v=20261013-marker-follow2"></script>
-  <script src="./pixelstow.js?v=20261014-v5-default1"></script>
+  <script src="./pixelstow.js?v=20261014-quality-range1"></script>
   <script src="./pixelstow-export.js?v=20261011-exports"></script>
   <script src="./pixelstow-voice.js?v=20261013-voice-clock2"></script>
   <script src="./pixelstow-media.js?v=20261014-margin-ui1"></script>
   <script src="./pixelstow-sharing.js?v=20261011-png-clipboard"></script>
-  <script src="./pixelstow-camera.js?v=20261014-v5-default1"></script>
-  <script src="./pixelstow-preview.js?v=20261014-margin-ui1"></script>
+  <script src="./pixelstow-camera.js?v=20261014-quality-range1"></script>
+  <script src="./pixelstow-preview.js?v=20261014-quality-range1"></script>
   <script>
     const fileInput = document.querySelector("#file");
+    const chooseImageButton = document.querySelector("#choose-image");
+    const encodingQuality = document.querySelector("#encoding-quality");
+    const encodingQualityValue = document.querySelector("#encoding-quality-value");
     const drop = document.querySelector("#drop");
     const preview = document.querySelector("#preview");
     const previewEncodedButton = document.querySelector("#preview-encoded-image");
@@ -954,7 +971,7 @@
     // Acquire playback permission in the actual gesture, before a picker,
     // camera scan or password decrypt delays discovery of the audio attachment.
     document.addEventListener("click", (event) => {
-      if (event.isTrusted && event.target.closest('label[for="file"], #file, #paste-image, #open-camera, #take-photo, #camera-take-photo, #capture-frame, #use-camera-near-miss, #find-transform, #decode, #unlock'))
+      if (event.isTrusted && event.target.closest('label[for="file"], #choose-image, #file, #paste-image, #open-camera, #take-photo, #camera-take-photo, #capture-frame, #use-camera-near-miss, #find-transform, #decode, #unlock'))
         media.preparePlayback();
     }, true);
     unlockForm.addEventListener("submit", (event) => { if (event.isTrusted) media.preparePlayback(); });
@@ -976,9 +993,11 @@
     try { storedCarrier = localStorage.getItem("pixelstow-carrier-v5-adaptive"); } catch (_) { /* Storage can be disabled. */ }
     if (["1", "3", "4", "5"].includes(storedCarrier)) carrierSelect.value = storedCarrier;
     PixelStow.setCarrierVersion(Number(carrierSelect.value));
+    encodingQuality.disabled = ![4, 5].includes(Number(carrierSelect.value));
     carrierSelect.addEventListener("change", () => {
       try { localStorage.setItem("pixelstow-carrier-v5-adaptive", carrierSelect.value); } catch (_) { /* The choice still works for this session. */ }
       PixelStow.setCarrierVersion(Number(carrierSelect.value));
+      setBusy(busy);
       updateByteCounts();
       if (current) {
         const room = PixelStow.estimatePayloadBytes(current.width, current.height);
@@ -1137,8 +1156,12 @@
       transformMode.disabled = working;
       transformForce.disabled = working;
       legacyRecovery.disabled = working;
+      showTransform.disabled = working || !(current?.transformResult?.geometry || current?.transformResult?.markers?.length);
       cancelTransformButton.hidden = !transformAbort;
+      chooseImageButton.textContent = transformAbort ? "Cancel search" : "Choose image";
+      chooseImageButton.disabled = working && !transformAbort;
       carrierSelect.disabled = working;
+      encodingQuality.disabled = working || ![4, 5].includes(Number(carrierSelect.value));
       encodeButton.disabled = working || !canEncode;
       composition.hidden = cameraActive || Boolean(current && current.hasFingerprint) || needsUnlock;
       encodeButton.hidden = composition.hidden;
@@ -1414,7 +1437,8 @@
     function drawTransform(result) {
       if (!current) return;
       paintTransform(transformOutline, result, current.width, current.height);
-      transformOutline.hidden = !showTransform.checked || !(result.geometry || result.markers?.length);
+      transformOutline.hidden = !showTransform.checked || !(result.geometry || result.markers?.length) ||
+        (current.markerGuideOverride !== true && (current.suppressMarkerOverlay || !result.unreadable));
     }
 
     showTransform.addEventListener("change", () => {
@@ -1447,9 +1471,9 @@
             : result.signature ? "No encoding signature or checksum-valid markers found." : "";
       const nearMiss = Boolean(result.unreadable && job.transformResult.markers.length);
       recoveryFraming.hidden = !nearMiss;
-      // Show measured geometry by default; retain an explicit checkbox choice
-      // for this image through successful and unsuccessful retries.
-      showTransform.checked = job.markerGuideOverride ?? true;
+      // Failed photos show diagnostics. Successful reads and continuous-camera
+      // captures stay clean unless the preview checkbox is explicitly enabled.
+      showTransform.checked = job.markerGuideOverride ?? (nearMiss && !job.suppressMarkerOverlay);
       if (showTransform.checked) drawTransform(job.transformResult);
       else transformOutline.hidden = true;
       job.hasFingerprint = job.hasFingerprint || result.found;
@@ -1465,10 +1489,15 @@
         if (result.unreadable) transformStatus.textContent += markerFailureNote(result);
       }
     }
-    cancelTransformButton.addEventListener("click", () => {
+    function cancelImageSearch() {
       transformAbort?.abort();
       transformStatus.textContent = "Cancelling search…";
       transformSignature.textContent = "";
+    }
+    cancelTransformButton.addEventListener("click", cancelImageSearch);
+    chooseImageButton.addEventListener("click", () => {
+      if (transformAbort) cancelImageSearch();
+      else if (!chooseImageButton.disabled) fileInput.click();
     });
     findTransformButton.addEventListener("click", async () => {
       if (!current || busy || media.active || camera?.active) return;
@@ -1598,6 +1627,7 @@
           width: image.width,
           height: image.height,
           exact: image.exact,
+          suppressMarkerOverlay: Boolean(captured?.continuousCapture),
           hasFingerprint: false,
           passwordProtected: false
         };
@@ -1649,7 +1679,7 @@
         if (current) {
           recoveryVisible = true;
           transformSignature.textContent = "";
-          transformStatus.textContent = error?.name === "AbortError" ? "Image recovery cancelled. Retry recovery or choose another image."
+          transformStatus.textContent = error?.name === "AbortError" ? "Search cancelled. You can encode this image, retry recovery or choose another image."
             : error?.message || "Image recovery failed. Retry recovery or choose another image.";
           setStatus(transformStatus.textContent, error?.name !== "AbortError");
         } else {
@@ -1818,6 +1848,9 @@
     }).observe(viewport);
 
     message.addEventListener("input", updateByteCounts);
+    encodingQuality.addEventListener("input", () => {
+      encodingQualityValue.value = Number(encodingQuality.value).toFixed(2);
+    });
 
     fileInput.addEventListener("change", () => {
       const file = fileInput.files && fileInput.files[0];
@@ -1853,7 +1886,8 @@
       setStatus("Encoding…");
       try {
         const content = { text: message.value, attachments: media.files };
-        const encoded = await PixelStow.encodePayload(current.pixels, current.width, current.height, content, password.value);
+        const encoded = await PixelStow.encodePayload(current.pixels, current.width, current.height, content, password.value,
+          { quality: Number(encodingQuality.value) });
         // The writer knows the exact grid and strength. Export verification must
         // never search for a resized/photographed image or depend on marker fits.
         const verification = { nativeOnly: true, carrierVersion: encoded.carrierVersion, strength: encoded.strength };

@@ -40,13 +40,10 @@ is removed. The outer row and column are multiplied by 0.7 each. Strength now
 adapts as described below. Reading samples at `1.25 * i + 0.125` with the existing four-pixel
 difference template.
 
-The painter preserves the chosen local colour average through clipping and
-rounding. Ordinary unclipped regions retain local brightness, including any
-small background rounding in the payload. On saturated colours, nearby payload
-pixels can have a DC shift
-to create signal headroom. Markers match that background shift, measured once
-in a 12-pixel ring excluding every reservation, rather than leaving an empty
-white/black patch or imposing the old large per-symbol brightness correction.
+The painter uses the same linearly compressed RGB reference as the payload.
+It preserves that reference's local colour average through rounding. Marker
+gain is bounded by available headroom for both bit orientations; it no longer
+requires a separate per-cell brightness correction or channel sign flip.
 Alpha is unchanged. These remain embedded signals, not invisible markings.
 
 ## Adaptive contrast
@@ -55,8 +52,18 @@ V5 shares [V4's adaptive payload contrast](CarrierV4.md#adaptive-contrast): actu
 fractional repetition sets the nominal strength, source texture raises it
 locally, and the stronger nonlinear ramp below 2x applies. The shared inverse
 uplift raises the curve by 15% at 2x, tapering smoothly above it. The same headroom
-limits prevent extra boost from buying large brightness or unequal RGB shifts
-in dark regions with highlights. This was previously missing from the V5 writer.
+limits prevent clipping in dark regions with highlights. This was previously
+missing from the V5 writer.
+
+The quality/durability slider is normalized to 0..1, default 0.8. Its signal
+multiplier is `2^(0.8 - quality)`: 0.8 keeps the accepted boost curve, 1 is about
+13% gentler and 0 about 74% stronger before existing hard ceilings. It scales
+nominal strength, local texture gain and marker/payload peaks for V4 and V5;
+it does not change capacity, redundancy, payload bytes or the local noise
+estimator. The nominal signal applies throughout the image. Extra texture
+boost uses source-only RMS after removing a local mean and plane, separately
+for each 4x4 payload block and marker cell. A smooth brightness slope does not
+receive that extra boost.
 
 Corner markers and side references also adapt to source texture. Their nominal
 strength is at least 12 and texture gain at least 0.5: marker headers do not
@@ -65,10 +72,33 @@ curve with the existing hard ceiling of 32. The existing edge taper, square
 patches, small references and local brightness balancing remain in place.
 Carrier extraction accounts for the raised payload and marker peaks.
 
-These are contrast changes within the existing layout and headers. Existing
+These are contrast changes within the existing marker layout and headers. Existing
 V5 images remain readable. Native tests cover high, moderate and low redundancy,
 source preservation and clipped colours; fresh optical captures are required
 to evaluate the improvement in camera recovery.
+
+## Linear range adjustment and source reconstruction
+
+New V5 images reserve uniform, symmetric RGB headroom before painting wavelets:
+`encodedSource = h + source * (255 - 2h) / 255`. Every RGB value participates,
+including marker margins and partial edge pixels, while mid-grey remains fixed
+and alpha stays unchanged. The headroom follows nominal strength plus the
+redundancy/quality margin, rounded up to an even value with a ceiling of 62.
+This compresses contrast in the encoded image to avoid localized brightness
+and colour artefacts. Boosted payload and marker signals are limited to fit
+the compressed reference with no further block brightness shift.
+
+Carrier preamble byte 2 retains bit 0 (required) and bit 1 (one-parity mode).
+Bits 2..6 store `h / 2`; bit 7 is reserved. The existing carrier-header CRC
+protects it. The preamble length, marker headers and PCF1 payload/password
+frames remain unchanged. A zero headroom denotes earlier V5 output; no separate
+discovery profile is required.
+
+Source extraction first removes payload and marker wavelets, then reverses
+the recorded map: `source = (cleaned - h) * 255 / (255 - 2h)`. It restores
+black/white range without estimating new endpoints from image content.
+Quantization and wavelet removal remain lossy, and optical captures introduce
+additional changes; this is not exact recovery of the original source pixels.
 
 ## Side references
 
@@ -163,3 +193,22 @@ Focused checks: `node tests/pixelstow-v5-default-checks.mjs`,
 `node tests/pixelstow-v5-boost-checks.mjs` and
 `node tests/pixelstow-v5-photo-checks.mjs`. The existing resize suite
 explicitly selects carrier 3 to keep its measured baseline separate.
+
+`node tests/pixelstow-quality-checks.mjs` verifies slider direction, the unchanged
+local-noise estimator, whole-range mapping, header persistence through PNG,
+source reconstruction on black/white/saturated RGB, and source/alpha preservation.
+
+## Low-frequency resolution pilot: appraisal
+
+A known 64- or 128-pixel carrier period could provide an additional scale hint
+when the four-pixel carrier is blurred or aliased. The existing FFT already
+uses the payload carrier and the distinct marker frequency to propose scales;
+a low-frequency pilot would supplement that mechanism. Pitch alone does not
+identify image boundaries, orientation, dimensions or lens distortion.
+
+Photographic content also has low-frequency structure, and perspective makes
+the observed pitch vary across the frame. A very faint single sine wave can
+therefore be a weak or ambiguous identifier. A two-axis phase-coded pilot,
+evaluated after geometric normalization, is a more useful experiment. It needs
+false-positive, source-texture, minimum-size and capture tests before adding
+another signal to every encoded image. No pilot is implemented in this revision.

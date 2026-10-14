@@ -247,13 +247,16 @@
         await this.video.play();
         if (this.session !== session) return;
         session.ready = true;
+        // Start the grace period when the live picture is ready, rather than
+        // counting camera permission/startup time as time spent framing it.
+        session.scanAfter = Date.now() + 4000;
         this.sync();
         this.progress.textContent = purpose === "source" ? "Camera ready. Frame your source photo, then tap Use photo for encoding."
           : this.backgroundAvailable
-          ? "Camera ready. Keep all four picture corners inside the guides and hold steady while frames are checked…"
+          ? "Frame your picture. Automatic scanning starts in four seconds; Capture and read is available now."
           : "Preview ready. Tap Capture and read. Automatic background scanning needs HTTPS or localhost.";
         this.refreshOrientation(session);
-        this.schedule(session, 900); // Let the camera settle focus/exposure first.
+        this.schedule(session, 900);
       } catch (error) {
         if (this.session !== session) return;
         this.close();
@@ -304,7 +307,7 @@
     schedule(session, delay = 700) {
       if (this.session !== session || session.purpose === "source" || session.paused || session.adjusting || session.handingOff) return;
       clearTimeout(session.timer);
-      session.timer = setTimeout(() => this.scan(session), delay);
+      session.timer = setTimeout(() => this.scan(session), Math.max(delay, (session.scanAfter || 0) - Date.now()));
     }
 
     captureFrame() {
@@ -394,6 +397,7 @@
 
     scan(session) {
       if (this.session !== session || session.purpose === "source" || session.paused || session.adjusting || session.handingOff) return;
+      if (Date.now() < (session.scanAfter || 0)) { this.schedule(session, 0); return; }
       if (this.video.readyState < 2 || this.video.currentTime === session.lastTime) {
         this.schedule(session);
         return;
@@ -544,7 +548,7 @@
         const name = "camera-capture-" + new Date().toISOString().replace(/[:.]/g, "-") + ".png";
         const file = new File([blob], name, { type: "image/png" });
         this.close();
-        await this.importImage(file, "camera", { image, inspection, markerScan, sourceOnly: session.purpose === "source" });
+        await this.importImage(file, "camera", { image, inspection, markerScan, continuousCapture: true, sourceOnly: session.purpose === "source" });
       } catch (error) {
         if (this.session !== session) return;
         this.close();

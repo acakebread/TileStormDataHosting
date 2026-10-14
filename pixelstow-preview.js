@@ -9,6 +9,8 @@
       this.toolbar = document.querySelector("#preview-screen-toolbar");
       this.audioButton = document.querySelector("#preview-audio");
       this.audioPlaceholder = document.createComment("Image audio control returns here");
+      this.markerControl = document.querySelector("#preview-markers");
+      this.markerPlaceholder = document.createComment("Marker preview control returns here");
       this.placeholder = document.createComment("Image preview returns here");
       document.querySelector("#full-preview").addEventListener("click", () => this.open(false));
       document.querySelector("#preview-encoded-image").addEventListener("click", () => this.open(true));
@@ -58,6 +60,8 @@
       // node/listener/player, and keep the bottom comparison slider unobstructed.
       this.audioButton.before(this.audioPlaceholder);
       this.toolbar.prepend(this.audioButton);
+      this.markerControl.before(this.markerPlaceholder);
+      this.toolbar.prepend(this.markerControl);
       this.panel.classList.toggle("clean", clean);
       this.controls(!clean);
       document.documentElement.classList.add("preview-modal-open");
@@ -82,6 +86,7 @@
       this.tap = null; this.multitouch = false;
       this.placeholder.replaceWith(this.preview);
       this.audioPlaceholder.replaceWith(this.audioButton);
+      this.markerPlaceholder.replaceWith(this.markerControl);
       document.documentElement.classList.remove("preview-modal-open");
       document.body.classList.remove("preview-modal-open");
       this.restoreView(this.savedView);
