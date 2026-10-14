@@ -128,26 +128,34 @@ divider, recovery overlay, audio button and toolbar. Tap to reveal controls or
 press Escape to close. Pinch/two-finger pan still work. Browsers with element
 fullscreen can also hide their chrome; iPhones use the viewport dialog fallback.
 Successful reads start with marker overlays hidden. Failed photographs show
-diagnostic markers; continuous captures start clean. The preview's Detected
-bounds and markers checkbox can reveal the separate overlay, including in
-fullscreen. It never changes captured or exported pixels. The comparison range
+diagnostic markers; continuous captures start clean. Fullscreen preview has a
+small **Show analysis** checkbox below the image; it is absent from the main
+page. It can reveal the separate overlay without changing captured or exported
+pixels. The comparison range
 slider has a larger thumb and a 48-pixel-high touch target.
 Choose image becomes Cancel search while automatic image recovery runs, leaving
 the loaded image ready for encoding after cancellation. Continuous camera
 scanning waits four seconds after the live video starts before buffering or
 checking frames; manual capture remains available during that framing period.
-There is one additional image audio button, beside the page preview. The same
-DOM node moves into the full-screen top toolbar, clear of the bottom comparison
-slider, then returns on close. Native attachment players retain their controls;
+The page places the image first, with caption, audio and fullscreen actions
+below it. Mobile uses two compact rows for choosing/scanning images and smaller
+secondary controls, while keeping 44-pixel touch targets. There is one image
+audio button. The same DOM node and comparison slider move into a fullscreen
+footer with compact Fit/100%/Hide/Close controls, then return on close. The
+footer occupies its own space below the image. Native attachment players retain their controls;
 there is no second decoded-message Play button. The audio element and tap handler
 are reused rather than recreated, preserving the existing Safari playback flow.
 
-After a successful encode, a **Photo-read prognosis** bar above the export actions
+With a source and payload selected, a **Photo-read prognosis** bar above the export actions
 runs green through amber to red, with a difficulty marker and textual label.
-Five or more repeats show good margin; 2x to 5x show moderate margin; below 2x or
-reduced parity is marked tricky. This is a qualitative estimate from redundancy
-and error correction, not a calibrated camera success percentage. It resets
-with the exported result. Capture focus, glare, source detail and distortion
+The baseline uses redundancy and parity. It now also responds immediately to
+the quality/durability slider, using nominal strength, local texture gain and
+marker peaks with their hard ceilings. More durable settings move the marker
+towards green; low repetition and reduced parity retain a minimum risk. 0.8
+keeps the previous baseline. This is a qualitative estimate, not a calibrated
+camera success percentage. If settings change after export, it estimates the
+next encoding and asks the user to re-encode; the saved PNG remains unchanged.
+Capture focus, glare, source detail and distortion
 still affect recovery. Recovery status/signature, near-miss advice and overlays
 are cleared before a new import, retry, decode/unlock or camera read begins.
 

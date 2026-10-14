@@ -18,6 +18,10 @@ for (const key of ['strength', 'textureGain', 'payloadPeak', 'markerPeak', 'bias
 const gentle = I.qualitySignalPolicy(policy, 1), durable = I.qualitySignalPolicy(policy, 0);
 assert(gentle.strength < normal.strength && durable.strength > normal.strength);
 assert(gentle.textureGain < normal.textureGain && durable.textureGain > normal.textureGain);
+assert.equal(c.estimateSignalGain(2.4,.8),1);
+assert(c.estimateSignalGain(2.4,0)>1 && c.estimateSignalGain(2.4,1)<1);
+assert(c.estimateSignalGain(1.1,0) < c.estimateSignalGain(5,0), 'prognosis must account for the boost ceilings at low redundancy');
+assert.equal(c.estimateSignalGain(2.4,0,1),1);
 const ramp = Uint8Array.from({length:256 * 4}, (_, i) => i % 4 === 3 ? 127 : Math.floor(i / 4));
 const compressed = I.linearRange(ramp, 28), restored = I.linearRange(compressed, 28, true);
 assert.equal(compressed[0], 28);assert.equal(compressed[255 * 4], 227);

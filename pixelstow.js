@@ -672,6 +672,16 @@
       markerTextureMinimum: 0.5 * gain };
   }
 
+  function estimateSignalGain(ratio, quality = DEFAULT_QUALITY, version = preferredCarrier) {
+    if (![CARRIER_V4, CARRIER_V5].includes(version) || !Number.isFinite(ratio) || ratio < 1) return 1;
+    const baseline = v4SignalPolicy(ratio, STRENGTHS[0]);
+    const selected = qualitySignalPolicy(baseline, encodingQuality(quality));
+    // A relative strength hint for the UI, including hard ceilings. It is not
+    // a measured optical success probability or a replacement for redundancy.
+    return 0.5 * selected.strength / baseline.strength +
+      0.35 * selected.textureGain / baseline.textureGain + 0.15 * selected.markerPeak / baseline.markerPeak;
+  }
+
   function linearRange(pixels, headroom, inverse = false) {
     // One symmetric RGB map over the entire image: midpoint stays fixed,
     // including untouched edge pixels and marker reservations. Alpha is unchanged.
@@ -1359,7 +1369,7 @@
 
   function searchInWorker(pixels, width, height, options, operation = "geometry") {
     return new Promise((resolve, reject) => {
-      const url = new URL("pixelstow-transform-worker.js?v=20261014-quality-range1", codecScriptUrl);
+      const url = new URL("pixelstow-transform-worker.js?v=20261014-mobile-layout1", codecScriptUrl);
       const worker = new Worker(url);
       let finished = false;
       const abort = () => { if (finished) return; cleanup(); reject(new DOMException("Search cancelled.", "AbortError")); };
@@ -3006,6 +3016,7 @@
     estimatePayloadBytes,
     payloadSize,
     estimateRepetition,
+    estimateSignalGain,
     payloadsEqual,
     inspect,
     decode,

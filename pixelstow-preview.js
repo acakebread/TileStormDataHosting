@@ -7,10 +7,12 @@
       this.panel = document.querySelector("#preview-panel");
       this.slot = document.querySelector("#preview-screen");
       this.toolbar = document.querySelector("#preview-screen-toolbar");
+      this.footer = document.querySelector("#preview-screen-footer");
+      this.actions = document.querySelector("#preview-screen-actions");
       this.audioButton = document.querySelector("#preview-audio");
       this.audioPlaceholder = document.createComment("Image audio control returns here");
-      this.markerControl = document.querySelector("#preview-markers");
-      this.markerPlaceholder = document.createComment("Marker preview control returns here");
+      this.comparison = document.querySelector("#comparison-control");
+      this.comparisonPlaceholder = document.createComment("Comparison slider returns here");
       this.placeholder = document.createComment("Image preview returns here");
       document.querySelector("#full-preview").addEventListener("click", () => this.open(false));
       document.querySelector("#preview-encoded-image").addEventListener("click", () => this.open(true));
@@ -49,19 +51,22 @@
     }
     get openNow() { return this.panel.open; }
     get clean() { return this.panel.open && this.panel.classList.contains("clean"); }
-    controls(show) { this.toolbar.hidden = !show; }
+    controls(show) {
+      this.toolbar.hidden = this.footer.hidden = !show;
+      if (this.panel.open) this.resize();
+    }
     open(clean) {
       if (this.panel.open || this.preview.hidden) return;
       this.savedView = this.captureView();
       this.returnFocus = document.activeElement;
       this.preview.before(this.placeholder);
       this.slot.append(this.preview);
-      // Move the single image audio shortcut into the top toolbar. Reuse its
-      // node/listener/player, and keep the bottom comparison slider unobstructed.
+      // Reuse the single audio player and comparison slider in the footer.
+      // Controls occupy their own rows below the image, preserving touch targets.
       this.audioButton.before(this.audioPlaceholder);
-      this.toolbar.prepend(this.audioButton);
-      this.markerControl.before(this.markerPlaceholder);
-      this.toolbar.prepend(this.markerControl);
+      this.actions.prepend(this.audioButton);
+      this.comparison.before(this.comparisonPlaceholder);
+      this.footer.prepend(this.comparison);
       this.panel.classList.toggle("clean", clean);
       this.controls(!clean);
       document.documentElement.classList.add("preview-modal-open");
@@ -86,7 +91,7 @@
       this.tap = null; this.multitouch = false;
       this.placeholder.replaceWith(this.preview);
       this.audioPlaceholder.replaceWith(this.audioButton);
-      this.markerPlaceholder.replaceWith(this.markerControl);
+      this.comparisonPlaceholder.replaceWith(this.comparison);
       document.documentElement.classList.remove("preview-modal-open");
       document.body.classList.remove("preview-modal-open");
       this.restoreView(this.savedView);
