@@ -47,14 +47,15 @@ Alpha is unchanged. These remain embedded signals, not invisible markings.
 
 V5 shares [V4's adaptive payload contrast](CarrierV4.md#adaptive-contrast): actual
 fractional repetition sets the nominal strength, source texture raises it
-locally, and the stronger nonlinear ramp below 2x applies. The same headroom
+locally, and the stronger nonlinear ramp below 2x applies. The shared inverse
+uplift raises the curve by 15% at 2x, tapering smoothly above it. The same headroom
 limits prevent extra boost from buying large brightness or unequal RGB shifts
 in dark regions with highlights. This was previously missing from the V5 writer.
 
 Corner markers and side references also adapt to source texture. Their nominal
 strength is at least 12 and texture gain at least 0.5: marker headers do not
-have as many repeats as the payload. Marker strength is capped at 24 at 2x
-redundancy or above, rising toward 32 below 2x. The existing edge taper, square
+have as many repeats as the payload. Their working peaks follow the raised
+curve with the existing hard ceiling of 32. The existing edge taper, square
 patches, small references and local brightness balancing remain in place.
 Carrier extraction accounts for the raised payload and marker peaks.
 

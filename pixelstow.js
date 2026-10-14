@@ -27,6 +27,8 @@
   const V4_PAYLOAD_PEAK = 64;
   const V4_MARKER_PEAK = 32;
   const V5_MARKER_PEAK = 32;
+  const REDUNDANCY_UPLIFT_AT_TWO = 0.15;
+  const REDUNDANCY_UPLIFT_DENOMINATOR = 1;
   let preferredCarrier = CARRIER_V4;
   const RECOVERY_CARRIERS = [CARRIER_V4, CARRIER_V3, CARRIER_V5];
   const codecScriptUrl = typeof document !== "undefined" ? document.currentScript?.src : null;
@@ -621,12 +623,20 @@
     const pressure = Math.max(0, Math.min(1, (5 - ratio) / 4));
     const shortfall = Math.max(0, Math.min(1, 2 - ratio));
     const urgency = shortfall * (2 - shortfall);
-    // Keep the proven >=2x settings exactly. Below 2x, a curved ramp spends
-    // contrast faster; it is a quality tradeoff, not extra error correction.
-    return { strength: Math.max(strength, Math.round(8 + 12 * pressure + 12 * urgency)),
-      textureGain: (0.175 + 0.825 * pressure) * (1 + urgency),
-      payloadPeak: Math.round(48 + 16 * urgency), markerPeak: Math.round(24 + 8 * urgency),
+    // A reciprocal uplift raises the existing curve by 15% at 2x, tapering
+    // smoothly with more copies. The positive denominator and existing ceilings
+    // keep low-redundancy pictures bounded. Quantise only after applying it.
+    const uplift = redundancyUplift(ratio);
+    return { strength: Math.max(strength, Math.min(32, Math.round((8 + 12 * pressure + 12 * urgency) * uplift))),
+      textureGain: (0.175 + 0.825 * pressure) * (1 + urgency) * uplift,
+      payloadPeak: Math.min(V4_PAYLOAD_PEAK, Math.round((48 + 16 * urgency) * uplift)),
+      markerPeak: Math.min(V4_MARKER_PEAK, Math.round((24 + 8 * urgency) * uplift)),
       biasLimit: Math.round(4 + 8 * urgency) };
+  }
+
+  function redundancyUplift(ratio) {
+    return 1 + REDUNDANCY_UPLIFT_AT_TWO * (2 + REDUNDANCY_UPLIFT_DENOMINATOR) /
+      (Math.max(1, ratio) + REDUNDANCY_UPLIFT_DENOMINATOR);
   }
 
   function textureAmplitude(reference, width, x, y, side, policy, ceiling) {
@@ -1271,7 +1281,7 @@
 
   function searchInWorker(pixels, width, height, options, operation = "geometry") {
     return new Promise((resolve, reject) => {
-      const url = new URL("pixelstow-transform-worker.js?v=20261014-v5-boost1", codecScriptUrl);
+      const url = new URL("pixelstow-transform-worker.js?v=20261014-redundancy-curve1", codecScriptUrl);
       const worker = new Worker(url);
       let finished = false;
       const abort = () => { if (finished) return; cleanup(); reject(new DOMException("Search cancelled.", "AbortError")); };

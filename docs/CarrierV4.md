@@ -56,21 +56,23 @@ need user evaluation. Carrier 3's writer remains frozen for comparison.
 ## Adaptive contrast
 
 The V4 writer uses actual fractional repetition rather than a rounded count of
-complete copies. At 5x redundancy or above, the nominal amplitude starts at 8.
-Between 5x and 2x it retains the restrained linear increase (8 to 17).
-Below 2x an additional `u * (2 - u)` ramp, where `u = clamp(2 - ratio, 0, 1)`,
-rises quickly toward the stronger low-margin settings: nominal amplitude is
-28 at 1.5x and 32 at 1x. Native verification can also raise it if required.
-This spends more image quality on
+complete copies. The baseline starts at 8 at 5x or above, increases linearly to
+17 at 2x, and adds a stronger `u * (2 - u)` ramp below 2x, where
+`u = clamp(2 - ratio, 0, 1)`. A smooth reciprocal uplift then raises that curve:
+`uplift = 1 + 0.45 / (max(1, ratio) + 1)`. The constants correspond to a 15%
+uplift at 2x and a denominator offset of 1; both are named codec constants for
+later calibration. At 2x the nominal amplitude becomes 19.55, quantised to 20.
+At 1.5x and below it reaches the existing nominal ceiling of 32. Native
+verification can also raise it if required. This spends more image quality on
 payloads with fewer repeated symbols. It does not create extra redundancy.
 
 Each payload block and each six-pixel marker cell measures RMS source detail
 after subtracting a local brightness plane. Flat regions and smooth brightness
 slopes do not trigger a texture boost. Source detail adds bounded contrast, with
-more allowance below 5x. At 2x and above, both the redundancy-driven increase
-above 8 and the texture gain retain the halved settings from the earlier trial.
-Below 2x the texture gain and ceilings also follow the curved ramp. Payload
-peaks rise from 48 to 64 and marker peaks from 24 to 32; payload clipping still
+more allowance below 5x. Texture gain and the working payload/marker peaks
+receive the same reciprocal uplift. Its contribution decreases smoothly with
+more repeated data rather than switching off above 2x. Payload and marker
+peaks still have hard ceilings of 64 and 32 respectively; payload clipping still
 uses the existing fitted-shift/sign
 check, and markers retain their exact local brightness targets. Neither input
 pixels nor alpha are modified. Stronger wavelets will be visible on dense or
@@ -91,7 +93,8 @@ The geometry, symbol signs, preamble, envelope, repetition and marker CRCs remai
 unchanged. The existing signed-correlation reader accepts varying amplitudes
 without requiring an amplitude map. Frame strength records the nominal value;
 source extraction allows for the larger V4 local peaks. No migration for earlier
-V4 output is added. V1/V3/V5 writing is unchanged, including the frozen V3 digest.
+V4 output is added. V1/V3 writing is unchanged, including the frozen V3 digest.
+V5 shares this payload policy with its own smaller marker layout and taper.
 Checks cover native payloads and all eight marker CRCs at both high and low
 redundancy, clipped colours, dark/highlight brightness and colour bounds, and unchanged source/alpha:
 `node tests/pixelstow-v4-boost-checks.mjs`. They do not establish a camera success

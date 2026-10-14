@@ -1,5 +1,5 @@
 // Dedicated disposable worker; its input is a copy, never the UI's pixel buffer.
-importScripts("./pixelstow-spectrum.js?v=20261013-marker-follow2", "./pixelstow-transform.js?v=20261014-v5-outline1", "./pixelstow.js?v=20261014-v5-boost1");
+importScripts("./pixelstow-spectrum.js?v=20261013-marker-follow2", "./pixelstow-transform.js?v=20261014-v5-outline1", "./pixelstow.js?v=20261014-redundancy-curve1");
 importScripts("./pixelstow-lattice.js?v=20261013-marker-follow2");
 self.onmessage = async ({ data }) => {
   try {

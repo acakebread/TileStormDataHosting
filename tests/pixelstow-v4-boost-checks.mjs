@@ -9,8 +9,27 @@ process.chdir(fileURLToPath(new URL('../', import.meta.url)));
 const context=vm.createContext({window:{},Uint8Array,Uint8ClampedArray,TextEncoder,TextDecoder,
  Blob,Response,CompressionStream,DecompressionStream,crypto:webcrypto,setTimeout,DOMException});
 vm.runInContext((await fs.readFile('pixelstow.js','utf8')).replace('root.PixelStow = {',
- 'root.boostChecks = { locatorLayout, locatorBlockMap, readVisualLocator, applyBit, v4SignalPolicy }; root.PixelStow = {'),context);
+ 'root.boostChecks = { locatorLayout, locatorBlockMap, readVisualLocator, applyBit, v4SignalPolicy, redundancyUplift }; root.PixelStow = {'),context);
 const codec=context.window.PixelStow,internals=context.window.boostChecks,w=640,h=480;
+assert(Math.abs(internals.redundancyUplift(2)-1.15)<1e-12);
+assert(internals.redundancyUplift(2.4)>1&&internals.redundancyUplift(2.4)<1.15);
+assert(internals.redundancyUplift(5)<internals.redundancyUplift(2.4));
+assert.equal(internals.redundancyUplift(Infinity),1);
+let previous;
+for(let ratio=1;ratio<=10;ratio+=.05){
+ const policy=internals.v4SignalPolicy(ratio,8);
+ assert(policy.strength<=32&&policy.payloadPeak<=64&&policy.markerPeak<=32);
+ if(previous){
+  assert(policy.strength<=previous.strength);
+  assert(policy.textureGain<=previous.textureGain);
+  assert(policy.payloadPeak<=previous.payloadPeak&&policy.markerPeak<=previous.markerPeak);
+ }
+ previous=policy;
+}
+assert.equal(internals.v4SignalPolicy(2,8).strength,20);
+assert.equal(internals.v4SignalPolicy(1,8).strength,32);
+assert.equal(internals.v4SignalPolicy(2,8).biasLimit,4);
+console.log('PASS: inverse uplift is 15% at 2x, tapers with redundancy, and retains strength/peak/headroom bounds');
 let state=127;
 function random(){state^=state<<13;state^=state>>>17;state^=state<<5;return(state>>>0)/4294967296;}
 const input=new Uint8Array(w*h*4);
