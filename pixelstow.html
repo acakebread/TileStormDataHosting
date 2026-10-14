@@ -187,25 +187,10 @@
       align-items: center;
     }
 
-    .file-input {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      padding: 0;
-      margin: -1px;
-      overflow: hidden;
-      clip: rect(0, 0, 0, 0);
-      white-space: nowrap;
-      border: 0;
-    }
-
-    label.choose {
-      flex: 0 0 auto;
-      width: fit-content;
-      margin: 0;
-      white-space: nowrap;
-      cursor: pointer;
-    }
+    .image-label { margin: 14px 0 6px; color: var(--text); font-weight: 700; }
+    .image-actions > button { white-space: nowrap; }
+    .image-actions #full-preview { width: 44px; padding: 0; flex: 0 0 44px; }
+    .image-actions #choose-image { white-space: normal; }
 
     .preview {
       margin-top: 14px;
@@ -299,7 +284,9 @@
     .camera-header h2 { margin: 0; font-size: 1.1rem; }
     .camera-header .hint { margin: 3px 0 0; font-size: 0.82rem; }
     .camera-header button { flex: 0 0 auto; }
-    .camera-view { position: relative; min-width: 0; min-height: 0; line-height: 0; background: #000; overflow: hidden; touch-action: none; }
+    .camera-view { position: relative; min-width: 0; min-height: 0; line-height: 0; background: #000; overflow: hidden; touch-action: none; cursor: pointer; }
+    .camera-view[aria-disabled="true"] { cursor: default; }
+    .camera-view:focus-visible { outline: 2px solid var(--tile-azure); outline-offset: -2px; }
     .camera-view video { position: absolute; display: block; left: 50%; top: 50%; max-width: none; max-height: none; object-fit: contain; transform: translate(-50%, -50%); }
     .camera-frame { position: absolute; box-sizing: border-box; border: 1px solid rgba(140, 235, 237, 0.65); pointer-events: none; }
     .camera-target { position: absolute; inset: 6%; }
@@ -309,17 +296,18 @@
     .camera-target span:nth-child(3) { right: 0; bottom: 0; border-left: 0; border-top: 0; }
     .camera-target span:nth-child(4) { left: 0; bottom: 0; border-right: 0; border-top: 0; }
     .camera-frame-note { position: absolute; left: 8px; right: 8px; bottom: 5px; margin: 0; text-align: center; color: white; font-size: 0.75rem; line-height: 1.4; text-shadow: 0 1px 3px #000; }
-    .camera-footer { max-height: 38dvh; overflow: auto; overscroll-behavior: contain; }
+    .camera-footer { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 8px; min-height: 0; }
+    .camera-feedback { box-sizing: border-box; height: clamp(104px, 18dvh, 164px); overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
     .camera-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; }
     .camera-controls button { margin: 0; padding: 9px 6px; }
     .camera-controls .camera-shutter { color: #081016; background: var(--tile-azure); font-weight: 700; }
     .camera-native-photo { grid-column: 1 / -1; }
-    .camera-footer > .hint { margin: 8px 0 0; font-size: 0.82rem; overflow-wrap: anywhere; }
-    .camera-footer > .hint:empty { display: none; }
+    .camera-feedback > .hint { margin: 0 0 8px; font-size: 0.82rem; overflow-wrap: anywhere; }
     @media (orientation: landscape) and (max-height: 600px) {
       .camera-panel[open] { grid-template-columns: minmax(0, 1fr) minmax(190px, 260px); grid-template-rows: auto minmax(0, 1fr); }
       .camera-header { grid-column: 1 / -1; }
-      .camera-footer { grid-column: 2; grid-row: 2; max-height: none; min-height: 0; }
+      .camera-footer { grid-column: 2; grid-row: 2; }
+      .camera-feedback { height: 100%; }
     }
     .camera-near-miss { margin-top: 12px; }
     .camera-near-miss summary { cursor: pointer; color: var(--tile-community); }
@@ -537,14 +525,14 @@
       .intro .intro-desktop { display: none; }
       .intro .intro-mobile { display: inline; }
       .drop { margin-top: 12px; padding: 10px; }
-      .drop > .file-row:not(.camera-controls) { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
-      .drop > .file-row > button { grid-column: span 2; font-size: 0.78rem; padding: 0 6px; min-width: 0; font-weight: 500; }
-      .drop > .file-row > #choose-image, .drop > .file-row > #open-camera { grid-column: span 3; font-size: 0.88rem; font-weight: 700; }
+      .image-actions { display: grid; grid-template-columns: minmax(44px, 1fr) minmax(44px, .8fr) 44px minmax(44px, 1.1fr) minmax(44px, .8fr); gap: 5px; }
+      .image-actions > button { font-size: 0.78rem; padding: 0 3px; min-width: 0; font-weight: 500; }
+      .image-actions > #choose-image, .image-actions > #open-camera { font-weight: 700; }
       button, .button-link { font-size: 0.85rem; padding: 0 10px; }
       .preview { margin-top: 8px; }
       .preview-toolbar { gap: 6px; margin: 6px 0; }
       .preview-toolbar button { font-size: 0.85rem; }
-      .drop > label { margin-top: 0; }
+      .image-label { margin-top: 0; }
       .payload-panel { padding: 12px; margin: 12px 0; }
       .image-caption { margin: 6px 0; }
       .status { margin-top: 8px; font-size: 0.9rem; }
@@ -572,17 +560,19 @@
 
       <div class="drop" id="drop">
         <div id="open-card" tabindex="-1">
-          <p class="open-card-note" id="open-card-note" hidden>Opening a photo card? Choose the original image from Files, or copy the photo and tap Paste image. If it is locked, enter its password below the preview.</p>
+          <p class="open-card-note" id="open-card-note" hidden>Opening a photo card? Tap Browse to choose the original image from Files, or copy the photo and tap Paste. If it is locked, enter its password below the preview.</p>
         </div>
-        <label for="file">Image</label>
-        <div class="file-row">
-          <input id="file" class="file-input" type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg">
-          <button class="choose" id="choose-image" type="button">Choose image</button>
-          <button id="open-camera" type="button">Scan camera</button>
+        <p class="image-label">Image</p>
+        <div class="file-row image-actions">
+          <input id="file" type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg" aria-label="Browse for an image" hidden>
+          <button id="choose-image" type="button">Browse</button>
           <button id="paste-image" type="button" aria-label="Paste image">Paste</button>
-          <button id="take-photo" type="button">Take photo</button>
-          <button id="camera-source" type="button" title="Take a new source photo to encode" aria-label="Take a source photo to encode">New photo</button>
-          <input id="camera-file" class="file-input" type="file" accept="image/*" capture="environment" aria-label="Take a photo with the camera">
+          <button id="full-preview" type="button" title="Full screen preview" aria-label="Full screen preview" disabled>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" focusable="false"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg>
+          </button>
+          <button id="open-camera" type="button" title="Scan or capture an encoded image" aria-label="Capture an image to read">Capture</button>
+          <button id="camera-source" type="button" title="Take a new source photo to encode" aria-label="Take a source photo to encode">Photo</button>
+          <input id="camera-file" type="file" accept="image/*" capture="environment" aria-label="Take a photo with the camera" hidden>
         </div>
         <dialog class="camera-panel" id="camera-panel" hidden aria-labelledby="camera-title">
           <header class="camera-header">
@@ -592,11 +582,11 @@
             </div>
             <button id="close-camera" type="button" autofocus>Close camera</button>
           </header>
-          <div class="camera-view" id="camera-view">
+          <div class="camera-view" id="camera-view" role="button" tabindex="0" aria-label="Capture and read the live camera preview" aria-disabled="true">
             <video id="camera-video" autoplay muted playsinline aria-label="Live camera preview"></video>
             <div class="camera-frame" id="camera-frame" hidden aria-hidden="true">
               <div class="camera-target"><span></span><span></span><span></span><span></span></div>
-              <p class="camera-frame-note">The whole outlined view is captured</p>
+              <p class="camera-frame-note">Tap the preview to capture</p>
             </div>
           </div>
           <div class="camera-footer">
@@ -607,17 +597,19 @@
               <button id="rotate-camera" type="button">Rotate view</button>
               <button class="camera-native-photo" id="camera-take-photo" type="button">Take photo with phone camera</button>
             </div>
-            <p class="hint" id="camera-progress" role="status"></p>
-            <p class="hint" id="camera-signature"></p>
-            <details class="camera-near-miss" id="camera-near-miss" hidden open>
-              <summary id="camera-near-summary">Markers found in an earlier capture</summary>
-              <div class="camera-still">
-                <canvas id="camera-still"></canvas>
-                <canvas id="camera-guides" aria-label="Markers detected in this captured frame"></canvas>
-              </div>
-              <p class="hint">These guides belong to the captured frame above. For the next attempt, keep every corner visible, move closer for more detail, keep sharp focus and avoid glare.</p>
-              <button id="use-camera-near-miss" type="button">Inspect this capture</button>
-            </details>
+            <div class="camera-feedback" tabindex="0" role="region" aria-label="Camera scan status and capture details">
+              <p class="hint" id="camera-progress" role="status"></p>
+              <p class="hint" id="camera-signature"></p>
+              <details class="camera-near-miss" id="camera-near-miss" hidden open>
+                <summary id="camera-near-summary">Markers found in an earlier capture</summary>
+                <div class="camera-still">
+                  <canvas id="camera-still"></canvas>
+                  <canvas id="camera-guides" aria-label="Markers detected in this captured frame"></canvas>
+                </div>
+                <p class="hint">These guides belong to the captured frame above. For the next attempt, keep every corner visible, move closer for more detail, keep sharp focus and avoid glare.</p>
+                <button id="use-camera-near-miss" type="button">Inspect this capture</button>
+              </details>
+            </div>
           </div>
         </dialog>
         <div class="preview" id="preview" hidden>
@@ -644,7 +636,6 @@
           </div>
           <div class="preview-toolbar">
             <button class="preview-audio" id="preview-audio" type="button" hidden>Play audio</button>
-            <button id="full-preview" type="button">Full screen</button>
           </div>
           <p class="hint preview-note" id="preview-note" hidden>Scroll over the picture to zoom. Hold the right mouse button to pan.</p>
           <p class="hint" id="image-repetition" role="status" hidden></p>
@@ -791,10 +782,10 @@
         <h2 id="more-info-title">About PixelStow</h2>
         <p>Everything is processed in this browser and is not uploaded. Encoding saves a new image. The new resize-recovery format currently needs this browser reader. Choose version 1 for existing desktop and TileStorm readers; attachments also need binary-payload support.</p>
         <p>This is a prototype. Short recordings and small attachments work best; heavy payloads can give variable results. Download the verified PNG and keep the original file. Sharing apps may resize or recompress photos, especially large images over about 2,000 pixels, and the hidden contents can disappear. That size is a guideline, not a guaranteed safe limit.</p>
-        <p>For WhatsApp, send the image as a Document / original file where possible and include the PixelStow opening link. The recipient can save it to Files and use Choose image, or copy it and use Paste image. A link opens this page but cannot automatically read a WhatsApp attachment. Screenshots, resized copies and ordinary photo sharing may not keep the payload.</p>
-        <p>On iPhone, allow Safari's Paste prompt after tapping Paste image. If needed, use the touch-and-hold paste box. Safari may require a tap on Play audio beside the image before sound is allowed; the full audio player is also available under Attached files. Audio format support varies by browser.</p>
+        <p>For WhatsApp, send the image as a Document / original file where possible and include the PixelStow opening link. The recipient can save it to Files and use Browse, or copy it and use Paste. A link opens this page but cannot automatically read a WhatsApp attachment. Screenshots, resized copies and ordinary photo sharing may not keep the payload.</p>
+        <p>On iPhone, allow Safari's Paste prompt after tapping Paste. If needed, use the touch-and-hold paste box. Safari may require a tap on Play audio beside the image before sound is allowed; the full audio player is also available under Attached files. Audio format support varies by browser.</p>
         <p>PixelStow automatically attempts recovery from resized, padded, rotated or photographed encoded images. Recovery remains experimental: blur, cropping, print quality and heavy recompression can still prevent reading. Keep the original encoded file where possible.</p>
-        <p>Open camera checks markers in recent captures and reads the most promising frame while the preview stays live. A stronger capture replaces an ongoing read. Keep all four picture corners visible and hold steady, or use Take photo for a sharper still. Live scanning needs HTTPS or localhost and camera permission. The camera closes when you leave the page. All captures and decoding stay on your device.</p>
+        <p>Capture scans encoded images while the preview stays live. Keep all four picture corners visible and hold steady, or tap the preview or Capture and read to read a frame immediately. On phones, Take photo with phone camera opens the native camera for a sharper still. Photo opens the live camera to take a new source image for encoding. Live scanning needs HTTPS or localhost and camera permission. The camera closes when you leave the page. All captures and decoding stay on your device.</p>
       </section>
 
       <div class="links">
@@ -828,7 +819,7 @@
     <h2 id="paste-title">Paste a photo</h2>
     <p id="paste-help">Copy the actual photo first. Touch and hold in the box, then choose Paste (or press Ctrl / Cmd + V).</p>
     <div class="paste-target" id="paste-target" contenteditable="true" role="textbox" aria-label="Paste image here" aria-describedby="paste-help" inputmode="none" spellcheck="false"></div>
-    <p class="hint">If only a link or text was copied, save the original image to Files and use Choose image.</p>
+    <p class="hint">If only a link or text was copied, save the original image to Files and use Browse.</p>
     <div class="actions"><button id="paste-close" type="button">Close</button></div>
   </dialog>
   <dialog class="export-dialog" id="share-dialog" aria-labelledby="share-title">
@@ -884,8 +875,8 @@
   <script src="./pixelstow-export.js?v=20261011-exports"></script>
   <script src="./pixelstow-voice.js?v=20261013-voice-clock2"></script>
   <script src="./pixelstow-media.js?v=20261014-audio-preview1"></script>
-  <script src="./pixelstow-sharing.js?v=20261014-facebook-photo1"></script>
-  <script src="./pixelstow-camera.js?v=20261014-source-shutter1"></script>
+  <script src="./pixelstow-sharing.js?v=20261014-compact-actions1"></script>
+  <script src="./pixelstow-camera.js?v=20261014-compact-actions1"></script>
   <script src="./pixelstow-preview.js?v=20261014-mobile-layout1"></script>
   <script>
     const fileInput = document.querySelector("#file");
@@ -1017,7 +1008,7 @@
     // Acquire playback permission in the actual gesture, before a picker,
     // camera scan or password decrypt delays discovery of the audio attachment.
     document.addEventListener("click", (event) => {
-      if (event.isTrusted && event.target.closest('label[for="file"], #choose-image, #file, #paste-image, #open-camera, #take-photo, #camera-take-photo, #capture-frame, #use-camera-near-miss, #find-transform, #decode, #unlock'))
+      if (event.isTrusted && event.target.closest('#choose-image, #file, #paste-image, #open-camera, #camera-source, #camera-take-photo, #capture-frame, #use-camera-near-miss, #find-transform, #decode, #unlock'))
         media.preparePlayback();
     }, true);
     unlockForm.addEventListener("submit", (event) => { if (event.isTrusted) media.preparePlayback(); });
@@ -1032,7 +1023,8 @@
     });
     camera = new PixelStowCamera({
       importImage: useFile, report: setStatus, working: () => busy || media.active,
-      changed: () => setBusy(busy), drawGuides: paintTransform, clearFeedback: clearReadFeedback
+      changed: () => setBusy(busy), drawGuides: paintTransform, clearFeedback: clearReadFeedback,
+      prepareCapture: () => media.preparePlayback()
     });
 
     const carrierSelect = document.querySelector("#carrier-version");
@@ -1261,8 +1253,9 @@
       showTransform.disabled = working || !canAnalyze;
       showTransform.parentElement.title = canAnalyze ? "Show recovery diagnostics for this image" : "No recovery markers are available for this image or format";
       cancelTransformButton.hidden = !transformAbort;
-      chooseImageButton.textContent = transformAbort ? "Cancel search" : "Choose image";
+      chooseImageButton.textContent = transformAbort ? "Cancel search" : "Browse";
       chooseImageButton.disabled = working && !transformAbort;
+      document.querySelector("#full-preview").disabled = !hasImage || cameraActive;
       carrierSelect.disabled = working;
       encodingQuality.disabled = working || ![4, 5].includes(Number(carrierSelect.value));
       scaleSource.disabled = working;

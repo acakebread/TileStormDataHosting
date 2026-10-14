@@ -1,9 +1,9 @@
 // Clipboard and native sharing stay in the browser; no photo is hosted or uploaded here.
 (function () {
   const openingUrl = "https://www.massivehadron.com/pixelstow.html#open-card";
-  const shareText = "There is a message inside this photo! Open it in PixelStow: " + openingUrl + "\nSave the original image to Files and choose it there, or copy the photo and tap Paste image.";
+  const shareText = "There is a message inside this photo! Open it in PixelStow: " + openingUrl + "\nSave the original image to Files and tap Browse to choose it, or copy the photo and tap Paste.";
   const facebookText = "There is a message, file or voice recording inside this photo! Open it in PixelStow:\n" + openingUrl +
-    "\n\nOpen the photo on Facebook and save/download the photo itself (not a screenshot). Open the PixelStow link above, tap Choose image and select the saved photo. Or copy the actual photo and tap Paste image.\n\nIf it is locked, enter the password. For audio, tap Play audio.";
+    "\n\nOpen the photo on Facebook and save/download the photo itself (not a screenshot). Open the PixelStow link above, tap Browse and select the saved photo. Or copy the actual photo and tap Paste.\n\nIf it is locked, enter the password. For audio, tap Play audio.";
 
   class Sharing {
     constructor({ importImage, save, report, working, setBusy, hasImage, imageForClipboard }) {
@@ -47,7 +47,7 @@
         if (!image) {
           if (this.pasteDialog.open) {
             event.preventDefault();
-            this.pasteHelp.textContent = "No image was pasted. Copy the actual photo, or save it to Files and use Choose image.";
+            this.pasteHelp.textContent = "No image was pasted. Copy the actual photo, or save it to Files and use Browse.";
           }
           return;
         }

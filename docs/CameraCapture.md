@@ -1,6 +1,11 @@
 # Browser camera acquisition
 
-**Photograph to encode** opens the same camera preview for taking a new source
+The image toolbar has **Browse**, **Paste**, a **Full screen** icon, **Capture**
+for reading encoded images, and **Photo** for taking a new source image. Only the
+explicit Browse/Paste controls open their respective pickers; the Image heading
+and spaces between buttons are inert. Keyboard image paste remains available.
+
+**Photo** opens the same camera preview for taking a new source
 image on phones or desktops with a camera. **Take source photo** imports the
 complete video raster into the message/file composer; no marker worker or
 photographic recovery search runs in this mode. Only the inexpensive native
@@ -8,19 +13,19 @@ fingerprint check runs on import, so existing native locked/encoded images are
 still rejected for re-encoding. The normal writer also retains its fingerprint
 guard. Switching cameras or rotating the view preserves source mode.
 
-The source preview has one **Take source photo** shutter. It captures the live
-frame and opens PixelStow's preview/composer directly, without the iPhone's
+The source preview has one **Take source photo** shutter; tapping the live preview
+does the same thing. Drags and multi-touch gestures do not trigger capture. It
+captures the live frame and opens PixelStow's preview/composer directly, without the iPhone's
 native camera and Use Photo confirmation step. The separate native still-camera
 shortcut is hidden in source mode. On browsers without live camera access,
-Photograph to encode uses the native picker directly on phones/tablets.
-Desktop Take photo opens a manual live preview, with Capture and read as its
-shutter, instead of opening a file chooser. New photo opens the source preview.
-The duplicate phone-camera shortcut is hidden on desktop. Without live camera
-access, desktop users are directed to Choose image for saved photos. The picker purpose is
-cleared after selection or cancellation; the ordinary Take photo button continues
-to import images through the reader. Captured image pixels are preserved.
+Photo uses the native picker directly on phones/tablets. Capture starts scanning
+and provides **Capture and read**, also available by tapping the preview, for an
+immediate manual read. The native still-camera shortcut remains inside Capture
+on phones and is hidden on desktop. Without live camera access, desktop users
+are directed to Browse for saved photos. The picker purpose is cleared after
+selection or cancellation. Captured image pixels are preserved.
 
-**Open camera** requests video only, preferring the rear camera and a 1920 × 2560
+**Capture** requests video only, preferring the rear camera and a 1920 × 2560
 portrait or 2560 × 1920 landscape feed, according to the device's orientation.
 Constraints are ideals: actual resolution depends on the browser/device.
 If camera startup reports a format/read error, acquisition retries the same
@@ -44,8 +49,10 @@ layout, with safe-area padding for phone notches and controls beside the preview
 on short landscape screens. The frame border follows the fitted video's actual
 dimensions; inset corner guides suggest leaving room around all four corners of
 the encoded picture. Guides and controls are never included in captured pixels.
-Preview layout follows changes in available space, including status text and
-retained near misses, without stretching or cropping the feed.
+Status text and retained near misses occupy a fixed-height, scrollable area below
+the controls. Updates do not move the preview or buttons; on short landscape
+screens, feedback scrolls within the existing controls column. Viewport changes
+refit the feed without stretching or cropping it.
 
 Device rotation updates the preferred camera dimensions on the current video
 track and cancels the old frame's search. If the browser cannot change the feed,

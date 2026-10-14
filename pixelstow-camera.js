@@ -2,8 +2,8 @@
 // decides whether a frame contains a complete, checksum-valid payload.
 (function () {
   class PixelStowCamera {
-    constructor({ importImage, report, working, changed, drawGuides, clearFeedback }) {
-      Object.assign(this, { importImage, report, working, changed, drawGuides, clearFeedback });
+    constructor({ importImage, report, working, changed, drawGuides, clearFeedback, prepareCapture }) {
+      Object.assign(this, { importImage, report, working, changed, drawGuides, clearFeedback, prepareCapture });
       this.session = null;
       this.devices = [];
       this.devicesKnown = false;
@@ -18,7 +18,6 @@
       this.captureCanvas = document.createElement("canvas");
       this.openButton = document.querySelector("#open-camera");
       this.sourceButton = document.querySelector("#camera-source");
-      this.photoButton = document.querySelector("#take-photo");
       this.input = document.querySelector("#camera-file");
       this.panel = document.querySelector("#camera-panel");
       this.title = document.querySelector("#camera-title");
@@ -45,7 +44,6 @@
       this.backgroundAvailable = typeof Worker !== "undefined" && ["https:", "http:"].includes(location.protocol);
       this.openButton.addEventListener("click", () => this.open());
       this.sourceButton.addEventListener("click", () => this.open("environment", "source"));
-      this.photoButton.addEventListener("click", () => this.takePhoto());
       this.nativePhotoButton.addEventListener("click", () => this.takePhoto(this.session?.purpose));
       this.input.addEventListener("change", () => {
         const file = this.input.files?.[0];
@@ -55,12 +53,28 @@
         if (file && !this.working()) this.importImage(file, "camera", sourceOnly ? { sourceOnly: true } : undefined);
       });
       this.input.addEventListener("cancel", () => { this.inputPurpose = "read"; });
-      this.captureButton.addEventListener("click", () => {
-        const session = this.session;
-        if (!session || session.handingOff || this.working()) return;
-        try { this.accept(session, this.captureFrame()); }
-        catch (error) { this.progress.textContent = error.message; }
+      this.captureButton.addEventListener("click", () => this.captureCurrent());
+      // Capture on a deliberate tap, never at the end of a drag or pinch.
+      this.view.addEventListener("pointerdown", (event) => {
+        if (!event.isPrimary || event.button !== 0) { this.viewTap = null; return; }
+        this.viewTap = { id: event.pointerId, x: event.clientX, y: event.clientY, at: Date.now(), session: this.session };
       });
+      this.view.addEventListener("pointermove", (event) => {
+        if (this.viewTap?.id === event.pointerId && Math.hypot(event.clientX - this.viewTap.x, event.clientY - this.viewTap.y) > 8)
+          this.viewTap = null;
+      });
+      this.view.addEventListener("pointerup", (event) => {
+        const tap = this.viewTap;
+        this.viewTap = null;
+        if (tap?.id === event.pointerId && tap.session === this.session && Date.now() - tap.at < 500) this.captureCurrent();
+      });
+      for (const type of ["pointercancel", "pointerleave"]) this.view.addEventListener(type, () => { this.viewTap = null; });
+      this.view.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        if (!event.repeat) this.captureCurrent();
+      });
+      this.view.addEventListener("click", (event) => { if (event.detail === 0) this.captureCurrent(); });
       this.useNearButton.addEventListener("click", () => {
         const session = this.session;
         if (session?.best && !session.handingOff && !this.working())
@@ -99,8 +113,7 @@
       this.video.addEventListener("loadedmetadata", () => this.sync());
       this.video.addEventListener("loadeddata", () => this.sync());
       this.video.addEventListener("resize", () => this.sync());
-      // Status wrapping and a retained near miss can change the space available
-      // to the preview without resizing the window.
+      // Refit when viewport or camera controls change size.
       if (typeof ResizeObserver !== "undefined") new ResizeObserver(() => this.layoutPreview()).observe(this.view);
       const viewportChanged = () => {
         this.layoutPreview();
@@ -117,7 +130,7 @@
       document.addEventListener("visibilitychange", () => {
         if (document.hidden && this.active) {
           this.close();
-          this.report("Camera closed while the page was away. Open camera to resume.");
+          this.report("Camera closed while the page was away. Tap Capture to resume.");
         }
       });
       this.sync();
@@ -125,19 +138,26 @@
 
     get active() { return Boolean(this.session || this.switchOperation); }
 
+    captureCurrent() {
+      const session = this.session;
+      if (!session?.ready || session.adjusting || session.handingOff || this.switchOperation || this.working() || this.video.readyState < 2) return;
+      // Keep audio permission preparation in the actual shutter/tap gesture.
+      this.prepareCapture?.();
+      try { this.accept(session, this.captureFrame()); }
+      catch (error) { this.progress.textContent = error.message; }
+    }
+
     takePhoto(purpose = "read") {
       if (this.working() || this.switchOperation || this.session?.handingOff) return;
-      // New photo is already showing the live source. Its shutter should use
+      // Photo is already showing the live source. Its shutter should use
       // that frame directly, without opening the phone's separate capture UI.
       if (this.session?.purpose === "source") {
-        try { this.accept(this.session, this.captureFrame()); }
-        catch (error) { this.progress.textContent = error.message; }
+        this.captureCurrent();
         return;
       }
       if (!this.nativePhotoCapture) {
         if (this.active) {
-          try { this.accept(this.session, this.captureFrame()); }
-          catch (error) { this.progress.textContent = error.message; }
+          this.captureCurrent();
         } else this.open("environment", purpose, { manualCapture: true });
         return;
       }
@@ -318,15 +338,17 @@
       this.panel.hidden = !session;
       this.openButton.disabled = locked || this.active;
       this.sourceButton.disabled = locked || this.active;
-      this.photoButton.disabled = this.input.disabled = locked || Boolean(this.switchOperation || session?.handingOff);
+      this.input.disabled = locked || Boolean(this.switchOperation || session?.handingOff);
       this.nativePhotoButton.disabled = locked || Boolean(this.switchOperation || session?.handingOff);
       this.captureButton.disabled = locked || !ready || Boolean(this.switchOperation || session?.handingOff);
+      this.view.setAttribute("aria-disabled", String(this.captureButton.disabled));
       const source = session?.purpose === "source";
       this.title.textContent = source ? "Camera source photo" : session?.manualCapture ? "Camera photo" : "Camera scanner";
       this.help.textContent = source ? "Frame a new photo to put your message and files inside. The whole outlined view is captured."
         : "Keep all four picture corners inside the guides. Move closer and hold steady.";
       if (session?.deviceLabel) this.help.textContent += " Camera: " + session.deviceLabel + ".";
       this.captureButton.textContent = source ? "Take source photo" : "Capture and read";
+      this.view.setAttribute("aria-label", source ? "Take a source photo from the live camera preview" : "Capture and read the live camera preview");
       this.nativePhotoButton.textContent = "Take photo with phone camera";
       this.nativePhotoButton.hidden = source || !this.nativePhotoCapture;
       this.target.hidden = source;
@@ -348,9 +370,8 @@
       if (this.session || (this.switchOperation && this.switchOperation !== options.switchOperation) || this.working()) return;
       if (!options.switchOperation) this.failedDevices.clear();
       if (!navigator.mediaDevices?.getUserMedia) {
-        if (purpose === "source" && this.nativePhotoCapture) { this.takePhoto("source"); return; }
-        this.report("Live camera needs a supported browser on HTTPS or localhost. " +
-          (this.nativePhotoCapture ? "Use Take photo instead." : "Use Choose image to load a saved photo."), true);
+        if (this.nativePhotoCapture) { this.takePhoto(purpose); return; }
+        this.report("Live camera needs a supported browser on HTTPS or localhost. Use Browse to load a saved photo.", true);
         return;
       }
       let deviceId = options.deviceId === undefined ? this.preferredDeviceId : options.deviceId;
@@ -394,7 +415,7 @@
         track.addEventListener("ended", () => {
           if (this.session !== session || session.handingOff) return;
           this.close();
-          this.report("Camera disconnected. Open camera again or use Take photo.", true);
+          this.report("Camera disconnected. Tap Capture to try again, or Browse to load a saved photo.", true);
         });
         this.video.muted = true;
         this.video.playsInline = true;
@@ -428,10 +449,10 @@
           : "Close other apps and preview tabs using the camera, then retry.";
         const message = error?.name === "NotAllowedError" ? "Camera permission was denied. Allow camera access in your browser or choose a saved image."
           : ["NotFoundError", "OverconstrainedError"].includes(error?.name) && options.deviceId ? "The selected camera is unavailable. Reopen the camera or choose a saved image."
-          : error?.name === "NotFoundError" ? "No camera is available. Choose an image or use Take photo on a phone."
+          : error?.name === "NotFoundError" ? "No camera is available. Use Browse to load a saved photo."
           : ["NotReadableError", "AbortError"].includes(error?.name)
             ? "The browser could not start this camera. " + closePreviews + (this.nativePhotoCapture
-              ? " Use Take photo or choose a saved image."
+              ? " Use Browse to load a saved image."
               : " If it still fails, use OBS Virtual Camera or choose a saved image.")
             : "Could not start the camera. Close other apps using the camera or choose a saved image.";
         const clean = value => String(value || "").replace(/[\x00-\x1f\x7f]/g, " ").slice(0, 200);
@@ -645,7 +666,7 @@
         if (this.session !== session || controller.signal.aborted) return;
         session.paused = true;
         this.cancelSearches(session);
-        this.progress.textContent = (error?.message || "The camera scan could not finish.") + " Scanning paused; resume or use Take photo.";
+        this.progress.textContent = (error?.message || "The camera scan could not finish.") + " Scanning paused; resume or tap Capture and read.";
         this.sync();
       } finally {
         session.scanning = false;
@@ -732,7 +753,7 @@
       } catch (error) {
         if (this.session !== session) return;
         this.close();
-        this.report(error?.message || "Could not open the captured frame. Try Take photo.", true);
+        this.report(error?.message || "Could not open the captured frame. Tap Capture to try again.", true);
       }
     }
   }

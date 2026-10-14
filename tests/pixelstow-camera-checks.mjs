@@ -19,6 +19,8 @@ const server = http.createServer(async (req, res) => {
 });
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const url = 'http://127.0.0.1:' + server.address().port + '/pixelstow.html';
+const screenshots = path.join(root, 'artifacts', 'camera-checks');
+await fs.mkdir(screenshots, { recursive: true });
 let browser;
 try {
   browser = await chromium.launch({ headless: true,
@@ -46,7 +48,47 @@ try {
     camera.importImage = (file, origin, captured) => { importedCaptures.push({ file, origin, captured }); return importImage(file, origin, captured); };
   });
   const ready = () => page.waitForFunction(() => camera.session?.ready && !document.querySelector('#capture-frame').disabled);
-  await page.locator('#take-photo').click(); await ready();
+  assert.deepEqual(await page.locator('.image-actions > button').allTextContents().then(labels => labels.map(text => text.trim())), ['Browse', 'Paste', '', 'Capture', 'Photo']);
+  assert(await page.locator('#full-preview').isDisabled());
+  await page.evaluate(() => {
+    window.clipboardReads = 0;
+    navigator.clipboard.read = async () => { clipboardReads++; throw new DOMException('Synthetic empty clipboard', 'NotAllowedError'); };
+  });
+  // The Image heading used to be a full-width file label. Gaps and headings
+  // must be inert; explicit Browse/Paste and actual keyboard paste still work.
+  const label = await page.locator('.image-label').boundingBox();
+  await page.mouse.click(label.x + label.width - 4, label.y + label.height / 2);
+  const browse = await page.locator('#choose-image').boundingBox(), paste = await page.locator('#paste-image').boundingBox();
+  await page.mouse.click((browse.x + browse.width + paste.x) / 2, browse.y + browse.height / 2);
+  assert.equal(filePickers, 0); assert.equal(await page.evaluate(() => clipboardReads), 0);
+  assert(!(await page.locator('#paste-dialog').isVisible()));
+  const browsePicker = page.waitForEvent('filechooser');
+  await page.locator('#choose-image').click(); await (await browsePicker).setFiles([]);
+  assert.equal(filePickers, 1); filePickers = 0;
+  await page.locator('#paste-image').click(); assert(await page.locator('#paste-dialog').isVisible());
+  await page.locator('#paste-close').click(); assert.equal(await page.evaluate(() => clipboardReads), 1);
+  console.log('PASS: compact actions open Browse and Paste explicitly; blank row space and the Image heading do nothing');
+
+  const stableFeedback = async target => {
+    const result = await target.evaluate(() => {
+      const progress = camera.progress.textContent, signature = camera.signature.textContent, hidden = camera.nearMiss.hidden;
+      const boxes = () => ['#camera-view', '#camera-video', '#capture-frame', '#switch-camera'].map(selector => {
+        const { x, y, width, height } = document.querySelector(selector).getBoundingClientRect(); return { x, y, width, height };
+      });
+      camera.progress.textContent = ''; camera.signature.textContent = ''; camera.nearMiss.hidden = true;
+      const empty = boxes();
+      camera.progress.textContent = 'Hold steady.'; const short = boxes();
+      camera.progress.textContent = 'Recovery markers were found, but the payload did not pass its checks. '.repeat(20);
+      camera.signature.textContent = 'Eight markers, partial geometry, waiting for a sharper frame. '.repeat(12);
+      camera.nearMiss.hidden = false;
+      const long = boxes(), feedback = document.querySelector('.camera-feedback');
+      const scrollable = feedback.scrollHeight > feedback.clientHeight;
+      camera.progress.textContent = progress; camera.signature.textContent = signature; camera.nearMiss.hidden = hidden;
+      return { empty, short, long, scrollable };
+    });
+    assert.deepEqual(result.empty, result.short); assert.deepEqual(result.empty, result.long); assert(result.scrollable);
+  };
+  await page.locator('#open-camera').click(); await ready();
   const first = await page.evaluate(() => {
     window.firstTracks = camera.session.stream.getTracks();
     return { device: camera.session.deviceId, manual: camera.session.manualCapture, paused: camera.session.paused,
@@ -59,9 +101,12 @@ try {
     navigator.mediaDevices.enumerateDevices = async () => (await enumerate()).map(device =>
       device.deviceId === unavailableDeviceId ? { kind: 'videoinput', deviceId: device.deviceId, label: 'OBS Virtual Camera' } : device);
   });
-  assert(first.manual && first.paused); assert.equal(filePickers, 0);
+  assert(!first.manual && !first.paused); assert.equal(filePickers, 0);
   assert(!(await page.locator('#camera-take-photo').isVisible()));
-  assert(!(await page.locator('#pause-camera').isVisible()));
+  assert(await page.locator('#pause-camera').isVisible());
+  await stableFeedback(page);
+  await page.screenshot({ path: path.join(screenshots, 'desktop-scanner.png') });
+  await page.locator('#pause-camera').click();
   await page.evaluate(() => { camera.session.scanAfter = 0; camera.scan(camera.session); });
   assert.equal(await page.evaluate(() => markerCalls), 0);
   await page.locator('#switch-camera').click(); await ready();
@@ -71,12 +116,12 @@ try {
   assert.notEqual(second.device, first.device);
   assert.equal(second.request.video.deviceId.exact, second.device);
   assert(!second.request.video.facingMode); assert.equal(second.request.audio, false);
-  assert(second.stopped && second.manual);
+  assert(second.stopped && !second.manual);
   assert((await page.locator('#camera-help').textContent()).includes(second.label));
   await page.locator('#close-camera').click();
-  await page.locator('#take-photo').click(); await ready();
+  await page.locator('#open-camera').click(); await ready();
   assert.equal(await page.evaluate(() => camera.session.deviceId), second.device);
-  await page.locator('#capture-frame').click();
+  await page.locator('#camera-view').click();
   await page.waitForFunction(() => !camera.active && current && !busy);
   const photo = await page.evaluate(async () => {
     const { file, origin, captured } = importedCaptures.at(-1), png = await PixelStow.decodePng(new Uint8Array(await file.arrayBuffer()));
@@ -85,8 +130,9 @@ try {
   });
   assert.equal(photo.origin, 'camera'); assert.equal(photo.sourceOnly, false);
   assert(photo.sameBuffer && photo.bytesEqual && photo.width > 0 && photo.height > 0);
+  assert.equal(await page.evaluate(() => importedCaptures.length), 1, 'One preview tap imports only one frame');
   assert.equal(filePickers, 0);
-  console.log('PASS: desktop Take photo opens manual video capture; exact device switching changes cameras, stops old tracks and remembers the selection; captured PNG preserves the video raster');
+  console.log('PASS: Capture offers scanning and a manual shutter; exact device switching changes cameras, stops old tracks and remembers the selection; captured PNG preserves the video raster');
 
   await page.locator('#camera-source').click(); await ready();
   await page.locator('#switch-camera').click(); await ready();
@@ -114,7 +160,7 @@ try {
       return acquire(constraints);
     };
   });
-  await page.locator('#take-photo').click(); await ready();
+  await page.locator('#open-camera').click(); await ready();
   assert(await page.evaluate(() => !cameraRequests.at(-1).video.deviceId));
   // Exhausting every candidate, including the previous camera, stops once.
   await page.evaluate(() => {
@@ -134,7 +180,7 @@ try {
     window.realAcquire = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
     PixelStow.scanMarkers = async () => ({ found: false, markers: [], candidates: [] });
   });
-  await compatibility.locator('#take-photo').click();
+  await compatibility.locator('#open-camera').click();
   await compatibility.waitForFunction(() => camera.session?.ready && !document.querySelector('#capture-frame').disabled);
   // Some drivers reject the advertised high-resolution format, but permit the
   // same exact device at its native default. Exercise that path on real video.
@@ -186,7 +232,7 @@ try {
   // Reopening makes failed devices eligible again (e.g. OBS is now running).
   await compatibility.locator('#close-camera').click();
   await compatibility.evaluate(() => { navigator.mediaDevices.getUserMedia = constraints => realAcquire(constraints); });
-  await compatibility.locator('#take-photo').click();
+  await compatibility.locator('#open-camera').click();
   await compatibility.waitForFunction(() => camera.session?.ready && !document.querySelector('#capture-frame').disabled);
   assert.equal(await compatibility.evaluate(() => camera.failedDevices.size), 0);
   await compatibility.evaluate(() => {
@@ -227,7 +273,7 @@ try {
   assert(await compatibility.evaluate(() => !camera.active && !camera.switchOperation && compatibilityRequests.length === 1 && !document.querySelector('#camera-panel').open));
   console.log('PASS: closing while switching prevents late failures from trying subsequent devices');
   await compatibility.evaluate(() => { navigator.mediaDevices.getUserMedia = constraints => realAcquire(constraints); });
-  await compatibility.locator('#take-photo').click();
+  await compatibility.locator('#open-camera').click();
   await compatibility.waitForFunction(() => camera.session?.ready && !document.querySelector('#capture-frame').disabled);
   await compatibility.evaluate(() => {
     compatibilityRequests.length = 0;
@@ -247,7 +293,7 @@ try {
       compatibilityRequests.push(constraints); throw new DOMException('Synthetic denied', 'NotAllowedError');
     };
   });
-  await compatibility.locator('#take-photo').click();
+  await compatibility.locator('#open-camera').click();
   await compatibility.waitForFunction(() => !camera.active && document.querySelector('#status').textContent.includes('NotAllowedError'));
   assert(await compatibility.evaluate(() => compatibilityRequests.length === 1));
   console.log('PASS: exhausted camera retries report the browser error; denied permission is reported without retries');
@@ -257,7 +303,7 @@ try {
       compatibilityRequests.push(constraints); return new Promise((resolve, reject) => { window.rejectPendingCamera = reject; });
     };
   });
-  await compatibility.locator('#take-photo').click();
+  await compatibility.locator('#open-camera').click();
   await compatibility.waitForFunction(() => Boolean(window.rejectPendingCamera));
   await compatibility.locator('#close-camera').click();
   await compatibility.evaluate(async () => {
@@ -274,7 +320,10 @@ try {
   phone.on('filechooser', () => phoneFilePickers++);
   await phone.goto(url);
   await phone.evaluate(() => { PixelStow.inspect = async () => ({ found: false }); });
-  const [picker] = await Promise.all([phone.waitForEvent('filechooser'), phone.locator('#take-photo').click()]);
+  await phone.locator('#open-camera').click();
+  await phone.waitForFunction(() => camera.session?.ready && !document.querySelector('#capture-frame').disabled);
+  await stableFeedback(phone);
+  const [picker] = await Promise.all([phone.waitForEvent('filechooser'), phone.locator('#camera-take-photo').click()]);
   assert(!await phone.evaluate(() => camera.active));
   const bytes = Buffer.from(await phone.evaluate(async () => {
     const pixels = new Uint8Array(640 * 480 * 4); for (let i = 0; i < pixels.length; i += 4) pixels.set([60, 120, 160, 255], i);
@@ -312,6 +361,14 @@ try {
   await phone.waitForFunction(() => camera.session?.ready && !document.querySelector('#capture-frame').disabled);
   assert(!(await phone.locator('#camera-take-photo').isVisible()));
   assert.equal(await phone.locator('#capture-frame').textContent(), 'Take source photo');
+  await stableFeedback(phone);
+  await phone.setViewportSize({ width: 844, height: 390 });
+  await phone.waitForFunction(() => camera.session?.ready && !camera.session.portrait && !camera.session.adjusting && !document.querySelector('#capture-frame').disabled);
+  await stableFeedback(phone);
+  await phone.screenshot({ path: path.join(screenshots, 'phone-landscape.png') });
+  await phone.setViewportSize({ width: 390, height: 844 });
+  await phone.waitForFunction(() => camera.session?.ready && camera.session.portrait && !camera.session.adjusting && !document.querySelector('#capture-frame').disabled);
+  await phone.screenshot({ path: path.join(screenshots, 'phone-portrait.png') });
   await phone.evaluate(() => {
     window.phoneTracks = camera.session.stream.getTracks();
     const importImage = camera.importImage;
@@ -320,16 +377,25 @@ try {
       return importImage(file, origin, captured);
     };
   });
-  await phone.locator('#capture-frame').click();
+  const live = await phone.locator('#camera-view').boundingBox(), tapX = live.x + live.width / 2, tapY = live.y + live.height / 2;
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ id: 1, x: tapX, y: tapY }] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ id: 1, x: tapX + 40, y: tapY + 40 }] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  assert(await phone.evaluate(() => camera.active && !window.phoneSourceCapture));
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ id: 1, x: tapX - 20, y: tapY }] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ id: 1, x: tapX - 20, y: tapY }, { id: 2, x: tapX + 20, y: tapY }] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  assert(await phone.evaluate(() => camera.active && !window.phoneSourceCapture));
+  await phone.touchscreen.tap(tapX, tapY);
   await phone.waitForFunction(() => Boolean(window.phoneSourceCapture) && !busy && !camera.active);
   assert(await phone.evaluate(() => phoneTracks.every(track => track.readyState === 'ended') &&
     phoneSourceCapture.sourceOnly && current.pixels === phoneSourceCapture.image.pixels));
-  assert.equal(phoneFilePickers, 1, 'New photo must not open another native camera/picker or confirmation screen');
+  assert.equal(phoneFilePickers, 1, 'Photo must not open another native camera/picker or confirmation screen');
   assert(await phone.locator('#preview').isVisible());
   assert(await phone.locator('#composition').isVisible());
   assert(await phone.locator('#scale-source').isChecked());
   assert.equal(await phone.evaluate(() => camera.inputPurpose), 'read');
-  console.log('PASS: phone New photo has one direct source shutter, imports the live raster into the preview/composer, stops tracks and enables sizing without a native picker; reader Take photo keeps its native route');
+  console.log('PASS: preview taps capture a source photo directly while drags do nothing; Capture retains the native phone camera option; long status/near-miss feedback never moves controls or preview on desktop, portrait or landscape');
   assert.deepEqual(errors, []);
 } finally {
   await browser?.close(); await new Promise(resolve => server.close(resolve));
