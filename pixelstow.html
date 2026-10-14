@@ -870,13 +870,13 @@
   <script src="./pixelstow-spectrum.js?v=20261014-v5-default1"></script>
   <script src="./pixelstow-transform.js?v=20261014-v5-default1"></script>
   <script src="./pixelstow-lattice.js?v=20261013-marker-follow2"></script>
-  <script src="./pixelstow.js?v=20261014-source-sizing1"></script>
+  <script src="./pixelstow.js?v=20261014-camera-devices1"></script>
   <script src="./pixelstow-sizing.js?v=20261014-source-sizing1"></script>
   <script src="./pixelstow-export.js?v=20261011-exports"></script>
   <script src="./pixelstow-voice.js?v=20261013-voice-clock2"></script>
   <script src="./pixelstow-media.js?v=20261014-margin-ui1"></script>
   <script src="./pixelstow-sharing.js?v=20261011-png-clipboard"></script>
-  <script src="./pixelstow-camera.js?v=20261014-quality-range1"></script>
+  <script src="./pixelstow-camera.js?v=20261014-camera-devices1"></script>
   <script src="./pixelstow-preview.js?v=20261014-mobile-layout1"></script>
   <script>
     const fileInput = document.querySelector("#file");
@@ -1516,15 +1516,21 @@
       const markerCorners = (marker) => {
         const w = marker.patchWidth || result.geometry?.patchWidth || 72;
         const h = marker.patchHeight || result.geometry?.patchHeight || 48;
-        return [[0, 0], [w - 1, 0], [w - 1, h - 1], [0, h - 1]].map(([x, y]) => PixelStowTransform.point(marker.matrix, x, y));
+        // Detector transforms map pixel centres. Draw the outer pixel edges,
+        // then convert centre coordinates to the canvas's edge coordinates.
+        return [[-.5, -.5], [w - .5, -.5], [w - .5, h - .5], [-.5, h - .5]].map(([x, y]) => {
+          const point = PixelStowTransform.point(marker.matrix, x, y);
+          return { x: point.x + .5, y: point.y + .5 };
+        });
       };
-      for (const marker of result.geometry?.expectedMarkers || []) {
-        if (result.markers?.some((m) => m.id === marker.id)) continue;
+      const confirmed = [...(result.markers || []), ...(result.geometry?.referenceMarkers || [])];
+      for (const marker of [...(result.geometry?.expectedMarkers || []), ...(result.geometry?.expectedReferenceMarkers || [])]) {
+        if (confirmed.some((m) => m.id === marker.id)) continue;
         ctx.setLineDash([ctx.lineWidth * 3, ctx.lineWidth * 3]);
         path(markerCorners(marker), "#a8b7c8");
       }
       ctx.setLineDash([]);
-      for (const marker of [...(result.markers || []), ...(result.geometry?.referenceMarkers || [])]) {
+      for (const marker of confirmed) {
         const corners = markerCorners(marker);
         path(corners, marker.verification === "reference" ? "#8cebed" : marker.verification === "pattern" ? "#a9f5b5" : "#f5e69e");
         ctx.fillText(String(marker.id), corners[0].x, corners[0].y - 4);

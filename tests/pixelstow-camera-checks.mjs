@@ -1,0 +1,138 @@
+// Browser camera acquisition only: Chrome's synthetic cameras, never hardware.
+// npm-installed Playwright is the default; a bundled module path can be supplied.
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import http from 'node:http';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+const root = fileURLToPath(new URL('../', import.meta.url));
+const playwright = process.env.PIXELSTOW_PLAYWRIGHT;
+const { chromium } = await import(playwright ? pathToFileURL(playwright).href : 'playwright');
+const server = http.createServer(async (req, res) => {
+  try {
+    const file = path.resolve(root, '.' + decodeURIComponent(new URL(req.url, 'http://localhost').pathname));
+    if (!file.startsWith(root)) throw Error('Outside test directory');
+    res.setHeader('Content-Type', file.endsWith('.js') ? 'text/javascript' : file.endsWith('.html') ? 'text/html' : 'application/octet-stream');
+    res.end(await fs.readFile(file));
+  } catch { res.writeHead(404).end(); }
+});
+await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+const url = 'http://127.0.0.1:' + server.address().port + '/pixelstow.html';
+let browser;
+try {
+  browser = await chromium.launch({ headless: true,
+    ...(process.env.PIXELSTOW_CHROME ? { executablePath: process.env.PIXELSTOW_CHROME } : {}),
+    args: ['--disable-gpu', '--use-fake-device-for-media-stream=device-count=2', '--use-fake-ui-for-media-stream'] });
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, permissions: ['camera'] });
+  const page = await context.newPage(), errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  let filePickers = 0;
+  page.on('filechooser', () => filePickers++);
+  await page.goto(url);
+  await page.evaluate(() => {
+    window.cameraRequests = []; window.markerCalls = 0; window.importedCaptures = [];
+    const acquire = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+    navigator.mediaDevices.getUserMedia = constraints => { cameraRequests.push(constraints); return acquire(constraints); };
+    // The tests cover acquisition and import routing, not optical recovery.
+    PixelStow.scanMarkers = async () => { markerCalls++; return { found: false, markers: [], candidates: [] }; };
+    PixelStow.inspect = async () => ({ found: false });
+    const importImage = camera.importImage;
+    camera.importImage = (file, origin, captured) => { importedCaptures.push({ file, origin, captured }); return importImage(file, origin, captured); };
+  });
+  const ready = () => page.waitForFunction(() => camera.session?.ready && !document.querySelector('#capture-frame').disabled);
+  await page.locator('#take-photo').click(); await ready();
+  const first = await page.evaluate(() => {
+    window.firstTracks = camera.session.stream.getTracks();
+    return { device: camera.session.deviceId, manual: camera.session.manualCapture, paused: camera.session.paused,
+      count: camera.devices.length, facing: camera.session.facing };
+  });
+  assert.equal(first.count, 2, 'Chrome must expose two synthetic cameras');
+  assert(first.manual && first.paused); assert.equal(filePickers, 0);
+  assert(!(await page.locator('#camera-take-photo').isVisible()));
+  assert(!(await page.locator('#pause-camera').isVisible()));
+  await page.evaluate(() => { camera.session.scanAfter = 0; camera.scan(camera.session); });
+  assert.equal(await page.evaluate(() => markerCalls), 0);
+  await page.locator('#switch-camera').click(); await ready();
+  const second = await page.evaluate(() => ({ device: camera.session.deviceId, request: cameraRequests.at(-1),
+    stopped: firstTracks.every(track => track.readyState === 'ended'), manual: camera.session.manualCapture,
+    label: camera.session.stream.getVideoTracks()[0].label }));
+  assert.notEqual(second.device, first.device);
+  assert.equal(second.request.video.deviceId.exact, second.device);
+  assert(!second.request.video.facingMode); assert.equal(second.request.audio, false);
+  assert(second.stopped && second.manual);
+  assert((await page.locator('#camera-help').textContent()).includes(second.label));
+  await page.locator('#close-camera').click();
+  await page.locator('#take-photo').click(); await ready();
+  assert.equal(await page.evaluate(() => camera.session.deviceId), second.device);
+  await page.locator('#capture-frame').click();
+  await page.waitForFunction(() => !camera.active && current && !busy);
+  const photo = await page.evaluate(async () => {
+    const { file, origin, captured } = importedCaptures.at(-1), png = await PixelStow.decodePng(new Uint8Array(await file.arrayBuffer()));
+    return { origin, sourceOnly: captured.sourceOnly, sameBuffer: current.pixels === captured.image.pixels,
+      width: png.width, height: png.height, bytesEqual: png.pixels.every((value, i) => value === captured.image.pixels[i]) };
+  });
+  assert.equal(photo.origin, 'camera'); assert.equal(photo.sourceOnly, false);
+  assert(photo.sameBuffer && photo.bytesEqual && photo.width > 0 && photo.height > 0);
+  assert.equal(filePickers, 0);
+  console.log('PASS: desktop Take photo opens manual video capture; exact device switching changes cameras, stops old tracks and remembers the selection; captured PNG preserves the video raster');
+
+  await page.locator('#camera-source').click(); await ready();
+  await page.locator('#switch-camera').click(); await ready();
+  assert.equal(await page.evaluate(() => camera.session.purpose), 'source');
+  await page.locator('#capture-frame').click(); await page.waitForFunction(() => !camera.active && !busy);
+  assert(await page.evaluate(() => importedCaptures.at(-1).captured.sourceOnly));
+  assert(await page.locator('#scale-source').isChecked());
+  assert.equal(await page.evaluate(() => markerCalls), 0);
+  console.log('PASS: switching preserves source capture mode and automatic source sizing without marker scanning');
+
+  // A temporarily missing remembered device falls back on the next ordinary open.
+  await page.evaluate(() => {
+    const acquire = navigator.mediaDevices.getUserMedia;
+    let fail = true;
+    navigator.mediaDevices.getUserMedia = constraints => {
+      if (fail && constraints.video.deviceId) { fail = false; cameraRequests.push(constraints); throw new DOMException('Test missing camera', 'OverconstrainedError'); }
+      return acquire(constraints);
+    };
+  });
+  await page.locator('#take-photo').click(); await ready();
+  assert(await page.evaluate(() => !cameraRequests.at(-1).video.deviceId));
+  // An explicit failed switch must not quietly return to the previous camera.
+  await page.evaluate(() => {
+    navigator.mediaDevices.getUserMedia = async constraints => {
+      cameraRequests.push(constraints); throw new DOMException('Test unavailable camera', 'OverconstrainedError');
+    };
+  });
+  await page.locator('#switch-camera').click();
+  await page.waitForFunction(() => !camera.active && document.querySelector('#status').textContent.includes('selected camera'));
+  assert.equal(filePickers, 0);
+  console.log('PASS: unplugged remembered camera permits a fresh default; unavailable explicit switch reports failure rather than reopening the wrong camera');
+
+  const mobile = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, permissions: ['camera'],
+    userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 Version/26.0 Mobile/15E148 Safari/604.1' });
+  const phone = await mobile.newPage(); phone.on('pageerror', error => errors.push(error.message));
+  await phone.goto(url);
+  await phone.evaluate(() => { PixelStow.inspect = async () => ({ found: false }); });
+  const [picker] = await Promise.all([phone.waitForEvent('filechooser'), phone.locator('#take-photo').click()]);
+  assert(!await phone.evaluate(() => camera.active));
+  const bytes = Buffer.from(await phone.evaluate(async () => {
+    const pixels = new Uint8Array(640 * 480 * 4); for (let i = 0; i < pixels.length; i += 4) pixels.set([60, 120, 160, 255], i);
+    return Array.from(new Uint8Array(await (await PixelStow.writePng(pixels, 640, 480)).arrayBuffer()));
+  }));
+  await picker.setFiles({ name: 'public-phone-photo.png', mimeType: 'image/png', buffer: bytes });
+  await phone.waitForFunction(() => current && !busy);
+  assert.equal(await phone.evaluate(() => camera.inputPurpose), 'read');
+  await phone.locator('#camera-source').click();
+  await phone.waitForFunction(() => camera.session?.ready && !document.querySelector('#capture-frame').disabled);
+  await phone.evaluate(() => { window.phoneTracks = camera.session.stream.getTracks(); });
+  const [sourcePicker] = await Promise.all([phone.waitForEvent('filechooser'), phone.locator('#camera-take-photo').click()]);
+  assert(await phone.evaluate(() => !camera.active && phoneTracks.every(track => track.readyState === 'ended')));
+  await sourcePicker.setFiles({ name: 'public-phone-source.png', mimeType: 'image/png', buffer: bytes });
+  await phone.waitForFunction(() => current?.file.name === 'public-phone-source.png' && !busy);
+  assert(await phone.locator('#scale-source').isChecked());
+  assert.equal(await phone.evaluate(() => camera.inputPurpose), 'read');
+  console.log('PASS: phone Take photo keeps its native capture/picker route; source photo shortcut stops live tracks and preserves encoding purpose');
+  assert.deepEqual(errors, []);
+} finally {
+  await browser?.close(); await new Promise(resolve => server.close(resolve));
+}

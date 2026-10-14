@@ -5,6 +5,14 @@
     constructor({ importImage, report, working, changed, drawGuides, clearFeedback }) {
       Object.assign(this, { importImage, report, working, changed, drawGuides, clearFeedback });
       this.session = null;
+      this.devices = [];
+      this.devicesKnown = false;
+      this.preferredDeviceId = null;
+      // Desktop file inputs ignore capture and open a file picker. Keep the
+      // native still-camera route for phones/tablets, including desktop-UA iPads.
+      this.nativePhotoCapture = Boolean(navigator.userAgentData?.mobile ||
+        /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+        (/Macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1));
       this.captureCanvas = document.createElement("canvas");
       this.openButton = document.querySelector("#open-camera");
       this.sourceButton = document.querySelector("#camera-source");
@@ -67,12 +75,11 @@
           : "View rotated. Keep all four picture corners inside the guides and hold steady.";
         this.schedule(session, 900);
       });
-      this.switchButton.addEventListener("click", () => {
-        if (!this.session || this.session.handingOff || this.working()) return;
-        const facing = this.session.facing === "environment" ? "user" : "environment";
-        const purpose = this.session.purpose;
-        this.close();
-        this.open(facing, purpose);
+      this.switchButton.addEventListener("click", () => this.switchCamera());
+      navigator.mediaDevices?.addEventListener?.("devicechange", async () => {
+        if (!this.active) return;
+        await this.refreshDevices();
+        this.sync();
       });
       this.closeButton.addEventListener("click", () => {
         this.close();
@@ -117,10 +124,57 @@
 
     takePhoto(purpose = "read") {
       if (this.working() || this.session?.handingOff) return;
+      if (!this.nativePhotoCapture) {
+        if (this.active) {
+          try { this.accept(this.session, this.captureFrame()); }
+          catch (error) { this.progress.textContent = error.message; }
+        } else this.open("environment", purpose, { manualCapture: true });
+        return;
+      }
       this.close();
       this.inputPurpose = purpose;
       this.input.value = "";
       this.input.click(); // Remain in the user gesture for iPhone's picker.
+    }
+
+    async refreshDevices() {
+      if (!navigator.mediaDevices?.enumerateDevices) return;
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const ids = new Set();
+        this.devices = devices.filter(device => {
+          if (device.kind !== "videoinput" || !device.deviceId || ids.has(device.deviceId)) return false;
+          ids.add(device.deviceId);
+          return true;
+        });
+        this.devicesKnown = true;
+      } catch { /* A permitted video stream remains usable without enumeration. */ }
+    }
+
+    async switchCamera() {
+      const session = this.session;
+      if (!session?.ready || session.adjusting || session.handingOff || this.working()) return;
+      session.adjusting = true;
+      clearTimeout(session.timer);
+      this.cancelSearches(session, true);
+      this.progress.textContent = "Switching camera…";
+      this.sync();
+      await this.refreshDevices();
+      if (this.session !== session) return;
+      const index = this.devices.findIndex(device => device.deviceId === session.deviceId);
+      const next = this.devices.length > 1 ? this.devices[(index + 1) % this.devices.length] : null;
+      if (!next && !this.nativePhotoCapture) {
+        session.adjusting = false;
+        this.progress.textContent = "No other camera is available to this browser.";
+        this.sync();
+        this.schedule(session, 900);
+        return;
+      }
+      const facing = session.facing === "environment" ? "user" : "environment";
+      const options = { deviceId: next?.deviceId || null, manualCapture: session.manualCapture, paused: session.paused };
+      const purpose = session.purpose;
+      this.close();
+      await this.open(facing, purpose, options);
     }
 
     isPortrait() {
@@ -131,8 +185,9 @@
       return window.matchMedia("(orientation: portrait)").matches;
     }
 
-    videoConstraints(facing, portrait = this.isPortrait()) {
-      return { facingMode: { ideal: facing }, width: { ideal: portrait ? 1920 : 2560 },
+    videoConstraints(facing, portrait = this.isPortrait(), deviceId = null) {
+      return { ...(deviceId ? { deviceId: { exact: deviceId } } : { facingMode: { ideal: facing } }),
+        width: { ideal: portrait ? 1920 : 2560 },
         height: { ideal: portrait ? 2560 : 1920 }, aspectRatio: { ideal: portrait ? 3 / 4 : 4 / 3 } };
     }
 
@@ -166,7 +221,7 @@
       this.sync();
       try {
         const track = session.stream?.getVideoTracks()[0];
-        await track?.applyConstraints(this.videoConstraints(session.facing, portrait));
+        await track?.applyConstraints(this.videoConstraints(session.facing, portrait, session.deviceId));
       } catch {
         // Ideals are advisory. Retain a usable feed if the camera cannot change
         // its format; guides still reflect it and Rotate view remains available.
@@ -175,6 +230,7 @@
         if (this.session === session && !session.handingOff) {
           session.portrait = portrait;
           this.progress.textContent = session.purpose === "source" ? "Camera ready. Frame your source photo, then tap Use photo for encoding."
+            : session.manualCapture ? "Camera ready. Frame your picture, then tap Capture and read."
             : session.paused ? "Scanning paused. Reframe, then resume or capture and read."
             : "Camera ready. Keep all four picture corners inside the guides and hold steady…";
           this.sync();
@@ -195,29 +251,38 @@
       this.nativePhotoButton.disabled = locked || Boolean(session?.handingOff);
       this.captureButton.disabled = locked || !ready || Boolean(session?.handingOff);
       const source = session?.purpose === "source";
-      this.title.textContent = source ? "Camera source photo" : "Camera scanner";
+      this.title.textContent = source ? "Camera source photo" : session?.manualCapture ? "Camera photo" : "Camera scanner";
       this.help.textContent = source ? "Frame a new photo to put your message and files inside. The whole outlined view is captured."
         : "Keep all four picture corners inside the guides. Move closer and hold steady.";
+      if (session?.deviceLabel) this.help.textContent += " Camera: " + session.deviceLabel + ".";
       this.captureButton.textContent = source ? "Use photo for encoding" : "Capture and read";
       this.nativePhotoButton.textContent = source ? "Take source photo with phone camera" : "Take photo with phone camera";
+      this.nativePhotoButton.hidden = !this.nativePhotoCapture;
       this.target.hidden = source;
       this.signature.hidden = source;
-      this.pauseButton.hidden = source || !this.backgroundAvailable;
+      this.pauseButton.hidden = source || Boolean(session?.manualCapture) || !this.backgroundAvailable;
       this.pauseButton.disabled = locked || !session?.ready || !this.backgroundAvailable || Boolean(session?.handingOff);
       this.pauseButton.textContent = session?.paused ? "Resume scanning" : "Pause scanning";
-      this.switchButton.disabled = this.rotateButton.disabled = locked || !ready || Boolean(session?.handingOff);
+      this.rotateButton.disabled = locked || !ready || Boolean(session?.handingOff);
+      this.switchButton.disabled = this.rotateButton.disabled || (!this.nativePhotoCapture && this.devicesKnown && this.devices.length < 2);
+      const next = this.devices.length > 1 ? this.devices[(this.devices.findIndex(device => device.deviceId === session?.deviceId) + 1) % this.devices.length] : null;
+      this.switchButton.title = next?.label ? "Switch to " + next.label : this.switchButton.disabled && ready
+        ? "No other camera is available to this browser" : "Switch camera";
       this.useNearButton.disabled = locked || !session?.best || Boolean(session?.handingOff);
       this.layoutPreview();
     }
 
-    async open(facing = "environment", purpose = "read") {
+    async open(facing = "environment", purpose = "read", options = {}) {
       if (this.active || this.working()) return;
       if (!navigator.mediaDevices?.getUserMedia) {
-        if (purpose === "source") { this.takePhoto("source"); return; }
-        this.report("Live camera needs a supported browser on HTTPS or localhost. Use Take photo instead.", true);
+        if (purpose === "source" && this.nativePhotoCapture) { this.takePhoto("source"); return; }
+        this.report("Live camera needs a supported browser on HTTPS or localhost. " +
+          (this.nativePhotoCapture ? "Use Take photo instead." : "Use Choose image to load a saved photo."), true);
         return;
       }
-      const session = { facing, purpose, ready: false, paused: purpose === "source" || !this.backgroundAvailable, frames: 0, lastTime: -1,
+      const deviceId = options.deviceId === undefined ? this.preferredDeviceId : options.deviceId;
+      const session = { facing, purpose, deviceId, manualCapture: Boolean(options.manualCapture), ready: false,
+        paused: purpose === "source" || Boolean(options.manualCapture || options.paused) || !this.backgroundAvailable, frames: 0, lastTime: -1,
         rotation: 0, portrait: this.isPortrait(), history: [], appraised: 0 };
       this.session = session;
       this.clearFeedback?.();
@@ -230,12 +295,29 @@
         document.body.classList.add("camera-modal-open");
         // Ideals allow a lower-resolution webcam to work too. Never request the
         // microphone, crop to the CSS preview, or rescale captured video pixels.
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: false,
-          video: this.videoConstraints(facing, session.portrait) });
+        let stream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ audio: false,
+            video: this.videoConstraints(facing, session.portrait, deviceId) });
+        } catch (error) {
+          // A remembered camera may have been unplugged since the last session.
+          // An explicit switch must fail rather than silently reopen the old one.
+          if (this.session !== session || !deviceId || options.deviceId !== undefined ||
+            !["NotFoundError", "OverconstrainedError"].includes(error?.name)) throw error;
+          this.preferredDeviceId = null;
+          stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: this.videoConstraints(facing, session.portrait) });
+        }
         if (this.session !== session) { stream.getTracks().forEach((track) => track.stop()); return; }
         session.stream = stream;
         const track = stream.getVideoTracks()[0];
         session.facing = track.getSettings().facingMode || facing;
+        session.deviceId = track.getSettings().deviceId || deviceId;
+        session.deviceLabel = track.label;
+        this.preferredDeviceId = session.deviceId;
+        await this.refreshDevices();
+        if (this.session !== session) return;
+        if (!session.deviceId) session.deviceId = this.devices.find(device => device.label === track.label)?.deviceId || null;
+        this.preferredDeviceId = session.deviceId;
         track.addEventListener("ended", () => {
           if (this.session !== session || session.handingOff) return;
           this.close();
@@ -252,6 +334,8 @@
         session.scanAfter = Date.now() + 4000;
         this.sync();
         this.progress.textContent = purpose === "source" ? "Camera ready. Frame your source photo, then tap Use photo for encoding."
+          : session.manualCapture ? "Camera ready. Frame your picture, then tap Capture and read."
+          : session.paused && this.backgroundAvailable ? "Camera ready. Scanning paused; capture a photo or resume scanning."
           : this.backgroundAvailable
           ? "Frame your picture. Automatic scanning starts in four seconds; Capture and read is available now."
           : "Preview ready. Tap Capture and read. Automatic background scanning needs HTTPS or localhost.";
@@ -260,9 +344,10 @@
       } catch (error) {
         if (this.session !== session) return;
         this.close();
-        const message = error?.name === "NotAllowedError" ? "Camera permission was denied. Allow camera access in your browser, or use Take photo."
+        const message = error?.name === "NotAllowedError" ? "Camera permission was denied. Allow camera access in your browser or choose a saved image."
+          : ["NotFoundError", "OverconstrainedError"].includes(error?.name) && options.deviceId ? "The selected camera is unavailable. Reopen the camera or choose a saved image."
           : error?.name === "NotFoundError" ? "No camera is available. Choose an image or use Take photo on a phone."
-          : "Could not start the camera. Try Take photo, or close other apps using the camera.";
+          : "Could not start the camera. Close other apps using the camera or choose a saved image.";
         this.report(message, true);
       }
     }

@@ -988,7 +988,7 @@
       matrix[6], matrix[7], matrix[8] + matrix[6] * patch.x + matrix[7] * patch.y];
   }
 
-  function checkReferences(pixels, width, height, matrix, dimensions) {
+  function checkReferences(pixels, width, height, matrix, dimensions, nativeOnly = false) {
     // References are checked only near positions predicted by verified corner
     // geometry. They carry no independent dimensions or checksum and must never
     // be used to claim that an image is encoded, or to accept its payload.
@@ -998,15 +998,17 @@
       const quality = (x, y) => locatorAgreement(locatorScores(pixels, width, height,
         patchTransform(matrix, { x: patch.x + x, y: patch.y + y }), 24, CARRIER_V5, true), header);
       let best = { x: 0, y: 0, quality: quality(0, 0) };
-      for (const y of [-6, -4, -2, 0, 2, 4, 6]) for (const x of [-6, -4, -2, 0, 2, 4, 6]) {
-        const q = quality(x, y);
-        if (q > best.quality) best = { x, y, quality: q };
-      }
-      for (const step of [0.5, 0.125]) {
-        const start = best;
-        for (const y of [-step, 0, step]) for (const x of [-step, 0, step]) {
-          const q = quality(start.x + x, start.y + y);
-          if (q > best.quality) best = { x: start.x + x, y: start.y + y, quality: q };
+      if (!nativeOnly) {
+        for (const y of [-6, -4, -2, 0, 2, 4, 6]) for (const x of [-6, -4, -2, 0, 2, 4, 6]) {
+          const q = quality(x, y);
+          if (q > best.quality) best = { x, y, quality: q };
+        }
+        for (const step of [0.5, 0.125]) {
+          const start = best;
+          for (const y of [-step, 0, step]) for (const x of [-step, 0, step]) {
+            const q = quality(start.x + x, start.y + y);
+            if (q > best.quality) best = { x: start.x + x, y: start.y + y, quality: q };
+          }
         }
       }
       if (best.quality >= 0.82) found.push({ id: patch.id, verification: "reference", quality: best.quality,
@@ -1383,7 +1385,7 @@
 
   function searchInWorker(pixels, width, height, options, operation = "geometry") {
     return new Promise((resolve, reject) => {
-      const url = new URL("pixelstow-transform-worker.js?v=20261014-source-sizing1", codecScriptUrl);
+      const url = new URL("pixelstow-transform-worker.js?v=20261014-camera-devices1", codecScriptUrl);
       const worker = new Worker(url);
       let finished = false;
       const abort = () => { if (finished) return; cleanup(); reject(new DOMException("Search cancelled.", "AbortError")); };
@@ -1913,11 +1915,18 @@
       matrix: [1, 0, patch.x, 0, 1, patch.y, 0, 0, 1] }));
     const markers = expectedMarkers.map(patch => readVisualLocator(pixels, width, height, patch.matrix, patch.id, version))
       .filter(marker => marker && marker.originalWidth === width && marker.originalHeight === height);
+    const matrix = [1,0,0,0,1,0,0,0,1];
+    const expectedReferenceMarkers = version === CARRIER_V5 ? referenceLayout(width, height).map(patch => ({
+      id: patch.id, patchWidth: 24, patchHeight: 16, matrix: patchTransform(matrix, patch)
+    })) : [];
+    const referenceMarkers = markers.length && version === CARRIER_V5 ? checkReferences(pixels, width, height, matrix,
+      { originalWidth: width, originalHeight: height }, true) : [];
     return { found: Boolean(markers.length), markers, geometry: markers.length ? {
-      carrierVersion: version, model: "native", matrix: [1,0,0,0,1,0,0,0,1], originalWidth: width, originalHeight: height,
+      carrierVersion: version, model: "native", matrix, originalWidth: width, originalHeight: height,
       corners: [{x:0,y:0},{x:width-1,y:0},{x:width-1,y:height-1},{x:0,y:height-1}],
       expectedMarkers, patchWidth: profile.width, patchHeight: profile.height, markerCount: markers.length,
-      markerTotal: profile.ids.length, headerCount: markers.length, patternCount: 0, inlierCount: markers.length, fitError: 0
+      markerTotal: profile.ids.length, headerCount: markers.length, patternCount: 0, inlierCount: markers.length, fitError: 0,
+      referenceMarkers, referenceCount: referenceMarkers.length, expectedReferenceMarkers
     } : null };
   }
 

@@ -10,7 +10,11 @@ guard. Switching cameras or rotating the view preserves source mode.
 
 Inside that preview, **Take source photo with phone camera** opens the native
 still-camera/picker with the same source purpose. On browsers without live camera
-access, Photograph to encode uses that picker directly. The picker purpose is
+access, Photograph to encode uses that picker directly on phones/tablets.
+Desktop Take photo opens a manual live preview, with Capture and read as its
+shutter, instead of opening a file chooser. New photo opens the source preview.
+The duplicate phone-camera shortcut is hidden on desktop. Without live camera
+access, desktop users are directed to Choose image for saved photos. The picker purpose is
 cleared after selection or cancellation; the ordinary Take photo button continues
 to import images through the reader. Captured image pixels are preserved.
 
@@ -95,19 +99,30 @@ marker discovery. It still requires the full payload checksum before displaying
 contents. Equal-rated captures prefer the newer frame.
 
 **Pause scanning** cancels both workers and clears the pending slot, leaving the preview running for
-reframing. **Switch camera** stops the current stream/search before requesting
-the other facing mode. **Close camera**, dismissing the dialog, leaving the page, or hiding the tab
+reframing. After camera permission, **Switch camera** enumerates video inputs and
+cycles through their exact device IDs, stopping the previous stream/search first.
+This selects distinct desktop webcams even when they ignore front/rear preferences.
+The current camera name is shown in the preview help; the selected device is
+retained for subsequent opens in the same page. Source/manual/paused mode is
+preserved when switching. A disconnected remembered device permits a default
+camera on a new open; an unavailable explicit switch reports failure rather
+than silently reopening the previous device. A single desktop camera disables
+Switch camera; device-change events refresh availability. Phones can fall back
+to front/rear preference when device enumeration is unavailable.
+**Close camera**, dismissing the dialog, leaving the page, or hiding the tab
 stops tracks, clears retained frames and terminates both in-progress workers.
 Session identity and abort checks discard late permission and worker results.
 The user must reopen the camera after returning to the page.
 
-**Take photo** is a separate `image/*` file input with `capture="environment"`.
-It stops the live stream before opening the native capture/picker. On phones
+On phones/tablets, **Take photo** uses a separate `image/*` file input with
+`capture="environment"`. It stops the live stream before opening the native capture/picker. On phones
 this requests the still camera; browsers may instead offer a file picker. The
 result uses the existing image import/reader. This path can preserve detail that
 is absent from the live feed and remains available when live access fails. It
 also has a shortcut inside the live-camera dialog, using the same input and import
-flow as the page's **Take photo** button.
+flow as the page's **Take photo** button. On desktop it uses manual live capture
+and never substitutes a file picker for the camera. Scan camera retains continuous
+scanning with the four-second framing delay.
 
 A high-confidence marker fit can start a read before every image scale was
 visited. If its payload fails, live reading now resumes the unvisited marker
@@ -134,5 +149,10 @@ References: [getUserMedia and secure contexts](https://developer.mozilla.org/en-
 Implementation is for local user evaluation. Focused checks verified marker-only
 discovery, ranked payload recovery on the supplied full-resolution `IMG_2353.png`,
 and scheduler appraisal/preemption/pause behavior with controlled worker results.
-No camera/device tests, commit or deployment were performed for this change. Actual decoding
+`node tests/pixelstow-camera-checks.mjs` uses Playwright/Chrome with two synthetic
+camera devices to check exact switching, stream cleanup, remembering devices,
+manual/source capture and the phone picker route. It never accesses hardware.
+Set `PIXELSTOW_PLAYWRIGHT` to a Playwright module file and `PIXELSTOW_CHROME` to a
+Chrome executable to use an existing runtime instead of the package defaults.
+Actual decoding
 speed and printed-image recovery remain dependent on device and input quality.

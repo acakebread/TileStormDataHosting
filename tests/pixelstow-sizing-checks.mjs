@@ -57,6 +57,11 @@ assert(c.payloadsEqual(await c.decode(loaded.pixels,loaded.width,loaded.height,'
 assert(Math.abs(encoded.repetitionRatio-prepared.plan.repetitionRatio)<1e-12);
 const analysis=await c.analyzeNativeMarkers(loaded.pixels,loaded.width,loaded.height,5);
 assert.equal(analysis.markers.length,4);assert.equal(analysis.geometry.originalWidth,encoded.width);
+assert.equal(analysis.geometry.headerCount,4);
+assert.equal(analysis.geometry.referenceCount,4);
+assert.equal(analysis.geometry.expectedReferenceMarkers.length,4);
+assert.deepEqual(analysis.geometry.referenceMarkers.map(marker=>marker.id),[1,3,5,7]);
+assert(analysis.geometry.referenceMarkers.every(marker=>marker.verification==='reference'));
 assert.deepEqual(source.pixels,before);
 const locked=await c.encodePayload(prepared.image.pixels,prepared.image.width,prepared.image.height,content,'public fixture password');
 await assert.rejects(()=>S.prepare({pixels:locked.pixels,width:locked.width,height:locked.height},content,false,.8,.2),/already contains/);

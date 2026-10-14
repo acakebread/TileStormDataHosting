@@ -132,6 +132,10 @@ diagnostic markers; continuous captures start clean. Fullscreen preview has a
 small **Show analysis** checkbox below the image; it is absent from the main
 page. Native reads, including clipboard pastes and generated images, gather
 diagnostics at the known marker positions on request without a broad search.
+For V5 this includes all four checksum-bearing corner markers and four smaller
+side references, whose matches do not increase the header count. Marker rectangles
+surround the full pixel area rather than connecting the outer pixel centres.
+Unconfirmed expected side references use dashed outlines in native analysis.
 Formats without recovery markers have the control disabled with an explanation.
 The separate overlay never changes captured or exported pixels. The comparison range
 slider has a larger thumb and a 48-pixel-high touch target.
