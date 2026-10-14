@@ -355,8 +355,10 @@
         check(element("split").value === "1000", "A captured picture drag clamps the divider at the right image edge");
         mouse(viewport, "pointercancel", x(1.1), y); mouse(viewport, "pointermove", x(0.5), y);
         check(!captured && element("split").value === "1000", "Cancelling a picture drag releases capture and stops moving the divider");
-        const touchOnPicture = new app.PointerEvent("pointerdown", { bubbles: true, cancelable: true, pointerId: 44, pointerType: "touch", button: 0, clientX: x(0.5), clientY: y });
-        check(canvas.dispatchEvent(touchOnPicture) && !captured && element("split").value === "1000", "Touching the picture outside the handle preserves ordinary page scrolling");
+        const touchOnPicture = new app.PointerEvent("pointerdown", { bubbles: true, cancelable: true, pointerId: 44, pointerType: "touch", isPrimary: true, button: 0, clientX: x(0.5), clientY: y });
+        check(canvas.dispatchEvent(touchOnPicture) && !captured && element("split").value === "500", "Touching the picture moves the divider immediately without capturing or cancelling page scrolling");
+        const secondFinger = new app.PointerEvent("pointerdown", { bubbles: true, cancelable: true, pointerId: 45, pointerType: "touch", isPrimary: false, button: 0, clientX: x(0.8), clientY: y });
+        check(canvas.dispatchEvent(secondFinger) && !captured && element("split").value === "500", "A second finger does not move the comparison divider");
         input("split", "500");
         const visible = viewport.getBoundingClientRect();
         const clickX = visible.left + visible.width * 0.65, clickY = visible.top + visible.height / 2;

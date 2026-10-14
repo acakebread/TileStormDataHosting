@@ -748,10 +748,10 @@
       </select>
       <p class="hint">Version 5 boosts contrast in textured areas while keeping smaller markers. Below 5× redundancy, stronger encoding spends more image quality on recovery. Older formats remain available; enable older-format recovery to read them. Photo and resize recovery remain experimental. Use version 1 for desktop and TileStorm readers until they are upgraded.</p>
 
-      <label for="encoding-quality">Image quality / durability <output id="encoding-quality-value">0.80</output></label>
-      <input id="encoding-quality" type="range" min="0" max="1" step="0.01" value="0.8">
+      <label for="encoding-quality">Durability / image quality <output id="encoding-quality-value" for="encoding-quality">80%</output></label>
+      <input id="encoding-quality" type="range" min="0" max="1" step="0.01" value="0.8" aria-valuetext="80% image quality">
       <div class="prognosis-labels"><span>More durable · stronger pattern</span><span>Higher image quality</span></div>
-      <p class="hint">0.80 uses the current signal strength. Move left to help camera recovery at the cost of appearance. Applies to versions 4 and 5.</p>
+      <p class="hint">80% uses the current signal strength. Move left to help camera recovery at the cost of appearance. Applies to versions 4 and 5.</p>
       <label><input id="scale-source" type="checkbox"> Scale source for payload</label>
       <p class="hint" id="source-size-plan">Resize the source before encoding to meet the selected read margin. Your original stays unchanged.</p>
 
@@ -1473,7 +1473,7 @@
 
     function previewHelp(comparing) {
       if (window.matchMedia("(pointer: coarse)").matches) {
-        return "Pinch to zoom; two fingers to pan." + (comparing ? " Drag the divider or slider to compare." : "");
+        return "Pinch to zoom; two fingers to pan." + (comparing ? " Tap the image or drag the divider to compare." : "");
       }
       return "Scroll to zoom; right-drag to pan." + (comparing ? " Drag the divider to compare." : "");
     }
@@ -1866,7 +1866,7 @@
 
     // Leave a single finger to native page scrolling (and button taps). Touch
     // events keep the two-finger view usable when pan-y cancels pointer events.
-    // Only the comparison handle captures a single pointer.
+    // Only the comparison handle captures a single touch pointer.
     viewport.addEventListener("touchstart", (event) => {
       if (!imagePixels().w) return;
       trackPreviewTouches(event);
@@ -1908,7 +1908,13 @@
     viewport.addEventListener("pointerdown", (event) => {
       const onHandle = splitHandle.contains(event.target);
       if (event.button !== 0 || fullPreview.clean || compareUi.hidden || panning || splitPointer !== null || previewTouches.size > 1) return;
-      if (!onHandle && (event.pointerType === "touch" || !compare.contains(event.target))) return;
+      if (!onHandle && !compare.contains(event.target)) return;
+      if (!onHandle && event.pointerType === "touch") {
+        // Jump without capturing or cancelling the gesture: its vertical
+        // movement still belongs to native page scrolling.
+        if (event.isPrimary) dragSplit(event);
+        return;
+      }
       event.preventDefault();
       splitPointer = event.pointerId;
       splitCapture = onHandle ? splitHandle : viewport;
@@ -1977,9 +1983,15 @@
       if (!preview.hidden) sizeViewport();
     }).observe(viewport);
 
+    function updateEncodingQualityValue() {
+      const percentage = Math.round(Number(encodingQuality.value) * 100) + "%";
+      encodingQualityValue.value = percentage;
+      encodingQuality.setAttribute("aria-valuetext", percentage + " image quality");
+    }
+
     message.addEventListener("input", updateByteCounts);
     encodingQuality.addEventListener("input", () => {
-      encodingQualityValue.value = Number(encodingQuality.value).toFixed(2);
+      updateEncodingQualityValue();
       if (scaleSource.checked) refreshEncodingPlan();
       else showReadPrognosis(prognosisBudget || current?.repetition);
     });
@@ -1996,7 +2008,7 @@
       else {
         const selected = PixelStowSizing.qualityForTarget(prognosisBudget, target, Number(carrierSelect.value));
         encodingQuality.value = selected.quality.toFixed(2);
-        encodingQualityValue.value = selected.quality.toFixed(2);
+        updateEncodingQualityValue();
         showReadPrognosis(prognosisBudget);
       }
     });
