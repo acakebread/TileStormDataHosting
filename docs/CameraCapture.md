@@ -113,10 +113,17 @@ reframing. After camera permission, **Switch camera** enumerates video inputs an
 cycles through their exact device IDs, stopping the previous stream/search first.
 This selects distinct desktop webcams even when they ignore front/rear preferences.
 The current camera name is shown in the preview help; the selected device is
-retained for subsequent opens in the same page. Source/manual/paused mode is
-preserved when switching. A disconnected remembered device permits a default
-camera on a new open; an unavailable explicit switch reports failure rather
-than silently reopening the previous device. A single desktop camera disables
+retained for subsequent opens in the same page once its preview plays successfully.
+Source/manual/paused mode is preserved when switching. Failed devices, including
+inactive virtual cameras, are skipped automatically while cycling around the
+list; the preview identifies any skipped cameras. Subsequent switches in the
+same capture session omit these failures. If all alternatives fail, the previous
+working camera is reopened once; exhausting the list reports the browser error.
+Closing during a switch cancels the remaining attempts and stops late streams.
+Opening a new capture session or a device-change event makes previously failed
+devices eligible again, allowing a newly started virtual camera to work.
+A disconnected remembered device permits a default camera on a new open.
+A single working desktop camera disables
 Switch camera; device-change events refresh availability. Phones can fall back
 to front/rear preference when device enumeration is unavailable.
 **Close camera**, dismissing the dialog, leaving the page, or hiding the tab
@@ -159,9 +166,11 @@ References: [getUserMedia and secure contexts](https://developer.mozilla.org/en-
 Implementation is for local user evaluation. Focused checks verified marker-only
 discovery, ranked payload recovery on the supplied full-resolution `IMG_2353.png`,
 and scheduler appraisal/preemption/pause behavior with controlled worker results.
-`node tests/pixelstow-camera-checks.mjs` uses Playwright/Chrome with two synthetic
+`node tests/pixelstow-camera-checks.mjs` uses Playwright/Chrome with three synthetic
 camera devices to check exact switching, stream cleanup, remembering devices,
-manual/source capture and the phone picker route. It never accesses hardware.
+unavailable-device skipping, restoring the previous working camera, cancellation,
+manual/source capture, the phone picker route and prognosis touch gestures. It
+never accesses hardware.
 Set `PIXELSTOW_PLAYWRIGHT` to a Playwright module file and `PIXELSTOW_CHROME` to a
 Chrome executable to use an existing runtime instead of the package defaults.
 Actual decoding

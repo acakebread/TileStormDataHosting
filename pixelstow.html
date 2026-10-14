@@ -117,11 +117,12 @@
     .hint.repetition-warning { color: #ffe285; border-left: 3px solid #ffe285; padding-left: 10px; }
     .read-prognosis { margin: 18px 0 12px; padding: 14px; border: 1px solid var(--border); border-radius: 10px; }
     .read-prognosis p { margin: 0 0 10px; }
-    .prognosis-scale { position: relative; height: 14px; margin: 12px 8px 6px; border-radius: 8px; background: linear-gradient(90deg, #63d79c, #efc66a 55%, #ed7777); }
-    .prognosis-pointer { position: absolute; top: -5px; bottom: -5px; width: 4px; transform: translateX(-50%); border: 2px solid #fff; border-radius: 3px; background: #081016; }
-    #prognosis-target { position: absolute; inset: -15px 0; width: 100%; height: 44px; margin: 0; opacity: 0; cursor: ew-resize; touch-action: none; }
+    .prognosis-scale { position: relative; height: 64px; margin: 0 8px 6px; border-radius: 8px; }
+    .prognosis-scale::before { content: ""; position: absolute; inset: 25px 0; border-radius: 8px; background: linear-gradient(90deg, #63d79c, #efc66a 55%, #ed7777); }
+    .prognosis-pointer { position: absolute; top: 14px; bottom: 14px; width: 14px; transform: translateX(-50%); border: 2px solid #fff; border-radius: 6px; background: #081016; }
+    #prognosis-target { position: absolute; inset: 0; width: 100%; height: 64px; margin: 0; opacity: 0; cursor: ew-resize; touch-action: none; }
     .prognosis-scale:focus-within { outline: 2px solid var(--tile-azure); outline-offset: 5px; }
-    .prognosis-limit { position: absolute; inset-block: 0; background: rgba(8,16,22,.6); pointer-events: none; }
+    .prognosis-limit { position: absolute; inset-block: 25px; background: rgba(8,16,22,.6); pointer-events: none; }
     #prognosis-low-limit { left: 0; border-radius: 8px 0 0 8px; }
     #prognosis-high-limit { right: 0; border-radius: 0 8px 8px 0; }
     .prognosis-labels { display: flex; justify-content: space-between; font-size: 0.82rem; color: var(--muted); }
@@ -876,7 +877,7 @@
   <script src="./pixelstow-voice.js?v=20261013-voice-clock2"></script>
   <script src="./pixelstow-media.js?v=20261014-margin-ui1"></script>
   <script src="./pixelstow-sharing.js?v=20261011-png-clipboard"></script>
-  <script src="./pixelstow-camera.js?v=20261014-camera-startup2"></script>
+  <script src="./pixelstow-camera.js?v=20261014-camera-skip1"></script>
   <script src="./pixelstow-preview.js?v=20261014-mobile-layout1"></script>
   <script>
     const fileInput = document.querySelector("#file");
@@ -1998,6 +1999,32 @@
         showReadPrognosis(prognosisBudget);
       }
     });
+    // Map the whole touch area directly to the scale: mobile range controls can
+    // otherwise require grabbing their tiny invisible native thumb precisely.
+    let prognosisDrag = null;
+    function movePrognosis(event) {
+      const rect = prognosisTarget.getBoundingClientRect();
+      if (!rect.width) return;
+      prognosisTarget.value = String(Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)));
+      prognosisTarget.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    prognosisTarget.addEventListener("pointerdown", event => {
+      if (prognosisTarget.disabled || !event.isPrimary || event.button !== 0 || prognosisDrag !== null) return;
+      event.preventDefault();
+      prognosisTarget.focus({ preventScroll: true });
+      prognosisDrag = event.pointerId;
+      prognosisTarget.setPointerCapture(event.pointerId);
+      movePrognosis(event);
+    });
+    prognosisTarget.addEventListener("pointermove", event => {
+      if (event.pointerId === prognosisDrag) movePrognosis(event);
+    });
+    function endPrognosis(event) {
+      if (event.pointerId !== prognosisDrag) return;
+      prognosisDrag = null;
+      if (prognosisTarget.hasPointerCapture(event.pointerId)) prognosisTarget.releasePointerCapture(event.pointerId);
+    }
+    ["pointerup", "pointercancel", "lostpointercapture"].forEach(name => prognosisTarget.addEventListener(name, endPrognosis));
 
     fileInput.addEventListener("change", () => {
       const file = fileInput.files && fileInput.files[0];

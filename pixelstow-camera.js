@@ -8,6 +8,8 @@
       this.devices = [];
       this.devicesKnown = false;
       this.preferredDeviceId = null;
+      this.failedDevices = new Set();
+      this.switchOperation = null;
       // Desktop file inputs ignore capture and open a file picker. Keep the
       // native still-camera route for phones/tablets, including desktop-UA iPads.
       this.nativePhotoCapture = Boolean(navigator.userAgentData?.mobile ||
@@ -77,6 +79,7 @@
       });
       this.switchButton.addEventListener("click", () => this.switchCamera());
       navigator.mediaDevices?.addEventListener?.("devicechange", async () => {
+        this.failedDevices.clear();
         if (!this.active) return;
         await this.refreshDevices();
         this.sync();
@@ -120,7 +123,7 @@
       this.sync();
     }
 
-    get active() { return Boolean(this.session); }
+    get active() { return Boolean(this.session || this.switchOperation); }
 
     takePhoto(purpose = "read") {
       if (this.working() || this.session?.handingOff) return;
@@ -153,28 +156,65 @@
 
     async switchCamera() {
       const session = this.session;
-      if (!session?.ready || session.adjusting || session.handingOff || this.working()) return;
+      if (!session?.ready || session.adjusting || session.handingOff || this.switchOperation || this.working()) return;
+      const operation = { cancelled: false };
+      this.switchOperation = operation;
       session.adjusting = true;
       clearTimeout(session.timer);
       this.cancelSearches(session, true);
       this.progress.textContent = "Switching camera…";
       this.sync();
-      await this.refreshDevices();
-      if (this.session !== session) return;
-      const index = this.devices.findIndex(device => device.deviceId === session.deviceId);
-      const next = this.devices.length > 1 ? this.devices[(index + 1) % this.devices.length] : null;
-      if (!next && !this.nativePhotoCapture) {
-        session.adjusting = false;
-        this.progress.textContent = "No other camera is available to this browser.";
-        this.sync();
-        this.schedule(session, 900);
-        return;
+      try {
+        await this.refreshDevices();
+        if (this.session !== session || operation.cancelled) return;
+        const choices = this.nextDevices(session.deviceId);
+        if (!choices.length && !this.nativePhotoCapture) {
+          session.adjusting = false;
+          this.progress.textContent = "No other working camera is available to this browser.";
+          this.schedule(session, 900);
+          return;
+        }
+        const facing = session.facing === "environment" ? "user" : "environment";
+        if (!choices.length) choices.push({ deviceId: null }); // Phone front/rear fallback.
+        // If every alternative fails, try the last working camera once as well.
+        if (session.deviceId) choices.push({ deviceId: session.deviceId, label: session.deviceLabel, restore: true });
+        const skipped = [];
+        let last;
+        this.close(true);
+        for (const device of choices) {
+          if (operation.cancelled || this.switchOperation !== operation) return;
+          last = await this.open(device.restore ? session.facing : facing, session.purpose, {
+            deviceId: device.deviceId, manualCapture: session.manualCapture, paused: session.paused,
+            switchOperation: operation, quietFailure: true
+          });
+          if (last?.cancelled || operation.cancelled) return;
+          if (last?.ready) {
+            if (skipped.length) this.progress.textContent += " Skipped unavailable cameras: " + skipped.join(", ") + ".";
+            if (device.restore) this.progress.textContent += " Kept the last working camera.";
+            return;
+          }
+          // Permission/security failures apply to camera access, not one format.
+          if (["NotAllowedError", "SecurityError"].includes(last?.error?.name)) break;
+          if (device.deviceId) this.failedDevices.add(device.deviceId);
+          skipped.push(device.label || "camera");
+        }
+        if (!operation.cancelled) this.report("No camera in the remaining list could be opened. " + (last?.message || "Try reopening the camera."), true);
+      } finally {
+        if (this.switchOperation === operation) {
+          this.switchOperation = null;
+          this.changed();
+          this.sync();
+        }
       }
-      const facing = session.facing === "environment" ? "user" : "environment";
-      const options = { deviceId: next?.deviceId || null, manualCapture: session.manualCapture, paused: session.paused };
-      const purpose = session.purpose;
-      this.close();
-      await this.open(facing, purpose, options);
+    }
+
+    nextDevices(deviceId) {
+      const index = this.devices.findIndex(device => device.deviceId === deviceId), choices = [];
+      for (let offset = 1; offset <= this.devices.length; offset++) {
+        const device = this.devices[(index + offset) % this.devices.length];
+        if (device.deviceId !== deviceId && !this.failedDevices.has(device.deviceId)) choices.push(device);
+      }
+      return choices;
     }
 
     isPortrait() {
@@ -269,11 +309,11 @@
       const session = this.session, locked = this.working();
       const ready = Boolean(session?.ready && !session.adjusting && this.video.readyState >= 2 && this.video.videoWidth && this.video.videoHeight);
       this.panel.hidden = !session;
-      this.openButton.disabled = locked || Boolean(session);
-      this.sourceButton.disabled = locked || Boolean(session);
-      this.photoButton.disabled = this.input.disabled = locked || Boolean(session?.handingOff);
-      this.nativePhotoButton.disabled = locked || Boolean(session?.handingOff);
-      this.captureButton.disabled = locked || !ready || Boolean(session?.handingOff);
+      this.openButton.disabled = locked || this.active;
+      this.sourceButton.disabled = locked || this.active;
+      this.photoButton.disabled = this.input.disabled = locked || Boolean(this.switchOperation || session?.handingOff);
+      this.nativePhotoButton.disabled = locked || Boolean(this.switchOperation || session?.handingOff);
+      this.captureButton.disabled = locked || !ready || Boolean(this.switchOperation || session?.handingOff);
       const source = session?.purpose === "source";
       this.title.textContent = source ? "Camera source photo" : session?.manualCapture ? "Camera photo" : "Camera scanner";
       this.help.textContent = source ? "Frame a new photo to put your message and files inside. The whole outlined view is captured."
@@ -285,11 +325,11 @@
       this.target.hidden = source;
       this.signature.hidden = source;
       this.pauseButton.hidden = source || Boolean(session?.manualCapture) || !this.backgroundAvailable;
-      this.pauseButton.disabled = locked || !session?.ready || !this.backgroundAvailable || Boolean(session?.handingOff);
+      this.pauseButton.disabled = locked || !session?.ready || !this.backgroundAvailable || Boolean(this.switchOperation || session?.handingOff);
       this.pauseButton.textContent = session?.paused ? "Resume scanning" : "Pause scanning";
-      this.rotateButton.disabled = locked || !ready || Boolean(session?.handingOff);
-      this.switchButton.disabled = this.rotateButton.disabled || (!this.nativePhotoCapture && this.devicesKnown && this.devices.length < 2);
-      const next = this.devices.length > 1 ? this.devices[(this.devices.findIndex(device => device.deviceId === session?.deviceId) + 1) % this.devices.length] : null;
+      this.rotateButton.disabled = locked || !ready || Boolean(this.switchOperation || session?.handingOff);
+      const next = this.nextDevices(session?.deviceId)[0];
+      this.switchButton.disabled = this.rotateButton.disabled || (!this.nativePhotoCapture && this.devicesKnown && !next);
       this.switchButton.title = next?.label ? "Switch to " + next.label : this.switchButton.disabled && ready
         ? "No other camera is available to this browser" : "Switch camera";
       this.useNearButton.disabled = locked || !session?.best || Boolean(session?.handingOff);
@@ -297,7 +337,9 @@
     }
 
     async open(facing = "environment", purpose = "read", options = {}) {
-      if (this.active || this.working()) return;
+      if (options.switchOperation?.cancelled) return { cancelled: true };
+      if (this.session || (this.switchOperation && this.switchOperation !== options.switchOperation) || this.working()) return;
+      if (!options.switchOperation) this.failedDevices.clear();
       if (!navigator.mediaDevices?.getUserMedia) {
         if (purpose === "source" && this.nativePhotoCapture) { this.takePhoto("source"); return; }
         this.report("Live camera needs a supported browser on HTTPS or localhost. " +
@@ -333,17 +375,15 @@
           deviceId = session.deviceId = null;
           stream = await this.acquireStream(session, facing, null);
         }
-        if (this.session !== session) { stream.getTracks().forEach((track) => track.stop()); return; }
+        if (this.session !== session) { stream.getTracks().forEach((track) => track.stop()); return { cancelled: true }; }
         session.stream = stream;
         const track = stream.getVideoTracks()[0];
         session.facing = track.getSettings().facingMode || facing;
         session.deviceId = track.getSettings().deviceId || deviceId;
         session.deviceLabel = track.label;
-        this.preferredDeviceId = session.deviceId;
         await this.refreshDevices();
-        if (this.session !== session) return;
+        if (this.session !== session) return { cancelled: true };
         if (!session.deviceId) session.deviceId = this.devices.find(device => device.label === track.label)?.deviceId || null;
-        this.preferredDeviceId = session.deviceId;
         track.addEventListener("ended", () => {
           if (this.session !== session || session.handingOff) return;
           this.close();
@@ -353,8 +393,11 @@
         this.video.playsInline = true;
         this.video.srcObject = stream;
         await this.video.play();
-        if (this.session !== session) return;
+        if (this.session !== session) return { cancelled: true };
         session.ready = true;
+        // Only a live, playable camera becomes the remembered selection.
+        this.preferredDeviceId = session.deviceId;
+        this.failedDevices.delete(session.deviceId);
         // Start the grace period when the live picture is ready, rather than
         // counting camera permission/startup time as time spent framing it.
         session.scanAfter = Date.now() + 4000;
@@ -369,9 +412,10 @@
           this.video.videoWidth + " × " + this.video.videoHeight + " actual pixels.";
         this.refreshOrientation(session);
         this.schedule(session, 900);
+        return { ready: true };
       } catch (error) {
-        if (this.session !== session) return;
-        this.close();
+        if (this.session !== session) return { cancelled: true };
+        this.close(Boolean(options.switchOperation));
         const closePreviews = /Windows/i.test(navigator.userAgent)
           ? "Close OBS, webcam-test tabs and the Windows Settings camera preview, then retry."
           : "Close other apps and preview tabs using the camera, then retry.";
@@ -385,12 +429,18 @@
             : "Could not start the camera. Close other apps using the camera or choose a saved image.";
         const clean = value => String(value || "").replace(/[\x00-\x1f\x7f]/g, " ").slice(0, 200);
         const detail = [clean(error?.name), error?.constraint ? "constraint: " + clean(error.constraint) : "", clean(error?.message)].filter(Boolean).join(" · ");
-        this.report((session.deviceLabel ? clean(session.deviceLabel) + ": " : "") + message +
-          (detail ? " Browser error: " + detail : ""), true);
+        const failure = (session.deviceLabel ? clean(session.deviceLabel) + ": " : "") + message +
+          (detail ? " Browser error: " + detail : "");
+        if (!options.quietFailure) this.report(failure, true);
+        return { error, message: failure };
       }
     }
 
-    close() {
+    close(preserveSwitch = false) {
+      if (!preserveSwitch && this.switchOperation) {
+        this.switchOperation.cancelled = true;
+        this.switchOperation = null;
+      }
       const session = this.session;
       if (!session) return;
       // Invalidate first: late permission/play/worker results cannot reopen the

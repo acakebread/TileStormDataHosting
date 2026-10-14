@@ -1,4 +1,4 @@
-// Browser camera acquisition only: Chrome's synthetic cameras, never hardware.
+// Browser camera acquisition and touch controls: synthetic cameras, never hardware.
 // npm-installed Playwright is the default; a bundled module path can be supplied.
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -23,7 +23,7 @@ let browser;
 try {
   browser = await chromium.launch({ headless: true,
     ...(process.env.PIXELSTOW_CHROME ? { executablePath: process.env.PIXELSTOW_CHROME } : {}),
-    args: ['--disable-gpu', '--use-fake-device-for-media-stream=device-count=2', '--use-fake-ui-for-media-stream'] });
+    args: ['--disable-gpu', '--use-fake-device-for-media-stream=device-count=3', '--use-fake-ui-for-media-stream'] });
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, permissions: ['camera'] });
   const page = await context.newPage(), errors = [];
   page.on('pageerror', error => errors.push(error.message));
@@ -33,7 +33,12 @@ try {
   await page.evaluate(() => {
     window.cameraRequests = []; window.markerCalls = 0; window.importedCaptures = [];
     const acquire = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
-    navigator.mediaDevices.getUserMedia = constraints => { cameraRequests.push(constraints); return acquire(constraints); };
+    navigator.mediaDevices.getUserMedia = constraints => {
+      cameraRequests.push(constraints);
+      if (window.unavailableDeviceId && constraints.video.deviceId?.exact === window.unavailableDeviceId)
+        throw new DOMException('Synthetic inactive OBS camera', 'NotReadableError');
+      return acquire(constraints);
+    };
     // The tests cover acquisition and import routing, not optical recovery.
     PixelStow.scanMarkers = async () => { markerCalls++; return { found: false, markers: [], candidates: [] }; };
     PixelStow.inspect = async () => ({ found: false });
@@ -47,7 +52,13 @@ try {
     return { device: camera.session.deviceId, manual: camera.session.manualCapture, paused: camera.session.paused,
       count: camera.devices.length, facing: camera.session.facing };
   });
-  assert.equal(first.count, 2, 'Chrome must expose two synthetic cameras');
+  assert.equal(first.count, 3, 'Chrome must expose three synthetic cameras');
+  await page.evaluate(() => {
+    window.unavailableDeviceId = camera.devices.at(-1).deviceId;
+    const enumerate = navigator.mediaDevices.enumerateDevices.bind(navigator.mediaDevices);
+    navigator.mediaDevices.enumerateDevices = async () => (await enumerate()).map(device =>
+      device.deviceId === unavailableDeviceId ? { kind: 'videoinput', deviceId: device.deviceId, label: 'OBS Virtual Camera' } : device);
+  });
   assert(first.manual && first.paused); assert.equal(filePickers, 0);
   assert(!(await page.locator('#camera-take-photo').isVisible()));
   assert(!(await page.locator('#pause-camera').isVisible()));
@@ -80,11 +91,19 @@ try {
   await page.locator('#camera-source').click(); await ready();
   await page.locator('#switch-camera').click(); await ready();
   assert.equal(await page.evaluate(() => camera.session.purpose), 'source');
+  assert(await page.evaluate(() => camera.failedDevices.has(unavailableDeviceId) && camera.session.deviceId === firstTracks[0].getSettings().deviceId));
+  assert.match(await page.locator('#camera-progress').textContent(), /Skipped unavailable cameras: OBS Virtual Camera/);
+  const failedRequests = await page.evaluate(() => cameraRequests.filter(request => request.video.deviceId?.exact === unavailableDeviceId).length);
+  assert.equal(failedRequests, 3);
+  await page.locator('#switch-camera').click(); await ready();
+  await page.locator('#switch-camera').click(); await ready();
+  assert.equal(await page.evaluate(() => cameraRequests.filter(request => request.video.deviceId?.exact === unavailableDeviceId).length), failedRequests);
+  assert(await page.evaluate(() => camera.preferredDeviceId === camera.session.deviceId));
   await page.locator('#capture-frame').click(); await page.waitForFunction(() => !camera.active && !busy);
   assert(await page.evaluate(() => importedCaptures.at(-1).captured.sourceOnly));
   assert(await page.locator('#scale-source').isChecked());
   assert.equal(await page.evaluate(() => markerCalls), 0);
-  console.log('PASS: switching preserves source capture mode and automatic source sizing without marker scanning');
+  console.log('PASS: A → B → inactive OBS → A continues automatically; later switches skip the failed camera and preserve source mode, last working selection and source sizing');
 
   // A temporarily missing remembered device falls back on the next ordinary open.
   await page.evaluate(() => {
@@ -97,7 +116,7 @@ try {
   });
   await page.locator('#take-photo').click(); await ready();
   assert(await page.evaluate(() => !cameraRequests.at(-1).video.deviceId));
-  // An explicit failed switch must not quietly return to the previous camera.
+  // Exhausting every candidate, including the previous camera, stops once.
   await page.evaluate(() => {
     navigator.mediaDevices.getUserMedia = async constraints => {
       cameraRequests.push(constraints); throw new DOMException('Test unavailable camera', 'OverconstrainedError');
@@ -106,7 +125,7 @@ try {
   await page.locator('#switch-camera').click();
   await page.waitForFunction(() => !camera.active && document.querySelector('#status').textContent.includes('selected camera'));
   assert.equal(filePickers, 0);
-  console.log('PASS: unplugged remembered camera permits a fresh default; unavailable explicit switch reports failure rather than reopening the wrong camera');
+  console.log('PASS: unplugged remembered camera permits a fresh default; exhausting remaining cameras reports a bounded failure');
 
   const compatibility = await context.newPage(); compatibility.on('pageerror', error => errors.push(error.message));
   await compatibility.goto(url);
@@ -151,6 +170,66 @@ try {
     compatibilityRequests.at(-1).video.height.ideal === 480));
   console.log('PASS: startup failures retry native defaults then VGA on the same exact camera, without microphone access');
   await compatibility.evaluate(() => {
+    compatibilityRequests.length = 0; window.restoreDevice = camera.session.deviceId;
+    navigator.mediaDevices.getUserMedia = constraints => {
+      compatibilityRequests.push(constraints);
+      if (constraints.video.deviceId?.exact !== restoreDevice) throw new DOMException('Synthetic unavailable alternative', 'NotReadableError');
+      return realAcquire(constraints);
+    };
+  });
+  await compatibility.locator('#switch-camera').click();
+  await compatibility.waitForFunction(() => camera.session?.ready && !camera.switchOperation);
+  assert(await compatibility.evaluate(() => camera.session.deviceId === restoreDevice && camera.preferredDeviceId === restoreDevice &&
+    compatibilityRequests.length === 7 && camera.failedDevices.size === 2));
+  assert.match(await compatibility.locator('#camera-progress').textContent(), /Kept the last working camera/);
+  console.log('PASS: when alternatives fail, the last working camera is restored once and remains the remembered selection');
+  // Reopening makes failed devices eligible again (e.g. OBS is now running).
+  await compatibility.locator('#close-camera').click();
+  await compatibility.evaluate(() => { navigator.mediaDevices.getUserMedia = constraints => realAcquire(constraints); });
+  await compatibility.locator('#take-photo').click();
+  await compatibility.waitForFunction(() => camera.session?.ready && !document.querySelector('#capture-frame').disabled);
+  assert.equal(await compatibility.evaluate(() => camera.failedDevices.size), 0);
+  await compatibility.evaluate(() => {
+    compatibilityRequests.length = 0; window.unplayableDevice = camera.nextDevices(camera.session.deviceId)[0].deviceId;
+    window.failedVideoTracks = []; window.originalCameraPlay = HTMLMediaElement.prototype.play;
+    navigator.mediaDevices.getUserMedia = async constraints => {
+      compatibilityRequests.push(constraints);
+      const stream = await realAcquire(constraints);
+      if (constraints.video.deviceId?.exact === unplayableDevice) failedVideoTracks.push(...stream.getTracks());
+      return stream;
+    };
+    HTMLMediaElement.prototype.play = function () {
+      if (this === camera.video && this.srcObject?.getVideoTracks()[0]?.getSettings().deviceId === unplayableDevice)
+        return Promise.reject(new DOMException('Synthetic unplayable camera', 'NotSupportedError'));
+      return originalCameraPlay.call(this);
+    };
+  });
+  await compatibility.locator('#switch-camera').click();
+  await compatibility.waitForFunction(() => camera.session?.ready && !camera.switchOperation);
+  assert(await compatibility.evaluate(() => camera.failedDevices.has(unplayableDevice) && failedVideoTracks.length > 0 &&
+    failedVideoTracks.every(track => track.readyState === 'ended') && camera.preferredDeviceId === camera.session.deviceId &&
+    camera.preferredDeviceId !== unplayableDevice));
+  await compatibility.evaluate(() => { HTMLMediaElement.prototype.play = originalCameraPlay; });
+  console.log('PASS: an acquired but unplayable camera is stopped/skipped and cannot overwrite the last working selection');
+  await compatibility.evaluate(() => {
+    compatibilityRequests.length = 0;
+    navigator.mediaDevices.getUserMedia = constraints => {
+      compatibilityRequests.push(constraints); return new Promise((resolve, reject) => { window.rejectPendingSwitch = reject; });
+    };
+  });
+  await compatibility.locator('#switch-camera').click();
+  await compatibility.waitForFunction(() => Boolean(window.rejectPendingSwitch));
+  await compatibility.locator('#close-camera').click();
+  await compatibility.evaluate(async () => {
+    rejectPendingSwitch(new DOMException('Synthetic late switch failure', 'NotReadableError'));
+    await new Promise(resolve => setTimeout(resolve, 50));
+  });
+  assert(await compatibility.evaluate(() => !camera.active && !camera.switchOperation && compatibilityRequests.length === 1 && !document.querySelector('#camera-panel').open));
+  console.log('PASS: closing while switching prevents late failures from trying subsequent devices');
+  await compatibility.evaluate(() => { navigator.mediaDevices.getUserMedia = constraints => realAcquire(constraints); });
+  await compatibility.locator('#take-photo').click();
+  await compatibility.waitForFunction(() => camera.session?.ready && !document.querySelector('#capture-frame').disabled);
+  await compatibility.evaluate(() => {
     compatibilityRequests.length = 0;
     navigator.mediaDevices.getUserMedia = constraints => {
       compatibilityRequests.push(constraints); throw new DOMException('Synthetic driver busy', 'NotReadableError');
@@ -158,7 +237,7 @@ try {
   });
   await compatibility.locator('#switch-camera').click();
   await compatibility.waitForFunction(() => !camera.active && document.querySelector('#status').textContent.includes('Browser error'));
-  assert(await compatibility.evaluate(() => compatibilityRequests.length === 3));
+  assert(await compatibility.evaluate(() => compatibilityRequests.length === 9));
   assert.match(await compatibility.locator('#status').textContent(), /NotReadableError.*Synthetic driver busy/);
   assert.match(await compatibility.locator('#status').textContent(), /Windows Settings camera preview/);
   // Permission denial must not trigger format retries or a default-device open.
@@ -202,6 +281,31 @@ try {
   await picker.setFiles({ name: 'public-phone-photo.png', mimeType: 'image/png', buffer: bytes });
   await phone.waitForFunction(() => current && !busy);
   assert.equal(await phone.evaluate(() => camera.inputPurpose), 'read');
+  await phone.evaluate(() => {
+    let state = 139;
+    media.files = [{ name: 'public.bin', type: 'application/octet-stream', bytes: Uint8Array.from({ length: 550 }, () => {
+      state ^= state << 13; state ^= state >>> 17; state ^= state << 5; return state & 255;
+    }) }];
+    media.sync();
+  });
+  await phone.locator('#message').fill('Public touch control check.');
+  await phone.waitForFunction(() => !document.querySelector('#read-prognosis').hidden && !document.querySelector('#prognosis-target').disabled);
+  await phone.locator('#prognosis-target').scrollIntoViewIfNeeded();
+  const target = await phone.locator('#prognosis-target').boundingBox();
+  assert(target.height >= 64);
+  await phone.touchscreen.tap(target.x + target.width * .9, target.y + 6);
+  const gentle = await phone.locator('#encoding-quality').inputValue();
+  await phone.touchscreen.tap(target.x + target.width * .1, target.y + target.height - 6);
+  const durable = await phone.locator('#encoding-quality').inputValue();
+  assert(Number(durable) < Number(gentle));
+  const cdp = await mobile.newCDPSession(phone), beforeScroll = await phone.evaluate(() => scrollY);
+  const currentTarget = await phone.locator('#prognosis-target').boundingBox(), y = currentTarget.y + currentTarget.height - 6;
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ id: 1, x: currentTarget.x + currentTarget.width * .15, y }] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ id: 1, x: currentTarget.x + currentTarget.width * .85, y: y + 24 }] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  assert(Number(await phone.locator('#encoding-quality').inputValue()) > Number(durable));
+  assert.equal(await phone.evaluate(() => scrollY), beforeScroll);
+  console.log('PASS: phone prognosis accepts taps above/below the bar across a 64px target and drags outside it without scrolling the page');
   await phone.locator('#camera-source').click();
   await phone.waitForFunction(() => camera.session?.ready && !document.querySelector('#capture-frame').disabled);
   await phone.evaluate(() => { window.phoneTracks = camera.session.stream.getTracks(); });

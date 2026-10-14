@@ -163,6 +163,9 @@ camera success percentage. If settings change after export, it estimates the
 next encoding and asks the user to re-encode; the saved PNG remains unchanged.
 Dragging the prognosis at a fixed source size adjusts quality within its
 achievable range. Unavailable portions of the scale are shaded.
+The slider has a 64-pixel-high touch area and a larger visible handle. Tapping
+anywhere across that area chooses a target immediately; dragging retains the
+gesture outside the bar while page scrolling remains available elsewhere.
 
 Optional **Scale source for payload** keeps the selected quality and changes
 carrier dimensions to reach the requested prognosis, using compressed payload
