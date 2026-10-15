@@ -8,7 +8,7 @@ const root=new URL('../',import.meta.url),out=new URL('artifacts/research/scale-
 await fs.mkdir(out,{recursive:true});
 const context={self:{},setTimeout};
 vm.runInNewContext((await fs.readFile(new URL('pixelstow-spectrum.js',root),'utf8'))
-  .replace('root.PixelStowSpectrum = { analyze };','root.PixelStowSpectrum = { analyze, fft };'),context);
+  .replace('root.PixelStowSpectrum = { analyze, scaleGuide };','root.PixelStowSpectrum = { analyze, scaleGuide, fft };'),context);
 const fft=context.self.PixelStowSpectrum.fft;
 const tones=[{k:2,phase:.2,weight:1},{k:3,phase:1.1,weight:.8},{k:5,phase:2.4,weight:.6}];
 const period=256,width=1024,height=768;

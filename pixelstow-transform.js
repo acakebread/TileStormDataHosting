@@ -273,7 +273,7 @@
       const s = [Math.hypot(basis[0], basis[1]), Math.hypot(basis[2], basis[3])];
       if (!scales.some((v) => Math.abs(v[0] - s[0]) + Math.abs(v[1] - s[1]) < 0.04)) scales.push(s);
     }
-    for (const scale of [0.95, 1.05, 0.75, 1.25, 0.5, 2]) scales.push([scale, scale]);
+    if (!options.pilotFirst) for (const scale of [0.95, 1.05, 0.75, 1.25, 0.5, 2]) scales.push([scale, scale]);
     for (const quad of quads) for (let turn = 0; turn < 4; turn++) {
       const corners = quad.slice(turn).concat(quad.slice(0, turn));
       const sideX = Math.hypot(corners[1].x - corners[0].x, corners[1].y - corners[0].y);
@@ -289,6 +289,10 @@
           for (const dy of [0, -1.5, 1.5]) for (const dx of [0, -1.5, 1.5]) {
             const trial = offsetMatrix(matrix, dx, dy), score = adapter.quality(trial, id);
             options.pilotQuality = Math.max(options.pilotQuality || 0, score);
+            if (options.pilotFirst && score > .6) {
+              const direct = adapter.read(trial, id);
+              if (direct) return { ...direct, initialMatrix: quadFit(corners, direct.originalWidth, direct.originalHeight) };
+            }
             if (score > 0.2) proposals.push({ matrix: trial, id, score, corners, adapter });
           }
         }
@@ -312,6 +316,10 @@
   }
 
   async function seedSearch(pixels, luma, width, height, adapters, options, signature) {
+    if (options.pilotFirst) {
+      const seed = await seedFromQuads([[{x:0,y:0},{x:width-1,y:0},{x:width-1,y:height-1},{x:0,y:height-1}]],signature,adapters,options);
+      if (seed) return seed;
+    }
     if (options.mode !== "padding") {
       const quads = options.corners?.length === 4 ? [options.corners] : await paddingQuads(pixels, width, height, options);
       const seed = await seedFromQuads(quads, signature, adapters, options);
@@ -742,10 +750,20 @@
         const luma = new Float32Array(width * height);
         options.onProgress?.("Preparing wavelet search…");
         for (let i = 0; i < luma.length; i++) luma[i] = (pixels[i * 4] + pixels[i * 4 + 1] + pixels[i * 4 + 2]) / 3;
-        signature = await root.PixelStowSpectrum.analyze(luma, width, height, options);
-        options.onSignature?.(signature);
-        if (!signature.likely && !options.forceSearch && !options.corners?.length) return { geometry: null, markers, signature, evidence: evidence(), reason: signature.message };
-        seed = await seedSearch(pixels, luma, width, height, adapters, options, signature);
+        if (requested.pilotFirst && requested.scaleGuide?.detected) {
+          const {fx,fy} = requested.scaleGuide, squared = fx*fx+fy*fy;
+          const scale = 1/(128*Math.sqrt(squared)), ux=fx/Math.sqrt(squared)*scale, uy=fy/Math.sqrt(squared)*scale;
+          signature = { likely:true, confirmed:false, scalePilot:true,
+            bases:[[ux,uy,-uy,ux],[-uy,ux,-ux,-uy],[-ux,-uy,uy,-ux],[uy,-ux,ux,uy]],
+            message:"Scale pilot suggests a marker pitch. Checking marker headers…" };
+          options.onSignature?.(signature);
+          seed = await seedSearch(pixels,luma,width,height,adapters,options,signature);
+        } else {
+          signature = await root.PixelStowSpectrum.analyze(luma, width, height, options);
+          options.onSignature?.(signature);
+          if (!signature.likely && !options.forceSearch && !options.corners?.length) return { geometry: null, markers, signature, evidence: evidence(), reason: signature.message };
+          seed = await seedSearch(pixels, luma, width, height, adapters, options, signature);
+        }
       }
       if (!seed) return { geometry: null, markers, evidence: evidence(),
         signature: { ...signature, confirmed: false, message: "No checksum-valid markers found. Frequency evidence alone does not confirm an encoded image." },

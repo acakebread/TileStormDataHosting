@@ -89,12 +89,13 @@ and colour artefacts. Boosted payload and marker signals are limited to fit
 the compressed reference with no further block brightness shift.
 
 Carrier preamble byte 2 retains bit 0 (required) and bit 1 (one-parity mode).
-Bits 2..6 store `h / 2`; bit 7 is reserved. The existing carrier-header CRC
+Bits 2..6 store `h / 2`; bit 7 records the scale pilot described below. The existing carrier-header CRC
 protects it. The preamble length, marker headers and PCF1 payload/password
 frames remain unchanged. A zero headroom denotes earlier V5 output; no separate
 discovery profile is required.
 
-Source extraction first removes payload and marker wavelets, then reverses
+Source extraction first removes payload and marker wavelets, removes the pilot
+when its presence bit is set, then reverses
 the recorded map: `source = (cleaned - h) * 255 / (255 - 2h)`. It restores
 black/white range without estimating new endpoints from image content.
 Quantization and wavelet removal remain lossy, and optical captures introduce
@@ -198,22 +199,64 @@ explicitly selects carrier 3 to keep its measured baseline separate.
 local-noise estimator, whole-range mapping, header persistence through PNG,
 source reconstruction on black/white/saturated RGB, and source/alpha preservation.
 
-## Low-frequency resolution pilot: appraisal
+## Low-frequency scale pilot
 
-A known 64- or 128-pixel carrier period could provide an additional scale hint
-when the four-pixel carrier is blurred or aliased. The existing FFT already
-uses the payload carrier and the distinct marker frequency to propose scales;
-a low-frequency pilot would supplement that mechanism. Pitch alone does not
-identify image boundaries, orientation, dimensions or lens distortion.
+New V5 images include a one-axis, three-tone pilot with wavelengths 128, 85⅓
+and 51.2 **native pixels**. A fixed native wavelength, rather than a fixed cycle
+count per image, lets the measured capture wavelength estimate capture pixels
+per native pixel. Checksum-valid marker headers remain authoritative for native
+dimensions; the pilot does not provide those dimensions or image boundaries.
 
-Photographic content also has low-frequency structure, and perspective makes
-the observed pitch vary across the frame. A very faint single sine wave can
-therefore be a weak or ambiguous identifier. A two-axis phase-coded pilot,
-evaluated after geometric normalization, is a more useful experiment. It needs
-false-positive, source-texture, minimum-size and capture tests before adding
-another signal to every encoded image. No pilot is implemented in this revision.
+For native column `x`, the integer RGB offset is:
 
-### Fixed-pitch pilot experiment (15 October 2026)
+```
+round(3 / 2.4 * (cos(2π*2*x/256 + 0.2)
+             + 0.8*cos(2π*3*x/256 + 1.1)
+             + 0.6*cos(2π*5*x/256 + 2.4)))
+```
+
+The combined offset is at most three RGB levels out of 255; alpha is untouched.
+It is painted onto the linearly compressed reference before payload and marker
+wavelets. Headroom includes the extra three levels. Local texture appraisal still
+uses the original source. Extraction subtracts the same integer offsets before
+undoing the recorded range map. The CRC-protected preamble bit prevents removing
+a pilot from older V5 images. Payload layout, capacity, passwords and PCF1 frames
+remain unchanged. Older V5 images remain readable by this reader; readers from
+before this addition may reject the newly used preamble bit and need updating.
+
+The guide detector uses a separate low-frequency 2D FFT, since the ordinary
+wavelet detector removes low frequencies. It averages to a 128-pixel maximum
+edge, removes a fitted brightness plane, windows the data and retains complex
+FFT values. Three collinear peaks must agree in pitch, relative amplitudes and
+the translation-invariant phase relationship `phase2 + phase3 - phase5`.
+An unclear full-frame result also checks a central crop. Work is bounded to
+750 ms and yields between chunks. Missing scripts, an unclear signal or no pilot
+returns to ordinary discovery. Rotation is allowed; perspective and photographic
+texture can smear or hide the peaks, so detection is optional.
+
+A detected pilot proposes an arbitrary working grid near native marker pitch
+and an orientation for the first marker search. This extra attempt has a short
+1.2-second allowance and uses the pilot as an unconfirmed frequency cue. It must
+still decode a marker header and CRC. Every ordinary pyramid level remains
+available with its original search logic, including its frequency gate, and
+unvisited levels remain in the payload recovery fallback. A Fourier peak alone
+never confirms an encoded image or accepts its contents.
+
+Continuous capture independently checks a small copy of each sampled frame.
+Pilot-bearing frames take priority over unhinted frames; see
+[CameraCapture.md](CameraCapture.md). A marker-free pilot match cannot trigger a
+payload read, and the complete payload checksum is still required.
+
+`node tests/pixelstow-pilot-checks.mjs` covers the new writer, source removal,
+alpha, measured scales 0.73/1/1.37/2.1, quarter-turn and padded 12° rotation, unencoded controls,
+real guided marker/payload recovery, cancellation and all original fallback
+grids after a false hint. `tests/fixtures/public-v5-before-scale-pilot.png` was
+generated with the pre-pilot writer at `ea623cf` and contains only public test
+text. It guards decode, extraction and padded-capture fallback for earlier V5 output. Browser worker and
+camera-thumbnail mapping checks are in `tests/pixelstow-pilot-worker-checks.mjs`.
+These are controlled synthetic checks, not measured optical reliability.
+
+### Earlier one-dimensional appraisal (15 October 2026)
 
 `node tools/pixelstow-scale-pilot-appraisal.mjs` now provides a reproducible,
 public synthetic appraisal. A fixed **cycle count** (for example eight cycles
@@ -243,9 +286,7 @@ on this machine; image preparation and camera hardware are not benchmarked.
 Detailed measurements are generated under ignored
 `artifacts/research/scale-pilot-appraisal/results.json`.
 
-This supports further investigation of a fixed-pitch pilot after an outline
-proposal, using oriented 2D FFT peaks or short-strip/local measurements before
-perspective normalization. It does not justify changing the V5 writer yet.
-Any eventual pilot needs signal/headroom and source-removal tests, natural-photo
-negatives, rotation/perspective/glare tests and optical capture evidence. No pilot
-is added to saved images, and the current frequency gate and checksums remain.
+Those results describe the earlier one-dimensional prototype, not the production
+2D detector above. They motivated the 2D implementation and retaining the full
+fallback. Natural-photo negatives, perspective, glare and fresh optical captures
+remain necessary to establish real camera benefit and false-positive rates.

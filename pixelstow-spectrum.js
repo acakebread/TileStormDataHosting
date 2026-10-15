@@ -187,5 +187,120 @@
           : "No clear encoding frequency signature detected at this scale." };
   }
 
-  root.PixelStowSpectrum = { analyze };
+  async function scaleGuide(pixels, width, height, pilot, options = {}) {
+    // A scale hint only. The guided attempt must still verify marker headers
+    // and the payload. Low-confidence/missing pilots leave ordinary discovery.
+    const deadline = Math.min(options.deadline || Infinity, Date.now() + 750);
+    const check = () => {
+      if (options.signal?.aborted) throw new DOMException("Search cancelled.", "AbortError");
+      if (Date.now() >= deadline) { const error = new Error("Pilot appraisal time limit."); error.name = "PilotLimit"; throw error; }
+    };
+    const phaseCode = pilot.tones[0].phase + pilot.tones[1].phase - pilot.tones[2].phase;
+    const angleError = value => Math.abs(Math.atan2(Math.sin(value), Math.cos(value)));
+    async function region(left, top, regionWidth, regionHeight) {
+      const reduction = Math.max(1, Math.max(regionWidth, regionHeight) / 128);
+      const w = Math.max(2, Math.round(regionWidth / reduction)), h = Math.max(2, Math.round(regionHeight / reduction));
+      const fw = powerOfTwo(w * 2), fh = powerOfTwo(h * 2);
+      const luma = new Float64Array(w * h), real = new Float64Array(fw * fh), imaginary = new Float64Array(real.length);
+      let mean = 0, slopeX = 0, slopeY = 0, normX = 0, normY = 0;
+      for (let y = 0; y < h; y++) {
+        if ((y & 15) === 0) { check(); if ((y & 63) === 0) await pause(); }
+        const y0 = top + Math.floor(y * regionHeight / h), y1 = top + Math.floor((y + 1) * regionHeight / h);
+        for (let x = 0; x < w; x++) {
+          const x0 = left + Math.floor(x * regionWidth / w), x1 = left + Math.floor((x + 1) * regionWidth / w);
+          let value = 0;
+          for (let sy = y0; sy < y1; sy++) for (let sx = x0; sx < x1; sx++) {
+            const i = (sx + sy * width) * 4; value += (pixels[i] + pixels[i + 1] + pixels[i + 2]) / 3;
+          }
+          value /= Math.max(1, (x1 - x0) * (y1 - y0));
+          luma[x + y * w] = value; mean += value;
+          const dx = x - (w - 1) / 2, dy = y - (h - 1) / 2;
+          slopeX += dx * value; slopeY += dy * value; normX += dx * dx; normY += dy * dy;
+        }
+      }
+      mean /= w * h; slopeX /= normX; slopeY /= normY;
+      let weightSum = 0;
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        const weight = (.5 - .5 * Math.cos(2 * Math.PI * x / (w - 1))) * (.5 - .5 * Math.cos(2 * Math.PI * y / (h - 1)));
+        real[x + y * fw] = (luma[x + y * w] - mean - slopeX * (x - (w - 1) / 2) - slopeY * (y - (h - 1) / 2)) * weight;
+        weightSum += weight;
+      }
+      for (let y = 0; y < fh; y++) {
+        if ((y & 31) === 0) { check(); if ((y & 127) === 0) await pause(); }
+        fft(real.subarray(y * fw, (y + 1) * fw), imaginary.subarray(y * fw, (y + 1) * fw));
+      }
+      const columnReal = new Float64Array(fh), columnImaginary = new Float64Array(fh);
+      for (let x = 0; x < fw; x++) {
+        if ((x & 31) === 0) { check(); if ((x & 127) === 0) await pause(); }
+        for (let y = 0; y < fh; y++) { columnReal[y] = real[x + y * fw]; columnImaginary[y] = imaginary[x + y * fw]; }
+        fft(columnReal, columnImaginary);
+        for (let y = 0; y < fh; y++) { real[x + y * fw] = columnReal[y]; imaginary[x + y * fw] = columnImaginary[y]; }
+      }
+      const power = Float64Array.from(real, (value, i) => value * value + imaginary[i] * imaginary[i]);
+      const at = (x, y) => wrap(x, fw) + wrap(y, fh) * fw;
+      const centred = (x, y) => {
+        const ix = Math.floor(x), iy = Math.floor(y); let re = 0, im = 0;
+        for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) {
+          const sx = ix + dx, sy = iy + dy, i = at(sx, sy);
+          const weight = (dx ? x - ix : 1 - x + ix) * (dy ? y - iy : 1 - y + iy);
+          const angle = 2 * Math.PI * (sx * (w - 1) / (2 * fw) + sy * (h - 1) / (2 * fh));
+          re += weight * (real[i] * Math.cos(angle) - imaginary[i] * Math.sin(angle));
+          im += weight * (real[i] * Math.sin(angle) + imaginary[i] * Math.cos(angle));
+        }
+        const noise = [[6,0],[-6,0],[0,6],[0,-6],[8,8],[-8,8],[8,-8],[-8,-8]].map(([dx,dy]) => power[at(Math.round(x) + dx, Math.round(y) + dy)]).sort((a,b) => a-b);
+        const p = re * re + im * im;
+        return { phase: Math.atan2(im, re), amplitude: 2 * Math.sqrt(p) / weightSum, contrast: p / Math.max(1e-6, noise[4]) };
+      };
+      const peaks = [];
+      for (let y = 0; y <= fh / 2; y++) {
+        if ((y & 31) === 0) { check(); if ((y & 127) === 0) await pause(); }
+        for (let x = 0; x < fw; x++) {
+          const fx = (x <= fw / 2 ? x : x - fw) / fw, fy = y / fh;
+          if ((y === 0 && fx <= 0) || Math.hypot(fx * fw, fy * fh) < 4) continue;
+          const p = power[at(x,y)];
+          if (p <= 1e-6 || [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]].some(([dx,dy]) => power[at(x+dx,y+dy)] > p)) continue;
+          const refine = (a,b,c) => {
+            const low=Math.log(a+1e-20),mid=Math.log(b+1e-20),high=Math.log(c+1e-20),denominator=low-2*mid+high;
+            return Math.abs(denominator)<1e-12?0:Math.max(-.5,Math.min(.5,.5*(low-high)/denominator));
+          };
+          peaks.push({ x: (x <= fw / 2 ? x : x - fw) + refine(power[at(x-1,y)],p,power[at(x+1,y)]),
+            y: y + refine(power[at(x,y-1)],p,power[at(x,y+1)]), power: p });
+        }
+      }
+      const matches = [];
+      for (const peak of peaks.sort((a,b) => b.power-a.power).slice(0,64)) for (const tone of pilot.tones) {
+        const bx = peak.x / tone.k, by = peak.y / tone.k;
+        const fx = bx * 2 / fw * w / regionWidth, fy = by * 2 / fh * h / regionHeight;
+        const scale = 2 / (pilot.period * Math.hypot(fx,fy));
+        if (!Number.isFinite(scale) || scale < .25 || scale > 8) continue;
+        const measured = pilot.tones.map(t => centred(bx*t.k,by*t.k));
+        if (measured.some(m => !Number.isFinite(m.contrast) || m.contrast < 10 || m.amplitude < .2)) continue;
+        const gains = measured.map((m,i) => m.amplitude / pilot.tones[i].weight);
+        if (Math.max(...gains) / Math.min(...gains) > 2.5) continue;
+        const phase = measured[0].phase + measured[1].phase - measured[2].phase;
+        const phaseError = Math.min(angleError(phase-phaseCode),angleError(phase+phaseCode));
+        if (phaseError > .25) continue;
+        matches.push({ scale, fx, fy, phaseError, contrast: Math.min(...measured.map(m=>m.contrast)),
+          score: measured.reduce((s,m)=>s+Math.log(m.contrast),0)-4*phaseError });
+      }
+      return matches.sort((a,b)=>b.score-a.score)[0] || null;
+    }
+    try {
+      if (!pilot || width < 128 || height < 96) return null;
+      const full = await region(0,0,width,height);
+      if (full && full.contrast >= 30 && full.phaseError < .12)
+        return { ...full, detected: true, confirmed: false, width, height, agreement: false };
+      const cropWidth = Math.round(width*.68), cropHeight = Math.round(height*.68);
+      const crop = await region(Math.floor((width-cropWidth)/2),Math.floor((height-cropHeight)/2),cropWidth,cropHeight);
+      const agree = full && crop && Math.abs(Math.log2(full.scale/crop.scale)) < .12 &&
+        Math.abs(full.fx*crop.fy-full.fy*crop.fx) / Math.max(1e-9,Math.hypot(full.fx,full.fy)*Math.hypot(crop.fx,crop.fy)) < .15;
+      const selected = agree ? (full.score > crop.score ? full : crop) : [full,crop].filter(m=>m && m.contrast>=30 && m.phaseError<.12).sort((a,b)=>b.score-a.score)[0];
+      return selected ? { ...selected, detected: true, confirmed: false, width, height, agreement: Boolean(agree) } : null;
+    } catch (error) {
+      if (error?.name === "PilotLimit") return null;
+      throw error;
+    }
+  }
+
+  root.PixelStowSpectrum = { analyze, scaleGuide };
 })(typeof window !== "undefined" ? window : self);

@@ -24,6 +24,9 @@
   const CARRIER_V3 = 3;
   const CARRIER_V4 = 4;
   const CARRIER_V5 = 5;
+  const SCALE_PILOT_FLAG = 0x80;
+  const SCALE_PILOT = Object.freeze({ period: 256, amplitude: 3,
+    tones: Object.freeze([{ k: 2, phase: .2, weight: 1 }, { k: 3, phase: 1.1, weight: .8 }, { k: 5, phase: 2.4, weight: .6 }]) });
   const V4_PAYLOAD_PEAK = 64;
   const V4_MARKER_PEAK = 32;
   const V5_MARKER_PEAK = 32;
@@ -707,6 +710,20 @@
     return output;
   }
 
+  function applyScalePilot(pixels, width, inverse = false) {
+    // Paint under the four-pixel payload wavelets, on the headroom-compressed
+    // reference. Integer deltas are reversible after carrier removal; alpha and
+    // the original pixels remain untouched. Native periods: 128, 85 1/3, 51.2.
+    const output = pixels.slice(), deltas = new Int8Array(width);
+    for (let x = 0; x < width; x++) deltas[x] = Math.round(SCALE_PILOT.amplitude / 2.4 *
+      SCALE_PILOT.tones.reduce((sum, tone) => sum + tone.weight * Math.cos(2 * Math.PI * tone.k * x / SCALE_PILOT.period + tone.phase), 0));
+    for (let i = 0; i < pixels.length; i += 4) {
+      const delta = deltas[(i / 4) % width] * (inverse ? -1 : 1);
+      for (let c = 0; c < 3; c++) output[i + c] = clampByte(pixels[i + c] + delta);
+    }
+    return output;
+  }
+
   function linearAmplitude(reference, width, x, y, requested) {
     const fits = (amplitude) => [0, 1].every((bit) => {
       const bias = fitBias(reference, width, x, y, bit, amplitude);
@@ -1385,7 +1402,7 @@
 
   function searchInWorker(pixels, width, height, options, operation = "geometry") {
     return new Promise((resolve, reject) => {
-      const url = new URL("pixelstow-transform-worker.js?v=20261015-attachment-count1", codecScriptUrl);
+      const url = new URL("pixelstow-transform-worker.js?v=20261015-v5-pilot1", codecScriptUrl);
       const worker = new Worker(url);
       let finished = false;
       const abort = () => { if (finished) return; cleanup(); reject(new DOMException("Search cancelled.", "AbortError")); };
@@ -1409,7 +1426,7 @@
         const copy = new Uint8Array(pixels);
         worker.postMessage({ pixels: copy, width, height, operation, mode: options.mode, forceSearch: options.forceSearch,
           includeLegacy: options.includeLegacy ?? legacyRecovery, carrierVersion: options.carrierVersion, nativeOnly: options.nativeOnly,
-          corners: options.corners, seed: options.seed, deadline: options.deadline,
+          corners: options.corners, seed: options.seed, deadline: options.deadline, scaleGuide: options.scaleGuide,
           seedDeadline: options.seedDeadline, camera: options.camera, scan: options.scan,
           searchState: options.searchState, stopOnHighConfidence: options.stopOnHighConfidence,
           resumeDiscovery: options.resumeDiscovery,
@@ -1812,6 +1829,15 @@
     return pending.reduce((bestIndex, index) => priority(index) < priority(bestIndex) ? index : bestIndex, pending[0]);
   }
 
+  // Cheap calibration only. No markers, carrier header or payload are read.
+  async function scanScaleGuide(pixels, width, height, options = {}) {
+    assertImage(pixels, width, height);
+    checkCancelled(options.signal);
+    if (canUseReaderWorker(options)) return searchInWorker(pixels, width, height, options, "scale-guide");
+    if (!root.PixelStowSpectrum?.scaleGuide) return null;
+    return root.PixelStowSpectrum.scaleGuide(pixels, width, height, SCALE_PILOT, options);
+  }
+
   // Pure discovery: only locator symbols are read. No carrier preamble, body,
   // decompression or payload verification is performed by this operation.
   async function scanMarkers(pixels, width, height, options = {}) {
@@ -1831,7 +1857,16 @@
     }
     if (options.nativeOnly) return { found: false, geometry: null, candidates: [], markers: [], width, height,
       reason: "No recovery marker headers were found on the native pixel grid." };
-    if ((options.singleResolution || options.mode === "padding" || Math.max(width, height) < 640) && width * height <= MAX_PIXELS) {
+    let scaleGuide = options.searchState?.scaleGuide || (options.scaleGuide?.detected && options.scaleGuide.width === width &&
+      options.scaleGuide.height === height && Number.isFinite(options.scaleGuide.scale) && options.scaleGuide.scale >= .25 &&
+      options.scaleGuide.scale <= 8 && Number.isFinite(options.scaleGuide.fx) && Number.isFinite(options.scaleGuide.fy) &&
+      Math.hypot(options.scaleGuide.fx, options.scaleGuide.fy) > 0 ? options.scaleGuide : null);
+    if (!scaleGuide && !options.searchState && !options.seed && !options.singleResolution && options.mode !== "padding" &&
+      options.scaleGuide !== false && recoveryVersions(options).includes(CARRIER_V5)) {
+      try { scaleGuide = await scanScaleGuide(pixels, width, height, { worker: false, signal: options.signal, deadline: options.deadline }); }
+      catch (error) { if (error?.name === "AbortError") throw error; } // An optional guide must not break ordinary recovery.
+    }
+    if ((options.singleResolution || options.mode === "padding" || (Math.max(width, height) < 640 && !scaleGuide)) && width * height <= MAX_PIXELS) {
       const result = await findVisualTransform(pixels, width, height, { ...options, worker: false, geometryOnly: true });
       const candidates = rankMarkerCandidates((result.candidates || []).map((geometry) => ({ geometry, markers: result.markers, markerSearch: result.markerSearch })));
       return { ...result, candidates, geometry: candidates[0]?.geometry, highConfidence: Boolean(candidates[0]?.geometry.highConfidence), width, height };
@@ -1843,14 +1878,23 @@
     // Start near a useful middle size. Marker agreement and measured spacing
     // choose the next level; both directions remain available after a weak miss.
     // Every working image comes directly from the original, never a resize chain.
-    const sizes = [16, 8, 4, 2, 1].map((divisor) => ({ divisor,
+    const sizes = options.searchState?.sizes?.slice() || [16, 8, 4, 2, 1].map((divisor) => ({ divisor,
       width: Math.round(width / divisor), height: Math.round(height / divisor) }))
       .filter((size, i, all) => (width * height <= MAX_PIXELS || size.width * size.height <= MAX_MARKER_PIXELS) &&
         (size.divisor === 1 || size.width >= 128 && size.height >= 96) &&
         all.findIndex((s) => s.width === size.width && s.height === size.height) === i);
     const startDivisor = known ? markerBasis(known.matrix, known.carrierVersion) / 1.2 : Math.max(width, height) / 1000;
-    const start = sizes.reduce((best, size, i) => Math.abs(Math.log2(size.divisor / startDivisor)) <
-      Math.abs(Math.log2(sizes[best].divisor / startDivisor)) ? i : best, 0);
+    if (scaleGuide && !options.searchState?.sizes) {
+      const proposed = { divisor: scaleGuide.scale, width: Math.round(width / scaleGuide.scale),
+        height: Math.round(height / scaleGuide.scale), guided: true };
+      // Keep the ordinary level even when dimensions coincide: the short pilot
+      // search uses narrower hypotheses and must not replace its full fallback.
+      if (proposed.width >= 128 && proposed.height >= 96 && proposed.width * proposed.height <= MAX_MARKER_PIXELS) sizes.push(proposed);
+      sizes.sort((a,b) => b.divisor-a.divisor);
+    }
+    const normalStart = sizes.reduce((best, size, i) => !size.guided && (sizes[best].guided || Math.abs(Math.log2(size.divisor / startDivisor)) <
+      Math.abs(Math.log2(sizes[best].divisor / startDivisor))) ? i : best, 0);
+    let start = scaleGuide && !options.searchState && sizes.some(size => size.guided) ? sizes.findIndex(size => size.guided) : normalStart;
     const pending = options.searchState?.pending.slice() || sizes.map((_, i) => i);
     const samples = options.searchState?.samples.slice() || [];
     while (pending.length) {
@@ -1861,8 +1905,8 @@
       }
       const index = nextMarkerScale(pending, samples, start, sizes, known);
       pending.splice(pending.indexOf(index), 1);
-      const { width: rw, height: rh, divisor } = sizes[index], full = divisor === 1;
-      const label = (full ? "Full size" : "1/" + divisor + " size") + " (" + rw + " × " + rh + ")";
+      const { width: rw, height: rh, divisor, guided } = sizes[index], full = divisor === 1;
+      const label = (guided ? "Pilot-guided size" : full ? "Full size" : "1/" + divisor + " size") + " (" + rw + " × " + rh + ")";
       options.onProgress?.("Locating photo markers: " + label + "…");
       const corners = options.corners?.map((p) => ({ x: (p.x + 0.5) * rw / width - 0.5, y: (p.y + 0.5) * rh / height - 0.5 }));
       const scaleMatrix = (h) => [(rw / width) * h[0] + (rw / width - 1) / 2 * h[6],
@@ -1880,9 +1924,14 @@
       const image = full ? { pixels, width, height } : await reducePhoto(pixels, width, height, rw, rh, options.signal);
       const remaining = deadline - Date.now();
       const seedBudget = Math.max(1500, remaining / Math.min(3, pending.length + 1));
+      // A false pilot gets only a short extra attempt. Every original pyramid
+      // level remains pending, with the original reader budgets and checks.
+      const levelDeadline = guided ? Math.min(deadline, Date.now() + 1200) : deadline;
+      const workingGuide = guided && scaleGuide ? { ...scaleGuide, fx: scaleGuide.fx * width / rw, fy: scaleGuide.fy * height / rh } : null;
       const result = await findVisualTransform(image.pixels, rw, rh, { ...options, corners, seed, singleResolution: true,
-        worker: false, geometryOnly: true, deadline,
-        seedDeadline: Math.min(deadline, Date.now() + seedBudget),
+        scaleGuide: workingGuide, pilotFirst: Boolean(workingGuide),
+        worker: false, geometryOnly: true, deadline: levelDeadline,
+        seedDeadline: Math.min(levelDeadline, Date.now() + seedBudget),
         onProgress: (text) => options.onProgress?.(label + ": " + text) });
       const lifted = full ? result : liftPhotoResult(result, width, height, rw, rh);
       const header = lifted.markers?.filter((m) => m.verification === "header").sort((a, b) => b.quality - a.quality)[0];
@@ -1891,7 +1940,8 @@
         localizationResolution: { width: rw, height: rh }, photo: true });
       const markerScore = lifted.geometry?.rank ?? (lifted.markers?.length ? 30 + lifted.markers.length * 3 :
         Math.min(20, 20 * Math.max(0, lifted.evidence?.pilotQuality || 0)));
-      samples.push({ index, score: markerScore });
+      if (!guided || header) samples.push({ index, score: markerScore });
+      if (guided && !header) start = normalStart;
       const rank = (r) => (r?.geometry ? 16 : 0) + (r?.markers?.length || 0);
       if (!best || rank(lifted) >= rank(best)) best = lifted;
       if (options.stopOnHighConfidence !== false && lifted.geometry?.highConfidence) {
@@ -1900,9 +1950,9 @@
       }
     }
     const ranked = rankMarkerCandidates(candidates);
-    return { ...best, width, height, candidates: ranked, geometry: ranked[0]?.geometry,
+    return { ...best, width, height, scaleGuide, candidates: ranked, geometry: ranked[0]?.geometry,
       highConfidence: Boolean(ranked[0]?.geometry.highConfidence),
-      searchState: { pending, samples, seed: verifiedCurrent ? known : undefined, deadline },
+      searchState: { pending, samples, seed: verifiedCurrent ? known : undefined, deadline, sizes, scaleGuide },
       markers: ranked[0]?.markers || best?.markers || [], markerSearch: ranked[0]?.markerSearch || best?.markerSearch };
   }
 
@@ -2080,7 +2130,8 @@
     // V5's CRC-protected carrier header stores uniform headroom in two-level
     // increments. This changes no payload frame, password or marker header.
     const flags = FLAGS | (parityBits === 1 ? ONE_PARITY : 0) |
-      (version === CARRIER_V5 ? ((signalPolicy?.linearHeadroom || 0) / 2) << 2 : 0);
+      (version === CARRIER_V5 ? (((signalPolicy?.linearHeadroom || 0) / 2) << 2) |
+        (signalPolicy?.scalePilot ? SCALE_PILOT_FLAG : 0) : 0);
     const bytes = new Uint8Array(9);
     bytes[0] = MAGIC;
     bytes[1] = locatorProfile(version) ? version : CARRIER_V1;
@@ -2239,7 +2290,8 @@
     }
     const allowed = preamble.version === CARRIER_V5 ? (ONE_PARITY | 0xfc) : ONE_PARITY;
     if ((preamble.flags & ~allowed) !== FLAGS) throw frameError("The carrier flags do not match this profile.");
-    const rangeHeadroom = preamble.version === CARRIER_V5 ? (preamble.flags >>> 2) * 2 : 0;
+    const rangeHeadroom = preamble.version === CARRIER_V5 ? ((preamble.flags >>> 2) & 31) * 2 : 0;
+    const scalePilot = preamble.version === CARRIER_V5 && Boolean(preamble.flags & SCALE_PILOT_FLAG);
     if (rangeHeadroom > 62) throw frameError("Unsupported carrier range adjustment.");
     const bitsPerByte = (preamble.flags & ONE_PARITY) !== 0 ? 9 : 12;
     const payloadBlocks = scores.length - PREAMBLE_BLOCKS;
@@ -2256,7 +2308,7 @@
       corrections: decoded.corrections,
       ...repetitionBudget(payloadBlocks, preamble.framedLength, bitsPerByte),
       carrierVersion: preamble.version,
-      rangeHeadroom
+      rangeHeadroom, scalePilot
     };
   }
 
@@ -2332,7 +2384,8 @@
         bundle: unpacked.bundle,
         formatVersion: unpacked.formatVersion,
         carrierVersion: framed.carrierVersion,
-        rangeHeadroom: framed.rangeHeadroom
+        rangeHeadroom: framed.rangeHeadroom,
+        scalePilot: framed.scalePilot
       };
     } catch (error) {
       if (error && error.code === "frame") return null;
@@ -2444,6 +2497,7 @@
       geometry: recovery.geometry,
       readResolution: recovery.readResolution,
       strength: recovery.strength,
+      scalePilot: recovery.scalePilot,
       repetitionRatio: recovery.repetitionRatio,
       copies: recovery.copies,
       parityBits: recovery.parityBits,
@@ -2506,6 +2560,7 @@
           passwordProtected: recovery.passwordProtected,
           strength: recovery.strength,
           rangeHeadroom: recovery.rangeHeadroom,
+          scalePilot: recovery.scalePilot,
           repetitionRatio: recovery.repetitionRatio,
           copies: recovery.copies,
           parityBits: recovery.parityBits,
@@ -2519,7 +2574,7 @@
     }
   }
 
-  async function encodeAt(reference, width, height, payload, passwordProtected, strength, adaptive, bundle, carrierVersion, quality = DEFAULT_QUALITY) {
+  async function encodeAt(reference, width, height, payload, passwordProtected, strength, adaptive, bundle, carrierVersion, quality = DEFAULT_QUALITY, scalePilot = true) {
     strength = Math.max(1, Math.min(32, strength));
     const version = locatorProfile(carrierVersion) ? carrierVersion : CARRIER_V1;
     const map = locatorProfile(version) ? locatorBlockMap(width, height, Infinity, version) : null;
@@ -2549,9 +2604,11 @@
     const framed = await packFrame(payload, strength, passwordProtected, bundle);
     let signalSource = reference;
     if (version === CARRIER_V5) {
-      const headroom = Math.min(62, 2 * Math.ceil((Math.max(12, strength) * 19 / 16 + signalPolicy.biasLimit) / 2));
+      const headroom = Math.min(62, 2 * Math.ceil((Math.max(12, strength) * 19 / 16 + signalPolicy.biasLimit +
+        (scalePilot ? SCALE_PILOT.amplitude : 0)) / 2));
       signalSource = linearRange(reference, headroom);
-      signalPolicy = { ...signalPolicy, linearHeadroom: headroom, textureSource: reference };
+      if (scalePilot) signalSource = applyScalePilot(signalSource, width);
+      signalPolicy = { ...signalPolicy, linearHeadroom: headroom, textureSource: reference, scalePilot };
     }
     const output = signalSource.slice();
     const written = await writeSignal(signalSource, output, width, height, framed, strength, version, map, signalPolicy);
@@ -2566,6 +2623,7 @@
       passwordProtected,
       carrierVersion: version,
       rangeHeadroom: signalPolicy?.linearHeadroom || 0,
+      scalePilot: Boolean(signalPolicy?.scalePilot),
       map
     };
   }
@@ -2598,7 +2656,7 @@
       const usedVersion = wantLocators && locatorFits(width, height, preferredCarrier) ? preferredCarrier : CARRIER_V1;
       const payload = locked ? await encryptEnvelope(plain, password, bundle) : plain.slice();
       try {
-        let encoded = await encodeAt(pixels, width, height, payload, locked, STRENGTHS[0], true, bundle, usedVersion, quality);
+        let encoded = await encodeAt(pixels, width, height, payload, locked, STRENGTHS[0], true, bundle, usedVersion, quality, options.scalePilot !== false);
         for (;;) {
           const recovery = await readNative(encoded.pixels, width, height, usedVersion, encoded.strength, undefined, encoded.map);
           if (recovery && !recovery.locatorOnly && recovery.carrierVersion === usedVersion &&
@@ -2615,6 +2673,7 @@
               passwordProtected: locked,
               carrierVersion: usedVersion,
               rangeHeadroom: encoded.rangeHeadroom,
+              scalePilot: encoded.scalePilot,
               quality,
               locatorFallback: wantLocators && usedVersion === CARRIER_V1
             };
@@ -2629,7 +2688,7 @@
           if (next === 0) {
             throw new Error("The message could not be verified in this image. Try another picture or a shorter message.");
           }
-          encoded = await encodeAt(pixels, width, height, payload, locked, next, false, bundle, usedVersion, quality);
+          encoded = await encodeAt(pixels, width, height, payload, locked, next, false, bundle, usedVersion, quality, options.scalePilot !== false);
         }
       } finally { payload.fill(0); }
     } finally { plain.fill(0); }
@@ -2983,6 +3042,7 @@
     let cleaned = await extractBlind(restored, origW, origH, fit.strength, locatorBlockMap(origW, origH, Infinity, fit.carrierVersion),
       fit.carrierVersion === CARRIER_V4 || fit.carrierVersion === CARRIER_V5 ? V4_PAYLOAD_PEAK : fit.strength);
     cleanLocators(restored, origW, origH, cleaned, fit.carrierVersion);
+    if (fit.scalePilot) cleaned = applyScalePilot(cleaned, origW, true);
     if (fit.rangeHeadroom) cleaned = linearRange(cleaned, fit.rangeHeadroom, true);
     if (identity) return cleaned;
     return forwardSample(cleaned, origW, origH, pixels, width, height, fit, options.signal);
@@ -3069,6 +3129,7 @@
     extractCarrier,
     findVisualTransform,
     scanMarkers,
+    scanScaleGuide,
     analyzeNativeMarkers,
     readMarkerCandidates,
     clearVisualTransform(pixels) { visualMappings.delete(pixels); },

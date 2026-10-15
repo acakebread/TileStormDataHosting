@@ -81,6 +81,65 @@ function workerQueue(){
 }
 console.log('PASS: working search budgets, complete fit list/fallback, uninterrupted slower reads, stronger-frame promotion, latest-slot replacement and cancellation');
 
+const pilot={detected:true,confirmed:false,scale:1,fx:1/128,fy:0,width:16,height:16};
+{
+  const {camera,session}=setup(),guides=[],markers=[];let id=0,reads=0;
+  camera.video={readyState:2,currentTime:1};camera.captureFrame=()=>image(++id);camera.captureGuideImage=img=>img;
+  codec.scanScaleGuide=(p,w,h,options)=>new Promise(resolve=>guides.push({id:p[0],options,resolve}));
+  codec.scanMarkers=(p,w,h,options)=>new Promise((resolve,reject)=>{
+    markers.push({id:p[0],options,resolve});
+    options.signal.addEventListener('abort',()=>reject(new DOMException('Cancelled','AbortError')),{once:true});
+  });
+  codec.readMarkerCandidates=async()=>{reads++;return {found:false};};
+  camera.scan(session);assert.equal(guides.length,1);assert.equal(markers.length,0);
+  guides[0].resolve(null);await flush();assert.equal(markers[0].id,1);
+  camera.video.currentTime=2;camera.scan(session);camera.video.currentTime=3;camera.scan(session);
+  assert.equal(guides.length,2);assert.equal(session.guidePending.frameNumber,3);
+  guides[1].resolve(null);await flush();assert.equal(guides[2].id,3);
+  guides[2].resolve(pilot);await flush();
+  assert(markers[0].options.signal.aborted,'a later pilot must jump an unconfirmed marker search');
+  assert.equal(markers[1].id,3);assert(markers[1].options.scaleGuide.detected);
+  assert.equal(markers[1].options.deadline-now,24000);
+  markers[1].resolve({markers:[],candidates:[]});await flush();
+  assert.equal(reads,0,'a Fourier match without verified marker geometry must never start a payload read');
+  assert.equal(timers.size,0);
+}
+{
+  const {camera,session}=setup();session.scanning=true;session.scanningEntry={...entry(1),markerConfirmed:true};
+  session.abort=new AbortController();
+  const positive={...entry(2),scaleGuide:pilot};camera.enqueueFrame(session,positive);camera.enqueueFrame(session,entry(3));
+  assert.equal(session.pending,positive,'unhinted arrivals cannot displace a pending pilot');
+  assert(!session.abort.signal.aborted,'a verified marker protects useful acquisition until the later frame is appraised');
+}
+{
+  const {camera,session}=setup(),calls=workerQueue();
+  session.history=[entry(1,200)];camera.readBestFrame(session);await flush();
+  session.pending={...entry(2,50),scaleGuide:pilot};codec.scanMarkers=async()=>scan(50);
+  await camera.scanMarkers(session);await flush();
+  assert(calls[0].options.signal.aborted);assert.equal(calls[1].id,2,'a verified pilot-bearing frame takes priority even with a lower geometry score');
+  assert.equal(calls[1].scan.candidates.length,3);assert(calls[1].options.resumeDiscovery);
+  session.pending={...entry(3,50),scaleGuide:pilot};await camera.scanMarkers(session);await flush();
+  assert(!calls[1].options.signal.aborted,'equal pilot-bearing fits do not repeatedly restart a valid read');
+  session.paused=true;camera.cancelSearches(session);await flush();assert.equal(timers.size,0);
+}
+{
+  const {camera,session}=setup();let finish;const enqueued=[];
+  camera.enqueueFrame=(s,e)=>enqueued.push(e);session.guidePending={...entry(1),guideImage:image(1)};
+  codec.scanScaleGuide=()=>new Promise(resolve=>{finish=resolve;});
+  camera.checkScaleGuide(session);session.paused=true;camera.cancelSearches(session);finish(pilot);await flush();
+  assert.equal(enqueued.length,0,'pause invalidates even a late pilot-positive result');assert.equal(timers.size,0);
+  session.paused=false;session.guidePending={...entry(2),guideImage:image(2)};
+  codec.scanScaleGuide=async()=>{throw Error('Synthetic guide failure');};await camera.checkScaleGuide(session);
+  assert.equal(enqueued[0].frameNumber,2);assert(!enqueued[0].scaleGuide,'guide errors retain ordinary discovery');
+  session.guidePending={...entry(3),guideImage:image(3)};
+  codec.scanScaleGuide=(p,w,h,{signal})=>new Promise((resolve,reject)=>signal.addEventListener('abort',()=>reject(new DOMException('Cancelled','AbortError')),{once:true}));
+  camera.checkScaleGuide(session);await advance(1200);
+  assert.equal(enqueued[1].frameNumber,3);assert(!enqueued[1].scaleGuide);assert.equal(timers.size,0);
+  session.purpose='source';camera.captureFrame=()=>{throw Error('Source mode must not sample for analysis');};camera.scan(session);
+}
+delete codec.scanScaleGuide;
+console.log('PASS: independent latest-frame Fourier lookahead, pilot-first priority, marker/payload verification, tie protection and cancelled/error fallback');
+
 // Real codec regression: inaccurate higher-ranked transforms may precede the
 // correct one. The camera must not silently discard the third valid candidate.
 globalThis.window={};

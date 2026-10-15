@@ -19,6 +19,7 @@
         /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
         (/Macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1));
       this.captureCanvas = document.createElement("canvas");
+      this.guideCanvas = document.createElement("canvas");
       this.openButton = document.querySelector("#open-camera");
       this.sourceButton = document.querySelector("#camera-source");
       this.input = document.querySelector("#camera-file");
@@ -612,6 +613,7 @@
       this.nearMiss.hidden = true;
       this.still.width = this.still.height = this.guides.width = this.guides.height = 0;
       this.captureCanvas.width = this.captureCanvas.height = 0;
+      this.guideCanvas.width = this.guideCanvas.height = 0;
       this.changed();
     }
 
@@ -658,6 +660,9 @@
     cancelSearches(session, clearHistory = false) {
       session.abort?.abort();
       session.readAbort?.abort();
+      session.guideAbort?.abort();
+      session.guidePending = null;
+      session.guideGeneration = (session.guideGeneration || 0) + 1;
       session.pending = null;
       session.appraised = 0;
       if (clearHistory) {
@@ -677,9 +682,9 @@
       if (entry.scan.markers?.length) history.push(entry);
       // Keep an attempted frame for feedback, but don't let old failed captures
       // occupy every history slot and starve newer candidates of a payload read.
-      const attempted = history.filter((frame) => frame.attempted).sort((a, b) => b.score - a.score)[0];
+      const attempted = history.filter((frame) => frame.attempted).sort((a, b) => this.framePriority(b) - this.framePriority(a))[0];
       const retained = history.filter((frame) => !frame.attempted || frame === attempted);
-      retained.sort((a, b) => Number(a.attempted || false) - Number(b.attempted || false) || b.score - a.score || b.frameNumber - a.frameNumber);
+      retained.sort((a, b) => Number(a.attempted || false) - Number(b.attempted || false) || this.framePriority(b) - this.framePriority(a) || b.frameNumber - a.frameNumber);
       let bytes = 0;
       session.history = retained.filter((frame, index) => {
         bytes += frame.image.pixels.byteLength;
@@ -687,6 +692,62 @@
       });
       session.best = session.history[0];
       this.showBestFrame(session);
+    }
+
+    framePriority(entry) {
+      // Only marker-bearing frames reach payload history. The guide promotes
+      // their scheduling; it never substitutes for a marker or payload checksum.
+      return (entry.scaleGuide?.detected ? 1000 : 0) + entry.score;
+    }
+
+    captureGuideImage(image) {
+      const factor = Math.min(1, 512 / Math.max(image.width, image.height));
+      const canvas = this.guideCanvas;
+      canvas.width = Math.round(image.width * factor); canvas.height = Math.round(image.height * factor);
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      context.imageSmoothingEnabled = true; context.imageSmoothingQuality = "high";
+      // Same frozen raster, including rotation. Never sample a later video frame.
+      context.drawImage(this.captureCanvas, 0, 0, canvas.width, canvas.height);
+      return { pixels: new Uint8Array(context.getImageData(0, 0, canvas.width, canvas.height).data.buffer), width: canvas.width, height: canvas.height };
+    }
+
+    enqueueFrame(session, entry) {
+      if (this.session !== session || session.paused || session.adjusting || session.handingOff) return;
+      if (session.pending?.scaleGuide?.detected && !entry.scaleGuide?.detected && Date.now() - session.pending.capturedAt < 45000) return;
+      session.pending = entry;
+      const active = session.scanningEntry;
+      if (entry.scaleGuide?.detected && active && !active.scaleGuide?.detected && !active.markerConfirmed) {
+        session.abort?.abort();
+        if (!session.reading) this.progress.textContent = "Scale pilot found. Prioritising frame " + entry.frameNumber + " for marker checks…";
+      }
+      this.scanMarkers(session);
+    }
+
+    async checkScaleGuide(session) {
+      if (this.session !== session || session.paused || session.adjusting || session.handingOff || session.guideBusy || !session.guidePending) return;
+      session.guideBusy = true;
+      const entry = session.guidePending; session.guidePending = null;
+      const generation = session.guideGeneration;
+      const controller = new AbortController(); session.guideAbort = controller;
+      const timer = setTimeout(() => controller.abort(), 1200);
+      try {
+        const small = entry.guideImage;
+        const hint = await PixelStow.scanScaleGuide(small.pixels, small.width, small.height,
+          { signal: controller.signal, deadline: Date.now() + 1000 });
+        if (this.session !== session || controller.signal.aborted) return;
+        if (hint?.detected && Number.isFinite(hint.scale) && hint.scale > 0 && Math.hypot(hint.fx, hint.fy) > 0) {
+          const fx = hint.fx * small.width / entry.image.width, fy = hint.fy * small.height / entry.image.height;
+          entry.scaleGuide = { ...hint, fx, fy, scale: hint.scale * Math.hypot(hint.fx, hint.fy) / Math.hypot(fx, fy),
+            width: entry.image.width, height: entry.image.height };
+        }
+      } catch (_) { /* An unavailable/unclear guide always uses ordinary discovery. */ }
+      finally {
+        clearTimeout(timer); entry.guideImage = null;
+        if (generation === session.guideGeneration) this.enqueueFrame(session, entry);
+        session.guideBusy = false;
+        if (session.guideAbort === controller) session.guideAbort = null;
+        this.checkScaleGuide(session);
+      }
     }
 
     showBestFrame(session) {
@@ -732,8 +793,12 @@
       try {
         // Refresh this one slot even during a long payload read. The next marker
         // scan starts from the current framing, rather than an old queued frame.
-        session.pending = { image: this.captureFrame(), frameNumber: ++session.frames, capturedAt: Date.now() };
-        this.scanMarkers(session);
+        const entry = { image: this.captureFrame(), frameNumber: ++session.frames, capturedAt: Date.now() };
+        if (typeof PixelStow.scanScaleGuide === "function") {
+          entry.guideImage = this.captureGuideImage(entry.image);
+          session.guidePending = entry;
+          this.checkScaleGuide(session);
+        } else this.enqueueFrame(session, entry);
       } catch (error) {
         session.paused = true;
         this.cancelSearches(session);
@@ -748,6 +813,7 @@
       session.scanning = true;
       const entry = session.pending;
       session.pending = null;
+      session.scanningEntry = entry;
       const { image, frameNumber } = entry;
       const controller = new AbortController();
       session.abort = controller;
@@ -762,27 +828,31 @@
         const header = previous?.markers?.find((m) => m.verification === "header");
         const scan = await PixelStow.scanMarkers(image.pixels, image.width, image.height, {
           mode: "perspective", camera: true, deadline: Date.now() + (header ? 12000 : 24000), signal: controller.signal,
+          scaleGuide: entry.scaleGuide || false,
           seed: previous?.width === image.width && previous?.height === image.height && header
             ? { ...header, initialMatrix: previous.geometry?.matrix } : undefined,
           onProgress: (text) => { if (this.session === session && !controller.signal.aborted && !session.reading) {
             this.progress.textContent = prefix + text; this.readProgress.update(this.progress.textContent);
           } },
           onSignature: (signature) => { if (this.session === session && !controller.signal.aborted) {
+            if (signature.confirmed) entry.markerConfirmed = true;
             this.signature.textContent = signature.message;
             if (!session.reading) this.readProgress.signature(signature);
           } }
         });
         if (this.session !== session || controller.signal.aborted) return;
         entry.scan = scan;
+        entry.scaleGuide ||= scan.scaleGuide;
         session.tracking = scan.markers?.some((m) => m.verification === "header") ? { scan } : null;
         entry.score = scan.candidates?.[0]?.geometry.rank ?? (scan.markers?.length || 0);
         this.retainFrame(session, entry);
         session.appraised++;
-        if (scan.candidates?.length && session.readEntry && !session.readAbort?.signal.aborted && entry.score > session.readEntry.score) {
+        if (scan.candidates?.length && session.readEntry && !session.readAbort?.signal.aborted && this.framePriority(entry) > this.framePriority(session.readEntry)) {
           session.readEntry.state = "replaced by a stronger capture";
           session.appraised = Math.max(2, session.appraised);
           session.readAbort.abort(); // Terminates the payload worker, not just its UI updates.
-          this.progress.textContent = "A stronger marker fit was found. Switching to frame " + frameNumber + "…";
+          this.progress.textContent = (entry.scaleGuide?.detected && !session.readEntry.scaleGuide?.detected
+            ? "A marker-bearing capture with a scale pilot was found. Switching to frame " : "A stronger marker fit was found. Switching to frame ") + frameNumber + "…";
         }
         this.signature.textContent = scan.highConfidence
           ? "All markers agree strongly. Reading the most promising capture."
@@ -803,6 +873,7 @@
         this.sync();
       } finally {
         session.scanning = false;
+        if (session.scanningEntry === entry) session.scanningEntry = null;
         if (session.abort === controller) session.abort = null;
         if (this.session === session && !session.paused && !session.adjusting && !session.handingOff) this.scanMarkers(session);
       }
@@ -812,7 +883,7 @@
       if (this.session !== session || session.purpose === "source" || session.paused || session.adjusting || session.reading || session.handingOff) return;
       const entry = session.history.find((frame) => !frame.attempted && frame.scan.candidates?.length && Date.now() - frame.capturedAt < 45000);
       if (!entry) return; // Never spend a payload read on a marker-free capture.
-      if (session.appraised < 2 && !entry.scan.highConfidence) return;
+      if (session.appraised < 2 && !entry.scan.highConfidence && !entry.scaleGuide?.detected) return;
       session.appraised = 0;
       session.reading = true;
       session.readEntry = entry;

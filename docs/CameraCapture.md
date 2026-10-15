@@ -68,8 +68,8 @@ merely turn the CSS preview while leaving captures sideways. Scanning resumes
 with a fresh frame after the adjustment. These controls do not modify the native
 **Take photo** path.
 
-On HTTP/HTTPS, a disposable marker worker checks the FFT gate and locates the
-eight patches, retaining translation/affine/perspective fits without reading any
+On HTTP/HTTPS, a disposable marker worker checks frequency evidence and locates
+the selected format's patches, retaining translation/affine/perspective fits without reading any
 payload. Large frames use the
 adaptive scale localization described in
 [VisualTransformReader.md](VisualTransformReader.md),
@@ -77,7 +77,8 @@ then rectify the full capture onto the encoded dimensions for wavelet reading.
 The captured raster and marker guides remain in original-resolution coordinates.
 The camera captures a fresh full-resolution raster every 900 ms into one pending
 slot. That slot is replaced while a marker worker is busy; there is no growing
-queue of stale camera frames. Initial marker acquisition has a 24-second budget;
+queue of stale camera frames. A pending frame with a scale pilot is retained
+ahead of unhinted arrivals. Initial marker acquisition has a 24-second budget;
 subsequent scans with a verified tracking header have 12 seconds. The tracking
 header is confirmed against the new pixels before reuse, and cleared after a
 scan without a verified header. Known patches below the detector's basis range
@@ -92,7 +93,7 @@ marker quality/coverage/error rating described in
 [VisualTransformReader.md](VisualTransformReader.md). Frames without a stable fit
 never enter automatic payload decoding. Attempted frames do not fill every
 history slot and block new captures.
-A complete high-confidence eight-marker fit bypasses the two-scan wait and is
+A complete high-confidence marker fit bypasses the two-scan wait and is
 read immediately. Its threshold and the measured warmer/colder scale scheduling
 are shared with ordinary geometric image recovery; full checksums are still
 required. A bad early camera read yields to fresher captures rather than
@@ -105,7 +106,7 @@ unattempted retained frame is then read. Payload attempts have a 30-second
 limit and failed frames are skipped instead of repeatedly parsed. Ordinary
 image imports use the same discovery/ranking stages after their inexpensive
 native/full-frame checks, without the camera's frame-history scheduling.
-The camera UI does not bypass the weak-signature gate. **Capture and read** opens
+Ordinary fallback retains the weak-signature gate. **Capture and read** opens
 a single frame with the ordinary image recovery controls, including the option
 to override that gate if required.
 
@@ -114,7 +115,40 @@ opens. The same RGBA object and its verified geometry are reused; discovery is
 not repeated. A lossless PNG of this raster supplies the imported file for
 exports/sharing. Later decoding/unlocking still verifies the complete frame.
 Workers return inspection metadata/geometry only, not decrypted text, attachment
-bytes or passwords. Original carrier and payload formats do not change.
+bytes or passwords. Payload formats do not change.
+
+### V5 Fourier guide and frame priority
+
+New V5 images carry a faint fixed-pitch scale pilot, described in
+[CarrierV5.md](CarrierV5.md#low-frequency-scale-pilot). Each sampled capture has
+a separate guide copy with maximum edge 512, taken from the same frozen raster,
+including its rotation. A disposable worker runs the bounded low-frequency FFT
+while marker or payload work continues. Only one guide worker and one latest
+pending guide frame are retained. It does not queue behind a long marker read.
+
+A detected pilot promotes that frame ahead of frames without it. If marker
+discovery on an older unhinted frame has not verified a header, it is cancelled
+and the pilot-bearing frame goes next. A search with an already verified header
+keeps its allowance. Only after the new frame produces stable marker geometry
+can it preempt a payload read; pilot-bearing fits outrank unhinted fits, then
+the existing geometry score breaks ties. Equal-rated pilot fits do not repeatedly
+interrupt one another. A stable pilot-bearing fit also bypasses the two-appraisal
+wait. A pilot without verified markers never starts a payload read.
+
+The measured wavelength supplies an initial marker search scale, not acceptance
+of an image. Absent/unclear pilots and guide errors use ordinary discovery; older
+V5 images do not need the signal. The guide's 1.2-second hard cancellation is
+separate from the existing 24/12-second marker and 30-second payload allowances.
+All ranked marker fits and remaining-scale fallback are preserved. Pause,
+reframing, switching and closing abort guide work and invalidate late results.
+Source-photo mode performs no guide appraisal.
+
+`node tests/pixelstow-camera-scheduling-checks.mjs` checks independent lookahead,
+pilot priority, protection of verified work, complete candidate/fallback retention,
+and pause/error handling with controlled worker results. The real browser guide,
+marker and payload workers are checked by `tests/pixelstow-pilot-worker-checks.mjs`
+using a resized public synthetic image. Fresh optical captures must establish
+whether this improves real phone scanning.
 
 The best retained marker-bearing capture is shown with its guides and appraisal/
 read status. That frozen frame is separate from the live preview: coordinates from
