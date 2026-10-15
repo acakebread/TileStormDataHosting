@@ -203,8 +203,8 @@ using synthetic camera streams. Browser visibility and capability limits are
 documented by [enumerateDevices](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/enumerateDevices)
 and [InputDeviceInfo.getCapabilities](https://developer.mozilla.org/en-US/docs/Web/API/InputDeviceInfo/getCapabilities).
 The page places the image first, with its caption below it. The image toolbar has
-compact Browse, Paste, Decode and Create actions, with fullscreen at the top right
-of the image toolbar. Browse and Paste can open either encoded images or raw
+compact Browse, Paste, Decode and Create actions, followed immediately by fullscreen
+at the right end of the same button row. Browse and Paste can open either encoded images or raw
 sources; Decode opens the camera reader, while Create takes a source photo. The speaker button
 sits to the left of the main comparison slider on the same row. The same button and slider
 move into the fullscreen footer, then return on close. Speaker, Fit, 100%,
