@@ -6,10 +6,19 @@
   function prognosis(data, quality = .8, version = data?.carrierVersion ?? 5) {
     if (!data?.fits || !Number.isFinite(data.repetitionRatio)) return .99;
     const ratio = data.repetitionRatio, weak = data.parityBits === 1;
-    const base = weak ? .95 : ratio < 2 ? .7 + .3 * clamp(2 - ratio, 0, 1)
-      : ratio < 5 ? .25 + .35 * (5 - ratio) / 3 : Math.max(.04, 1 / ratio);
-    const gain = root.PixelStow.estimateSignalGain(ratio, quality, version);
-    return clamp(base - .2 * Math.log2(gain), weak ? .75 : ratio < 2 ? .5 : .04, .98);
+    // Compare capacity on the same 12-bit basis across the 12 -> 9-bit parity
+    // switch. Raw repeat counts change denominator at that boundary.
+    const coverage = weak ? ratio * 9 / 12 : ratio;
+    const anchor = (copies, base, floor) => clamp(base - .2 * Math.log2(
+      root.PixelStow.estimateSignalGain(copies, quality, version)), floor, .98);
+    const one = anchor(1, .9, .75), two = anchor(2, .6, .5), five = anchor(5, .2, .04);
+    // Interpolate the strength-adjusted anchors instead of rounding/clamping
+    // each candidate's risk: a red plateau made the final slider tick accept
+    // every smaller image at once. Reserve the last interval for reduced parity.
+    if (coverage < 1) return one + (1 - one) * .8 * clamp((1 - coverage) / .25, 0, 1);
+    if (coverage < 2) return one + (two - one) * (coverage - 1);
+    if (coverage < 5) return two + (five - two) * (coverage - 2) / 3;
+    return Math.max(.04, five * 5 / coverage);
   }
   function qualityForTarget(data, target, version = data?.carrierVersion ?? 5) {
     // Match the real 0.01 quality steps, including flat portions at hard limits.

@@ -34,6 +34,36 @@ const full=c.repetitionForFrame(640,480,2000);
 assert(!full.fits);assert.equal(S.qualityForTarget(full,0).risk,.99);
 console.log('PASS: source dimensions follow actual compressed bytes, selected prognosis, quality, marker limits and the 24MP ceiling; fixed-size quality targets are bounded');
 
+for (const version of [1, 4, 5]) for (const quality of [0, .8, 1]) {
+  const riskAt = coverage => S.prognosis({ fits: true, carrierVersion: version,
+    parityBits: coverage < 1 ? 1 : 4, repetitionRatio: coverage < 1 ? coverage * 12 / 9 : coverage }, quality, version);
+  let previousRisk = Infinity;
+  for (let step = 0; step <= 1000; step++) {
+    const risk = riskAt(.75 + step * .01);
+    assert(risk <= previousRisk + 1e-12, 'more carrier capacity must never worsen prognosis, including the parity switch');
+    previousRisk = risk;
+  }
+  for (const boundary of [1, 2, 5]) assert(Math.abs(riskAt(boundary - 1e-8) - riskAt(boundary + 1e-8)) < 1e-7);
+  for (const framedBytes of [256, 5240, 70000]) {
+    const endpoint = S.plan(1280, 960, framedBytes, quality, 1, version);
+    assert(endpoint.fits);
+    let previous = null;
+    for (let step = 0; step <= 100; step++) {
+      const target = endpoint.min + (endpoint.max - endpoint.min) * step / 100;
+      const selected = S.plan(1280, 960, framedBytes, quality, target, version);
+      assert(selected.fits && selected.risk <= target + 1e-9);
+      if (previous) assert(selected.width <= previous.width && selected.height <= previous.height, 'moving towards tricky read must not enlarge the carrier');
+      previous = selected;
+    }
+    const lastTick = S.plan(1280, 960, framedBytes, quality, endpoint.max - .001, version);
+    assert(endpoint.width >= lastTick.width * .98 && endpoint.height >= lastTick.height * .98,
+      'the final slider tick must not skip a plateau of carrier sizes');
+  }
+}
+assert.equal(S.prognosis({ fits: true, repetitionRatio: 2, parityBits: 4 }, .8), .6);
+assert.equal(S.prognosis({ fits: true, repetitionRatio: 5, parityBits: 4 }, .8), .2);
+console.log('PASS: prognosis is continuous across 1x/2x/5x and the parity switch; sizing progresses through the final risky tick at every quality without skipping carrier sizes');
+
 const pixel=(r,g,b,a=255)=>new Uint8Array([r,g,b,a]);
 const transparent={width:2,height:1,pixels:new Uint8Array([...pixel(255,0,0,0),...pixel(0,0,255,255)])};
 const average=await S.resize(transparent,1,1);

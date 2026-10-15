@@ -117,6 +117,11 @@
     .hint.repetition-warning { color: #ffe285; border-left: 3px solid #ffe285; padding-left: 10px; }
     .read-prognosis { margin: 18px 0 12px; padding: 14px; border: 1px solid var(--border); border-radius: 10px; }
     .read-prognosis p { margin: 0 0 10px; }
+    .read-prognosis > p:first-child { height: 1.5em; }
+    .encoding-status { box-sizing: border-box; height: 9em; margin-top: 12px; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; font-size: .85rem; }
+    .read-prognosis .encoding-status .hint { margin: 0 0 6px; font-size: inherit; }
+    .encoding-status .error { color: #ffb4b4; }
+    #encoding-quality-value { display: inline-block; min-width: 4ch; font-variant-numeric: tabular-nums; }
     .prognosis-scale { position: relative; height: 64px; margin: 0 8px 6px; border-radius: 8px; }
     .prognosis-scale::before { content: ""; position: absolute; inset: 25px 0; border-radius: 8px; background: linear-gradient(90deg, #63d79c, #efc66a 55%, #ed7777); }
     .prognosis-pointer { position: absolute; top: 14px; bottom: 14px; width: 14px; transform: translateX(-50%); border: 2px solid #fff; border-radius: 6px; background: #081016; }
@@ -243,6 +248,7 @@
       user-select: none;
       -webkit-user-select: none;
     }
+    .preview-note { position: absolute; z-index: 2; left: 10px; bottom: 8px; width: fit-content; max-width: calc(100% - 20px); box-sizing: border-box; margin: 0; padding: 2px 5px; border-radius: 4px; color: #92989f; background: rgba(8, 16, 22, .72); font-size: .72rem; line-height: 1.4; pointer-events: none; }
 
     .viewport.panning,
     .viewport.panning * {
@@ -322,6 +328,8 @@
     .camera-open > .transform-reader { display: none !important; }
     .transform-reader { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
     .transform-reader summary { cursor: pointer; color: var(--tile-azure); font-weight: 700; }
+    .transform-reader > :last-child { margin-bottom: 0; }
+    #recovery-progress > .hint:empty { display: none; }
 
     .compare-ui {
       position: absolute;
@@ -491,6 +499,7 @@
       margin: 16px 0 0;
       color: var(--text);
     }
+    .status:empty { min-height: 0; margin: 0; }
 
     .status.error {
       color: #ffb4b4;
@@ -535,8 +544,9 @@
       .image-label { margin-top: 0; }
       .payload-panel { padding: 12px; margin: 12px 0; }
       .image-caption { margin: 6px 0; }
+      .read-prognosis > p:first-child { height: 3em; }
+      .encoding-status { height: 15em; }
       .status { margin-top: 8px; font-size: 0.9rem; }
-      .preview-note { font-size: 0.8rem; margin: 4px 0; }
       .attachment-row { padding: 10px; }
     }
   </style>
@@ -624,6 +634,7 @@
               <span class="compare-tag right" id="tag-source">Source</span>
               <div class="split-line" id="split-line"><button class="split-handle" id="split-handle" type="button" tabindex="-1" aria-label="Drag comparison divider">↔</button></div>
             </div>
+            <p class="hint preview-note" id="preview-note" hidden>(Scroll to zoom; right-drag to pan)</p>
           </div>
           <div class="comparison-control" id="comparison-control" hidden>
             <span>Encoded</span>
@@ -637,7 +648,6 @@
           <div class="preview-toolbar">
             <button class="preview-audio" id="preview-audio" type="button" hidden>Play audio</button>
           </div>
-          <p class="hint preview-note" id="preview-note" hidden>Scroll over the picture to zoom. Hold the right mouse button to pan.</p>
           <p class="hint" id="image-repetition" role="status" hidden></p>
         </div>
         <section class="payload-panel" id="payload-panel" hidden aria-label="Embedded image contents">
@@ -700,19 +710,6 @@
       <label for="message">Message <span class="byte-count" id="message-bytes">(0 bytes)</span></label>
       <textarea id="message" maxlength="16384" spellcheck="true"></textarea>
 
-      <h2>Attachments <span class="byte-count" id="attachment-bytes">(0 bytes)</span></h2>
-      <div class="attachment-controls">
-        <label for="attachment-kind">File type</label>
-        <select id="attachment-kind">
-          <option value="all">Any file</option>
-          <option value="audio">Audio</option>
-          <option value="image">Image</option>
-          <option value="document">Document</option>
-        </select>
-        <input id="attachment-file" type="file" multiple aria-label="Attach files">
-      </div>
-      <p class="hint">Attach files with or without a text message. Audio gets a player when decoded; other files can be downloaded. The total payload size must fit the photo.</p>
-      <div id="attachment-list" aria-label="Files to encode"></div>
       <label for="record-quality">Voice recording size</label>
       <select id="record-quality">
         <option value="compatible">Original recording — compatible</option>
@@ -726,8 +723,20 @@
         <button id="cancel-audio" type="button" hidden>Discard recording</button>
       </div>
       <p class="hint" id="record-status" role="status"></p>
-      <p class="hint" id="payload-budget" role="status">Choose a photo to see how much it can hold.</p>
-      <p class="hint" id="payload-repetition" role="status" hidden></p>
+
+      <h2>Attachments <span class="byte-count" id="attachment-bytes">(0 bytes)</span></h2>
+      <div class="attachment-controls">
+        <label for="attachment-kind">File type</label>
+        <select id="attachment-kind">
+          <option value="all">Any file</option>
+          <option value="audio">Audio</option>
+          <option value="image">Image</option>
+          <option value="document">Document</option>
+        </select>
+        <input id="attachment-file" type="file" multiple aria-label="Attach files">
+      </div>
+      <p class="hint">Attach files with or without a text message. Audio gets a player when decoded; other files can be downloaded. The total payload size must fit the photo.</p>
+      <div id="attachment-list" aria-label="Files to encode"></div>
 
       </section>
 
@@ -745,13 +754,16 @@
       <div class="prognosis-labels"><span>More durable · stronger pattern</span><span>Higher image quality</span></div>
       <p class="hint">80% uses the current signal strength. Move left to help camera recovery at the cost of appearance. Applies to versions 4 and 5.</p>
       <label><input id="scale-source" type="checkbox"> Scale source for payload</label>
-      <p class="hint" id="source-size-plan">Resize the source before encoding to meet the selected read margin. Your original stays unchanged.</p>
 
       <section class="read-prognosis" id="read-prognosis" hidden aria-label="Estimated camera-read difficulty">
         <p><strong id="prognosis-title"></strong></p>
         <div class="prognosis-scale"><span class="prognosis-limit" id="prognosis-low-limit" aria-hidden="true"></span><span class="prognosis-limit" id="prognosis-high-limit" aria-hidden="true"></span><span class="prognosis-pointer" id="prognosis-pointer" aria-hidden="true"></span><input id="prognosis-target" type="range" min="0" max="1" step="0.001" value="0.2" aria-label="Desired photo-read margin" aria-describedby="prognosis-detail"></div>
         <div class="prognosis-labels" aria-hidden="true"><span>More margin</span><span>Moderate</span><span>Tricky read</span></div>
-        <p class="hint" id="prognosis-detail"></p>
+        <div class="encoding-status" id="encoding-status" role="status" tabindex="0" aria-label="Encoding status">
+          <p class="hint" id="payload-budget"></p>
+          <p class="hint" id="source-size-plan"></p>
+          <p class="hint" id="prognosis-detail"></p>
+        </div>
       </section>
 
       <div id="encoding-passwords">
@@ -872,7 +884,7 @@
   <script src="./pixelstow-transform.js?v=20261014-v5-default1"></script>
   <script src="./pixelstow-lattice.js?v=20261013-marker-follow2"></script>
   <script src="./pixelstow.js?v=20261015-attachment-count1"></script>
-  <script src="./pixelstow-sizing.js?v=20261014-source-sizing1"></script>
+  <script src="./pixelstow-sizing.js?v=20261015-prognosis-curve1"></script>
   <script src="./pixelstow-export.js?v=20261011-exports"></script>
   <script src="./pixelstow-voice.js?v=20261013-voice-clock2"></script>
   <script src="./pixelstow-media.js?v=20261015-attachment-count1"></script>
@@ -933,7 +945,6 @@
     const decodeButton = document.querySelector("#decode");
     const relockButton = document.querySelector("#relock");
     const payloadBudget = document.querySelector("#payload-budget");
-    const payloadRepetition = document.querySelector("#payload-repetition");
     const imageRepetition = document.querySelector("#image-repetition");
     const readPrognosis = document.querySelector("#read-prognosis");
     const prognosisTitle = document.querySelector("#prognosis-title");
@@ -944,6 +955,7 @@
     const prognosisHighLimit = document.querySelector("#prognosis-high-limit");
     let repetitionGeneration = 0, repetitionTimer;
     let prognosisBudget = null, encodedPrognosis = null;
+    let composerBytes = null;
     let frameBudget = null, sourcePlan = null, autoTargetRisk = .2, prognosisBounds = { min: .04, max: .99 };
     let manualScaleSource = false;
     try { manualScaleSource = localStorage.getItem("pixelstow-scale-source") === "true"; } catch (_) { /* Session choices still work. */ }
@@ -973,6 +985,7 @@
     let panX = 0;
     let panY = 0;
     let blockPanMenu = false;
+    let previewHelpDismissed = false;
     const previewTouches = new Map();
     let touchView = null;
     const fullPreview = new PixelStowPreview({
@@ -985,6 +998,7 @@
       },
       fit: resetView,
       actualSize: () => {
+        dismissPreviewHelp();
         clearPreviewTouches(); fitMode = false; viewScale = 1 / (window.devicePixelRatio || 1);
         const img = imagePixels(), box = viewBox();
         originX = (box.w - img.w * viewScale) / 2; originY = (box.h - img.h * viewScale) / 2;
@@ -1095,18 +1109,25 @@
       attachmentBytes.textContent = "(" + media.files.reduce((sum, file) => sum + file.bytes.length, 0).toLocaleString("en-GB") + " bytes)";
       if (!current) { payloadBudget.textContent = "Choose a photo to see how much it can hold."; return; }
       try {
-        const used = PixelStow.payloadSize(message.value, media.files);
-        const size = plannedDimensions(current);
-        const room = PixelStow.estimatePayloadBytes(size.width, size.height, Boolean(password.value));
-        payloadBudget.textContent = used.toLocaleString("en-GB") + " payload bytes / about " + room.toLocaleString("en-GB") + " bytes available before compression. Shorter audio and larger photos give more room.";
-        payloadBudget.classList.toggle("error", used > room);
+        composerBytes = PixelStow.payloadSize(message.value, media.files);
+        updatePayloadBudget();
       } catch (error) {
+        composerBytes = null;
         payloadBudget.textContent = error.message;
         payloadBudget.classList.add("error");
       }
     }
 
+    function updatePayloadBudget() {
+      if (!current || composerBytes === null) return;
+      const size = plannedDimensions(current);
+      const room = PixelStow.estimatePayloadBytes(size.width, size.height, Boolean(password.value));
+      payloadBudget.textContent = composerBytes.toLocaleString("en-GB") + " bytes · about " + room.toLocaleString("en-GB") + " available before compression.";
+      payloadBudget.classList.toggle("error", composerBytes > room);
+    }
+
     function showRepetition(element, data, prefix = "Redundancy") {
+      if (element === imageRepetition && !readPrognosis.hidden) data = null;
       element.hidden = !data || !Number.isFinite(data.repetitionRatio);
       if (element.hidden) { element.textContent = ""; element.classList.remove("repetition-warning"); return; }
       const ratio = data.repetitionRatio, nearLimit = ratio < 1.25, weakParity = data.parityBits === 1;
@@ -1124,15 +1145,11 @@
       clearTimeout(repetitionTimer);
       showRepetition(imageRepetition, current?.repetition);
       if (!current || current.hasFingerprint || (!message.value && !media.files.length)) {
-        showRepetition(payloadRepetition, null);
         if (!encodedPng) showReadPrognosis(null);
         frameBudget = sourcePlan = null;
         sourceSizePlan.textContent = "Add a message or file to choose a carrier size. Your original stays unchanged.";
         return;
       }
-      payloadRepetition.hidden = false;
-      payloadRepetition.classList.remove("repetition-warning");
-      payloadRepetition.textContent = "Calculating payload repetition after compression…";
       const job = current;
       repetitionTimer = setTimeout(async () => {
         try {
@@ -1144,7 +1161,7 @@
         } catch (_) {
           if (generation === repetitionGeneration && job === current) {
             frameBudget = sourcePlan = null;
-            showRepetition(payloadRepetition, null); showReadPrognosis(null);
+            showReadPrognosis(null);
           }
         }
       }, 250);
@@ -1167,6 +1184,8 @@
     function showReadPrognosis(data) {
       prognosisBudget = data;
       readPrognosis.hidden = !data || !Number.isFinite(data.repetitionRatio);
+      payloadBudget.hidden = sourceSizePlan.hidden = Boolean(current?.hasFingerprint);
+      showRepetition(imageRepetition, current?.repetition);
       if (readPrognosis.hidden) { prognosisTitle.textContent = prognosisDetail.textContent = ""; return; }
       const ratio = data.repetitionRatio, weakParity = data.parityBits === 1;
       const quality = Number(encodingQuality.value), version = Number(carrierSelect.value);
@@ -1185,11 +1204,10 @@
       prognosisTitle.textContent = "Photo-read prognosis: " + level;
       prognosisPointer.style.left = (100 * risk).toFixed(1) + "%";
       prognosisDetail.textContent = ratio.toFixed(2) + "× redundancy. " + (weakParity ? "Reduced error correction. " : "") +
-        (ratio < 2 ? "Less repeated data makes camera recovery harder. Smaller attachments or a larger image give more margin. " : "") +
-        (data.fits === false ? "The contents do not fit this image. " : "") +
-        "Estimated from redundancy, error correction and signal strength; focus, glare and source detail also affect recovery." +
-        (scaleSource.checked ? " Drag to choose the read margin and carrier size." : " Drag within the available range to adjust image quality.") +
-        (needsEncoding ? " Re-encode to apply these settings to the picture." : "");
+        (data.fits === false ? "The contents do not fit this image. " : ratio < 2 ? "Tricky camera read; reduce the payload or enlarge the carrier. " : "") +
+        "Focus, glare and image detail also affect recovery." +
+        (needsEncoding ? " Re-encode to apply these settings." : "");
+      prognosisDetail.classList.toggle("repetition-warning", weakParity || ratio < 1.25 || data.fits === false);
     }
 
     function resultDimensions(job) {
@@ -1209,10 +1227,10 @@
         { ...frameBudget, fits: false, repetitionRatio: 0, parityBits: 1, carrierVersion: version };
       sourceSizePlan.textContent = scaleSource.checked ? sourcePlan.fits
         ? "Encode at " + sourcePlan.width + " × " + sourcePlan.height + " (" + Math.round(100 * sourcePlan.width / current.width) +
-          "% of source width). Resize first, then encode the same payload. Your original stays unchanged." +
+          "% of source width)." +
           (sourcePlan.limited ? " The selected margin exceeds the size limit; this is the closest available size." : "")
-        : sourcePlan.reason : "Original size: " + current.width + " × " + current.height + ". Enable scaling to resize the source for the selected read margin.";
-      showRepetition(payloadRepetition, data, "Expected redundancy");
+        : sourcePlan.reason : "Original size: " + current.width + " × " + current.height + ".";
+      updatePayloadBudget();
       showReadPrognosis(data);
       setBusy(busy);
     }
@@ -1459,6 +1477,7 @@
       const img = imagePixels();
       const box = viewBox();
       if (!img.w || !box.w || !box.h) return;
+      dismissPreviewHelp();
       const rect = viewport.getBoundingClientRect();
       const px = clientX - rect.left;
       const py = clientY - rect.top;
@@ -1474,9 +1493,14 @@
 
     function previewHelp(comparing) {
       if (window.matchMedia("(pointer: coarse)").matches) {
-        return "Pinch to zoom; two fingers to pan." + (comparing ? " Tap the image or drag the divider to compare." : "");
+        return "(Pinch to zoom; two fingers to pan" + (comparing ? "; tap the image or drag the divider to compare" : "") + ")";
       }
-      return "Scroll to zoom; right-drag to pan." + (comparing ? " Drag the divider to compare." : "");
+      return "(Scroll to zoom; right-drag to pan" + (comparing ? "; drag the divider to compare" : "") + ")";
+    }
+
+    function dismissPreviewHelp() {
+      previewHelpDismissed = true;
+      previewNote.hidden = true;
     }
 
     function hideComparison() {
@@ -1496,7 +1520,7 @@
       hideComparison();
       paintCanvas(previewEncoded, pixels, width, height);
       preview.hidden = false;
-      previewNote.hidden = false;
+      previewNote.hidden = previewHelpDismissed;
       resetView();
     }
 
@@ -1707,7 +1731,7 @@
         compareUi.hidden = false;
         comparisonControl.hidden = false;
         preview.hidden = false;
-        previewNote.hidden = false;
+        previewNote.hidden = previewHelpDismissed;
         previewNote.textContent = previewHelp(true);
         resetView();
       } catch (error) {
@@ -1731,6 +1755,8 @@
       confirmPassword.value = "";
       unlockPassword.value = "";
       current = null;
+      composerBytes = null;
+      previewHelpDismissed = false;
       frameBudget = sourcePlan = null;
       scaleSource.checked = origin === "camera" && captured?.sourceOnly ? true : manualScaleSource;
       transformOutline.hidden = true;
@@ -1881,6 +1907,7 @@
       trackPreviewTouches(event);
       if (!touchView) return;
       if (previewTouches.size < 2) { touchView = null; return; }
+      dismissPreviewHelp();
       if (event.cancelable) event.preventDefault();
       const [a, b] = [...previewTouches.values()], rect = viewport.getBoundingClientRect();
       const x = (a.x + b.x) / 2 - rect.left, y = (a.y + b.y) / 2 - rect.top;
@@ -1955,6 +1982,7 @@
 
     viewport.addEventListener("pointermove", (event) => {
       if (!panning) return;
+      dismissPreviewHelp();
       const img = imagePixels();
       const box = viewBox();
       originX += event.clientX - panX;

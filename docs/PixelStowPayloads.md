@@ -179,9 +179,29 @@ camera success percentage. If settings change after export, it estimates the
 next encoding and asks the user to re-encode; the saved PNG remains unchanged.
 Dragging the prognosis at a fixed source size adjusts quality within its
 achievable range. Unavailable portions of the scale are shaded.
+The sizing risk curve interpolates strength-adjusted anchors at one, two and
+five full-parity copies. It reserves a distinct continuous interval for reduced
+parity, comparing capacity on the same 12-bit basis across the 12-to-9-bit coding
+transition. This avoids ranking weaker protection as safer just because its raw
+repeat count is larger. The final risky tick no longer skips all dimensions that
+previously shared the clipped 0.98 risk. Actual carrier coding and signal strength
+are unchanged. Reported repetition still uses the actual selected coding; reduced
+error correction is identified explicitly.
 The slider has a 64-pixel-high touch area and a larger visible handle. Tapping
 anywhere across that area chooses a target immediately; dragging retains the
 gesture outside the bar while page scrolling remains available elsewhere.
+Changing byte capacity, planned dimensions and read warnings appear together in
+one fixed-height status area below this bar. The separate expected-repetition
+paragraph is removed; generated-image repetition is not repeated above it. The
+status area scrolls if unusually long feedback exceeds its reserved space.
+Its capacity figure follows the planned dimensions, and compression is not rerun
+while dragging. On mobile the prognosis heading also reserves a consistent height.
+
+Voice recording controls precede Attachments. Empty recovery status reserves no
+blank space, and the open recovery options have no trailing paragraph margin.
+Zoom/pan help is a small, muted, noninteractive overlay within the preview. It
+disappears after a zoom or pan and returns when a new image is loaded; comparison
+taps and ordinary page scrolling leave it alone.
 
 Optional **Scale source for payload** keeps the selected quality and changes
 carrier dimensions to reach the requested prognosis, using compressed payload
