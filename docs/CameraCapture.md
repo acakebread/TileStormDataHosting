@@ -69,7 +69,7 @@ with a fresh frame after the adjustment. These controls do not modify the native
 **Take photo** path.
 
 On HTTP/HTTPS, a disposable marker worker checks the FFT gate and locates the
-eight patches, retaining translation/affine/perspective fits without reading any
+selected format's recovery patches, retaining translation/affine/perspective fits without reading any
 payload. Large frames use the
 adaptive scale localization described in
 [VisualTransformReader.md](VisualTransformReader.md),
@@ -77,34 +77,47 @@ then rectify the full capture onto the encoded dimensions for wavelet reading.
 The captured raster and marker guides remain in original-resolution coordinates.
 The camera captures a fresh full-resolution raster every 900 ms into one pending
 slot. That slot is replaced while a marker worker is busy; there is no growing
-queue of stale camera frames. Initial marker acquisition has a 24-second budget;
-subsequent scans with a verified tracking header have 12 seconds. The tracking
+queue of stale camera frames. Initial live marker acquisition has a six-second
+turn; subsequent scans with a verified tracking header have three seconds.
+The detector can return a partial verified fit at that deadline; a worker that
+does not yield is terminated after a further 500 ms. Time slicing automatically
+starts on the newest pending capture and does not pause scanning. The tracking
 header is confirmed against the new pixels before reuse, and cleared after a
 scan without a verified header. Known patches below the detector's basis range
 skip unusably small pyramid levels. These are maximum discovery allowances,
 not a promise of video-frame-rate decoding.
 
-After two marker scans, the best eligible capture in recent history is read in
+The first stable marker fit can start a bounded read immediately in
 a separate disposable payload worker. History retains at most three marker-bearing
 frames and 48 MiB of RGBA, allowing one larger frame alone, and expires captures
 after 45 seconds. Fits within a frame and frames within history use the same
 marker quality/coverage/error rating described in
 [VisualTransformReader.md](VisualTransformReader.md). Frames without a stable fit
-never enter automatic payload decoding. Attempted frames do not fill every
-history slot and block new captures.
-A complete high-confidence eight-marker fit bypasses the two-scan wait and is
-read immediately. Its threshold and the measured warmer/colder scale scheduling
-are shared with ordinary geometric image recovery; full checksums are still
-required. A bad early camera read yields to fresher captures rather than
-continuing to exhaust the same frozen image.
+never enter automatic payload decoding. Only unattempted captures younger than
+12 seconds enter the automatic read queue. A small age penalty (0.75 ranking
+points per second, capped at six) favours fresh near-ties; substantially better
+geometry still wins. Attempted frames do not fill every history slot and block
+new captures. Marker thresholds and the measured warmer/colder scale scheduling
+remain shared with ordinary geometric recovery; full payload checksums are
+still required before accepting any capture.
 
 One marker worker and one payload worker may run together. Capture and marker
-appraisal continue during a payload read. A newly scanned frame with a stronger
-rating terminates the older frame's payload worker immediately; the strongest
-unattempted retained frame is then read. Payload attempts have a 30-second
-limit and failed frames are skipped instead of repeatedly parsed. Ordinary
+appraisal continue during a payload read. A newer fit more than one ranking
+point stronger terminates the old payload worker immediately. Comparable new
+fits, within two points of the current score, can replace it after an initial
+2.5-second read grace. A timer promotes an already queued comparable fit when
+that grace ends, without waiting for another scan callback. Substantially worse
+frames do not preempt. After two consecutive freshness replacements, one read
+gets its full bounded turn so that a succession of near-ties cannot starve the
+decoder; clearly stronger geometry can still preempt immediately. Pause,
+orientation changes and close clear the promotion timer.
+Payload attempts have an eight-second hard limit and try the top two geometric
+fits; they do not restart discovery at more scales of the same stale capture.
+Failed/aborted frames are skipped instead of repeatedly parsed. Ordinary
 image imports use the same discovery/ranking stages after their inexpensive
-native/full-frame checks, without the camera's frame-history scheduling.
+native/full-frame checks, with their full recovery budgets and without the
+camera's time slicing. Use **Inspect this capture** / **Capture and read** for a
+difficult frozen frame that warrants a deeper search.
 The camera UI does not bypass the weak-signature gate. **Capture and read** opens
 a single frame with the ordinary image recovery controls, including the option
 to override that gate if required.
@@ -146,6 +159,11 @@ stops tracks, clears retained frames and terminates both in-progress workers.
 Session identity and abort checks discard late permission and worker results.
 The user must reopen the camera after returning to the page.
 
+`node tests/pixelstow-camera-scheduling-checks.mjs` uses deterministic worker
+delays and a fake clock to verify latest-slot replacement, stronger and near-tie
+promotion, read grace, stale/worse-fit rejection, worker limits and cancellation.
+The browser camera checks retain synthetic-camera acquisition/layout coverage.
+
 On phones/tablets, **Take photo** uses a separate `image/*` file input with
 `capture="environment"`. It stops the live stream before opening the native capture/picker. On phones
 this requests the still camera; browsers may instead offer a file picker. The
@@ -157,13 +175,11 @@ and never substitutes a file picker for the camera. Scan camera retains continuo
 scanning with the four-second framing delay.
 
 A high-confidence marker fit can start a read before every image scale was
-visited. If its payload fails, live reading now resumes the unvisited marker
-scales on that same retained raster, then ranks and reads the resulting fits.
-This matches the fallback used by ordinary file recovery. The discovery retry
-and payload work share the existing 30-second live-read limit; a stronger new
-capture or cancellation still terminates that worker. Inspect this capture also
-uses the fallback. Saving to Photos is not required by the decoder, and this
-change does not make the video feed equivalent to a native still photograph.
+visited. If its payload fails during continuous capture, the live reader now
+moves on to fresher frames instead of exhausting unvisited scales of that old
+raster. Ordinary file recovery and **Inspect this capture** retain the deeper
+same-frame fallback. Saving to Photos is not required by the decoder, and live
+capture is not equivalent to a native still photograph.
 
 Live access requires browser camera permission and a secure context. HTTPS and
 localhost are the supported live-scanning routes; plain HTTP to a machine's LAN

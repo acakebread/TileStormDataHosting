@@ -212,3 +212,40 @@ therefore be a weak or ambiguous identifier. A two-axis phase-coded pilot,
 evaluated after geometric normalization, is a more useful experiment. It needs
 false-positive, source-texture, minimum-size and capture tests before adding
 another signal to every encoded image. No pilot is implemented in this revision.
+
+### Fixed-pitch pilot experiment (15 October 2026)
+
+`node tools/pixelstow-scale-pilot-appraisal.mjs` now provides a reproducible,
+public synthetic appraisal. A fixed **cycle count** (for example eight cycles
+over every carrier width) cannot determine native pixel scale: a 1024-pixel
+carrier shown at 1x and a 2048-pixel carrier shown at 0.5x produce the same
+observed wave. A fixed **native wavelength** does provide a scale hint. For
+example, a 128-native-pixel period observed as 96 capture pixels suggests 0.75
+capture pixels per native pixel. Approximate carrier bounds plus that pitch can
+then suggest native dimensions. The measured pitch remains a search hint;
+checksum-valid marker headers supply the authoritative dimensions.
+
+The experiment uses three tones of wavelengths 128, 85.33 and 51.2 native pixels,
+with specified phases. Their 2:3:5 frequency relationship permits a phase check
+invariant to image translation, reducing coincidences with ordinary texture.
+One-axis FFT column projections are tested at scales 0.5, 1 and 1.8, on four
+procedural textures, with padded capture backgrounds and exact carrier crops.
+Peak combined amplitudes are 1, 3 and 6 luminance levels out of 255. A controlled
+flat, unpadded pilot recovers scale within 2% in all three scale cases.
+
+At amplitude 3, the simple detector was within 5% in 9/12 carrier-cropped cases,
+versus 3/12 whole-frame cases. Amplitude 1 gave 6/12 cropped successes. None of
+the 24 unencoded controls passed the detector. These are small synthetic samples,
+not measured camera reliability or a general false-positive bound. The tested
+tilted and perspective cases all failed: projecting all rows into one spectrum
+can cancel or smear the phase-coded waves. Median analysis was a few milliseconds
+on this machine; image preparation and camera hardware are not benchmarked.
+Detailed measurements are generated under ignored
+`artifacts/research/scale-pilot-appraisal/results.json`.
+
+This supports further investigation of a fixed-pitch pilot after an outline
+proposal, using oriented 2D FFT peaks or short-strip/local measurements before
+perspective normalization. It does not justify changing the V5 writer yet.
+Any eventual pilot needs signal/headroom and source-removal tests, natural-photo
+negatives, rotation/perspective/glare tests and optical capture evidence. No pilot
+is added to saved images, and the current frequency gate and checksums remain.
