@@ -36,6 +36,11 @@ The browser checks also cover separate encoding/unlocking passwords, the visible
 contents summary, relocking, and context-menu suppression during image panning.
 Every export offers a filename dialog before downloading, including recovered
 attachments. The image picker identifies the loaded file or a clipboard paste.
+Encoding uses one password slot: Encode or Enter advances to confirmation;
+Change returns to the first entry. A blank password remains public.
+`node tests/pixelstow-password-checks.mjs` checks this flow, protected/public
+round trips and stable Encode positioning at mobile widths. It uses the same
+Playwright/Chrome environment overrides as the [camera checks](docs/CameraCapture.md).
 
 **Post to Facebook** shares the prepared encoded photo as a file only, with no
 title, text or URL in the native share payload. Choose Facebook in the share
