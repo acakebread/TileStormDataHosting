@@ -7,6 +7,8 @@
       this.session = null;
       this.devices = [];
       this.devicesKnown = false;
+      this.discoveryComplete = false;
+      this.automaticDeviceId = null;
       this.preferredDeviceId = null;
       this.failedDevices = new Set();
       this.deviceHistory = new Map();
@@ -94,13 +96,7 @@
         this.schedule(session, 900);
       });
       this.switchButton.addEventListener("click", () => this.switchCamera());
-      navigator.mediaDevices?.addEventListener?.("devicechange", async () => {
-        this.failedDevices.clear();
-        for (const [id, history] of this.deviceHistory) if (history.failed) this.deviceHistory.set(id, { ...history, failed: false });
-        if (!this.active) return;
-        await this.refreshDevices();
-        this.sync();
-      });
+      navigator.mediaDevices?.addEventListener?.("devicechange", () => this.devicesChanged());
       this.closeButton.addEventListener("click", () => {
         this.close();
         this.report("Camera closed.");
@@ -194,17 +190,38 @@
       return 0; // Retain browser order when available evidence is equal.
     }
 
-    async refreshDevices(rank = false) {
+    async devicesChanged() {
+      const before = this.devices.map(device => device.deviceId).sort().join("\n");
+      await this.refreshDevices(false, true);
+      const after = this.devices.map(device => device.deviceId).sort().join("\n");
+      // Permission exposure can generate events too. Only a changed camera list
+      // invalidates the discovery cache, not closing a camera or losing labels.
+      if (before !== after) {
+        this.discoveryComplete = false;
+        this.failedDevices.clear();
+        for (const [id, history] of this.deviceHistory) if (history.failed) this.deviceHistory.set(id, { ...history, failed: false });
+      }
+      this.sync();
+    }
+
+    async refreshDevices(rank = false, force = false) {
+      if (this.discoveryComplete && !force) return;
       if (!navigator.mediaDevices?.enumerateDevices) return;
       try {
         const devices = await navigator.mediaDevices.enumerateDevices();
         const previous = new Map(this.devices.map((device, index) => [device.deviceId, index]));
         const ids = new Set();
-        this.devices = devices.filter(device => {
+        const next = devices.filter(device => {
           if (device.kind !== "videoinput" || !device.deviceId || ids.has(device.deviceId)) return false;
           ids.add(device.deviceId);
           return true;
         });
+        if (this.devicesKnown && this.devices.length && (!next.length || next.every(device => !device.label))) return;
+        // With no live stream, a browser can expose only its default camera.
+        // Keep the permitted IDs until an actual startup proves one unavailable.
+        if (this.discoveryComplete && !this.session?.ready && next.length === 1 && next.length < this.devices.length &&
+          next.every(device => previous.has(device.deviceId))) return;
+        this.devices = next;
         this.devices.sort((a, b) => rank ? this.compareDevices(a, b)
           : (previous.get(a.deviceId) ?? Infinity) - (previous.get(b.deviceId) ?? Infinity) || this.compareDevices(a, b));
         this.devicesKnown = true;
@@ -235,8 +252,6 @@
       session.facing = settings.facingMode || facing;
       session.deviceId = settings.deviceId || deviceId;
       session.deviceLabel = track.label;
-      await this.refreshDevices();
-      if (this.session !== session) throw new DOMException("Camera closed.", "AbortError");
       if (!session.deviceId) session.deviceId = this.devices.find(device => device.label === track.label)?.deviceId || null;
       track.addEventListener("ended", () => {
         if (this.session !== session || session.stream !== stream || session.handingOff) return;
@@ -253,13 +268,18 @@
     }
 
     async startBestDevice(session, facing) {
+      const cached = this.discoveryComplete;
       await this.refreshDevices(true);
       if (this.session !== session) throw new DOMException("Camera closed.", "AbortError");
-      let choices = this.devices.some(device => device.label) ? this.devices.slice() : [{ deviceId: null }];
-      let bootstrap = choices[0]?.deviceId === null, reconsider = true, lastError;
+      const usable = this.devices.filter(device => !this.deviceHistory.get(device.deviceId)?.failed);
+      let choices = this.devices.some(device => device.label) ? (usable.length ? usable : this.devices).slice()
+        : [{ deviceId: cached ? this.automaticDeviceId : null }];
+      let bootstrap = choices[0]?.deviceId === null, reconsider = !cached, refreshed = false, lastError;
+      const attempted = new Set();
       const skipped = [];
       for (let index = 0; index < choices.length; index++) {
         const device = choices[index];
+        attempted.add(device.deviceId);
         try {
           await this.startDevice(session, facing, device.deviceId);
           if (reconsider) {
@@ -268,6 +288,7 @@
             bootstrap = false; reconsider = false;
             await this.refreshDevices(true);
             if (this.session !== session) throw new DOMException("Camera closed.", "AbortError");
+            if (!session.deviceId) session.deviceId = this.devices.find(candidate => candidate.label === session.deviceLabel)?.deviceId || null;
             const eligible = this.devices.filter(candidate => !this.failedDevices.has(candidate.deviceId));
             if (eligible[0] && eligible[0].deviceId !== session.deviceId) {
               const restore = this.devices.find(candidate => candidate.deviceId === session.deviceId) ||
@@ -279,6 +300,8 @@
             }
           }
           session.skippedDevices = skipped;
+          this.discoveryComplete = true;
+          this.automaticDeviceId = session.deviceId;
           return;
         } catch (error) {
           if (this.session !== session || ["NotAllowedError", "SecurityError"].includes(error?.name)) throw error;
@@ -286,11 +309,13 @@
           this.noteDeviceFailure(session.deviceId, error);
           this.stopStream(session);
           skipped.push(device.label || session.deviceLabel || "camera");
-          if (bootstrap) {
+          if (bootstrap || (cached && !refreshed)) {
             bootstrap = false;
-            await this.refreshDevices(true);
+            refreshed = true; reconsider = true;
+            this.discoveryComplete = false;
+            await this.refreshDevices(true, true);
             if (this.session !== session) throw error;
-            choices = this.devices.slice(); index = -1;
+            choices = this.devices.filter(candidate => !attempted.has(candidate.deviceId)); index = -1;
           }
           this.progress.textContent = "Trying the next available camera…";
         }
@@ -509,7 +534,7 @@
       this.signature.textContent = "";
       if (purpose === "source") this.readProgress.finish("Frame your source photo, then capture it.", "source");
       else this.readProgress.begin("Waiting for a camera frame…");
-      this.progress.textContent = "Allow camera access to start the preview…";
+      this.progress.textContent = "Opening camera…";
       this.changed();
       try {
         this.panel.showModal();

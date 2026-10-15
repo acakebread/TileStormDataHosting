@@ -53,6 +53,7 @@ try {
   assert.equal(await selected(page), 2);
   assert.deepEqual(await page.evaluate(() => camera.devices.map(device => fakeIds.indexOf(device.deviceId))), [2, 1, 0]);
   assert(await page.evaluate(() => cameraEvents[0] === 'enumerate' && cameraRequests.length === 1 && cameraRequests[0].video.deviceId.exact === fakeIds[2] && cameraRequests[0].audio === false));
+  const discoveryCalls = await page.evaluate(() => cameraEvents.filter(event => event === 'enumerate').length);
   for (const expected of [1, 0, 2]) {
     await page.locator('#switch-camera').click(); await ready(page);
     assert.equal(await selected(page), expected);
@@ -61,7 +62,8 @@ try {
   await page.locator('#switch-camera').click(); await ready(page); assert.equal(await selected(page), 1);
   await page.locator('#close-camera').click();
   await page.locator('#open-camera').click(); await ready(page); assert.equal(await selected(page), 2);
-  console.log('PASS: pre-enumeration opens physical HD ahead of remembered/default OBS and VGA, without probing every camera; cycles best to worst and fresh Capture ranks again');
+  assert.equal(await page.evaluate(() => cameraEvents.filter(event => event === 'enumerate').length), discoveryCalls, 'cycling and reopening must reuse the page-session discovery');
+  console.log('PASS: discovery opens physical HD ahead of remembered/default OBS and VGA; cycling and reopening reuse the ranked cache without enumeration');
   await page.locator('#close-camera').click();
   await page.evaluate(() => { deniedIds = [fakeIds[2]]; cameraRequests.length = 0; });
   await page.locator('#open-camera').click(); await ready(page); assert.equal(await selected(page), 1);
@@ -71,7 +73,11 @@ try {
   await page.locator('#open-camera').click(); await ready(page); assert.equal(await selected(page), 1);
   assert.equal(await page.evaluate(() => cameraRequests.length), 1, 'a known startup failure is ranked below working alternatives on a fresh open');
   await page.locator('#close-camera').click();
-  await page.evaluate(() => { deniedIds = []; navigator.mediaDevices.dispatchEvent(new Event('devicechange')); });
+  await page.evaluate(async () => {
+    deniedIds = [];
+    const restored = namedDevices.pop(); await camera.devicesChanged();
+    namedDevices.push(restored); await camera.devicesChanged();
+  });
   await page.locator('#open-camera').click(); await ready(page); assert.equal(await selected(page), 2);
   console.log('PASS: an unavailable best camera falls through automatically; failures lower its next startup rank and a device change makes it eligible again');
   await page.close();
@@ -95,6 +101,18 @@ try {
     assert(await permission.evaluate(partial => cameraRequests.length === 2 &&
       (partial ? cameraRequests[0].video.deviceId.exact === fakeIds[0] : !cameraRequests[0].video.deviceId) &&
       cameraRequests[1].video.deviceId.exact === fakeIds[2] && bootstrapTracks.every(track => track.readyState === 'ended'), partial));
+    const discovered = await permission.evaluate(() => ({ enumerations: cameraEvents.filter(event => event === 'enumerate').length, acquisitions: cameraRequests.length }));
+    await permission.locator('#close-camera').click();
+    await permission.evaluate(async () => {
+      // Some browsers hide names again when the last live stream is stopped.
+      namesExposed = false;
+      await camera.devicesChanged();
+    });
+    const beforeReopen = await permission.evaluate(() => cameraEvents.filter(event => event === 'enumerate').length);
+    await permission.locator('#open-camera').click(); await ready(permission);
+    assert.equal(await selected(permission), 2);
+    assert(await permission.evaluate(({ enumerations, acquisitions }) => cameraEvents.filter(event => event === 'enumerate').length === enumerations &&
+      cameraRequests.length === acquisitions + 1 && cameraRequests.at(-1).video.deviceId.exact === fakeIds[2], { enumerations: beforeReopen, acquisitions: discovered.acquisitions }));
     console.log(`PASS: ${partial ? 'partially exposed' : 'permission-hidden'} cameras are re-enumerated; the temporary stream is stopped and replaced before capture becomes ready`);
     await permission.close();
   }

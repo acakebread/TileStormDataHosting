@@ -98,11 +98,12 @@ try {
       count: camera.devices.length, facing: camera.session.facing };
   });
   assert.equal(first.count, 3, 'Chrome must expose three synthetic cameras');
-  await page.evaluate(() => {
+  await page.evaluate(async () => {
     window.unavailableDeviceId = camera.devices.at(-1).deviceId;
     const enumerate = navigator.mediaDevices.enumerateDevices.bind(navigator.mediaDevices);
     navigator.mediaDevices.enumerateDevices = async () => (await enumerate()).map(device =>
       device.deviceId === unavailableDeviceId ? { kind: 'videoinput', deviceId: device.deviceId, label: 'OBS Virtual Camera' } : device);
+    await camera.refreshDevices(false, true); // Update the fixture's newly assigned label once.
   });
   assert(!first.manual && !first.paused); assert.equal(filePickers, 0);
   assert(!(await page.locator('#camera-take-photo').isVisible()));

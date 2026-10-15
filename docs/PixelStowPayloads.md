@@ -176,8 +176,10 @@ Choose image becomes Cancel search while automatic image recovery runs, leaving
 the loaded image ready for encoding after cancellation. Continuous camera
 scanning waits four seconds after the live video starts before buffering or
 checking frames; manual capture remains available during that framing period.
-Each fresh Capture or Photo enumerates and ranks available cameras rather than
-retaining the previous selection. Physical cameras rank ahead of virtual feeds;
+The first Capture or Photo discovers and ranks cameras, caching that information
+for the page session. Reopening or cycling uses the cached list and opens the
+best eligible camera directly, independently of the last manual selection.
+Physical cameras rank ahead of virtual feeds;
 on phones, a standard rear lens ranks ahead of the front camera and unusual
 Dual Wide/Triple/Ultra Wide/telephoto modes. Within a group, reported resolution
 and autofocus capabilities provide hints, with observed capture dimensions as a
@@ -188,9 +190,15 @@ If initial permission hides cameras, the first stream exposes the list and is
 replaced when a better-ranked device appears. All discarded streams are stopped.
 Only the selected camera and necessary fallbacks are opened; enumeration does
 not start every camera. Once ready, Switch camera cycles through the fixed ranked
-order, wraps around and skips failed devices. A new Capture ranks again.
+order, wraps around and skips failed devices. Closing releases video tracks but
+retains discovery and ranking. Discovery refreshes on a changed camera list or a
+cached camera startup failure; unchanged device events and permission-hidden
+names do not discard it. The opening status says **Opening camera**, rather than
+claiming permission is needed on every open. Browser permission policy still
+controls actual permission prompts; cached metadata does not grant camera access.
 `node tests/pixelstow-camera-ranking-checks.mjs` covers ordering, permission-hidden
-and partially exposed lists, fallback, cancellation and standard rear-lens choice
+and partially exposed lists, cached reopen/cycling without re-enumeration,
+fallback, cancellation and standard rear-lens choice
 using synthetic camera streams. Browser visibility and capability limits are
 documented by [enumerateDevices](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/enumerateDevices)
 and [InputDeviceInfo.getCapabilities](https://developer.mozilla.org/en-US/docs/Web/API/InputDeviceInfo/getCapabilities).
