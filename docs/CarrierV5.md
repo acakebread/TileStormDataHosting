@@ -88,7 +88,8 @@ This compresses contrast in the encoded image to avoid localized brightness
 and colour artefacts. Boosted payload and marker signals are limited to fit
 the compressed reference with no further block brightness shift.
 
-Carrier preamble byte 2 retains bit 0 (required) and bit 1 (one-parity mode).
+Carrier preamble byte 2 retains bit 1 (one-parity mode). Bit 0 is required
+unless bit 7 identifies the stronger scale-pilot profile described below.
 Bits 2..6 store `h / 2`; bit 7 records the scale pilot described below. The existing carrier-header CRC
 protects it. The preamble length, marker headers and PCF1 payload/password
 frames remain unchanged. A zero headroom denotes earlier V5 output; no separate
@@ -210,19 +211,31 @@ dimensions; the pilot does not provide those dimensions or image boundaries.
 For native column `x`, the integer RGB offset is:
 
 ```
-round(3 / 2.4 * (cos(2π*2*x/256 + 0.2)
+round(16 / 2.4 * (cos(2π*2*x/256 + 0.2)
              + 0.8*cos(2π*3*x/256 + 1.1)
              + 0.6*cos(2π*5*x/256 + 2.4)))
 ```
 
-The combined offset is at most three RGB levels out of 255; alpha is untouched.
+The combined offset is at most sixteen RGB levels out of 255; alpha is untouched.
 It is painted onto the linearly compressed reference before payload and marker
-wavelets. Headroom includes the extra three levels. Local texture appraisal still
+wavelets. Headroom includes the extra sixteen levels. Local texture appraisal still
 uses the original source. Extraction subtracts the same integer offsets before
-undoing the recorded range map. The CRC-protected preamble bit prevents removing
-a pilot from older V5 images. Payload layout, capacity, passwords and PCF1 frames
+undoing the recorded range map. In the CRC-protected preamble, bit 7 marks pilot
+presence: bit 0 set means the original three-level pilot, while bit 0 cleared
+means the sixteen-level pilot. No-pilot images still require bit 0 set.
+Extraction uses that recorded amplitude, so older three-level images do not
+receive an excessive inverse adjustment. Payload layout, capacity, passwords and PCF1 frames
 remain unchanged. Older V5 images remain readable by this reader; readers from
-before this addition may reject the newly used preamble bit and need updating.
+before this addition reject the stronger profile and need updating. Script and
+worker cache versions are advanced together.
+
+The original three-level pilot failed detection on both supplied native encoded
+photos. Retaining those wavelengths but increasing the peak to sixteen, with
+the confidence changes below, recovered their scale after actual re-encoding.
+The pilot can be more visible, and reserving its headroom compresses source
+contrast further. This does not alter the quality slider's wavelet policy or
+the local noise estimator. The source preview removes the recorded pilot and
+reverses the range adjustment as before.
 
 The guide detector uses a separate low-frequency 2D FFT, since the ordinary
 wavelet detector removes low frequencies. It averages to a 128-pixel maximum
@@ -233,6 +246,13 @@ An unclear full-frame result also checks a central crop. Work is bounded to
 750 ms and yields between chunks. Missing scripts, an unclear signal or no pilot
 returns to ordinary discovery. Rotation is allowed; perspective and photographic
 texture can smear or hide the peaks, so detection is optional.
+
+Each tone now requires local power contrast of at least 8 (previously 10), with
+the existing amplitude-ratio bound. Phase error may reach 0.5 radians; an isolated
+strong-window match needs contrast at least 16 and phase error below 0.4, rather
+than the previous 30/0.12. Weaker matches still require consistent full/crop scale
+and orientation. This remains scheduling evidence; CRC marker verification and
+the full payload checksum retain their original requirements.
 
 A detected pilot proposes an arbitrary working grid near native marker pitch
 and an orientation for the first marker search. This extra attempt has a short
@@ -255,6 +275,23 @@ generated with the pre-pilot writer at `ea623cf` and contains only public test
 text. It guards decode, extraction and padded-capture fallback for earlier V5 output. Browser worker and
 camera-thumbnail mapping checks are in `tests/pixelstow-pilot-worker-checks.mjs`.
 These are controlled synthetic checks, not measured optical reliability.
+
+The frozen public `tests/fixtures/public-v5-three-level-pilot.png` from the
+pre-boost writer at `9217481` guards removal of the original three-level pilot.
+Twelve procedural landscapes and a deliberately wrong phase code extend the
+unencoded controls for the relaxed thresholds.
+
+`node tests/pixelstow-pilot-photo-checks.mjs <public-encoded-photo.png> [...]`
+is an optional local regression for supplied photos. It reconstructs the source,
+re-encodes the same public contents, checks exact PNG/payload round-trips and pilot
+scale at 0.73/1/1.37, including the 512-pixel camera-analysis copy. The 1.37x copy
+must recover four CRC marker headers and the exact payload through the guided
+reader. It also checks
+that the reconstructed source does not trigger a guide and leaves the input
+files unchanged. Re-encoded examples and a metadata-only report go under ignored
+`artifacts/research/scale-pilot-boost`; personal pixels/contents are not fixtures.
+The two reported failures both pass these checks with scale error below 1%.
+This still needs real optical capture evaluation.
 
 ### Earlier one-dimensional appraisal (15 October 2026)
 

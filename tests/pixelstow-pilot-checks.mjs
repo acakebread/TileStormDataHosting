@@ -16,13 +16,13 @@ let seed=313;
 const bytes=Uint8Array.from({length:900},()=>{seed^=seed<<13;seed^=seed>>>17;seed^=seed<<5;return seed&255;});
 const content={text:'Public V5 scale-pilot fixture.',attachments:[{name:'public.bin',type:'application/octet-stream',bytes}]};
 const original=source.slice(),encoded=await c.encodePayload(source,w,h,content,'');
-assert(encoded.scalePilot);assert.deepEqual(source,original);
+assert(encoded.scalePilot);assert.equal(encoded.scalePilotAmplitude,16);assert.deepEqual(source,original);
 const png=await c.decodePng(new Uint8Array(await(await c.writePng(encoded.pixels,w,h)).arrayBuffer()));
 const decoded=await c.decode(png.pixels,w,h,'',{nativeOnly:true});
-assert(decoded.scalePilot);assert.equal(decoded.rangeHeadroom,encoded.rangeHeadroom);assert(c.payloadsEqual(decoded,content));
+assert(decoded.scalePilot);assert.equal(decoded.scalePilotAmplitude,16);assert.equal(decoded.rangeHeadroom,encoded.rangeHeadroom);assert(c.payloadsEqual(decoded,content));
 const reference=I.linearRange(source,encoded.rangeHeadroom),painted=I.applyScalePilot(reference,w);
 assert.deepEqual(I.applyScalePilot(painted,w,true),reference);
-assert(painted.every((value,i)=>i%4===3?value===reference[i]:Math.abs(value-reference[i])<=3));
+assert(painted.every((value,i)=>i%4===3?value===reference[i]:Math.abs(value-reference[i])<=16));
 const extracted=await c.extractCarrier(png.pixels,w,h,encoded.strength);
 let error=0;for(let i=0;i<source.length;i++){if(i%4===3)assert.equal(extracted[i],source[i]);else error+=Math.abs(extracted[i]-source[i]);}
 assert(error/(w*h*3)<2,'source extraction removes the pilot before restoring RGB range');
@@ -36,16 +36,32 @@ for(const scale of [.73,1,1.37,2.1]){
 }
 const controller=new AbortController();controller.abort();
 await assert.rejects(()=>c.scanScaleGuide(encoded.pixels,w,h,{worker:false,signal:controller.signal}),{name:'AbortError'});
-for(const kind of ['flat','gradient','stripes','noise']){
+for(const kind of ['flat','gradient','stripes','noise','wrong-phase']){
   const negative=new Uint8Array(w*h*4);let n=937;
   for(let y=0;y<h;y++)for(let x=0;x<w;x++){
     n^=n<<13;n^=n>>>17;n^=n<<5;
-    const v=kind==='flat'?128:kind==='gradient'?50+160*x/w:kind==='stripes'?128+25*Math.cos(2*Math.PI*x/40):80+(n>>>0)%96;
+    const v=kind==='flat'?128:kind==='gradient'?50+160*x/w:kind==='stripes'?128+25*Math.cos(2*Math.PI*x/40):
+      kind==='wrong-phase'?128+12*Math.cos(2*Math.PI*2*x/256)+10*Math.cos(2*Math.PI*3*x/256)+8*Math.cos(2*Math.PI*5*x/256+3):80+(n>>>0)%96;
     negative.set([v,v,v,255],(x+y*w)*4);
   }
   assert.equal(await c.scanScaleGuide(negative,w,h,{worker:false}),null,kind+' cannot confirm a pilot');
 }
 console.log('PASS: measured pilot guides non-power-of-two scales; ordinary flat/gradient/stripe/noise controls and cancellation retain safe fallback');
+
+// Broad low-frequency photo-like structure, independent of the pilot's periods
+// and phases. Keep these public procedural negatives alongside the real-photo
+// local checks so relaxing thresholds cannot silently accept arbitrary scenery.
+for(let variant=0;variant<12;variant++){
+  let state=731+variant*37;const random=()=>{state^=state<<13;state^=state>>>17;state^=state<<5;return(state>>>0)/4294967296;};
+  const waves=Array.from({length:8},()=>({fx:(random()-.5)/24,fy:(random()-.5)/24,phase:random()*Math.PI*2,gain:4+random()*18}));
+  const landscape=new Uint8Array(w*h*4);
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+    const value=128+waves.reduce((sum,t)=>sum+t.gain*Math.sin(2*Math.PI*(t.fx*x+t.fy*y)+t.phase),0);
+    landscape.set([Math.round(value),Math.round(value*.8+24),Math.round(value*.6+43),255],(x+y*w)*4);
+  }
+  assert.equal(await c.scanScaleGuide(landscape,w,h,{worker:false}),null,'structured unencoded control '+variant);
+}
+console.log('PASS: twelve broad-spectrum unencoded landscapes and a wrong phase-code control do not trigger the relaxed guide');
 
 // The guide is measured again by the real reader, not supplied as an exact fit.
 const photo=await S.resize(encoded,1096,822),photoBefore=photo.pixels.slice();
@@ -94,6 +110,15 @@ const oldInspection=await c.readMarkerCandidates(oldPhoto.pixels,oldPhoto.width,
 assert(oldInspection.found&&!oldInspection.unreadable);
 assert.equal((await c.decode(oldPhoto.pixels,oldPhoto.width,oldPhoto.height,'')).text,oldDecoded.text);
 console.log('PASS: frozen pre-pilot V5 PNG decodes/reconstructs unchanged and its padded capture opens through ordinary marker recovery');
+
+const weak=await c.decodePng(new Uint8Array(await fs.readFile('tests/fixtures/public-v5-three-level-pilot.png')));
+const weakDecoded=await c.decode(weak.pixels,weak.width,weak.height,'',{nativeOnly:true});
+assert.equal(weakDecoded.text,'Public V5 original three-level pilot compatibility.');
+assert.equal(weakDecoded.scalePilotAmplitude,3);assert(weakDecoded.scalePilot);
+const weakClean=await c.extractCarrier(weak.pixels,weak.width,weak.height,weakDecoded.strength);
+let weakError=0;for(let i=0;i<weakClean.length;i++){if(i%4===3)assert.equal(weakClean[i],source[i]);else weakError+=Math.abs(weakClean[i]-source[i]);}
+assert(weakError/(w*h*3)<2,'old three-level images must remove their original pilot, not the new sixteen-level wave');
+console.log('PASS: frozen three-level V5 pilot decodes and reconstructs with its original amplitude');
 
 // Even a perfect isolated pilot is insufficient to establish encoding.
 const pilotOnly=I.applyScalePilot(reference,w);

@@ -25,7 +25,8 @@
   const CARRIER_V4 = 4;
   const CARRIER_V5 = 5;
   const SCALE_PILOT_FLAG = 0x80;
-  const SCALE_PILOT = Object.freeze({ period: 256, amplitude: 3,
+  const LEGACY_SCALE_PILOT_AMPLITUDE = 3;
+  const SCALE_PILOT = Object.freeze({ period: 256, amplitude: 16,
     tones: Object.freeze([{ k: 2, phase: .2, weight: 1 }, { k: 3, phase: 1.1, weight: .8 }, { k: 5, phase: 2.4, weight: .6 }]) });
   const V4_PAYLOAD_PEAK = 64;
   const V4_MARKER_PEAK = 32;
@@ -710,12 +711,12 @@
     return output;
   }
 
-  function applyScalePilot(pixels, width, inverse = false) {
+  function applyScalePilot(pixels, width, inverse = false, amplitude = SCALE_PILOT.amplitude) {
     // Paint under the four-pixel payload wavelets, on the headroom-compressed
     // reference. Integer deltas are reversible after carrier removal; alpha and
     // the original pixels remain untouched. Native periods: 128, 85 1/3, 51.2.
     const output = pixels.slice(), deltas = new Int8Array(width);
-    for (let x = 0; x < width; x++) deltas[x] = Math.round(SCALE_PILOT.amplitude / 2.4 *
+    for (let x = 0; x < width; x++) deltas[x] = Math.round(amplitude / 2.4 *
       SCALE_PILOT.tones.reduce((sum, tone) => sum + tone.weight * Math.cos(2 * Math.PI * tone.k * x / SCALE_PILOT.period + tone.phase), 0));
     for (let i = 0; i < pixels.length; i += 4) {
       const delta = deltas[(i / 4) % width] * (inverse ? -1 : 1);
@@ -1402,7 +1403,7 @@
 
   function searchInWorker(pixels, width, height, options, operation = "geometry") {
     return new Promise((resolve, reject) => {
-      const url = new URL("pixelstow-transform-worker.js?v=20261015-v5-pilot1", codecScriptUrl);
+      const url = new URL("pixelstow-transform-worker.js?v=20261015-v5-pilot2", codecScriptUrl);
       const worker = new Worker(url);
       let finished = false;
       const abort = () => { if (finished) return; cleanup(); reject(new DOMException("Search cancelled.", "AbortError")); };
@@ -2128,8 +2129,10 @@
     }
     const parityBits = bitsPerByte === 12 ? 4 : 1;
     // V5's CRC-protected carrier header stores uniform headroom in two-level
-    // increments. This changes no payload frame, password or marker header.
-    const flags = FLAGS | (parityBits === 1 ? ONE_PARITY : 0) |
+    // increments. With pilot bit 7 set, cleared bit 0 identifies the stronger
+    // pilot; old three-level pilots have bit 0 set. Payload frames are unchanged.
+    const pilot = version === CARRIER_V5 && signalPolicy?.scalePilot;
+    const flags = (pilot ? 0 : FLAGS) | (parityBits === 1 ? ONE_PARITY : 0) |
       (version === CARRIER_V5 ? (((signalPolicy?.linearHeadroom || 0) / 2) << 2) |
         (signalPolicy?.scalePilot ? SCALE_PILOT_FLAG : 0) : 0);
     const bytes = new Uint8Array(9);
@@ -2289,9 +2292,11 @@
       throw frameError("Unsupported image carrier.");
     }
     const allowed = preamble.version === CARRIER_V5 ? (ONE_PARITY | 0xfc) : ONE_PARITY;
-    if ((preamble.flags & ~allowed) !== FLAGS) throw frameError("The carrier flags do not match this profile.");
-    const rangeHeadroom = preamble.version === CARRIER_V5 ? ((preamble.flags >>> 2) & 31) * 2 : 0;
     const scalePilot = preamble.version === CARRIER_V5 && Boolean(preamble.flags & SCALE_PILOT_FLAG);
+    const strongPilot = scalePilot && !(preamble.flags & FLAGS);
+    if ((preamble.flags & ~allowed) !== (strongPilot ? 0 : FLAGS)) throw frameError("The carrier flags do not match this profile.");
+    const rangeHeadroom = preamble.version === CARRIER_V5 ? ((preamble.flags >>> 2) & 31) * 2 : 0;
+    const scalePilotAmplitude = scalePilot ? (strongPilot ? SCALE_PILOT.amplitude : LEGACY_SCALE_PILOT_AMPLITUDE) : 0;
     if (rangeHeadroom > 62) throw frameError("Unsupported carrier range adjustment.");
     const bitsPerByte = (preamble.flags & ONE_PARITY) !== 0 ? 9 : 12;
     const payloadBlocks = scores.length - PREAMBLE_BLOCKS;
@@ -2308,7 +2313,7 @@
       corrections: decoded.corrections,
       ...repetitionBudget(payloadBlocks, preamble.framedLength, bitsPerByte),
       carrierVersion: preamble.version,
-      rangeHeadroom, scalePilot
+      rangeHeadroom, scalePilot, scalePilotAmplitude
     };
   }
 
@@ -2385,7 +2390,8 @@
         formatVersion: unpacked.formatVersion,
         carrierVersion: framed.carrierVersion,
         rangeHeadroom: framed.rangeHeadroom,
-        scalePilot: framed.scalePilot
+        scalePilot: framed.scalePilot,
+        scalePilotAmplitude: framed.scalePilotAmplitude
       };
     } catch (error) {
       if (error && error.code === "frame") return null;
@@ -2498,6 +2504,7 @@
       readResolution: recovery.readResolution,
       strength: recovery.strength,
       scalePilot: recovery.scalePilot,
+      scalePilotAmplitude: recovery.scalePilotAmplitude,
       repetitionRatio: recovery.repetitionRatio,
       copies: recovery.copies,
       parityBits: recovery.parityBits,
@@ -2561,6 +2568,7 @@
           strength: recovery.strength,
           rangeHeadroom: recovery.rangeHeadroom,
           scalePilot: recovery.scalePilot,
+          scalePilotAmplitude: recovery.scalePilotAmplitude,
           repetitionRatio: recovery.repetitionRatio,
           copies: recovery.copies,
           parityBits: recovery.parityBits,
@@ -2624,6 +2632,7 @@
       carrierVersion: version,
       rangeHeadroom: signalPolicy?.linearHeadroom || 0,
       scalePilot: Boolean(signalPolicy?.scalePilot),
+      scalePilotAmplitude: signalPolicy?.scalePilot ? SCALE_PILOT.amplitude : 0,
       map
     };
   }
@@ -2674,6 +2683,7 @@
               carrierVersion: usedVersion,
               rangeHeadroom: encoded.rangeHeadroom,
               scalePilot: encoded.scalePilot,
+              scalePilotAmplitude: encoded.scalePilotAmplitude,
               quality,
               locatorFallback: wantLocators && usedVersion === CARRIER_V1
             };
@@ -3042,7 +3052,7 @@
     let cleaned = await extractBlind(restored, origW, origH, fit.strength, locatorBlockMap(origW, origH, Infinity, fit.carrierVersion),
       fit.carrierVersion === CARRIER_V4 || fit.carrierVersion === CARRIER_V5 ? V4_PAYLOAD_PEAK : fit.strength);
     cleanLocators(restored, origW, origH, cleaned, fit.carrierVersion);
-    if (fit.scalePilot) cleaned = applyScalePilot(cleaned, origW, true);
+    if (fit.scalePilot) cleaned = applyScalePilot(cleaned, origW, true, fit.scalePilotAmplitude || LEGACY_SCALE_PILOT_AMPLITUDE);
     if (fit.rangeHeadroom) cleaned = linearRange(cleaned, fit.rangeHeadroom, true);
     if (identity) return cleaned;
     return forwardSample(cleaned, origW, origH, pixels, width, height, fit, options.signal);

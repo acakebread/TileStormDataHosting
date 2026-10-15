@@ -274,12 +274,12 @@
         const scale = 2 / (pilot.period * Math.hypot(fx,fy));
         if (!Number.isFinite(scale) || scale < .25 || scale > 8) continue;
         const measured = pilot.tones.map(t => centred(bx*t.k,by*t.k));
-        if (measured.some(m => !Number.isFinite(m.contrast) || m.contrast < 10 || m.amplitude < .2)) continue;
+        if (measured.some(m => !Number.isFinite(m.contrast) || m.contrast < 8 || m.amplitude < .2)) continue;
         const gains = measured.map((m,i) => m.amplitude / pilot.tones[i].weight);
         if (Math.max(...gains) / Math.min(...gains) > 2.5) continue;
         const phase = measured[0].phase + measured[1].phase - measured[2].phase;
         const phaseError = Math.min(angleError(phase-phaseCode),angleError(phase+phaseCode));
-        if (phaseError > .25) continue;
+        if (phaseError > .5) continue;
         matches.push({ scale, fx, fy, phaseError, contrast: Math.min(...measured.map(m=>m.contrast)),
           score: measured.reduce((s,m)=>s+Math.log(m.contrast),0)-4*phaseError });
       }
@@ -288,13 +288,13 @@
     try {
       if (!pilot || width < 128 || height < 96) return null;
       const full = await region(0,0,width,height);
-      if (full && full.contrast >= 30 && full.phaseError < .12)
+      if (full && full.contrast >= 16 && full.phaseError < .4)
         return { ...full, detected: true, confirmed: false, width, height, agreement: false };
       const cropWidth = Math.round(width*.68), cropHeight = Math.round(height*.68);
       const crop = await region(Math.floor((width-cropWidth)/2),Math.floor((height-cropHeight)/2),cropWidth,cropHeight);
       const agree = full && crop && Math.abs(Math.log2(full.scale/crop.scale)) < .12 &&
         Math.abs(full.fx*crop.fy-full.fy*crop.fx) / Math.max(1e-9,Math.hypot(full.fx,full.fy)*Math.hypot(crop.fx,crop.fy)) < .15;
-      const selected = agree ? (full.score > crop.score ? full : crop) : [full,crop].filter(m=>m && m.contrast>=30 && m.phaseError<.12).sort((a,b)=>b.score-a.score)[0];
+      const selected = agree ? (full.score > crop.score ? full : crop) : [full,crop].filter(m=>m && m.contrast>=16 && m.phaseError<.4).sort((a,b)=>b.score-a.score)[0];
       return selected ? { ...selected, detected: true, confirmed: false, width, height, agreement: Boolean(agree) } : null;
     } catch (error) {
       if (error?.name === "PilotLimit") return null;
