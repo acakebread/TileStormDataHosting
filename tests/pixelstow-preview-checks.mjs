@@ -115,13 +115,14 @@ try {
     assert(mainAudio.x + mainAudio.width <= width);
     await page.getByRole('button', { name: 'Full screen preview', exact: true }).click();
     assert(await page.evaluate(() => !fullPreview.clean));
-    const controls = ['#preview-audio', '#preview-screen-fit', '#preview-screen-actual', '#preview-screen-hide', '#preview-screen-close', '#preview-markers'];
+    const controls = ['#preview-audio', '#preview-screen-fit', '#preview-screen-actual', '#preview-screen-hide', '#preview-markers', '#preview-screen-close'];
     const boxes = await Promise.all(controls.map(selector => page.locator(selector).boundingBox()));
     assert(boxes.every((box, index) => box && box.width >= 44 && box.height >= 48 && Math.abs(box.y - boxes[0].y) < 1 && box.x >= 0 && box.x + box.width <= width && (!index || box.x >= boxes[index - 1].x + boxes[index - 1].width + 7)), JSON.stringify(boxes));
-    assert.deepEqual(await page.locator('#show-transform').boundingBox(), boxes.at(-1), 'the entire Analysis button is the checkbox hit target');
+    const analysisBox = boxes[controls.indexOf('#preview-markers')];
+    assert.deepEqual(await page.locator('#show-transform').boundingBox(), analysisBox, 'the entire Analysis button is the checkbox hit target');
     const analysis = page.getByRole('checkbox', { name: 'Analysis', exact: true });
     await analysis.uncheck();
-    const corner = boxes.at(-1);
+    const corner = analysisBox;
     if (mobile) await page.touchscreen.tap(corner.x + 4, corner.y + 4);
     else await page.mouse.click(corner.x + 4, corner.y + 4);
     assert(await analysis.isChecked(), 'touching a corner of the Analysis icon must toggle it');

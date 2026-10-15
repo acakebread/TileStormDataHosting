@@ -155,7 +155,7 @@ divider does not reveal controls. Immediate handle/line dragging and desktop
 mouse scrubbing remain available. Escape closes the viewer.
 Successful reads start with marker overlays hidden. Failed photographs show
 diagnostic markers; continuous captures start clean. Fullscreen preview has a
-button-style **Analysis** toggle at the right end of the action row; it is absent
+button-style **Analysis** toggle just before Close in the action row; it is absent
 from the main page. Its computer/binary icon has a full 44 × 48 pixel touch
 target, a highlighted checked state and a keyboard focus outline. Native reads,
 including clipboard pastes and generated images, gather
@@ -175,7 +175,7 @@ The page places the image first, with its caption below it. The image toolbar ha
 compact Browse, Paste, fullscreen, Capture and Photo actions. The speaker button
 sits on the same row as the main comparison slider. The same button and slider
 move into the fullscreen footer, then return on close. Speaker, Fit, 100%,
-maximise, close and Analysis share one action row, including at 320px width,
+maximise, Analysis and close share one action row, including at 320px width,
 with 44 × 48 pixel targets and at least eight pixels between controls. Icon buttons have accessible labels and tooltips;
 the speaker label tracks Play/Pause without removing its SVG. Audio is disabled
 and hidden when no audio is available. The footer occupies its own space below
