@@ -44,6 +44,12 @@ read. Captures use the video's actual pixel dimensions, without resizing or JPEG
 conversion. The browser may already scale/process the sensor feed; video detail
 can therefore be worse than a full-resolution still photograph.
 
+During scanning, combined-lens camera names (Dual, Dual Wide or Triple) and
+Ultra Wide names receive a caution beside the selected camera. These modes may
+produce distorted or unreliable scan frames; the user can try a standard rear
+camera instead. The name is only a heuristic: capture remains available, ordinary
+Back Wide cameras are not flagged, and source-photo mode does not show a scan warning.
+
 The live view opens in a full-viewport modal dialog, above the page's normal
 layout, with safe-area padding for phone notches and controls beside the preview
 on short landscape screens. The frame border follows the fitted video's actual

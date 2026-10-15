@@ -107,9 +107,14 @@ try {
   await stableFeedback(page);
   await page.screenshot({ path: path.join(screenshots, 'desktop-scanner.png') });
   await page.locator('#pause-camera').click();
+  assert.equal(await page.locator('.camera-mode-warning').count(), 0);
+  await page.evaluate(() => { camera.session.deviceLabel = 'Camera Back Dual Wide'; camera.sync(); });
+  assert.match(await page.locator('.camera-mode-warning').textContent(), /distorted.*standard rear camera/);
+  assert(!(await page.locator('#capture-frame').isDisabled()));
   await page.evaluate(() => { camera.session.scanAfter = 0; camera.scan(camera.session); });
   assert.equal(await page.evaluate(() => markerCalls), 0);
   await page.locator('#switch-camera').click(); await ready();
+  assert.equal(await page.locator('.camera-mode-warning').count(), 0, 'Changing to a normal camera clears the advisory');
   const second = await page.evaluate(() => ({ device: camera.session.deviceId, request: cameraRequests.at(-1),
     stopped: firstTracks.every(track => track.readyState === 'ended'), manual: camera.session.manualCapture,
     label: camera.session.stream.getVideoTracks()[0].label }));
@@ -396,6 +401,22 @@ try {
   assert(await phone.locator('#scale-source').isChecked());
   assert.equal(await phone.evaluate(() => camera.inputPurpose), 'read');
   console.log('PASS: preview taps capture a source photo directly while drags do nothing; Capture retains the native phone camera option; long status/near-miss feedback never moves controls or preview on desktop, portrait or landscape');
+  assert(await phone.evaluate(() => !manualScaleSource), 'Automatic source capture must not overwrite the manual preference');
+  await phone.locator('#file').setInputFiles({ name: 'public-import-after-capture.png', mimeType: 'image/png', buffer: bytes });
+  await phone.waitForFunction(() => !busy && document.querySelector('#loaded-image').textContent.includes('public-import-after-capture.png'));
+  assert(!(await phone.locator('#scale-source').isChecked()));
+  await phone.locator('#scale-source').check();
+  await phone.locator('#camera-source').click();
+  await phone.waitForFunction(() => camera.session?.ready && !document.querySelector('#capture-frame').disabled);
+  await phone.locator('#capture-frame').click();
+  await phone.waitForFunction(() => !camera.active && !busy);
+  await phone.locator('#file').setInputFiles({ name: 'public-import-manual-scale.png', mimeType: 'image/png', buffer: bytes });
+  await phone.waitForFunction(() => !busy && document.querySelector('#loaded-image').textContent.includes('public-import-manual-scale.png'));
+  assert(await phone.locator('#scale-source').isChecked());
+  await phone.reload();
+  assert(await phone.locator('#scale-source').isChecked());
+  console.log('PASS: source capture temporarily enables scaling; normal imports restore manual off/on, and only the manually selected preference persists across reloads');
+  console.log('PASS: Dual Wide camera names show a scan advisory without disabling capture; a normal camera selection removes it');
   assert.deepEqual(errors, []);
 } finally {
   await browser?.close(); await new Promise(resolve => server.close(resolve));

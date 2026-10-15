@@ -347,6 +347,14 @@
       this.help.textContent = source ? "Frame a new photo to put your message and files inside. The whole outlined view is captured."
         : "Keep all four picture corners inside the guides. Move closer and hold steady.";
       if (session?.deviceLabel) this.help.textContent += " Camera: " + session.deviceLabel + ".";
+      // Camera names are a warning cue, not proof that a feed is unusable.
+      // In particular, ordinary "Back Wide Camera" is the standard rear lens.
+      if (!source && /\b(?:dual(?:[\s_-]*wide)?|triple|ultra[\s_-]*wide)\b/i.test(session?.deviceLabel || "")) {
+        const warning = document.createElement("span");
+        warning.className = "camera-mode-warning";
+        warning.textContent = " This camera mode may produce distorted frames and scan unreliably. Try a standard rear camera.";
+        this.help.append(warning);
+      }
       this.captureButton.textContent = source ? "Take source photo" : "Capture and read";
       this.view.setAttribute("aria-label", source ? "Take a source photo from the live camera preview" : "Capture and read the live camera preview");
       this.nativePhotoButton.textContent = "Take photo with phone camera";
