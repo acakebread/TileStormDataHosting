@@ -16,6 +16,8 @@ const server = http.createServer(async (req, res) => {
   } catch { res.writeHead(404).end(); }
 });
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+const snapshots=path.join(root,'artifacts','prognosis-checks');
+await fs.mkdir(snapshots,{recursive:true});
 let browser;
 try {
   browser = await chromium.launch({ headless: true, args: ['--disable-gpu'],
@@ -24,37 +26,46 @@ try {
     const page = await browser.newPage({ viewport: { width, height: 844 }, isMobile: true, hasTouch: true });
     const errors = []; page.on('pageerror', error => errors.push(error.message));
     await page.goto('http://127.0.0.1:' + server.address().port + '/pixelstow.html');
-    const load = (width, height, length) => page.evaluate(async ({ width, height, length }) => {
+    const load = (width, height, length, origin='file') => page.evaluate(async ({ width, height, length, origin }) => {
       const pixels = new Uint8Array(width * height * 4);
       for (let i = 0; i < pixels.length; i += 4) pixels.set([100, 120, 140, 255], i);
       const image = { pixels, width, height, exact: true };
-      await useFile(new File([await PixelStow.writePng(pixels, width, height)], 'public-source.png', { type: 'image/png' }), 'file', { image, sourceOnly: true });
+      await useFile(new File([await PixelStow.writePng(pixels, width, height)], 'public-source.png', { type: 'image/png' }), origin, { image, sourceOnly: true });
       let seed = 317;
       const bytes = Uint8Array.from({ length }, () => { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; return seed & 255; });
       window.publicPayload = { text: 'Public prognosis fixture.', attachments: [{ name: 'public.bin', type: 'application/octet-stream', bytes }] };
       media.files = publicPayload.attachments; message.value = publicPayload.text; media.sync(); updateByteCounts();
-    }, { width, height, length });
+    }, { width, height, length, origin });
     const dimensions = () => page.evaluate(() => ({ width: sourcePlan.width, height: sourcePlan.height }));
     const repetition = () => page.evaluate(() => sourcePlan.repetitionRatio);
     const risk = () => page.locator('#prognosis-pointer').evaluate(node => parseFloat(node.style.left));
-    await load(1280, 960, 1000);
+    await load(4032, 3024, 1000);
+    await page.locator('#encoding-quality').fill('0.1');
     await page.locator('#scale-source').check();
     await page.waitForFunction(() => sourcePlan?.fits && frameBudget?.framedBytes > 1000);
-    assert.deepEqual(await dimensions(), { width: 1280, height: 960 });
+    const initial=await dimensions();
+    assert(initial.width<1200 && initial.height<800, 'a phone-sized original immediately becomes payload-sized');
+    assert(await repetition()>=2 && await repetition()<2.05);
+    assert.equal(await page.locator('#encoding-quality').inputValue(),'0.8','enabling scaling discards the old quality setting');
     const controlPositions = () => page.evaluate(() => ['encoding-quality', 'prognosis-target', 'encode'].map(id => document.getElementById(id).getBoundingClientRect().top + scrollY));
     const positions = await controlPositions();
     await page.locator('#encoding-quality').fill('0'); const durable = await risk();
     await page.locator('#encoding-quality').fill('1'); const gentle = await risk();
-    assert(durable < gentle); assert.deepEqual(await dimensions(), { width: 1280, height: 960 });
+    assert(durable < gentle); assert.deepEqual(await dimensions(), initial);
     assert.deepEqual(await controlPositions(), positions, 'quality and status updates keep the controls steady');
     await page.locator('#prognosis-target').fill('0');
     const largest = await dimensions(), green = await risk(), greenRepetition = await repetition();
-    assert(largest.width > 1280 && largest.height > 960);
+    assert(largest.width>initial.width && largest.height>initial.height && largest.width<1200);
+    assert(greenRepetition>=3 && greenRepetition<3.05);
     assert.equal(await page.locator('#encoding-quality').inputValue(), '1');
     assert(await page.evaluate(() => sourcePlan.fits && sourcePlan.width === sourcePlan.maximum.width));
     await page.locator('#prognosis-target').fill('1');
     const smallest = await dimensions();
-    assert(smallest.width < 1280 && smallest.height < 960);
+    assert(smallest.width<initial.width && smallest.height<initial.height);
+    assert(await repetition()>=1 && await repetition()<1.05);
+    assert(Number(await page.locator('#encoding-quality').inputValue())<.35,'low repetition caps maximum quality at a stronger signal');
+    await page.locator('.quality-label').evaluate(node => scrollTo(0,node.getBoundingClientRect().top+scrollY-15));
+    await page.screenshot({path:path.join(snapshots,`payload-range-${width}.png`)});
     assert(await risk() > green && await repetition() < greenRepetition, 'green means more real payload repetition');
     let previousRepetition = await repetition();
     for (let step = 9; step >= 0; step--) {
@@ -88,18 +99,53 @@ try {
       const decoded = await PixelStow.decode(png.pixels, png.width, png.height, '', { nativeOnly: true });
       return png.width === width && png.height === height && decoded.parityBits === 4 &&
         decoded.repetitionRatio === sourcePlan.repetitionRatio && PixelStow.payloadsEqual(decoded, publicPayload) &&
-        current.width === 1280 && current.height === 960 && current.pixels.every((value, index) => value === [100, 120, 140, 255][index % 4]);
+        current.width === 4032 && current.height === 3024 && current.pixels.every((value, index) => value === [100, 120, 140, 255][index % 4]);
     }, encodedSize));
 
     await load(320, 240, 5200);
     await page.waitForFunction(() => sourcePlan?.fits && frameBudget?.framedBytes > 5200);
     const required = await dimensions(); assert(required.width > 320 && required.height > 240);
-    assert(await page.evaluate(() => sourcePlan.width === sourcePlan.minimum.width && sourcePlan.width < sourcePlan.maximum.width));
+    assert(await page.evaluate(() => sourcePlan.width === sourcePlan.recommended.width && sourcePlan.width < sourcePlan.maximum.width));
+    assert(await repetition()>=2 && await repetition()<2.05);
     await page.locator('#encoding-quality').fill('0'); await page.locator('#encoding-quality').fill('1');
     assert.deepEqual(await dimensions(), required, 'payload-driven enlargement does not depend on quality');
     assert(await page.locator('#prognosis-target').isEnabled(), 'more repetition remains selectable after the automatic minimum enlargement');
     await page.locator('#prognosis-target').fill('0');
     assert((await dimensions()).width > required.width);
+    await page.locator('#encoding-quality').fill('0');
+    await page.locator('#scale-source').uncheck();
+    await page.locator('#scale-source').check();
+    assert.deepEqual(await dimensions(),required,'every toggle on restores the suggested 2x grid');
+    assert(await page.evaluate(() => requestedQuality===.8 && sourceRedundancy===2 && Math.abs(Number(encodingQuality.value)-qualityLimit.quality)<1e-12));
+
+    if(width===390){
+      // Simulate Encode winning the race with the delayed UI compression pass.
+      await page.evaluate(() => {
+        let seed=709;
+        const bytes=Uint8Array.from({length:6400},()=>{seed^=seed<<13;seed^=seed>>>17;seed^=seed<<5;return seed&255;});
+        publicPayload={text:'Public immediate-encode fixture.',attachments:[{name:'fresh.bin',type:'application/octet-stream',bytes}]};
+        media.files=publicPayload.attachments;message.value=publicPayload.text;media.sync();updateByteCounts();
+        clearTimeout(repetitionTimer);
+      });
+      assert(await page.evaluate(() => frameBudget.framedBytes<6400));
+      await page.locator('#encode').click();
+      await page.waitForFunction(() => !busy && encodedPng, {}, {timeout:30000});
+      assert(await page.evaluate(async () => {
+        const frame=await PixelStow.estimatePayloadFrame(publicPayload,false);
+        const plan=PixelStowSizing.plan(current.width,current.height,frame.framedBytes,2);
+        const limit=PixelStowSizing.scaledQuality(plan,.8);
+        const png=await PixelStow.decodePng(new Uint8Array(await encodedPng.arrayBuffer()));
+        return encodedPrognosis.width===plan.width && encodedPrognosis.height===plan.height &&
+          Math.abs(encodedPrognosis.quality-limit.quality)<1e-12 &&
+          PixelStow.payloadsEqual(await PixelStow.decode(png.pixels,png.width,png.height,'',{nativeOnly:true}),publicPayload);
+      }),'Encode remeasures size and quality bounds even if the pending appraisal has not run');
+    }
+
+    await load(320,240,60000);
+    await page.waitForFunction(() => sourcePlan?.fits && frameBudget?.framedBytes>60000);
+    assert(await risk()>85,'even the strongest wavelets cannot advertise an enormous carrier as easy to photograph');
+    assert(await page.locator('#encoding-quality').isDisabled());
+    assert((await page.locator('#prognosis-detail').textContent()).includes('Large carrier'));
 
     await page.locator('#scale-source').uncheck();
     await load(1280, 960, 1000);
@@ -108,8 +154,16 @@ try {
     await page.locator('#prognosis-target').fill('1');
     assert(Number(await page.locator('#encoding-quality').inputValue()) > fixedDurable);
     assert(await page.evaluate(() => !sourcePlan && current.width === 1280 && current.height === 960));
+
+    await load(320,240,1000,'camera');
+    await page.waitForFunction(() => sourcePlan?.fits && frameBudget?.framedBytes>1000);
+    assert(await page.locator('#scale-source').isChecked());
+    assert(await page.evaluate(() => sourceRedundancy===2 && requestedQuality===.8));
+    await load(640,480,1000);
+    await page.waitForFunction(() => frameBudget?.framedBytes>1000);
+    assert(!await page.locator('#scale-source').isChecked(),'an automatic camera default must not overwrite the manual file preference');
     assert.deepEqual(errors, []);
-    console.log(`PASS: ${width}px quality changes strength only; every leftward scale gesture adds repetition, parity stays stable, minimum fitting encoding verifies unchanged payload bytes`);
+    console.log(`PASS: ${width}px scaling resets to payload-sized 2x/moderate strength; 1x--3x gestures bound quality and add real repetition; dense-grid warning, camera/file preferences and verified payload remain correct`);
     await page.close();
   }
 } finally {

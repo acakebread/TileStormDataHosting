@@ -235,20 +235,39 @@ inspection, cancellation, stale events and real native payload verification.
 
 With a source and payload selected, a **Photo-read prognosis** bar above the export actions
 runs green through amber to red, with a difficulty marker and textual label.
-It estimates protection from payload repetition, error correction and wavelet
-intensity. More repetition moves towards green. Strength-adjusted anchors at
+It estimates protection from payload repetition, error correction, wavelet
+intensity and native carrier density. More repetition moves towards green within
+the selected payload-sized range. Strength-adjusted anchors at
 one, two and five copies join smoothly, with a non-flat tail beyond five copies.
 Reduced-parity images are compared on the same 12-bit coverage basis. This is a
-heuristic, not a calibrated camera success percentage: native pattern size,
-focus, glare and framing still affect capture. Actual codec boost policies are unchanged.
+heuristic, not a calibrated camera success percentage. Above the user's observed
+1200 x 800 reference area, the model discounts the protection margin by
+`1 / sqrt(carrierPixels / 960000)`. Extra strength cannot eliminate this sampling
+penalty. Focus, glare, aspect ratio and framing still affect capture. Actual
+codec boost policies are unchanged.
 The quality/durability slider only changes wavelet intensity. Its 0.8 setting
 still preserves the accepted encoding strength. It never resizes the carrier,
 including when scaling is enabled. More durable settings move prognosis towards
 green on the already chosen grid. If settings change after export, prognosis
 estimates the next encoding and asks the user to re-encode; the saved PNG remains
 unchanged. Without source scaling, dragging prognosis adjusts intensity within
-its achievable range. With scaling, it selects resolution while leaving intensity
-unchanged. Unavailable portions of the scale are shaded in both modes.
+its achievable range. With scaling, it selects redundancy/resolution and updates
+the available quality range. Unavailable portions of both scales are shaded.
+
+The scaling quality envelope uses the accepted 2x redundancy / 80% strength
+setting as its reference. Its minimum requested signal multiplier is
+`sqrt(2 / coverage) * max(1, sqrt(carrierPixels / 960000))`, and its maximum quality
+is `clamp(0.8 - log2(multiplier), 0, 1)`. Coverage includes the existing parity
+normalization. This is a conservative planning policy, **not** a measured optical
+success boundary: current automated experiments establish native decoding and
+signal limits, not a camera-safe amplitude table. The existing capped writer
+gain is checked separately and a warning identifies insufficient compensation.
+The prognosis interpolates the quality multiplier continuously up to the real
+writer gain ceiling at each repetition anchor, avoiding jumps from rounded
+integer strengths. Lower quality remains selectable for stronger wavelets;
+quality above the current bound is clamped. The requested quality is retained
+while prognosis changes, so moving back into a more permissive range restores
+it. Quality gestures never change the selected repeat target or dimensions.
 Repetition and parity also appear as capacity warnings. Reported repetition uses
 the actual coding, and reduced error correction is identified explicitly.
 The slider has a 64-pixel-high touch area and a larger visible handle. Tapping
@@ -267,17 +286,29 @@ Zoom/pan help is a small, muted, noninteractive overlay within the preview. It
 disappears after a zoom or pan and returns when a new image is loaded; comparison
 taps and ordinary page scrolling leave it alone.
 
-Optional **Scale source for payload** starts at the original dimensions, capped
-at 24 megapixels. Initially it enlarges only if required to fit the compressed payload,
-including framing, password overhead, error correction and reserved marker space.
+Turning on **Scale source for payload** discards previous slider settings and
+selects approximately **2x redundancy and 80% quality**, subject to the quality
+envelope above. Camera source capture does the same automatically. The carrier
+is the smallest grid needed for that repeat budget, including actual compressed
+payload bytes, framing, password overhead, error correction and reserved marker
+space. A 4032 x 3024 original with a small payload is reduced immediately in the
+plan; a small original with a large payload is enlarged. No source pixels are
+changed until Encode.
 Moving prognosis left enlarges the carrier to add repetition; moving right shrinks
-it towards the minimum fit. Source aspect ratio is preserved, and the maximum is
-the 24-megapixel encoding limit, including when the source already fits. The
-selectable range retains standard four-bit parity whenever that can fit within
+it towards the minimum fit. The selectable range is approximately **1x--3x**,
+with only native block rounding beyond the requested repeat count. Tiny payloads
+can exceed this range because the markers themselves require a minimum grid.
+Dimensions are whole four-pixel blocks and preserve source aspect ratio to block
+rounding. The original pixel count does not determine the selected carrier size.
+The selectable range retains standard four-bit parity whenever that can fit within
 the limit; otherwise it retains one-bit parity throughout. This prevents a parity
 switch from making the displayed repeat count fall during a leftward gesture.
-A payload that cannot fit within 24 megapixels is rejected. Changing image quality leaves the chosen
-dimensions unchanged. Payload edits may increase the minimum required size.
+The 24-megapixel hard limit can truncate the repeat range below 3x (or 2x), and
+the status explains this; a payload that cannot fit even once is rejected.
+Large payloads can still require a dense carrier even at 1x, so the prognosis
+remains poor and recommends reducing the payload rather than advertising the
+larger grid as easy to photograph. Payload edits preserve the chosen repeat
+target and recompute the required dimensions.
 The sliders calculate dimensions without resampling. On Encode, a copy of the
 retained original is resized first, the same text and attachment bytes are
 embedded into that resized source, and the exported PNG is verified. Re-encoding
@@ -287,8 +318,9 @@ Camera photos explicitly taken for encoding enable scaling automatically;
 opening a file or pasting an image restores the last manually selected setting.
 `node tests/pixelstow-sizing-checks.mjs` covers capacity bounds, size direction,
 native round trips and unchanged source pixels. `node tests/pixelstow-prognosis-checks.mjs`
-checks the real mobile controls, independent intensity/size changes, monotonic
-repetition, forced enlargement and verified encoding at the minimum selectable size. Its Playwright
+checks the real mobile controls, reset-on-enable, payload-sized camera defaults,
+quality bounds, density warnings, monotonic repetition, forced enlargement and
+verified encoding at the minimum selectable size. Its Playwright
 environment overrides match the camera checks.
 
 Capture focus, glare, source detail and distortion
