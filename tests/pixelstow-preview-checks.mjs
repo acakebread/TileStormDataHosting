@@ -36,19 +36,36 @@ try {
       window.sourceFixture = image;
     });
     const cleanLayers = ['#preview-source', '#transform-outline', '#compare-ui', '#comparison-control', '#tag-encoded', '#tag-source', '#preview-audio', '#preview-markers'];
-    const checkCleanLayers = async () => {
-      for (const selector of cleanLayers) assert(!(await page.locator(selector).isVisible()), selector + ' must never appear in the transmission viewer');
+    const checkCleanLayers = async (source = false) => {
+      for (const selector of cleanLayers.filter(selector => selector !== '#preview-source')) assert(!(await page.locator(selector).isVisible()), selector + ' must never appear in the transmission viewer');
+      assert.equal(await page.locator('#preview-source').isVisible(), source);
+      assert.equal(await page.locator('#preview-encoded').isVisible(), !source);
+      if (source) assert.equal(await page.locator('#preview-source').evaluate(node => getComputedStyle(node).clipPath), 'none');
     };
     const tapImage = async () => {
       const box = await page.locator('#viewport').boundingBox();
       if (mobile) await page.touchscreen.tap(box.x + box.width * .3, box.y + box.height * .4);
       else await page.mouse.click(box.x + box.width * .3, box.y + box.height * .4);
     };
+    const holdImage = async () => {
+      const box = await page.locator('#viewport').boundingBox(), x = box.x + box.width * .3, y = box.y + box.height * .4;
+      if (mobile) {
+        const cdp = await page.context().newCDPSession(page);
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ id: 1, x, y }] });
+        await page.waitForTimeout(550);
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+        await cdp.detach();
+      } else {
+        await page.mouse.move(x, y); await page.mouse.down(); await page.waitForTimeout(550); await page.mouse.up();
+      }
+    };
     await page.getByRole('button', { name: 'Preview', exact: true }).click();
     assert(await page.evaluate(() => fullPreview.openNow && fullPreview.clean));
     assert(await page.locator('#preview-audio').isDisabled());
     assert(await page.locator('#show-transform').isDisabled());
     assert(!(await page.locator('#preview-screen-footer').isVisible()));
+    await checkCleanLayers();
+    await holdImage();
     await checkCleanLayers();
     await tapImage();
     assert(await page.getByRole('button', { name: 'Fit', exact: true }).isVisible());
@@ -100,17 +117,34 @@ try {
       await page.getByRole('button', { name: 'Hide controls', exact: true }).click();
       assert(!(await page.locator('#preview-screen-footer').isVisible()));
       await checkCleanLayers();
+      const viewBefore = await page.evaluate(() => [fitMode, viewScale, originX, originY]);
+      await holdImage();
+      await checkCleanLayers(true);
+      assert(!(await page.locator('#preview-screen-footer').isVisible()));
+      assert.equal(await page.locator('#split').inputValue(), dividerBefore);
+      assert.deepEqual(await page.evaluate(() => [fitMode, viewScale, originX, originY]), viewBefore, 'a source toggle preserves zoom/pan');
+      await tapImage();
+      await checkCleanLayers(true);
+      await page.getByRole('button', { name: 'Hide controls', exact: true }).click();
+      await holdImage();
+      await checkCleanLayers();
       if (origin === 'camera') {
         if (mobile) {
           const cdp = await page.context().newCDPSession(page), box = await page.locator('#viewport').boundingBox();
           const x = box.x + box.width * .2, y = box.y + box.height * .4;
           await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ id: 1, x, y }] });
-          await page.waitForTimeout(550);
           await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ id: 1, x: x + 40, y }] });
+          await page.waitForTimeout(550);
           await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
           assert.equal(await page.locator('#split').inputValue(), dividerBefore, 'clean-view holds cannot grab the comparison');
           assert(!(await page.locator('#preview-screen-footer').isVisible()));
           await checkCleanLayers();
+          await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ id: 1, x, y }] });
+          await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ id: 1, x, y }, { id: 2, x: x + 60, y }] });
+          await page.waitForTimeout(550);
+          await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+          await checkCleanLayers();
+          assert(!(await page.locator('#preview-screen-footer').isVisible()));
           await cdp.detach();
         }
         await page.screenshot({ path: path.join(snapshots, `clean-capture-${width}.png`) });
@@ -219,9 +253,16 @@ try {
       window.realExtraction = PixelStow.extractCarrier;
       PixelStow.extractCarrier = (...args) => new Promise((resolve, reject) => { window.finishExtraction = () => realExtraction(...args).then(resolve, reject); });
     });
+    await page.evaluate(async bytes => {
+      const photo = await PixelStow.decodePng(new Uint8Array(bytes));
+      media.files = (await PixelStow.decode(photo.pixels, photo.width, photo.height, '', { nativeOnly: true })).attachments;
+      media.sync();
+    }, fixture);
     await page.locator('#message').fill('Public newly generated preview.');
     await page.locator('#encode').click();
     await page.waitForFunction(() => !busy && encodedPng && window.finishExtraction);
+    assert(!(await page.locator('#preview-audio').isVisible()), 'speaker waits for the source comparison');
+    assert(!(await page.locator('#comparison-control').isVisible()));
     await page.getByRole('button', { name: 'Preview', exact: true }).click();
     assert(await page.evaluate(() => {
       const pixels = previewEncoded.getContext('2d').getImageData(0, 0, previewEncoded.width, previewEncoded.height).data;
@@ -233,6 +274,8 @@ try {
     await checkCleanLayers();
     await page.getByRole('button', { name: 'Close preview', exact: true }).click();
     await page.evaluate(async () => { PixelStow.extractCarrier = realExtraction; await finishExtraction(); await current.carrierPromise; });
+    assert(await page.locator('#preview-audio').isVisible());
+    assert(await page.locator('#comparison-control').isVisible());
     assert.deepEqual(errors, []);
     await page.close();
   }

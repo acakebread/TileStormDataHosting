@@ -33,6 +33,7 @@
       this.rotateButton = document.querySelector("#rotate-camera");
       this.nativePhotoButton = document.querySelector("#camera-take-photo");
       this.progress = document.querySelector("#camera-progress");
+      this.readProgress = new PixelStowReadProgress(document.querySelector("#camera-read-status"));
       this.signature = document.querySelector("#camera-signature");
       this.nearMiss = document.querySelector("#camera-near-miss");
       this.nearSummary = document.querySelector("#camera-near-summary");
@@ -390,6 +391,8 @@
       this.session = session;
       this.clearFeedback?.();
       this.signature.textContent = "";
+      if (purpose === "source") this.readProgress.finish("Frame your source photo, then capture it.", "source");
+      else this.readProgress.begin("Waiting for a camera frame…");
       this.progress.textContent = "Allow camera access to start the preview…";
       this.changed();
       try {
@@ -639,6 +642,7 @@
         if (!session.reading) {
           this.signature.textContent = "";
           this.progress.textContent = prefix + "Checking markers…";
+          this.readProgress.begin(this.progress.textContent);
         }
         const previous = session.tracking?.scan;
         const header = previous?.markers?.find((m) => m.verification === "header");
@@ -646,8 +650,13 @@
           mode: "perspective", camera: true, deadline: Date.now() + (header ? 12000 : 24000), signal: controller.signal,
           seed: previous?.width === image.width && previous?.height === image.height && header
             ? { ...header, initialMatrix: previous.geometry?.matrix } : undefined,
-          onProgress: (text) => { if (this.session === session && !controller.signal.aborted && !session.reading) this.progress.textContent = prefix + text; },
-          onSignature: (signature) => { if (this.session === session && !controller.signal.aborted) this.signature.textContent = signature.message; }
+          onProgress: (text) => { if (this.session === session && !controller.signal.aborted && !session.reading) {
+            this.progress.textContent = prefix + text; this.readProgress.update(this.progress.textContent);
+          } },
+          onSignature: (signature) => { if (this.session === session && !controller.signal.aborted) {
+            this.signature.textContent = signature.message;
+            if (!session.reading) this.readProgress.signature(signature);
+          } }
         });
         if (this.session !== session || controller.signal.aborted) return;
         entry.scan = scan;
@@ -669,12 +678,14 @@
         if (!session.reading) this.progress.textContent = prefix + (scan.candidates?.length
           ? "Marker scan complete. Ranking the recent captures…"
           : "No stable marker fit. Reframe and hold steady; checking a fresh capture…");
+        if (!session.reading) this.readProgress.update(this.progress.textContent);
         this.readBestFrame(session);
       } catch (error) {
         if (this.session !== session || controller.signal.aborted) return;
         session.paused = true;
         this.cancelSearches(session);
         this.progress.textContent = (error?.message || "The camera scan could not finish.") + " Scanning paused; resume or tap Capture and read.";
+        this.readProgress.finish(this.progress.textContent, "failed");
         this.sync();
       } finally {
         session.scanning = false;
@@ -694,6 +705,7 @@
       this.clearFeedback?.();
       this.signature.textContent = "";
       this.progress.textContent = "Reading best capture · frame " + entry.frameNumber + "…";
+      this.readProgress.update(this.progress.textContent);
       entry.attempted = true;
       entry.state = undefined;
       const controller = new AbortController();
@@ -707,8 +719,10 @@
         const { image, scan, frameNumber } = entry;
         const inspection = await PixelStow.readMarkerCandidates(image.pixels, image.width, image.height, scan, {
           signal: controller.signal, deadline, resumeDiscovery: true,
-          onProgress: (text) => { if (this.session === session && !controller.signal.aborted)
-            this.progress.textContent = "Reading best capture · frame " + frameNumber + ": " + text; }
+          onProgress: (text) => { if (this.session === session && !controller.signal.aborted) {
+            this.progress.textContent = "Reading best capture · frame " + frameNumber + ": " + text;
+            this.readProgress.update(this.progress.textContent);
+          } }
         });
         if (this.session !== session || controller.signal.aborted) return;
         entry.inspection = inspection;
@@ -717,6 +731,7 @@
           return;
         }
         this.progress.textContent = "This capture's contents did not pass their checks. Comparing fresher captures…";
+        this.readProgress.update(this.progress.textContent);
         this.showBestFrame(session);
       } catch (error) {
         if (this.session !== session) return;
@@ -748,6 +763,8 @@
       session.stream?.getTracks().forEach((track) => track.stop());
       this.signature.textContent = "";
       this.progress.textContent = inspection?.found && !inspection.unreadable ? "Encoded contents found. Opening this capture…" : "Opening this capture…";
+      if (inspection?.found && !inspection.unreadable) this.readProgress.finish(this.progress.textContent);
+      else this.readProgress.begin(this.progress.textContent);
       this.sync();
       try {
         // Preserve the inspected raster losslessly for exports/sharing. The UI

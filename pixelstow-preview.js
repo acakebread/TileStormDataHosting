@@ -2,8 +2,8 @@
 (function (root) {
   "use strict";
   class PixelStowPreview {
-    constructor({ preview, viewport, captureView, restoreView, fit, actualSize, resize }) {
-      Object.assign(this, { preview, viewport, captureView, restoreView, fit, actualSize, resize });
+    constructor({ preview, viewport, canToggleSource, captureView, restoreView, fit, actualSize, resize }) {
+      Object.assign(this, { preview, viewport, canToggleSource, captureView, restoreView, fit, actualSize, resize });
       this.panel = document.querySelector("#preview-panel");
       this.slot = document.querySelector("#preview-screen");
       this.toolbar = document.querySelector("#preview-screen-toolbar");
@@ -32,26 +32,38 @@
       viewport.addEventListener("pointerdown", (event) => {
         if (!this.panel.open || event.button !== 0) return;
         this.pointers.add(event.pointerId);
-        if (this.pointers.size > 1) { this.tap = null; this.multitouch = true; return; }
+        if (this.pointers.size > 1) { this.cancelTap(); this.multitouch = true; return; }
         if (event.target.closest("button")) return;
-        if (!this.multitouch) this.tap = { id: event.pointerId, x: event.clientX, y: event.clientY, at: Date.now() };
+        if (!this.multitouch) {
+          this.tap = { id: event.pointerId, x: event.clientX, y: event.clientY, at: Date.now() };
+          if (this.clean) this.holdTimer = setTimeout(() => {
+            this.holdTimer = null;
+            if (this.clean && this.tap?.id === event.pointerId && !this.tap.moved && this.canToggleSource?.()) {
+              this.tap.held = true;
+              this.panel.classList.toggle("show-source");
+            }
+          }, 450);
+        }
       }, true);
       viewport.addEventListener("pointermove", (event) => {
-        if (this.tap?.id === event.pointerId && Math.hypot(event.clientX - this.tap.x, event.clientY - this.tap.y) > 8) this.tap.moved = true;
+        if (this.tap?.id === event.pointerId && Math.hypot(event.clientX - this.tap.x, event.clientY - this.tap.y) > 8) {
+          this.tap.moved = true;
+          clearTimeout(this.holdTimer); this.holdTimer = null;
+        }
       }, true);
       viewport.addEventListener("pointerup", (event) => {
         const tap = this.tap;
-        this.tap = null;
+        this.cancelTap();
         this.pointers.delete(event.pointerId);
-        if (!this.multitouch && tap?.id === event.pointerId && !tap.moved && Date.now() - tap.at < 450 && (this.clean || this.toolbar.hidden)) this.controls(this.toolbar.hidden);
+        if (!this.multitouch && tap?.id === event.pointerId && !tap.moved && !tap.held && Date.now() - tap.at < 450 && (this.clean || this.toolbar.hidden)) this.controls(this.toolbar.hidden);
         if (!this.pointers.size) this.multitouch = false;
       }, true);
       viewport.addEventListener("pointercancel", (event) => {
-        this.tap = null;
+        this.cancelTap();
         this.pointers.delete(event.pointerId);
         if (!this.pointers.size) this.multitouch = false;
       }, true);
-      root.addEventListener("blur", () => { this.tap = null; this.pointers.clear(); this.multitouch = false; });
+      root.addEventListener("blur", () => { this.cancelTap(); this.pointers.clear(); this.multitouch = false; });
       document.addEventListener("fullscreenchange", () => {
         if (document.fullscreenElement === this.panel) this.nativeFullscreen = true;
         else if (this.nativeFullscreen && this.panel.open) this.close();
@@ -60,7 +72,7 @@
     }
     get openNow() { return this.panel.open; }
     get clean() { return this.panel.open && this.panel.classList.contains("clean"); }
-    cancelTap() { this.tap = null; }
+    cancelTap() { this.tap = null; clearTimeout(this.holdTimer); this.holdTimer = null; }
     controls(show) {
       const focusInFooter = this.footer.contains(document.activeElement);
       this.toolbar.hidden = this.footer.hidden = !show;
@@ -80,6 +92,9 @@
       this.comparison.before(this.comparisonPlaceholder);
       this.footer.prepend(this.comparison);
       this.panel.classList.toggle("clean", clean);
+      this.panel.classList.remove("show-source");
+      this.panel.setAttribute("aria-label", clean ? "Full screen image preview. Tap for controls; hold to switch encoded image and source when available; pinch to zoom; Escape to close."
+        : "Full screen image comparison. Tap for controls; hold to drag the divider; pinch to zoom; Escape to close.");
       this.controls(!clean);
       document.documentElement.classList.add("preview-modal-open");
       document.body.classList.add("preview-modal-open");
@@ -100,7 +115,8 @@
     }
     restore() {
       this.nativeFullscreen = false;
-      this.tap = null; this.multitouch = false;
+      this.cancelTap(); this.multitouch = false;
+      this.panel.classList.remove("show-source");
       this.pointers.clear();
       this.placeholder.replaceWith(this.preview);
       this.audioPlaceholder.replaceWith(this.audioButton);

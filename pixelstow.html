@@ -218,6 +218,8 @@
     .image-caption { margin: 8px 0; }
     .image-caption .loaded-image { margin: 0; font-size: 0.82rem; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .image-caption #capacity { margin: 2px 0 0; font-size: 0.78rem; }
+    .read-live-status { min-width: 0; height: 1.5em; margin: 2px 0; font-size: .8rem; line-height: 1.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color .25s ease; }
+    @media (prefers-reduced-motion: reduce) { .read-live-status { transition: none; } }
     html.preview-modal-open, body.preview-modal-open { overflow: hidden; overscroll-behavior: none; }
     .preview-panel {
       box-sizing: border-box; position: fixed; inset: 0; width: 100%; height: 100%; height: 100dvh;
@@ -244,6 +246,7 @@
     .preview-screen-toolbar button { flex: 0 0 44px; width: 44px; min-height: 48px; padding: 0; font-size: 0.82rem; font-weight: 500; }
     #preview-audio svg { display: block; }
     .preview-audio-label { display: none; }
+    #preview-audio.waiting-comparison { display: none !important; }
     .preview-screen-toolbar #preview-screen-close { color: var(--tile-azure); font-weight: 700; }
     .preview-panel.clean #preview-source,
     .preview-panel.clean #transform-outline,
@@ -251,6 +254,8 @@
     .preview-panel.clean #comparison-control,
     .preview-panel.clean #preview-audio,
     .preview-panel.clean #preview-markers { display: none !important; }
+    .preview-panel.clean.show-source #preview-source { display: block !important; clip-path: none !important; }
+    .preview-panel.clean.show-source #preview-encoded { visibility: hidden; }
 
     .viewport {
       position: relative;
@@ -318,7 +323,7 @@
     .camera-target span:nth-child(3) { right: 0; bottom: 0; border-left: 0; border-top: 0; }
     .camera-target span:nth-child(4) { left: 0; bottom: 0; border-right: 0; border-top: 0; }
     .camera-frame-note { position: absolute; left: 8px; right: 8px; bottom: 5px; margin: 0; text-align: center; color: white; font-size: 0.75rem; line-height: 1.4; text-shadow: 0 1px 3px #000; }
-    .camera-footer { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 8px; min-height: 0; }
+    .camera-footer { display: grid; grid-template-rows: auto auto minmax(0, 1fr); gap: 8px; min-height: 0; }
     .camera-feedback { box-sizing: border-box; height: clamp(104px, 18dvh, 164px); overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
     .camera-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; }
     .camera-controls button { margin: 0; padding: 9px 6px; }
@@ -627,6 +632,7 @@
             </div>
           </div>
           <div class="camera-footer">
+            <p class="read-live-status" id="camera-read-status" role="status" aria-live="polite" aria-atomic="true"></p>
             <div class="file-row camera-controls">
               <button class="camera-shutter" id="capture-frame" type="button">Capture and read</button>
               <button id="pause-camera" type="button">Pause scanning</button>
@@ -669,10 +675,11 @@
               <input id="split" type="range" min="0" max="1000" value="500" aria-label="Comparison divider. Encoded image on the left, recovered source on the right.">
               <span>Source</span>
             </div>
-            <button class="preview-audio" id="preview-audio" type="button" aria-label="Play audio" title="Play audio" disabled hidden><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7m3-10a9 9 0 0 1 0 13"/></svg><span class="preview-audio-label">Play audio</span></button>
+            <button class="preview-audio waiting-comparison" id="preview-audio" type="button" aria-label="Play audio" title="Play audio" disabled hidden><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7m3-10a9 9 0 0 1 0 13"/></svg><span class="preview-audio-label">Play audio</span></button>
           </div>
           <div class="image-caption">
             <p class="loaded-image" id="loaded-image" hidden></p>
+            <p class="read-live-status" id="image-read-status" role="status" aria-live="polite" aria-atomic="true"></p>
             <p class="hint" id="capacity">Your original stays unchanged.</p>
           </div>
           <p class="hint" id="image-repetition" role="status" hidden></p>
@@ -919,8 +926,9 @@
   <script src="./pixelstow-voice.js?v=20261013-voice-clock2"></script>
   <script src="./pixelstow-media.js?v=20261015-preview-icons1"></script>
   <script src="./pixelstow-sharing.js?v=20261014-compact-actions1"></script>
-  <script src="./pixelstow-camera.js?v=20261015-camera-mode-warning1"></script>
-  <script src="./pixelstow-preview.js?v=20261015-clean-preview2"></script>
+  <script src="./pixelstow-read-progress.js?v=20261015-read-stages1"></script>
+  <script src="./pixelstow-camera.js?v=20261015-read-stages1"></script>
+  <script src="./pixelstow-preview.js?v=20261015-clean-source-toggle1"></script>
   <script>
     const fileInput = document.querySelector("#file");
     const chooseImageButton = document.querySelector("#choose-image");
@@ -959,6 +967,7 @@
     const tagSource = document.querySelector("#tag-source");
     const capacity = document.querySelector("#capacity");
     const loadedImage = document.querySelector("#loaded-image");
+    const imageReadProgress = new PixelStowReadProgress(document.querySelector("#image-read-status"));
     const message = document.querySelector("#message");
     const password = document.querySelector("#password");
     const confirmPassword = document.querySelector("#confirm");
@@ -1024,6 +1033,7 @@
     let touchView = null;
     const fullPreview = new PixelStowPreview({
       preview, viewport,
+      canToggleSource: () => !previewSource.hidden && Boolean(current?.recoverPixels),
       captureView: () => ({ fitMode, viewScale, originX, originY }),
       restoreView: (view) => {
         clearPreviewTouches();
@@ -1072,7 +1082,8 @@
     });
     camera = new PixelStowCamera({
       importImage: useFile, report: setStatus, working: () => busy || media.active,
-      changed: () => setBusy(busy), drawGuides: paintTransform, clearFeedback: clearReadFeedback,
+      changed: () => setBusy(busy), drawGuides: paintTransform,
+      clearFeedback: () => { clearReadFeedback(); clearImageAppraisal(); },
       prepareCapture: () => media.preparePlayback()
     });
 
@@ -1208,11 +1219,20 @@
 
     function clearReadFeedback() {
       setStatus("");
+      imageReadProgress.clear();
       transformStatus.textContent = "";
       transformSignature.textContent = "";
       recoveryFraming.hidden = true;
       transformOutline.hidden = true;
       showRepetition(imageRepetition, null);
+    }
+
+    function clearImageAppraisal() {
+      ++repetitionGeneration;
+      clearTimeout(repetitionTimer);
+      showReadPrognosis(null);
+      showRepetition(imageRepetition, null);
+      payloadBudget.textContent = sourceSizePlan.textContent = "";
     }
 
     function showReadPrognosis(data) {
@@ -1383,6 +1403,7 @@
     }
 
     function rememberMessage(pixels, decoded, autoplay = true, size = resultDimensions(current)) {
+      imageReadProgress.finish("Encoded contents verified.");
       current.recoverPixels = pixels;
       current.decodePixels = pixels;
       current.resultWidth = size.width;
@@ -1549,6 +1570,8 @@
 
     function hideComparison() {
       previewGeneration += 1;
+      fullPreview.cancelTap();
+      fullPreview.panel.classList.remove("show-source");
       current?.carrierAbort?.abort();
       if (current) {
         current.carrierAbort = null;
@@ -1557,6 +1580,7 @@
       previewSource.hidden = true;
       compareUi.hidden = true;
       comparisonControl.hidden = true;
+      document.querySelector("#preview-audio").classList.add("waiting-comparison");
       previewNote.textContent = previewHelp(false);
     }
 
@@ -1639,8 +1663,12 @@
     function recoveryOptions(controller) {
       return {
         signal: controller.signal, forceSearch: transformForce.checked,
-        onSignature: (signature) => { if (!controller.signal.aborted) transformSignature.textContent = signature.message; },
-        onProgress: (text) => { if (!controller.signal.aborted) transformStatus.textContent = text; }
+        onSignature: (signature) => { if (!controller.signal.aborted && controller === transformAbort) {
+          transformSignature.textContent = signature.message; imageReadProgress.signature(signature);
+        } },
+        onProgress: (text) => { if (!controller.signal.aborted && controller === transformAbort) {
+          transformStatus.textContent = text; imageReadProgress.update(text);
+        } }
       };
     }
 
@@ -1657,6 +1685,10 @@
         : job.transformResult.markers.length ? "Recovery markers verified, but the contents could not be read."
           : result.signature?.likely ? "Frequency hints were found, but no checksum-valid markers or contents were recovered."
             : result.signature ? "No encoding signature or checksum-valid markers found." : "";
+      if (result.found && !result.unreadable) {
+        if (result.passwordProtected) imageReadProgress.finish("Encoded image found · password required.", "locked");
+        else imageReadProgress.update("Reading the most promising payload…");
+      } else imageReadProgress.finish(result.unreadable ? "Markers found · contents could not be verified." : "No readable fingerprint found.", "failed");
       const nearMiss = Boolean(result.unreadable && job.transformResult.markers.length);
       recoveryFraming.hidden = !nearMiss;
       // Failed photos show diagnostics. Successful reads and continuous-camera
@@ -1680,6 +1712,7 @@
     function cancelImageSearch() {
       transformAbort?.abort();
       transformStatus.textContent = "Cancelling search…";
+      imageReadProgress.finish("Cancelling search…", "cancelled");
       transformSignature.textContent = "";
     }
     cancelTransformButton.addEventListener("click", cancelImageSearch);
@@ -1691,6 +1724,8 @@
       if (!current || busy || media.active || camera?.active) return;
       const job = current;
       clearReadFeedback();
+      clearImageAppraisal();
+      imageReadProgress.begin("Starting image recovery…");
       setStatus("Reading the image…");
       clearDecoded();
       // This action reads the imported raster, including after a scaled encode.
@@ -1726,13 +1761,14 @@
             readout.value = decoded.text; message.value = decoded.text;
             rememberMessage(job.pixels, decoded);
             setStatus("Read the fingerprint from this image." + carrierNote(decoded));
-          } else setStatus("The recovered payload could not be read.", true);
+          } else { setStatus("The recovered payload could not be read.", true); imageReadProgress.finish("The recovered payload could not be read.", "failed"); }
         }
       } catch (error) {
         const text = error?.name === "AbortError" ? "Visual transform search cancelled." : error?.message || "Visual transform search failed.";
         transformStatus.textContent = text;
         transformSignature.textContent = "";
         setStatus(text, error?.name !== "AbortError");
+        imageReadProgress.finish(text, error?.name === "AbortError" ? "cancelled" : "failed");
       } finally {
         transformAbort = null;
         setBusy(false);
@@ -1774,6 +1810,7 @@
         previewSource.hidden = false;
         compareUi.hidden = false;
         comparisonControl.hidden = false;
+        document.querySelector("#preview-audio").classList.remove("waiting-comparison");
         preview.hidden = false;
         previewNote.hidden = previewHelpDismissed;
         previewNote.textContent = previewHelp(true);
@@ -1791,13 +1828,14 @@
       clearReadFeedback();
       camera?.close();
       hideComparison();
+      current = null;
+      clearImageAppraisal();
       media.reset();
       clearDownload();
       readout.value = "";
       message.value = "";
       clearEncodingPassword();
       unlockPassword.value = "";
-      current = null;
       composerBytes = null;
       previewHelpDismissed = false;
       frameBudget = sourcePlan = null;
@@ -1811,10 +1849,12 @@
       showTransform.checked = true;
       transformStatus.textContent = "";
       transformSignature.textContent = "";
+      capacity.textContent = "";
       loadedImage.hidden = true;
       loadedImage.textContent = "";
       setBusy(true);
       setStatus("Reading the image…");
+      imageReadProgress.begin(captured?.sourceOnly ? "Checking the source photo…" : "Reading the image…");
       try {
         // A camera scan keeps its original RGBA buffer and verified geometry.
         // Reuse both: no JPEG round trip and no second discovery search.
@@ -1870,8 +1910,10 @@
             setStatus("This image already has a public fingerprint, so it cannot be encoded again." + carrierNote(decoded));
           } else {
             setStatus("A fingerprint was found, but its text could not be read.", true);
+            imageReadProgress.finish("A fingerprint was found, but its contents could not be read.", "failed");
           }
         } else {
+          imageReadProgress.finish(captured?.sourceOnly ? "Source photo ready." : "No readable fingerprint found.", captured?.sourceOnly ? "source" : "failed");
           setStatus(captured?.sourceOnly ? "Source photo ready. Enter a message, attach a file or record some audio, then encode the image." : found.signature?.likely
             ? "No readable fingerprint was recovered. You can retry with Image recovery options below, or choose another image."
             : "No fingerprint found. Enter a message, attach a file or record some audio. If you expected encoded contents, try Image recovery options below.");
@@ -1883,6 +1925,7 @@
           transformStatus.textContent = error?.name === "AbortError" ? "Search cancelled. You can encode this image, retry recovery or choose another image."
             : error?.message || "Image recovery failed. Retry recovery or choose another image.";
           setStatus(transformStatus.textContent, error?.name !== "AbortError");
+          imageReadProgress.finish(transformStatus.textContent, error?.name === "AbortError" ? "cancelled" : "failed");
         } else {
           loadedImage.hidden = true;
           loadedImage.textContent = "";
@@ -1891,6 +1934,7 @@
           hideComparison();
           capacity.textContent = "Choose or paste a PNG or JPEG, or open the camera. Your original stays unchanged.";
           setStatus(error && error.message ? error.message : "Could not read that image.", true);
+          imageReadProgress.finish("Could not read that image.", "failed");
         }
       } finally {
         transformAbort = null;

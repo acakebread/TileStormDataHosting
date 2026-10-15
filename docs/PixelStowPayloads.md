@@ -144,6 +144,11 @@ captured image, with every control initially hidden. It never displays the
 comparison divider, Encoded/Source labels, analysis overlay or audio button,
 including when a tap reveals its Fit, 100%, maximise and close controls. The
 maximise icon hides those controls completely for phone-to-phone capture.
+Holding still for 450 milliseconds toggles the entire view between encoded
+pixels and recovered source when that comparison is ready. It preserves zoom,
+pan and divider position; neither image has comparison labels or a scrubber.
+Short taps only toggle controls. Drags, a second finger, cancellation and closing
+cancel pending holds. Each new Preview opens on the encoded image.
 Preview is disabled only when no image is available. Element fullscreen is
 requested where supported; iPhones retain the viewport-filling dialog fallback.
 The upper fullscreen button keeps the comparison/analysis viewer. There, the
@@ -181,9 +186,24 @@ pixels, including in the clean four-button viewer; Close is always last. Icon bu
 the speaker label tracks Play/Pause without removing its SVG. Audio is disabled
 and hidden when no audio is available. The footer occupies its own space below
 the image. Generated pixels appear immediately while source extraction prepares
-the comparison. Native attachment players retain their controls;
+the comparison. The shared speaker button remains hidden until the comparison
+slider is ready, then both appear together; decoded audio may start sooner.
+Native attachment players retain their controls;
 there is no second decoded-message Play button. The audio element and tap handler
 are reused rather than recreated, preserving the existing Safari playback flow.
+
+Starting a new import, camera session or recovery clears previous appraisal and
+redundancy feedback immediately and invalidates pending appraisal updates. A
+fixed single-line status directly below the image name follows recovery; live
+camera scanning has the same line next to its preview. Colour transitions from
+red through amber towards green as signature, markers, geometry and pixel-grid
+reads provide stronger evidence. Rejected candidates return towards red; only a
+verified payload receives the final green result. Colours describe evidence
+stages, not a percentage or a guarantee. Long text is ellipsized without moving
+the image or controls, while the complete recovery/result text remains below.
+Cancelled or completed worker callbacks cannot overwrite a newer status.
+`node tests/pixelstow-read-progress-checks.mjs` checks these states with paused
+inspection, cancellation, stale events and real native payload verification.
 
 With a source and payload selected, a **Photo-read prognosis** bar above the export actions
 runs green through amber to red, with a difficulty marker and textual label.

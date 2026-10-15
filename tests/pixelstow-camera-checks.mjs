@@ -72,18 +72,21 @@ try {
   const stableFeedback = async target => {
     const result = await target.evaluate(() => {
       const progress = camera.progress.textContent, signature = camera.signature.textContent, hidden = camera.nearMiss.hidden;
+      const live = { text: camera.readProgress.element.textContent, stage: camera.readProgress.element.dataset.stage, value: camera.readProgress.value };
       const boxes = () => ['#camera-view', '#camera-video', '#capture-frame', '#switch-camera'].map(selector => {
         const { x, y, width, height } = document.querySelector(selector).getBoundingClientRect(); return { x, y, width, height };
       });
       camera.progress.textContent = ''; camera.signature.textContent = ''; camera.nearMiss.hidden = true;
       const empty = boxes();
-      camera.progress.textContent = 'Hold steady.'; const short = boxes();
+      camera.progress.textContent = 'Hold steady.'; camera.readProgress.begin('Checking markers…'); const short = boxes();
       camera.progress.textContent = 'Recovery markers were found, but the payload did not pass its checks. '.repeat(20);
       camera.signature.textContent = 'Eight markers, partial geometry, waiting for a sharper frame. '.repeat(12);
       camera.nearMiss.hidden = false;
+      camera.readProgress.update('Checking subpixel alignment of the tracked grid… ' + 'long live description '.repeat(20));
       const long = boxes(), feedback = document.querySelector('.camera-feedback');
       const scrollable = feedback.scrollHeight > feedback.clientHeight;
       camera.progress.textContent = progress; camera.signature.textContent = signature; camera.nearMiss.hidden = hidden;
+      camera.readProgress.show(live.text, live.stage, live.value);
       return { empty, short, long, scrollable };
     });
     assert.deepEqual(result.empty, result.short); assert.deepEqual(result.empty, result.long); assert(result.scrollable);
