@@ -156,7 +156,16 @@
       await until(() => element("attachment-list").children.length === 2 && !element("encode").disabled, "attachment import");
       input("message", "Happy birthday! café 🎂\n  ");
       const publicPassword = "Public browser test key 🎂";
-      input("password", publicPassword); input("confirm", "mismatched public test value");
+      const passwordHeight = element("encoding-passwords").getBoundingClientRect().height;
+      input("password", publicPassword);
+      element("encode").click();
+      check(element("password").hidden && !element("confirm").hidden && element("encoding-password-label").htmlFor === "confirm" && doc.activeElement === element("confirm") && element("download").hidden, "The first Encode press asks for confirmation in the same password slot before writing anything");
+      check(element("encoding-passwords").getBoundingClientRect().height === passwordHeight, "Switching to password confirmation keeps the password area the same height");
+      element("change-encoding-password").click();
+      check(!element("password").hidden && element("confirm").hidden && element("password").value === publicPassword && !element("confirm").value, "Change password returns to the original entry and clears confirmation");
+      element("password").dispatchEvent(new app.KeyboardEvent("keydown", { bubbles: true, key: "Enter" }));
+      check(!element("confirm").hidden && doc.activeElement === element("confirm"), "Enter advances password entry to confirmation");
+      input("confirm", "mismatched public test value");
       element("encode").click();
       check(element("status").textContent.includes("do not match") && element("download").hidden, "Encoding still rejects a mismatched confirmation before writing an image");
       input("confirm", publicPassword);
@@ -187,7 +196,7 @@
       oscillator.stop(); await audioContext.close(); audioContext = null;
       element("encode").click();
       await until(() => !element("download").hidden && !element("decode").disabled, "encoded PNG download");
-      check(!element("password").value && !element("confirm").value, "Successful encoding clears passwords");
+      check(!element("password").value && !element("confirm").value && !element("password").hidden && element("confirm").hidden && element("change-encoding-password").hidden, "Successful encoding clears passwords and restores the single entry slot");
       check(element("decoded-attachments").children.length === 3, "Encoding verifies and displays all recovered files");
       check(!element("decoded-content").hidden && element("contents-summary").textContent.includes("a message and 3 attached files (1 audio file)"), "The contents summary identifies the message, file count and audio");
       const encodedPng = await (await fetch(element("download").href)).blob();
@@ -335,6 +344,18 @@
         touch("pointercancel", 0.75); touch("pointermove", 0.1);
         check(!handleCaptured && element("split").value === "750", "Cancelled touch dragging releases capture and stops moving the divider");
       } finally { [handle.setPointerCapture, handle.hasPointerCapture, handle.releasePointerCapture] = handleCapture; }
+      const divider = element("split-line"), dividerCapture = [divider.setPointerCapture, divider.hasPointerCapture, divider.releasePointerCapture];
+      let dividerCaptured = false;
+      divider.setPointerCapture = () => { dividerCaptured = true; };
+      divider.hasPointerCapture = () => dividerCaptured;
+      divider.releasePointerCapture = () => { dividerCaptured = false; };
+      const lineTouch = (name, ratio) => divider.dispatchEvent(new app.PointerEvent(name, { bubbles: true, cancelable: true, pointerId: 43, pointerType: "touch", button: 0, clientX: comparisonRect.left + comparisonRect.width * ratio }));
+      try {
+        lineTouch("pointerdown", .75); lineTouch("pointermove", .5);
+        check(dividerCaptured && element("split").value === "500", "The full divider line starts the same continuous touch drag as its handle");
+        lineTouch("pointerup", .5);
+        check(!dividerCaptured, "Releasing the divider line stops its touch drag");
+      } finally { [divider.setPointerCapture, divider.hasPointerCapture, divider.releasePointerCapture] = dividerCapture; }
       [viewport.setPointerCapture, viewport.hasPointerCapture, viewport.releasePointerCapture] = [() => { captured = true; }, () => captured, () => { captured = false; }];
       const mouse = (target, name, x, y, button = 0) => target.dispatchEvent(new app.PointerEvent(name, {
         bubbles: true, cancelable: true, pointerId: 43, pointerType: "mouse", button,
@@ -356,9 +377,9 @@
         mouse(viewport, "pointercancel", x(1.1), y); mouse(viewport, "pointermove", x(0.5), y);
         check(!captured && element("split").value === "1000", "Cancelling a picture drag releases capture and stops moving the divider");
         const touchOnPicture = new app.PointerEvent("pointerdown", { bubbles: true, cancelable: true, pointerId: 44, pointerType: "touch", isPrimary: true, button: 0, clientX: x(0.5), clientY: y });
-        check(canvas.dispatchEvent(touchOnPicture) && !captured && element("split").value === "500", "Touching the picture moves the divider immediately without capturing or cancelling page scrolling");
+        check(canvas.dispatchEvent(touchOnPicture) && !captured && element("split").value === "1000", "Touching the picture outside the handle leaves the divider unchanged and preserves page scrolling");
         const secondFinger = new app.PointerEvent("pointerdown", { bubbles: true, cancelable: true, pointerId: 45, pointerType: "touch", isPrimary: false, button: 0, clientX: x(0.8), clientY: y });
-        check(canvas.dispatchEvent(secondFinger) && !captured && element("split").value === "500", "A second finger does not move the comparison divider");
+        check(canvas.dispatchEvent(secondFinger) && !captured && element("split").value === "1000", "A second finger does not move the comparison divider");
         input("split", "500");
         const visible = viewport.getBoundingClientRect();
         const clickX = visible.left + visible.width * 0.65, clickY = visible.top + visible.height / 2;
