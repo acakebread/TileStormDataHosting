@@ -116,8 +116,29 @@ try {
   console.log('PASS: sharing cancellation retains the photo; unsupported native sharing offers the download-and-attach route');
   await page.evaluate(() => { media.reset(); });
   assert(await page.evaluate(() => media.composePlayers.size === 0 && !originalPreview.hasAttribute('src') && !secondPreview.hasAttribute('src')));
-  assert.deepEqual(errors, []);
   console.log('PASS: clearing the image removes audio sources and retained composition players');
+  await page.evaluate(async () => {
+    const pixels = new Uint8Array(640 * 480 * 4); for (let i = 0; i < pixels.length; i += 4) pixels.set([110, 135, 160, 255], i);
+    await useFile(new File([await PixelStow.writePng(pixels, 640, 480)], 'public-many-file-source.png', { type: 'image/png' }),
+      'file', { image: { pixels, width: 640, height: 480, exact: true }, sourceOnly: true });
+    window.manyPublicFiles = Array.from({ length: 12 }, (_, i) => new File(['Public attachment ' + i], 'part-' + i + '.txt', { type: 'text/plain' }));
+    await media.addFiles(manyPublicFiles.slice(0, 8));
+  });
+  assert(!(await page.locator('#attachment-file').isDisabled()));
+  assert(!(await page.locator('#record-audio').isDisabled()));
+  await page.evaluate(async () => { await media.addFiles(manyPublicFiles.slice(8)); });
+  assert.equal(await page.locator('#attachment-list .attachment-row').count(), 12);
+  await page.locator('#encode').click();
+  await page.waitForFunction(() => !busy && encodedPng && current?.decodedAttachments?.length === 12);
+  await page.evaluate(async () => {
+    const saved = new File([encodedPng], 'public-twelve-attachments.png', { type: 'image/png' });
+    await useFile(saved, 'file');
+  });
+  assert(await page.evaluate(() => current.carrierVersion === 5 && current.decodedAttachments.length === 12 &&
+    current.decodedAttachments.every((file, i) => file.name === 'part-' + i + '.txt' && new TextDecoder().decode(file.bytes) === 'Public attachment ' + i)));
+  assert.equal(await page.locator('#decoded-attachments .attachment-row').count(), 12);
+  assert.deepEqual(errors, []);
+  console.log('PASS: the eighth attachment leaves file/voice controls enabled; twelve selected files encode, verify and reimport intact through the V5 UI');
 } finally {
   await browser?.close(); await new Promise(resolve => server.close(resolve));
 }

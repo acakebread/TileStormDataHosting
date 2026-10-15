@@ -711,7 +711,7 @@
         </select>
         <input id="attachment-file" type="file" multiple aria-label="Attach files">
       </div>
-      <p class="hint">Attach up to eight files, with or without a text message. Audio gets a player when decoded; other files can be downloaded. The photo's capacity is the limit.</p>
+      <p class="hint">Attach files with or without a text message. Audio gets a player when decoded; other files can be downloaded. The total payload size must fit the photo.</p>
       <div id="attachment-list" aria-label="Files to encode"></div>
       <label for="record-quality">Voice recording size</label>
       <select id="record-quality">
@@ -786,7 +786,7 @@
         <p>For WhatsApp, send the image as a Document / original file where possible and include the PixelStow opening link. The recipient can save it to Files and use Browse, or copy it and use Paste. A link opens this page but cannot automatically read a WhatsApp attachment. Screenshots, resized copies and ordinary photo sharing may not keep the payload.</p>
         <p>On iPhone, allow Safari's Paste prompt after tapping Paste. If needed, use the touch-and-hold paste box. Safari may require a tap on Play audio beside the image before sound is allowed; the full audio player is also available under Attached files. Audio format support varies by browser.</p>
         <p>PixelStow automatically attempts recovery from resized, padded, rotated or photographed encoded images. Recovery remains experimental: blur, cropping, print quality and heavy recompression can still prevent reading. Keep the original encoded file where possible.</p>
-        <p>Capture scans encoded images while the preview stays live. Keep all four picture corners visible and hold steady, or tap the preview or Capture and read to read a frame immediately. On phones, Take photo with phone camera opens the native camera for a sharper still. Photo opens the live camera to take a new source image for encoding. Live scanning needs HTTPS or localhost and camera permission. The camera closes when you leave the page. All captures and decoding stay on your device.</p>
+        <p>Capture scans encoded images while the preview stays live. Keep all four picture corners visible and hold steady, or tap the preview or Capture and read to read a frame immediately. On phones, Take photo with phone camera opens the native camera for a sharper still. Photo opens the live camera to take a new source image for encoding. Allow camera access when prompted. The camera closes when you leave the page. All captures and decoding stay on your device.</p>
       </section>
 
       <div class="links">
@@ -871,11 +871,11 @@
   <script src="./pixelstow-spectrum.js?v=20261014-v5-default1"></script>
   <script src="./pixelstow-transform.js?v=20261014-v5-default1"></script>
   <script src="./pixelstow-lattice.js?v=20261013-marker-follow2"></script>
-  <script src="./pixelstow.js?v=20261014-camera-devices1"></script>
+  <script src="./pixelstow.js?v=20261015-attachment-count1"></script>
   <script src="./pixelstow-sizing.js?v=20261014-source-sizing1"></script>
   <script src="./pixelstow-export.js?v=20261011-exports"></script>
   <script src="./pixelstow-voice.js?v=20261013-voice-clock2"></script>
-  <script src="./pixelstow-media.js?v=20261014-audio-preview1"></script>
+  <script src="./pixelstow-media.js?v=20261015-attachment-count1"></script>
   <script src="./pixelstow-sharing.js?v=20261014-compact-actions1"></script>
   <script src="./pixelstow-camera.js?v=20261014-compact-actions1"></script>
   <script src="./pixelstow-preview.js?v=20261014-mobile-layout1"></script>

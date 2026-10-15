@@ -259,10 +259,10 @@
 
     sync() {
       const disabled = this.busy || this.locked || this.active;
-      this.input.disabled = disabled || this.files.length >= 8;
+      this.input.disabled = disabled;
       this.kind.disabled = disabled;
       const supported = Boolean(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
-      this.recordButton.disabled = disabled || this.files.length >= 8 || !supported;
+      this.recordButton.disabled = disabled || !supported;
       this.recordQuality.disabled = disabled;
       this.stopButton.hidden = !this.recording;
       this.stopButton.disabled = Boolean(this.recording?.finishing);
@@ -270,7 +270,7 @@
       this.cancelButton.textContent = this.compressionAbort ? "Cancel compression" : "Discard recording";
       this.list.querySelectorAll("button").forEach((button) => { button.disabled = disabled; });
       this.previewVoiceButton.disabled = this.busy || !this.voiceAudio;
-      if (!supported && !this.active) this.recordStatus.textContent = "Microphone recording needs a supported browser on HTTPS or localhost. You can still attach an audio file.";
+      if (!supported && !this.active) this.recordStatus.textContent = "This browser cannot access the microphone on this page. You can still attach an audio file.";
     }
 
     setState(busy, locked) {
@@ -321,7 +321,6 @@
 
     async addFiles(files) {
       if (!files.length || this.busy || this.locked || this.active) return;
-      if (this.files.length + files.length > 8) return this.report("You can attach up to eight files.", true);
       if (files.reduce((sum, file) => sum + file.size, 0) + this.files.reduce((sum, file) => sum + file.bytes.length, 0) > 1024 * 1024) {
         return this.report("Choose smaller files: the payload limit is 1 MiB, and this photo may hold less.", true);
       }
@@ -604,7 +603,7 @@
     }
 
     async startRecording() {
-      if (this.busy || this.locked || this.active || this.files.length >= 8) return;
+      if (this.busy || this.locked || this.active) return;
       let budget;
       try { budget = this.remaining(); }
       catch (error) { return this.report(error.message || "Check the message before recording.", true); }

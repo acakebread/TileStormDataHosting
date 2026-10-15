@@ -5,7 +5,7 @@
   const PREAMBLE_BLOCKS = 72 * 7;
   const MAX_TEXT = 16 * 1024;
   const MAX_BUNDLE = 1024 * 1024;
-  const MAX_FILES = 8;
+  const MAX_FILES = 0xFFFF; // Existing PSB1 count is an unsigned 16-bit field.
   const MAX_FRAMED = MAX_BUNDLE + 80;
   const MAX_BLOCKS = 8 * 1024 * 1024;
   const MAX_PIXELS = 24000000;
@@ -252,17 +252,16 @@
   function packBundle(text, attachments) {
     const textBytes = strictUtf8(text);
     if (textBytes.length > MAX_TEXT) throw new Error("The message is longer than 16 KiB.");
-    if (!Array.isArray(attachments) || attachments.length < 1 || attachments.length > MAX_FILES) {
-      throw new Error("Add between one and eight attachments.");
-    }
+    if (!Array.isArray(attachments) || attachments.length < 1) throw new Error("Add at least one attachment.");
+    if (attachments.length > MAX_FILES) throw new Error("The attachment count exceeds the format's 65,535-file range.");
     let size = 12 + textBytes.length;
     const entries = attachments.map((file) => {
       if (!(file.bytes instanceof Uint8Array)) throw new Error("Attachment data must be bytes.");
       const metadata = attachmentMetadata(file.name, file.type || "application/octet-stream");
       size += 8 + metadata.nameBytes.length + metadata.typeBytes.length + file.bytes.length;
+      if (size > MAX_BUNDLE) throw new Error("The message and attachments exceed the 1 MiB payload limit.");
       return { ...metadata, bytes: file.bytes };
     });
-    if (size > MAX_BUNDLE) throw new Error("The message and attachments exceed the 1 MiB payload limit.");
     const bundle = new Uint8Array(size);
     const view = new DataView(bundle.buffer);
     bundle.set([0x50, 0x53, 0x42, 0x31, 1, 0]);
@@ -291,7 +290,8 @@
     const view = new DataView(bundle.buffer, bundle.byteOffset, bundle.byteLength);
     const count = view.getUint16(6, true);
     const textLength = view.getUint32(8, true);
-    if (count < 1 || count > MAX_FILES || textLength > MAX_TEXT || 12 + textLength > bundle.length) {
+    // Every entry needs an eight-byte header, a name and at least "a/b" as its type.
+    if (count < 1 || textLength > MAX_TEXT || 12 + textLength + count * 12 > bundle.length) {
       throw frameError("Invalid attachment bundle lengths.");
     }
     const text = decodeUtf8(bundle.subarray(12, 12 + textLength));
@@ -1385,7 +1385,7 @@
 
   function searchInWorker(pixels, width, height, options, operation = "geometry") {
     return new Promise((resolve, reject) => {
-      const url = new URL("pixelstow-transform-worker.js?v=20261014-camera-devices1", codecScriptUrl);
+      const url = new URL("pixelstow-transform-worker.js?v=20261015-attachment-count1", codecScriptUrl);
       const worker = new Worker(url);
       let finished = false;
       const abort = () => { if (finished) return; cleanup(); reject(new DOMException("Search cancelled.", "AbortError")); };

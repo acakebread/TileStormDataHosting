@@ -45,7 +45,7 @@ The bundle uses this layout, with unsigned little-endian lengths:
 | 0 | 4 | ASCII `PSB1` |
 | 4 | 1 | Bundle version 1 |
 | 5 | 1 | Reserved flags, must be 0 |
-| 6 | 2 | Attachment count, 1–8 |
+| 6 | 2 | Attachment count, unsigned 16-bit (1–65,535) |
 | 8 | 4 | UTF-8 text byte length, 0–16,384 |
 | 12 | variable | Strict UTF-8 text, optional |
 
@@ -57,6 +57,13 @@ ASCII type/subtype with optional printable parameters, including audio codecs.
 Zero-byte files are valid. All file bytes are opaque. Every declared length must
 fit, and trailing bytes are rejected. Names are displayed as text and only audio
 is played; other files are exposed as downloads.
+
+There is no separate eight-file policy in the writer, reader or attachment UI.
+The existing 16-bit count field is unchanged. Filenames, media types, entry headers
+and file bytes all consume the 1 MiB bundle allowance and the carrier's actual byte
+capacity; the unsigned count field remains the format ceiling. Previously written
+bundles stay readable. Older readers enforcing the former eight-file policy must
+be updated to read bundles with more files; no V5 carrier or bundle version changes.
 
 Protected v3 uses the existing `PSP1` encryption layout with protection-header
 version 2 at offset 4 to distinguish a bundle from text. The plaintext limit is

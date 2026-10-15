@@ -122,13 +122,25 @@ const large = await roundTrip({ text: "", attachments: largeFiles }, "", 2049, 1
 check(large.encoded.pixels.slice(-4).every((byte, i) => byte === [140, 140, 140, 77][i]), "Partial edge pixels are preserved");
 await rejects(() => codec.encodePayload(flat(128, 128), 128, 128, content, ""), /framed payload needs.*image holds/, "Actual carrier capacity rejects oversized payloads");
 await rejects(() => codec.encodePayload(flat(512, 512), 512, 512, { text: "", attachments: [] }, ""), /message or add/, "An empty payload is rejected");
-await rejects(() => codec.encodePayload(flat(512, 512), 512, 512, { text: "", attachments: Array(9).fill(files[0]) }, ""), /eight/, "Attachment count is bounded");
+const manyFiles = Array.from({ length: 12 }, (_, i) => ({ name: "part-" + i + ".bin", type: "application/octet-stream", bytes: Uint8Array.of(i, 255 - i) }));
+codec.setCarrierVersion(5);
+for (const password of ["", "public many-file check key"]) {
+  const result = await roundTrip({ text: "Public many-file check.", attachments: manyFiles }, password, 640, 480);
+  check(result.encoded.carrierVersion === 5, "More than eight files round-trip in unchanged V5, public or password-protected");
+}
+codec.setCarrierVersion(1);
+const tinyFile = { name: "a", type: "a/b", bytes: new Uint8Array() };
+check(codec.payloadSize("", Array(65535).fill(tinyFile)) === 12 + 12 * 65535, "The full existing unsigned 16-bit count fits when the bundle byte budget permits it");
+assert.throws(() => codec.payloadSize("", Array(65536).fill(tinyFile)), /65,535/); checks++;
+assert.throws(() => codec.payloadSize("", Array(256).fill({ ...tinyFile, bytes: new Uint8Array(4096) })), /1 MiB/); checks++;
 assert.throws(() => codec.payloadSize("", [{ ...files[0], name: "../secret.bin" }]), /filenames/); checks++;
 assert.throws(() => codec.payloadSize("", [{ ...files[0], type: "audio/wav\nBad" }]), /media type/); checks++;
 assert.throws(() => codec.payloadSize("", [{ ...files[0], bytes: new Uint8Array(1024 * 1024) }]), /1 MiB/); checks++;
 assert.throws(() => codec.payloadSize("x".repeat(16385), files), /16 KiB/); checks++;
 
 const referenceBundle = bundle(content.text, files);
+const wideCountFiles = Array.from({ length: 257 }, (_, i) => ({ ...tinyFile, name: "part-" + i, bytes: Uint8Array.of(i & 255) }));
+check(codec.payloadsEqual(internal.unpackBundle(bundle("", wideCountFiles)), { text: "", attachments: wideCountFiles }), "An independently serialized count above 255 uses both count bytes and preserves every file");
 const independentlyPacked = frame(referenceBundle, { compress: true });
 const independentImage = await imageFromFrame(independentlyPacked);
 check(codec.payloadsEqual(await codec.decode(independentImage.pixels, 512, 512, ""), content), "Browser reads an independently serialized compressed v3 image");
@@ -144,7 +156,7 @@ for (const invalid of [
   referenceBundle.slice(0, -1),
   new Uint8Array([...referenceBundle, 0]),
   (() => { const bytes = referenceBundle.slice(); bytes[5] = 1; return bytes; })(),
-  (() => { const bytes = referenceBundle.slice(); bytes[6] = 9; return bytes; })(),
+  (() => { const bytes = referenceBundle.slice(); bytes[6] = 255; bytes[7] = 255; return bytes; })(),
   (() => { const bytes = referenceBundle.slice(); bytes[8] = 255; bytes[9] = 255; return bytes; })(),
 ]) {
   await rejects(() => internal.unpackFrame(frame(invalid)), /bundle|attachment/i, "Malformed bundle is refused despite a valid outer checksum");
