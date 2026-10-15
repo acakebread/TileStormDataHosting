@@ -138,10 +138,16 @@ its existing retained main player and gesture handling.
 
 **Full screen preview** beside the image uses the existing zoom, pan and comparison
 canvases in a viewport-filling dialog. Fit and 100% controls are available; closing
-restores the previous page view. **Preview** at the end of the export actions opens
-the same viewer for the current generated, imported, pasted or captured image.
-It is disabled only when no image is available. The maximise icon hides controls;
-a short tap reveals them again. With a comparison available, holding one finger
+restores the previous page view. **Preview** at the end of the export actions
+opens a clean transmission view of the current generated, imported, pasted or
+captured image, with every control initially hidden. It never displays the
+comparison divider, Encoded/Source labels, analysis overlay or audio button,
+including when a tap reveals its Fit, 100%, maximise and close controls. The
+maximise icon hides those controls completely for phone-to-phone capture.
+Preview is disabled only when no image is available. Element fullscreen is
+requested where supported; iPhones retain the viewport-filling dialog fallback.
+The upper fullscreen button keeps the comparison/analysis viewer. There, the
+maximise icon hides controls and a short tap reveals them again. Holding one finger
 still for 450 milliseconds grabs the divider from anywhere in the fullscreen
 viewport, even when its handle is offscreen. Movement before that delay cancels
 the hold; a second finger cancels it for pinch/two-finger pan. Releasing a held

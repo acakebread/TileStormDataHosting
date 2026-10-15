@@ -35,10 +35,25 @@ try {
       await useFile(new File([await PixelStow.writePng(pixels, width, height)], 'public-source.png', { type: 'image/png' }), 'file', { image, sourceOnly: true });
       window.sourceFixture = image;
     });
+    const cleanLayers = ['#preview-source', '#transform-outline', '#compare-ui', '#comparison-control', '#tag-encoded', '#tag-source', '#preview-audio', '#preview-markers'];
+    const checkCleanLayers = async () => {
+      for (const selector of cleanLayers) assert(!(await page.locator(selector).isVisible()), selector + ' must never appear in the transmission viewer');
+    };
+    const tapImage = async () => {
+      const box = await page.locator('#viewport').boundingBox();
+      if (mobile) await page.touchscreen.tap(box.x + box.width * .3, box.y + box.height * .4);
+      else await page.mouse.click(box.x + box.width * .3, box.y + box.height * .4);
+    };
     await page.getByRole('button', { name: 'Preview', exact: true }).click();
-    assert(await page.evaluate(() => fullPreview.openNow && !fullPreview.clean));
+    assert(await page.evaluate(() => fullPreview.openNow && fullPreview.clean));
     assert(await page.locator('#preview-audio').isDisabled());
-    assert(await page.getByRole('checkbox', { name: 'Analysis', exact: true }).isDisabled());
+    assert(await page.locator('#show-transform').isDisabled());
+    assert(!(await page.locator('#preview-screen-footer').isVisible()));
+    await checkCleanLayers();
+    await tapImage();
+    assert(await page.getByRole('button', { name: 'Fit', exact: true }).isVisible());
+    assert(await page.getByRole('button', { name: '100%', exact: true }).isVisible());
+    await checkCleanLayers();
     await page.getByRole('button', { name: 'Close preview', exact: true }).click();
     if (!fixture) fixture = await page.evaluate(async () => {
       const rate = 8000, count = rate * 2, wav = new Uint8Array(44 + count * 2), view = new DataView(wav.buffer);
@@ -62,14 +77,44 @@ try {
       assert(!(await page.getByRole('button', { name: 'Preview', exact: true }).isDisabled()));
       assert(!(await page.evaluate(() => Boolean(encodedPng))), 'imported images have no newly generated PNG');
       await page.getByRole('button', { name: 'Preview', exact: true }).click();
-      assert(await page.evaluate(() => fullPreview.openNow && !compareUi.hidden));
+      assert(await page.evaluate(() => fullPreview.openNow && fullPreview.clean));
+      assert(!(await page.locator('#preview-screen-footer').isVisible()));
+      await checkCleanLayers();
+      const dividerBefore = await page.locator('#split').inputValue();
+      await tapImage();
+      assert(await page.locator('#preview-screen-footer').isVisible());
+      await checkCleanLayers();
+      assert.equal(await page.locator('#split').inputValue(), dividerBefore, 'a clean-view tap must not change the comparison');
+      await page.getByRole('button', { name: '100%', exact: true }).click();
+      assert(await page.evaluate(() => Math.abs(viewScale - 1 / devicePixelRatio) < 1e-7));
+      await page.getByRole('button', { name: 'Fit', exact: true }).click();
+      await page.getByRole('button', { name: 'Hide controls', exact: true }).click();
+      assert(!(await page.locator('#preview-screen-footer').isVisible()));
+      await checkCleanLayers();
+      if (origin === 'camera') {
+        if (mobile) {
+          const cdp = await page.context().newCDPSession(page), box = await page.locator('#viewport').boundingBox();
+          const x = box.x + box.width * .2, y = box.y + box.height * .4;
+          await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ id: 1, x, y }] });
+          await page.waitForTimeout(550);
+          await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ id: 1, x: x + 40, y }] });
+          await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+          assert.equal(await page.locator('#split').inputValue(), dividerBefore, 'clean-view holds cannot grab the comparison');
+          assert(!(await page.locator('#preview-screen-footer').isVisible()));
+          await checkCleanLayers();
+          await cdp.detach();
+        }
+        await page.screenshot({ path: path.join(snapshots, `clean-capture-${width}.png`) });
+      }
+      await tapImage();
       await page.getByRole('button', { name: 'Close preview', exact: true }).click();
     }
     await page.waitForFunction(() => document.querySelector('#preview-audio').parentElement.id === 'preview-bottom-row');
     const mainAudio = await page.locator('#preview-audio').boundingBox(), mainSlider = await page.locator('#comparison-control').boundingBox();
     assert(Math.abs(mainAudio.y + mainAudio.height / 2 - mainSlider.y - mainSlider.height / 2) < 1);
     assert(mainAudio.x + mainAudio.width <= width);
-    await page.getByRole('button', { name: 'Preview', exact: true }).click();
+    await page.getByRole('button', { name: 'Full screen preview', exact: true }).click();
+    assert(await page.evaluate(() => !fullPreview.clean));
     const controls = ['#preview-audio', '#preview-screen-fit', '#preview-screen-actual', '#preview-screen-hide', '#preview-screen-close', '#preview-markers'];
     const boxes = await Promise.all(controls.map(selector => page.locator(selector).boundingBox()));
     assert(boxes.every((box, index) => box && box.width >= 44 && box.height >= 48 && Math.abs(box.y - boxes[0].y) < 1 && box.x >= 0 && box.x + box.width <= width && (!index || box.x >= boxes[index - 1].x + boxes[index - 1].width + 7)), JSON.stringify(boxes));
@@ -148,7 +193,7 @@ try {
       assert(Math.abs(Number(await page.locator('#split').inputValue()) - 800) <= 2);
       assert(!(await page.locator('#preview-screen-footer').isVisible()));
       await page.keyboard.press('Tab'); assert(await page.locator('#preview-screen-footer').isVisible());
-      console.log('PASS: desktop mouse scrubbing and keyboard access survive the compact toolbar; raw/file/clipboard/camera images all open from Preview');
+      console.log('PASS: desktop comparison keeps mouse/keyboard controls; raw/file/clipboard/camera Preview opens a separate clean transmission view');
     }
     await page.getByRole('button', { name: 'Close preview', exact: true }).click();
     await page.waitForFunction(() => document.querySelector('#preview-audio').parentElement.id === 'preview-bottom-row');
@@ -169,8 +214,12 @@ try {
     await page.getByRole('button', { name: 'Preview', exact: true }).click();
     assert(await page.evaluate(() => {
       const pixels = previewEncoded.getContext('2d').getImageData(0, 0, previewEncoded.width, previewEncoded.height).data;
-      return !fullPreview.clean && pixels.length === current.recoverPixels.length && pixels.every((value, index) => value === current.recoverPixels[index]);
+      return fullPreview.clean && pixels.length === current.recoverPixels.length && pixels.every((value, index) => value === current.recoverPixels[index]);
     }), 'Preview must show the current generated pixels before its comparison is ready');
+    await checkCleanLayers();
+    assert(!(await page.locator('#preview-screen-footer').isVisible()));
+    await tapImage();
+    await checkCleanLayers();
     await page.getByRole('button', { name: 'Close preview', exact: true }).click();
     await page.evaluate(async () => { PixelStow.extractCarrier = realExtraction; await finishExtraction(); await current.carrierPromise; });
     assert.deepEqual(errors, []);

@@ -16,7 +16,7 @@
       this.placeholder = document.createComment("Image preview returns here");
       this.pointers = new Set();
       document.querySelector("#full-preview").addEventListener("click", () => this.open(false));
-      document.querySelector("#preview-encoded-image").addEventListener("click", () => this.open(false));
+      document.querySelector("#preview-encoded-image").addEventListener("click", () => this.open(true));
       document.querySelector("#preview-screen-close").addEventListener("click", () => this.close());
       document.querySelector("#preview-screen-fit").addEventListener("click", fit);
       document.querySelector("#preview-screen-actual").addEventListener("click", actualSize);
