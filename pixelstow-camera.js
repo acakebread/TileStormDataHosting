@@ -663,6 +663,9 @@
       session.abort?.abort();
       session.readAbort?.abort();
       session.guideAbort?.abort();
+      session.finderAbort?.abort();
+      session.finderPending = null;
+      session.finderGeneration = (session.finderGeneration || 0) + 1;
       session.guidePending = null;
       session.guideGeneration = (session.guideGeneration || 0) + 1;
       session.pending = null;
@@ -697,9 +700,36 @@
     }
 
     framePriority(entry) {
-      // Only marker-bearing frames reach payload history. The guide promotes
+      // Only marker-bearing frames reach payload history. Calibration promotes
       // their scheduling; it never substitutes for a marker or payload checksum.
-      return (entry.scaleGuide?.detected ? 1000 : 0) + entry.score;
+      return (this.hasFinders(entry) ? 2000 : entry.scaleGuide?.detected ? 1000 : 0) + entry.score;
+    }
+
+    hasFinders(entry) {
+      return Boolean(entry?.finderScan && entry.image && entry.finderScan.width === entry.image.width && entry.finderScan.height === entry.image.height &&
+        entry.finderScan.markers?.some(marker => marker.finder && marker.verification === "header"));
+    }
+
+    async checkFinders(session) {
+      if (this.session !== session || session.paused || session.adjusting || session.handingOff || session.finderBusy || !session.finderPending) return;
+      session.finderBusy = true;
+      const entry = session.finderPending; session.finderPending = null;
+      const generation = session.finderGeneration;
+      const controller = new AbortController(); session.finderAbort = controller;
+      const timer = setTimeout(() => controller.abort(), 1500);
+      try {
+        const image = entry.image;
+        entry.finderScan = await PixelStow.scanFinderMarkers(image.pixels, image.width, image.height,
+          { signal: controller.signal, deadline: Date.now() + 1000 });
+      } catch (_) {
+        entry.finderScan = { markers: [], width: entry.image.width, height: entry.image.height };
+      } finally {
+        clearTimeout(timer);
+        if (generation === session.finderGeneration) this.enqueueFrame(session, entry);
+        session.finderBusy = false;
+        if (session.finderAbort === controller) session.finderAbort = null;
+        this.checkFinders(session);
+      }
     }
 
     captureGuideImage(image) {
@@ -715,12 +745,13 @@
 
     enqueueFrame(session, entry) {
       if (this.session !== session || session.paused || session.adjusting || session.handingOff) return;
-      if (session.pending?.scaleGuide?.detected && !entry.scaleGuide?.detected && Date.now() - session.pending.capturedAt < 45000) return;
+      const priority = frame => this.hasFinders(frame) ? 2 : frame.scaleGuide?.detected ? 1 : 0;
+      if (session.pending && priority(session.pending) > priority(entry) && Date.now() - session.pending.capturedAt < 45000) return;
       session.pending = entry;
       const active = session.scanningEntry;
-      if (entry.scaleGuide?.detected && active && !active.scaleGuide?.detected && !active.markerConfirmed) {
+      if (active && priority(entry) > priority(active) && !active.markerConfirmed) {
         session.abort?.abort();
-        if (!session.reading) this.progress.textContent = "Scale pilot found. Prioritising frame " + entry.frameNumber + " for marker checks…";
+        if (!session.reading) this.progress.textContent = (this.hasFinders(entry) ? "Finder header verified. Prioritising frame " : "Scale pilot found. Prioritising frame ") + entry.frameNumber + " for marker checks…";
       }
       this.scanMarkers(session);
     }
@@ -800,6 +831,9 @@
           entry.guideImage = this.captureGuideImage(entry.image);
           session.guidePending = entry;
           this.checkScaleGuide(session);
+        } else if (typeof PixelStow.scanFinderMarkers === "function") {
+          session.finderPending = entry;
+          this.checkFinders(session);
         } else this.enqueueFrame(session, entry);
       } catch (error) {
         session.paused = true;
@@ -831,7 +865,8 @@
         const scan = await PixelStow.scanMarkers(image.pixels, image.width, image.height, {
           mode: "perspective", camera: true, deadline: Date.now() + (header ? 12000 : 24000), signal: controller.signal,
           scaleGuide: entry.scaleGuide || false,
-          seed: previous?.width === image.width && previous?.height === image.height && header
+          finderScan: entry.finderScan,
+          seed: !this.hasFinders(entry) && previous?.width === image.width && previous?.height === image.height && header
             ? { ...header, initialMatrix: previous.geometry?.matrix } : undefined,
           onProgress: (text) => { if (this.session === session && !controller.signal.aborted && !session.reading) {
             this.progress.textContent = prefix + text; this.readProgress.update(this.progress.textContent);
@@ -885,7 +920,7 @@
       if (this.session !== session || session.purpose === "source" || session.paused || session.adjusting || session.reading || session.handingOff) return;
       const entry = session.history.find((frame) => !frame.attempted && frame.scan.candidates?.length && Date.now() - frame.capturedAt < 45000);
       if (!entry) return; // Never spend a payload read on a marker-free capture.
-      if (session.appraised < 2 && !entry.scan.highConfidence && !entry.scaleGuide?.detected) return;
+      if (session.appraised < 2 && !entry.scan.highConfidence && !entry.scaleGuide?.detected && !this.hasFinders(entry)) return;
       session.appraised = 0;
       session.reading = true;
       session.readEntry = entry;

@@ -143,6 +143,51 @@ const pilot={detected:true,confirmed:false,scale:1,fx:1/128,fy:0,width:16,height
 delete codec.scanScaleGuide;
 console.log('PASS: independent latest-frame Fourier lookahead, pilot-first priority, marker/payload verification, tie protection and cancelled/error fallback');
 
+const finders={width:16,height:16,markers:[{finder:true,verification:'header',id:0,carrierVersion:5}]};
+{
+  const {camera,session}=setup(),quick=[],markers=[];let id=0,reads=0;
+  camera.video={readyState:2,currentTime:1};camera.captureFrame=()=>image(++id);
+  codec.scanFinderMarkers=(p,w,h,options)=>new Promise(resolve=>quick.push({id:p[0],options,resolve}));
+  codec.scanMarkers=(p,w,h,options)=>new Promise((resolve,reject)=>{
+    markers.push({id:p[0],options,resolve});options.signal.addEventListener('abort',()=>reject(new DOMException('Cancelled','AbortError')),{once:true});
+  });
+  codec.readMarkerCandidates=async()=>{reads++;return {found:false};};
+  camera.scan(session);quick[0].resolve({width:16,height:16,markers:[],proposals:2});await flush();
+  assert.equal(markers[0].id,1);
+  camera.video.currentTime=2;camera.scan(session);camera.video.currentTime=3;camera.scan(session);
+  assert.equal(quick.length,2);assert.equal(session.finderPending.frameNumber,3);
+  quick[1].resolve({width:16,height:16,markers:[],proposals:2});await flush();
+  assert(!markers[0].options.signal.aborted,'raw square proposals cannot interrupt marker acquisition');
+  assert.equal(quick[2].id,3);
+  quick[2].resolve(finders);await flush();
+  assert(markers[0].options.signal.aborted,'a later checksum-valid ruler jumps an unconfirmed older marker search');
+  assert.equal(markers[1].id,3);assert.equal(markers[1].options.finderScan,finders);
+  assert.equal(markers[1].options.deadline-now,24000);
+  markers[1].resolve({markers:[],candidates:[]});await flush();assert.equal(reads,0,'rulers without stable carrier geometry cannot start a payload read');
+  assert.equal(timers.size,0);
+}
+{
+  const {camera,session}=setup(),calls=workerQueue();
+  session.history=[entry(1,200)];camera.readBestFrame(session);await flush();
+  session.pending={...entry(2,90),finderScan:finders};codec.scanMarkers=async()=>scan(90);
+  await camera.scanMarkers(session);await flush();
+  assert(calls[0].options.signal.aborted);assert.equal(calls[1].id,2);
+  assert.equal(calls[1].scan.candidates.length,3);assert(calls[1].options.resumeDiscovery);
+  session.pending={...entry(3,90),finderScan:finders};await camera.scanMarkers(session);await flush();
+  assert(!calls[1].options.signal.aborted,'equal ruler-bearing fits cannot repeatedly restart a good read');
+  session.paused=true;camera.cancelSearches(session);await flush();assert.equal(timers.size,0);
+}
+{
+  const {camera,session}=setup();let finish;const enqueued=[];camera.enqueueFrame=(s,e)=>enqueued.push(e);
+  codec.scanFinderMarkers=()=>new Promise(resolve=>{finish=resolve;});session.finderPending=entry(1);
+  camera.checkFinders(session);session.paused=true;camera.cancelSearches(session);finish(finders);await flush();
+  assert.equal(enqueued.length,0,'cancelled finder workers cannot promote late frames');assert.equal(timers.size,0);
+  session.paused=false;session.finderPending=entry(2);codec.scanFinderMarkers=async()=>{throw Error('Synthetic finder failure');};
+  await camera.checkFinders(session);assert.equal(enqueued[0].frameNumber,2);assert.equal(enqueued[0].finderScan.markers.length,0);
+}
+delete codec.scanFinderMarkers;
+console.log('PASS: latest-frame ruler lookahead, CRC-only promotion, full geometry/body verification, equal-fit protection and cancelled/error fallback');
+
 // Real codec regression: inaccurate higher-ranked transforms may precede the
 // correct one. The camera must not silently discard the third valid candidate.
 globalThis.window={};

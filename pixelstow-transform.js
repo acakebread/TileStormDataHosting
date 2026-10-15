@@ -519,7 +519,23 @@
   async function refineConfirmation(confirmed, adapter, seed, options) {
     if (options.signal?.aborted) check(options);
     if (Date.now() >= options.deadline) return confirmed;
-    try { return await refine(confirmed, adapter, seed, options) || confirmed; }
+    try {
+      if(seed.finder && adapter.quality(confirmed.matrix,confirmed.id,seed)<.92){
+        // A nearby wavelet phase can still pass header error correction. The
+        // ruler layout supplies a continuous alignment score to compare basins.
+        let best=confirmed,score=adapter.quality(confirmed.matrix,confirmed.id,seed);
+        for(let y=-6;y<=6;y+=2){
+          check(options);
+          for(let x=-6;x<=6;x+=2){
+            const matrix=offsetMatrix(confirmed.matrix,x,y),value=adapter.quality(matrix,confirmed.id,seed);
+            if(value>score){best={...confirmed,matrix};score=value;}
+          }
+          await pause();
+        }
+        confirmed=await refine(best,adapter,seed,options,true)||confirmed;
+      }
+      return await refine(confirmed, adapter, seed, options) || confirmed;
+    }
     catch (error) {
       // Refining a confirmed header/pattern is optional. A time limit must not
       // discard the patch we have already read; cancellation must still abort.
@@ -549,7 +565,7 @@
     peaks.sort((a, b) => b.score - a.score);
     for (const peak of peaks.slice(0, 8)) {
       const read = await refine(peak, adapter, seed, options, true);
-      if (read) return read;
+      if (read) return seed.finder ? refineConfirmation(read,adapter,seed,options) : read;
     }
     return null;
   }
@@ -882,5 +898,15 @@
     }
   }
 
-  root.PixelStowTransform = { find, invert, point };
+  function finderPlane(markers,layout){
+    const pairs=[];
+    for(const marker of markers){
+      const patch=layout.find(p=>p.id===marker.id);
+      for(const [x,y] of [[1.5,1.5],[49.5,1.5],[49.5,49.5],[1.5,49.5]])
+        pairs.push({source:{x:patch.x+x,y:patch.y+y},target:point(marker.matrix,x,y)});
+    }
+    return markers.length>=2?fitPoints(pairs,true):null;
+  }
+  root.PixelStowTransform = { find, invert, point, finderPlane,
+    refineLocator:(candidate,adapter,options)=>refine(candidate,adapter,null,options,true) };
 })(typeof window !== "undefined" ? window : self);

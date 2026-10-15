@@ -891,6 +891,36 @@
 
   function locatorProfile(version = CARRIER_V3) { return LOCATOR_PROFILES.get(version); }
 
+  let finderGridCache;
+  function finderGrid() {
+    return finderGridCache ||= { ...locatorProfile(CARRIER_V5), cell: 4, width: 40, height: 40,
+      offset: 6, sampleStep: 1, sampleOffset: 0,
+      kernels: [0, 1].map(bit => Float64Array.from({ length: 16 }, (_, i) => shapeWeight(i % 4, Math.floor(i / 4), bit))) };
+  }
+
+  function finderFrame(reference, output, width, patch, inverse = false) {
+    // Only the existing 52x52 reservation is touched. A reversible local range
+    // map makes the quiet ring/frame distinct; no whole-image contrast change.
+    for (let y = 0; y < 52; y++) for (let x = 0; x < 52; x++) {
+      if (x >= 6 && x < 46 && y >= 6 && y < 46) continue;
+      const white = x < 2 || x >= 50 || y < 2 || y >= 50, offset = white ? 223 : 0;
+      const i = (patch.x + x + (patch.y + y) * width) * 4;
+      for (let channel = 0; channel < 3; channel++) output[i + channel] = clampChannel(inverse
+        ? (reference[i + channel] - offset) * 8 : reference[i + channel] / 8 + offset);
+    }
+  }
+
+  function finderFrameQuality(pixels, width, height, matrix) {
+    let contrast = 0, count = 0, good = 0;
+    for (const t of [8, 14, 20, 26, 32, 38, 44]) for (let side = 0; side < 4; side++) {
+      const xy = d => side === 0 ? [d, t] : side === 1 ? [51 - d, t] : side === 2 ? [t, d] : [t, 51 - d];
+      const a = mappedPoint(matrix, ...xy(.5)), b = mappedPoint(matrix, ...xy(3.5));
+      const delta = sampleLuma(pixels, width, height, a.x, a.y) - sampleLuma(pixels, width, height, b.x, b.y);
+      contrast += delta; good += delta > 60; count++;
+    }
+    return contrast / count * Math.min(1, good / (count * .85));
+  }
+
   function referenceLayout(width, height) {
     const middleX = Math.floor((width - 24) / 8) * 4, middleY = Math.floor((height - 16) / 8) * 4;
     return [{ id: 1, x: middleX, y: 8 }, { id: 3, x: 8, y: middleY },
@@ -1075,13 +1105,15 @@
     }
     const patches = locatorLayout(width, height, version).concat(version === CARRIER_V5 ? referenceLayout(width, height) : []);
     for (const patch of patches) {
-      const main = p.ids.includes(patch.id), grid = main ? p : side, count = grid.cell ** 2;
+      const main = p.ids.includes(patch.id), finder = main && version === CARRIER_V5 && signalPolicy?.finderMarkers && [0,8].includes(patch.id);
+      const grid = finder ? finderGrid() : main ? p : side, count = grid.cell ** 2;
+      if(finder)finderFrame(reference,output,width,patch);
       const samples = new Float64Array(count), values = new Float64Array(count);
       const header = locatorHeader(width, height, patch.id, version);
       for (let slot = 0; slot < grid.order.length; slot++) {
         const cell = grid.order[slot], coded = slot % (main ? 96 : 24);
         const bit = WORD_BITS[header[Math.floor(coded / 12)] * 12 + coded % 12];
-        const x = patch.x + cell % grid.columns * grid.cell, y = patch.y + Math.floor(cell / grid.columns) * grid.cell;
+        const x = patch.x + (grid.offset||0) + cell % grid.columns * grid.cell, y = patch.y + (grid.offset||0) + Math.floor(cell / grid.columns) * grid.cell;
         const localAmplitude = markerPolicy ? textureAmplitude(markerPolicy.textureSource || reference, width, x, y,
           grid.cell, markerPolicy, markerPolicy.markerPeak) / 16 : amplitude;
         let gain = localAmplitude * blendedLocatorGain(version, grid, cell, main);
@@ -1182,16 +1214,17 @@
       y: (matrix[3] * x + matrix[4] * y + matrix[5]) / denominator };
   }
 
-  function locatorScores(pixels, width, height, matrix, count = 96, version = CARRIER_V3, reference = false) {
-    const p = reference ? referenceProfile() : locatorProfile(version);
+  function locatorScores(pixels, width, height, matrix, count = 96, version = CARRIER_V3, reference = false, finder = false) {
+    const p = finder ? finderGrid() : reference ? referenceProfile() : locatorProfile(version);
     // The patch matrix maps its own pixel centres into the supplied image.
-    for (const [x, y] of [[0, 0], [p.width - 1, 0], [0, p.height - 1], [p.width - 1, p.height - 1]]) {
+    const offset=p.offset||0;
+    for (const [x, y] of [[offset, offset], [offset+p.width-1, offset], [offset, offset+p.height-1], [offset+p.width-1, offset+p.height-1]]) {
       const point = mappedPoint(matrix, x, y);
       if (!Number.isFinite(point.x + point.y) || point.x < -0.5 || point.y < -0.5 || point.x > width - 0.5 || point.y > height - 0.5) return null;
     }
     const scores = new Float64Array(count);
     for (let slot = 0; slot < count; slot++) {
-      const cell = p.order[slot], x = cell % p.columns * p.cell, y = Math.floor(cell / p.columns) * p.cell;
+      const cell = p.order[slot], x = (p.offset||0) + cell % p.columns * p.cell, y = (p.offset||0) + Math.floor(cell / p.columns) * p.cell;
       let projection = 0, sum = 0, squares = 0;
       for (let dy = 0; dy < 4; dy++) for (let dx = 0; dx < 4; dx++) {
         const point = mappedPoint(matrix, x + p.sampleStep * dx + p.sampleOffset, y + p.sampleStep * dy + p.sampleOffset);
@@ -1214,22 +1247,37 @@
     return energy ? agreement / energy * Math.min(1, energy / (scores.length * 12)) : -Infinity;
   }
 
-  function readVisualLocator(pixels, width, height, matrix, id, version = CARRIER_V3) {
+  function readVisualLocator(pixels, width, height, matrix, id, version = CARRIER_V3, forceFinder = false) {
     const p = locatorProfile(version);
-    const scores = locatorScores(pixels, width, height, matrix, 96, version);
-    if (!scores || locatorAgreement(scores.subarray(0, 24), locatorHeader(0, 0, id, version)) < 0.55) return null;
-    const bytes = decodeSoft(scores, 8).bytes;
-    scramble(bytes, p.seed);
-    if (bytes[0] !== p.magic || bytes[1] !== (p.tag | id) || (crc32(bytes, 0, 6) & 0xFFFF) !== (bytes[6] | bytes[7] << 8)) return null;
-    const originalWidth = bytes[2] | bytes[3] << 8, originalHeight = bytes[4] | bytes[5] << 8;
-    if (!locatorFits(originalWidth, originalHeight, version)) return null;
-    // Supplied image bounds say nothing about encoded bounds once there is padding.
-    return { originalWidth, originalHeight, carrierVersion: version, patchWidth: p.width, patchHeight: p.height, id, matrix: Array.from(matrix),
-      verification: "header", quality: locatorAgreement(scores, locatorHeader(originalWidth, originalHeight, id, version)) };
+    const modes = forceFinder ? [true] : version===CARRIER_V5 && [0,8].includes(id) && finderFrameQuality(pixels,width,height,matrix)>90 ? [true,false] : [false];
+    for (const finder of modes) {
+      const scores = locatorScores(pixels, width, height, matrix, 96, version, false, finder);
+      if (!scores || locatorAgreement(scores.subarray(0, 24), locatorHeader(0, 0, id, version)) < 0.55) continue;
+      const bytes = decodeSoft(scores, 8).bytes;
+      scramble(bytes, p.seed);
+      if (bytes[0] !== p.magic || bytes[1] !== (p.tag | id) || (crc32(bytes, 0, 6) & 0xFFFF) !== (bytes[6] | bytes[7] << 8)) continue;
+      const originalWidth = bytes[2] | bytes[3] << 8, originalHeight = bytes[4] | bytes[5] << 8;
+      if (!locatorFits(originalWidth, originalHeight, version)) continue;
+      // Supplied image bounds say nothing about encoded bounds once there is padding.
+      return { originalWidth, originalHeight, carrierVersion: version, patchWidth: p.width, patchHeight: p.height, id, matrix: Array.from(matrix),
+        verification: "header", finder, quality: locatorAgreement(scores, locatorHeader(originalWidth, originalHeight, id, version)) };
+    }
+    return null;
   }
 
   function visualAdapter(pixels, width, height, version = CARRIER_V3) {
     const p = locatorProfile(version), ids = p.ids;
+    const useFinder=(matrix,id,dimensions)=>version===CARRIER_V5&&[0,8].includes(id)&&
+      (dimensions?.finder||finderFrameQuality(pixels,width,height,matrix)>90);
+    const alignment=(matrix,id,dimensions)=>{
+      const scores=locatorScores(pixels,width,height,matrix,dimensions?96:24,version,false,useFinder(matrix,id,dimensions));
+      const agreement=locatorAgreement(scores,locatorHeader(dimensions?.originalWidth||0,dimensions?.originalHeight||0,id,version));
+      if(!dimensions?.finder||!scores)return agreement;
+      // Sign agreement saturates once every symbol is readable, leaving a wide
+      // alignment plateau. Keep a small continuous energy term for these rulers.
+      const energy=scores.reduce((sum,value)=>sum+Math.abs(value),0);
+      return agreement*(.75+.25*energy/(energy+scores.length*16));
+    };
     return {
       carrierVersion: version, patchWidth: p.width, patchHeight: p.height,
       sampleStep: p.sampleStep, sampleOffset: p.sampleOffset,
@@ -1246,19 +1294,18 @@
       references: version === CARRIER_V5 ? (matrix, dimensions) => checkReferences(pixels, width, height, matrix, dimensions) : undefined,
       read: (matrix, id) => readVisualLocator(pixels, width, height, matrix, id, version),
       confirm: (matrix, id, dimensions) => {
-        const read = readVisualLocator(pixels, width, height, matrix, id, version);
+        const read = readVisualLocator(pixels, width, height, matrix, id, version,Boolean(dimensions.finder&&[0,8].includes(id)));
         if (read && read.originalWidth === dimensions.originalWidth && read.originalHeight === dimensions.originalHeight) return read;
         // Once dimensions are known, compare all 96 expected symbols. A damaged
         // header can still supply geometry; acceptance of contents needs frame CRC.
-        const scores = locatorScores(pixels, width, height, matrix, 96, version);
+        const finder=useFinder(matrix,id,dimensions), scores = locatorScores(pixels, width, height, matrix, 96, version, false, finder);
         const header = locatorHeader(dimensions.originalWidth, dimensions.originalHeight, id, version);
         const quality = locatorAgreement(scores, header);
         if (quality < 0.58 || !scores || locatorAgreement(scores.subarray(0, 24), header) < 0.4) return null;
         return { originalWidth: dimensions.originalWidth, originalHeight: dimensions.originalHeight,
-          carrierVersion: version, patchWidth: p.width, patchHeight: p.height, id, matrix: Array.from(matrix), quality, verification: "pattern" };
+          carrierVersion: version, patchWidth: p.width, patchHeight: p.height, id, matrix: Array.from(matrix), quality, verification: "pattern", finder };
       },
-      quality: (matrix, id, dimensions) => locatorAgreement(locatorScores(pixels, width, height, matrix, dimensions ? 96 : 24, version),
-        locatorHeader(dimensions?.originalWidth || 0, dimensions?.originalHeight || 0, id, version))
+      quality: alignment
     };
   }
 
@@ -1403,7 +1450,7 @@
 
   function searchInWorker(pixels, width, height, options, operation = "geometry") {
     return new Promise((resolve, reject) => {
-      const url = new URL("pixelstow-transform-worker.js?v=20261015-no-pilot1", codecScriptUrl);
+      const url = new URL("pixelstow-transform-worker.js?v=20261015-finder1", codecScriptUrl);
       const worker = new Worker(url);
       let finished = false;
       const abort = () => { if (finished) return; cleanup(); reject(new DOMException("Search cancelled.", "AbortError")); };
@@ -1428,6 +1475,7 @@
         worker.postMessage({ pixels: copy, width, height, operation, mode: options.mode, forceSearch: options.forceSearch,
           includeLegacy: options.includeLegacy ?? legacyRecovery, carrierVersion: options.carrierVersion, nativeOnly: options.nativeOnly,
           corners: options.corners, seed: options.seed, deadline: options.deadline, scaleGuide: options.scaleGuide,
+          finderScan: options.finderScan, finderSearch: options.finderSearch,
           seedDeadline: options.seedDeadline, camera: options.camera, scan: options.scan,
           searchState: options.searchState, stopOnHighConfidence: options.stopOnHighConfidence,
           resumeDiscovery: options.resumeDiscovery,
@@ -1839,6 +1887,61 @@
     return root.PixelStowSpectrum.scaleGuide(pixels, width, height, SCALE_PILOT, options);
   }
 
+  async function scanFinderMarkers(pixels,width,height,options={}) {
+    assertImage(pixels,width,height);checkCancelled(options.signal);
+    if(!recoveryVersions(options).includes(CARRIER_V5))return {markers:[],width,height};
+    if(canUseReaderWorker(options))return searchInWorker(pixels,width,height,options,"finders");
+    if(!root.PixelStowFinder||!root.PixelStowTransform)return {markers:[],width,height};
+    const started=Date.now(),deadline=Math.min(options.deadline||Infinity,started+1000);
+    const proposals=await root.PixelStowFinder.find(pixels,width,height,{...options,deadline:Math.min(deadline,started+600)});
+    const geometryMilliseconds=Date.now()-started;
+    const baseAdapter=visualAdapter(pixels,width,height,CARRIER_V5),markers=[];
+    const adapter={...baseAdapter,
+      quality:(matrix,id)=>locatorAgreement(locatorScores(pixels,width,height,matrix,24,CARRIER_V5,false,true),locatorHeader(0,0,id,CARRIER_V5)),
+      read:(matrix,id)=>readVisualLocator(pixels,width,height,matrix,id,CARRIER_V5,true)};
+    const native=[[1.5,1.5],[49.5,1.5],[49.5,49.5],[1.5,49.5]];
+    for(const proposal of proposals){
+      if(Date.now()>=deadline)break;
+      orientationLoop: for(let turn=0;turn<4;turn++){
+        checkCancelled(options.signal);
+        const quad=proposal.quad.slice(turn).concat(proposal.quad.slice(0,turn));
+        const matrix=root.PixelStowFinder.fit(native,quad);if(!matrix)continue;
+        // Tiny stair steps around a reduced square can look like perspective.
+        // Retain a parallelogram hypothesis rather than extrapolating that error.
+        const centre={x:quad.reduce((s,p)=>s+p.x,0)/4,y:quad.reduce((s,p)=>s+p.y,0)/4};
+        const ax=(quad[1].x-quad[0].x+quad[2].x-quad[3].x)/96,ay=(quad[1].y-quad[0].y+quad[2].y-quad[3].y)/96;
+        const bx=(quad[3].x-quad[0].x+quad[2].x-quad[1].x)/96,by=(quad[3].y-quad[0].y+quad[2].y-quad[1].y)/96;
+        const affine=[ax,bx,centre.x-25.5*(ax+bx),ay,by,centre.y-25.5*(ay+by),0,0,1];
+        for(const id of [0,8]){
+          if(markers.some(m=>m.id===id))continue;
+          let read=null;
+          for(const start of [affine,matrix]){
+            read=adapter.read(start,id);let best={matrix:start,score:adapter.quality(start,id)};
+            if(!read)for(const dy of [-1,-.5,0,.5,1])for(const dx of [-1,-.5,0,.5,1]){
+              const trial=start.slice();for(let k=0;k<3;k++){trial[k]+=dx*trial[k+6];trial[k+3]+=dy*trial[k+6];}
+              const score=adapter.quality(trial,id);if(score>best.score)best={matrix:trial,score};
+            }
+            if(!read&&best.score>.3&&Date.now()<deadline){
+              try{read=await root.PixelStowTransform.refineLocator({matrix:best.matrix,id},adapter,{...options,mode:"perspective",deadline:Math.min(deadline,Date.now()+120)});}
+              catch(error){if(error?.name!=="SearchLimit")throw error;}
+            }
+            if(read)break;
+          }
+          if(!read?.finder)continue;
+          if(markers.length&&(read.originalWidth!==markers[0].originalWidth||read.originalHeight!==markers[0].originalHeight))continue;
+          markers.push(read);options.onProgress?.("Finder "+id+" verified. Native size "+read.originalWidth+" × "+read.originalHeight+".");
+          break orientationLoop; // One physical square has only one ID/orientation.
+        }
+      }
+      if(markers.length===2)break;
+    }
+    if(markers.length){
+      const plane=root.PixelStowTransform.finderPlane(markers,locatorLayout(markers[0].originalWidth,markers[0].originalHeight,CARRIER_V5));
+      if(plane)for(const marker of markers)marker.initialMatrix=plane;
+    }
+    return {markers,width,height,proposals:proposals.length,geometryMilliseconds,milliseconds:Date.now()-started};
+  }
+
   // Pure discovery: only locator symbols are read. No carrier preamble, body,
   // decompression or payload verification is performed by this operation.
   async function scanMarkers(pixels, width, height, options = {}) {
@@ -1858,6 +1961,12 @@
     }
     if (options.nativeOnly) return { found: false, geometry: null, candidates: [], markers: [], width, height,
       reason: "No recovery marker headers were found on the native pixel grid." };
+    let finderScan=options.finderScan;
+    if(!options.searchState&&!options.seed&&options.finderSearch!==false&&recoveryVersions(options).includes(CARRIER_V5)){
+      if(!finderScan)finderScan=await scanFinderMarkers(pixels,width,height,{...options,worker:false});
+      if(finderScan.width!==width||finderScan.height!==height)finderScan=null;
+    }
+    const finderSeed=finderScan?.markers?.find(marker=>marker.finder&&marker.verification==="header");
     let scaleGuide = options.searchState?.scaleGuide || (options.scaleGuide?.detected && options.scaleGuide.width === width &&
       options.scaleGuide.height === height && Number.isFinite(options.scaleGuide.scale) && options.scaleGuide.scale >= .25 &&
       options.scaleGuide.scale <= 8 && Number.isFinite(options.scaleGuide.fx) && Number.isFinite(options.scaleGuide.fy) &&
@@ -1867,14 +1976,14 @@
       try { scaleGuide = await scanScaleGuide(pixels, width, height, { worker: false, signal: options.signal, deadline: options.deadline }); }
       catch (error) { if (error?.name === "AbortError") throw error; } // An optional guide must not break ordinary recovery.
     }
-    if ((options.singleResolution || options.mode === "padding" || (Math.max(width, height) < 640 && !scaleGuide)) && width * height <= MAX_PIXELS) {
-      const result = await findVisualTransform(pixels, width, height, { ...options, worker: false, geometryOnly: true });
+    if ((options.singleResolution || options.mode === "padding" || (Math.max(width, height) < 640 && !scaleGuide&&!finderSeed)) && width * height <= MAX_PIXELS) {
+      const result = await findVisualTransform(pixels, width, height, { ...options, seed:options.seed||finderSeed,worker: false, geometryOnly: true });
       const candidates = rankMarkerCandidates((result.candidates || []).map((geometry) => ({ geometry, markers: result.markers, markerSearch: result.markerSearch })));
       return { ...result, candidates, geometry: candidates[0]?.geometry, highConfidence: Boolean(candidates[0]?.geometry.highConfidence), width, height };
     }
     const deadline = Math.min(options.searchState?.deadline || Infinity, options.deadline || Infinity, Date.now() + 60000);
-    let best = null, known = options.searchState?.seed || options.seed || null;
-    let verifiedCurrent = Boolean(options.searchState?.seed);
+    let best = null, known = options.searchState?.seed || options.seed || finderSeed || null;
+    let verifiedCurrent = Boolean(options.searchState?.seed||finderSeed);
     const candidates = [];
     // Start near a useful middle size. Marker agreement and measured spacing
     // choose the next level; both directions remain available after a weak miss.
@@ -1885,6 +1994,12 @@
         (size.divisor === 1 || size.width >= 128 && size.height >= 96) &&
         all.findIndex((s) => s.width === size.width && s.height === size.height) === i);
     const startDivisor = known ? markerBasis(known.matrix, known.carrierVersion) / 1.2 : Math.max(width, height) / 1000;
+    if(finderSeed&&!options.searchState?.sizes){
+      const divisor=markerBasis(finderSeed.matrix,CARRIER_V5)/1.1;
+      const proposed={divisor,width:Math.round(width/divisor),height:Math.round(height/divisor),guided:true,finder:true};
+      if(proposed.width>=128&&proposed.height>=96&&proposed.width*proposed.height<=MAX_MARKER_PIXELS)sizes.push(proposed);
+      sizes.sort((a,b)=>b.divisor-a.divisor);
+    }
     if (scaleGuide && !options.searchState?.sizes) {
       const proposed = { divisor: scaleGuide.scale, width: Math.round(width / scaleGuide.scale),
         height: Math.round(height / scaleGuide.scale), guided: true };
@@ -1895,7 +2010,7 @@
     }
     const normalStart = sizes.reduce((best, size, i) => !size.guided && (sizes[best].guided || Math.abs(Math.log2(size.divisor / startDivisor)) <
       Math.abs(Math.log2(sizes[best].divisor / startDivisor))) ? i : best, 0);
-    let start = scaleGuide && !options.searchState && sizes.some(size => size.guided) ? sizes.findIndex(size => size.guided) : normalStart;
+    let start = (scaleGuide||finderSeed) && !options.searchState && sizes.some(size => size.guided) ? sizes.findIndex(size => size.guided) : normalStart;
     const pending = options.searchState?.pending.slice() || sizes.map((_, i) => i);
     const samples = options.searchState?.samples.slice() || [];
     while (pending.length) {
@@ -1906,8 +2021,8 @@
       }
       const index = nextMarkerScale(pending, samples, start, sizes, known);
       pending.splice(pending.indexOf(index), 1);
-      const { width: rw, height: rh, divisor, guided } = sizes[index], full = divisor === 1;
-      const label = (guided ? "Pilot-guided size" : full ? "Full size" : "1/" + divisor + " size") + " (" + rw + " × " + rh + ")";
+      const { width: rw, height: rh, divisor, guided, finder } = sizes[index], full = divisor === 1;
+      const label = (finder ? "Finder-guided size" : guided ? "Pilot-guided size" : full ? "Full size" : "1/" + divisor + " size") + " (" + rw + " × " + rh + ")";
       options.onProgress?.("Locating photo markers: " + label + "…");
       const corners = options.corners?.map((p) => ({ x: (p.x + 0.5) * rw / width - 0.5, y: (p.y + 0.5) * rh / height - 0.5 }));
       const scaleMatrix = (h) => [(rw / width) * h[0] + (rw / width - 1) / 2 * h[6],
@@ -1927,7 +2042,7 @@
       const seedBudget = Math.max(1500, remaining / Math.min(3, pending.length + 1));
       // A false pilot gets only a short extra attempt. Every original pyramid
       // level remains pending, with the original reader budgets and checks.
-      const levelDeadline = guided ? Math.min(deadline, Date.now() + 1200) : deadline;
+      const levelDeadline = guided&&!finder ? Math.min(deadline, Date.now() + 1200) : deadline;
       const workingGuide = guided && scaleGuide ? { ...scaleGuide, fx: scaleGuide.fx * width / rw, fy: scaleGuide.fy * height / rh } : null;
       const result = await findVisualTransform(image.pixels, rw, rh, { ...options, corners, seed, singleResolution: true,
         scaleGuide: workingGuide, pilotFirst: Boolean(workingGuide),
@@ -1951,7 +2066,7 @@
       }
     }
     const ranked = rankMarkerCandidates(candidates);
-    return { ...best, width, height, scaleGuide, candidates: ranked, geometry: ranked[0]?.geometry,
+    return { ...best, width, height, scaleGuide, finderScan,candidates: ranked, geometry: ranked[0]?.geometry,
       highConfidence: Boolean(ranked[0]?.geometry.highConfidence),
       searchState: { pending, samples, seed: verifiedCurrent ? known : undefined, deadline, sizes, scaleGuide },
       markers: ranked[0]?.markers || best?.markers || [], markerSearch: ranked[0]?.markerSearch || best?.markerSearch };
@@ -2092,12 +2207,16 @@
     const profile = locatorProfile(version);
     const patches = locatorLayout(width, height, version).concat(version === CARRIER_V5 ? referenceLayout(width, height) : []);
     for (const patch of patches) {
-      const main = profile.ids.includes(patch.id), p = main ? profile : referenceProfile();
+      const main = profile.ids.includes(patch.id), matrix=[1,0,patch.x,0,1,patch.y,0,0,1];
+      const locator=version===CARRIER_V5&&[0,8].includes(patch.id)?readVisualLocator(pixels,width,height,matrix,patch.id,version):null;
+      const finder=version===CARRIER_V5&&[0,8].includes(patch.id)&&
+        (locator?locator.finder:finderFrameQuality(pixels,width,height,matrix)>90);
+      const p = finder ? finderGrid() : main ? profile : referenceProfile();
       const header = locatorHeader(width, height, patch.id, version);
       for (let slot = 0; slot < p.order.length; slot++) {
         const cell = p.order[slot], coded = slot % (main ? 96 : 24);
         const bit = WORD_BITS[header[Math.floor(coded / 12)] * 12 + coded % 12], kernel = p.kernels[bit];
-        const x = patch.x + cell % p.columns * p.cell, y = patch.y + Math.floor(cell / p.columns) * p.cell;
+        const x = patch.x + (p.offset||0) + cell % p.columns * p.cell, y = patch.y + (p.offset||0) + Math.floor(cell / p.columns) * p.cell;
         let projection = 0, energy = 0;
         for (let i = 0; i < kernel.length; i++) {
           const index = (x + i % p.cell + (y + Math.floor(i / p.cell)) * width) * 4;
@@ -2111,6 +2230,7 @@
           for (let c = 0; c < 3; c++) output[index + c] = clampChannel(pixels[index + c] - amount * kernel[i]);
         }
       }
+      if(finder)finderFrame(pixels,output,width,patch,true);
     }
   }
 
@@ -2582,7 +2702,7 @@
     }
   }
 
-  async function encodeAt(reference, width, height, payload, passwordProtected, strength, adaptive, bundle, carrierVersion, quality = DEFAULT_QUALITY, scalePilot = false) {
+  async function encodeAt(reference, width, height, payload, passwordProtected, strength, adaptive, bundle, carrierVersion, quality = DEFAULT_QUALITY, scalePilot = false, finderMarkers = true) {
     strength = Math.max(1, Math.min(32, strength));
     const version = locatorProfile(carrierVersion) ? carrierVersion : CARRIER_V1;
     const map = locatorProfile(version) ? locatorBlockMap(width, height, Infinity, version) : null;
@@ -2616,7 +2736,7 @@
         (scalePilot ? SCALE_PILOT.amplitude : 0)) / 2));
       signalSource = linearRange(reference, headroom);
       if (scalePilot) signalSource = applyScalePilot(signalSource, width);
-      signalPolicy = { ...signalPolicy, linearHeadroom: headroom, textureSource: reference, scalePilot };
+      signalPolicy = { ...signalPolicy, linearHeadroom: headroom, textureSource: reference, scalePilot, finderMarkers };
     }
     const output = signalSource.slice();
     const written = await writeSignal(signalSource, output, width, height, framed, strength, version, map, signalPolicy);
@@ -2633,6 +2753,7 @@
       rangeHeadroom: signalPolicy?.linearHeadroom || 0,
       scalePilot: Boolean(signalPolicy?.scalePilot),
       scalePilotAmplitude: signalPolicy?.scalePilot ? SCALE_PILOT.amplitude : 0,
+      finderMarkers: version===CARRIER_V5&&finderMarkers,
       map
     };
   }
@@ -2665,7 +2786,7 @@
       const usedVersion = wantLocators && locatorFits(width, height, preferredCarrier) ? preferredCarrier : CARRIER_V1;
       const payload = locked ? await encryptEnvelope(plain, password, bundle) : plain.slice();
       try {
-        let encoded = await encodeAt(pixels, width, height, payload, locked, STRENGTHS[0], true, bundle, usedVersion, quality, options.scalePilot === true);
+        let encoded = await encodeAt(pixels, width, height, payload, locked, STRENGTHS[0], true, bundle, usedVersion, quality, options.scalePilot === true, options.finderMarkers !== false);
         for (;;) {
           const recovery = await readNative(encoded.pixels, width, height, usedVersion, encoded.strength, undefined, encoded.map);
           if (recovery && !recovery.locatorOnly && recovery.carrierVersion === usedVersion &&
@@ -2684,6 +2805,7 @@
               rangeHeadroom: encoded.rangeHeadroom,
               scalePilot: encoded.scalePilot,
               scalePilotAmplitude: encoded.scalePilotAmplitude,
+              finderMarkers: encoded.finderMarkers,
               quality,
               locatorFallback: wantLocators && usedVersion === CARRIER_V1
             };
@@ -2698,7 +2820,7 @@
           if (next === 0) {
             throw new Error("The message could not be verified in this image. Try another picture or a shorter message.");
           }
-          encoded = await encodeAt(pixels, width, height, payload, locked, next, false, bundle, usedVersion, quality, options.scalePilot === true);
+          encoded = await encodeAt(pixels, width, height, payload, locked, next, false, bundle, usedVersion, quality, options.scalePilot === true, options.finderMarkers !== false);
         }
       } finally { payload.fill(0); }
     } finally { plain.fill(0); }
@@ -3140,6 +3262,7 @@
     findVisualTransform,
     scanMarkers,
     scanScaleGuide,
+    scanFinderMarkers,
     analyzeNativeMarkers,
     readMarkerCandidates,
     clearVisualTransform(pixels) { visualMappings.delete(pixels); },

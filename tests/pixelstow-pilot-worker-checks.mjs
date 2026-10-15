@@ -28,6 +28,13 @@ try{
     if(camera.scaleGuideEnabled!==false)throw Error('Normal camera capture must not enable pilot analysis.');
     const normal=await PixelStow.encodePayload(pixels,w,h,content,'');
     if(normal.scalePilot||normal.scalePilotAmplitude)throw Error('Normal writing must not add a pilot.');
+    const rulerPhoto=await PixelStowSizing.resize(normal,1096,822),rulerBefore=rulerPhoto.pixels.slice();
+    const rulers=await PixelStow.scanFinderMarkers(rulerPhoto.pixels,rulerPhoto.width,rulerPhoto.height);
+    const rulerScan=await PixelStow.scanMarkers(rulerPhoto.pixels,rulerPhoto.width,rulerPhoto.height,{finderScan:rulers,deadline:Date.now()+24000});
+    const rulerRead=await PixelStow.readMarkerCandidates(rulerPhoto.pixels,rulerPhoto.width,rulerPhoto.height,rulerScan,{resumeDiscovery:true,deadline:Date.now()+30000});
+    const rulerExact=PixelStow.payloadsEqual(await PixelStow.decode(rulerPhoto.pixels,rulerPhoto.width,rulerPhoto.height,''),content);
+    const rulerAbort=new AbortController(),rulerPending=PixelStow.scanFinderMarkers(rulerPhoto.pixels,rulerPhoto.width,rulerPhoto.height,{signal:rulerAbort.signal});
+    rulerAbort.abort();let rulerCancelled=false;try{await rulerPending;}catch(e){rulerCancelled=e.name==='AbortError';}
     const encoded=await PixelStow.encodePayload(pixels,w,h,content,'',{scalePilot:true});
     const photo=await PixelStowSizing.resize(encoded,1096,822),before=photo.pixels.slice();
     // Exercise exactly the frozen capture -> 512px guide raster -> worker route.
@@ -51,12 +58,15 @@ try{
     const oldRead=await PixelStow.decode(original.pixels,original.width,original.height,'',{nativeOnly:true});
     const controller=new AbortController(),pending=PixelStow.scanScaleGuide(photo.pixels,photo.width,photo.height,{signal:controller.signal});
     controller.abort();let aborted=false;try{await pending;}catch(e){aborted=e.name==='AbortError';}
-    return {hint:true,scale:guide.scale,markers:scan.markers.filter(m=>m.verification==='header').length,
+    return {rulers:rulers.markers.length,rulerRead:rulerRead.found&&!rulerRead.unreadable,rulerExact,rulerCancelled,
+      rulerIntact:rulerPhoto.pixels.every((v,i)=>v===rulerBefore[i]),
+      hint:true,scale:guide.scale,markers:scan.markers.filter(m=>m.verification==='header').length,
       read:read.found&&!read.unreadable,exact:PixelStow.payloadsEqual(decoded,content),pilot:decoded.scalePilot,
       amplitude:decoded.scalePilotAmplitude,readAmplitude:read.scalePilotAmplitude,weakAmplitude:weakRead.scalePilotAmplitude,sameRemoval,
       intact:photo.pixels.every((v,i)=>v===before[i]),oldHint,oldText:oldRead.text,oldPilot:oldRead.scalePilot,aborted};
   });
   assert(result.hint);assert(Math.abs(result.scale/1.37-1)<.03);assert.equal(result.markers,4);
+  assert.equal(result.rulers,2);assert(result.rulerRead&&result.rulerExact&&result.rulerCancelled&&result.rulerIntact);
   assert(result.read&&result.exact&&result.pilot&&result.intact&&result.aborted);
   assert.equal(result.amplitude,16);assert.equal(result.readAmplitude,16);assert.equal(result.weakAmplitude,3);assert(result.sameRemoval);
   assert.equal(result.oldHint,null);assert.equal(result.oldPilot,false);
@@ -65,6 +75,7 @@ try{
   // in a real worker. Immediate abort can terminate before Playwright sees it.
   assert(workers.length>=4);assert.deepEqual(errors,[]);
   console.log('PASS: actual browser guide/marker/payload workers, 512px frozen-capture scale mapping, exact new V5 payload, unchanged pre-pilot V5 and worker cancellation');
+  console.log('PASS: actual browser ruler workers at arbitrary scale, reused header calibration, full payload, preserved input and worker cancellation');
   for(const relative of process.argv.slice(2)){
     const measured=await page.evaluate(async relative=>{
       const image=await PixelStow.decodePng(new Uint8Array(await(await fetch('./'+relative)).arrayBuffer()));
