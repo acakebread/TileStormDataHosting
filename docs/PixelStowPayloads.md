@@ -268,6 +268,11 @@ integer strengths. Lower quality remains selectable for stronger wavelets;
 quality above the current bound is clamped. The requested quality is retained
 while prognosis changes, so moving back into a more permissive range restores
 it. Quality gestures never change the selected repeat target or dimensions.
+The quality input's native maximum follows this bound, and its active track
+occupies only the available part of the full scale. The shaded remainder is
+inert; dragging beyond it cannot store a hidden over-limit quality or change
+prognosis. Returning inside the boundary responds immediately. Mouse, touch and
+keyboard input use the same real limit, with the existing large touch thumb.
 Repetition and parity also appear as capacity warnings. Reported repetition uses
 the actual coding, and reduced error correction is identified explicitly.
 The slider has a 64-pixel-high touch area and a larger visible handle. Tapping

@@ -22,8 +22,9 @@ let browser;
 try {
   browser = await chromium.launch({ headless: true, args: ['--disable-gpu'],
     ...(process.env.PIXELSTOW_CHROME ? { executablePath: process.env.PIXELSTOW_CHROME } : {}) });
-  for (const width of [390, 320]) {
-    const page = await browser.newPage({ viewport: { width, height: 844 }, isMobile: true, hasTouch: true });
+  for (const width of [390, 320, 1280]) {
+    const mobile=width<500;
+    const page = await browser.newPage({ viewport: { width, height: 844 }, isMobile: mobile, hasTouch: mobile });
     const errors = []; page.on('pageerror', error => errors.push(error.message));
     await page.goto('http://127.0.0.1:' + server.address().port + '/pixelstow.html');
     const load = (width, height, length, origin='file') => page.evaluate(async ({ width, height, length, origin }) => {
@@ -37,6 +38,7 @@ try {
       media.files = publicPayload.attachments; message.value = publicPayload.text; media.sync(); updateByteCounts();
     }, { width, height, length, origin });
     const dimensions = () => page.evaluate(() => ({ width: sourcePlan.width, height: sourcePlan.height }));
+    const maximumQuality = () => page.locator('#encoding-quality').press('End');
     const repetition = () => page.evaluate(() => sourcePlan.repetitionRatio);
     const risk = () => page.locator('#prognosis-pointer').evaluate(node => parseFloat(node.style.left));
     await load(4032, 3024, 1000);
@@ -50,10 +52,11 @@ try {
     const controlPositions = () => page.evaluate(() => ['encoding-quality', 'prognosis-target', 'encode'].map(id => document.getElementById(id).getBoundingClientRect().top + scrollY));
     const positions = await controlPositions();
     await page.locator('#encoding-quality').fill('0'); const durable = await risk();
-    await page.locator('#encoding-quality').fill('1'); const gentle = await risk();
+    await maximumQuality(); const gentle = await risk();
     assert(durable < gentle); assert.deepEqual(await dimensions(), initial);
     assert.deepEqual(await controlPositions(), positions, 'quality and status updates keep the controls steady');
     await page.locator('#prognosis-target').fill('0');
+    await maximumQuality();
     const largest = await dimensions(), green = await risk(), greenRepetition = await repetition();
     assert(largest.width>initial.width && largest.height>initial.height && largest.width<1200);
     assert(greenRepetition>=3 && greenRepetition<3.05);
@@ -64,6 +67,44 @@ try {
     assert(smallest.width<initial.width && smallest.height<initial.height);
     assert(await repetition()>=1 && await repetition()<1.05);
     assert(Number(await page.locator('#encoding-quality').inputValue())<.35,'low repetition caps maximum quality at a stronger signal');
+    const quality=page.locator('#encoding-quality');
+    const qualityState=()=>page.evaluate(()=>({value:Number(encodingQuality.value),requested:requestedQuality,
+      max:qualityLimit.max,bounds:{...prognosisBounds},label:encodingQualityValue.value}));
+    const geometry=()=>quality.evaluate(node=>{
+      const box=node.getBoundingClientRect(),full=node.parentElement.getBoundingClientRect();
+      const thumb=parseFloat(getComputedStyle(node).getPropertyValue('--quality-thumb'));
+      const max=Number(node.max),value=Number(node.value);
+      return {x:box.x+thumb/2+(box.width-thumb)*value/max,y:box.y+box.height/2,
+        limitX:box.right-thumb/2,outsideX:full.right-5};
+    });
+    // Exercise the browser's active drag, not just programmatic input events:
+    // overdrag must not alter a hidden requested value or the prognosis bounds.
+    for(const touch of mobile?[false,true]:[false]){
+      await quality.fill('0.1');await quality.scrollIntoViewIfNeeded();
+      const g=await geometry();
+      let cdp;
+      if(touch){
+        cdp=await page.context().newCDPSession(page);
+        await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{id:1,x:g.x,y:g.y}]});
+      }else{await page.mouse.move(g.x,g.y);await page.mouse.down();}
+      const move=async x=>touch
+        ?cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{id:1,x,y:g.y}]})
+        :page.mouse.move(x,g.y,{steps:4});
+      await move(g.limitX);
+      const atLimit=await qualityState();
+      assert(Math.abs(atLimit.value-atLimit.max)<.005);
+      assert(atLimit.requested<=atLimit.max+1e-12);
+      await move(g.outsideX);
+      const beyond=await qualityState();
+      assert.deepEqual(beyond,atLimit,'overdragging the grey area must leave the actual value, requested quality and prognosis unchanged');
+      await move(g.limitX-8);
+      assert((await qualityState()).value<atLimit.value-.005,'returning inside the boundary must reduce quality immediately');
+      if(touch){await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await cdp.detach();}
+      else await page.mouse.up();
+      await quality.press('End');const keyboardLimit=await qualityState();
+      await quality.press('ArrowRight');
+      assert.deepEqual(await qualityState(),keyboardLimit,'keyboard input must stop at the same real maximum');
+    }
     await page.locator('.quality-label').evaluate(node => scrollTo(0,node.getBoundingClientRect().top+scrollY-15));
     await page.screenshot({path:path.join(snapshots,`payload-range-${width}.png`)});
     assert(await risk() > green && await repetition() < greenRepetition, 'green means more real payload repetition');
@@ -82,7 +123,7 @@ try {
     const selected = await dimensions(), selectedRepetition = await repetition();
     assert(selected.width > smallest.width && selected.width < largest.width);
     await page.locator('#encoding-quality').fill('0'); const selectedDurable = await risk();
-    await page.locator('#encoding-quality').fill('1');
+    await maximumQuality();
     assert.deepEqual(await dimensions(), selected, 'quality cannot resize the selected carrier');
     assert.equal(await repetition(), selectedRepetition, 'quality changes strength, never the stored repeat count');
     assert(await risk() > selectedDurable);
@@ -107,7 +148,7 @@ try {
     const required = await dimensions(); assert(required.width > 320 && required.height > 240);
     assert(await page.evaluate(() => sourcePlan.width === sourcePlan.recommended.width && sourcePlan.width < sourcePlan.maximum.width));
     assert(await repetition()>=2 && await repetition()<2.05);
-    await page.locator('#encoding-quality').fill('0'); await page.locator('#encoding-quality').fill('1');
+    await page.locator('#encoding-quality').fill('0'); await maximumQuality();
     assert.deepEqual(await dimensions(), required, 'payload-driven enlargement does not depend on quality');
     assert(await page.locator('#prognosis-target').isEnabled(), 'more repetition remains selectable after the automatic minimum enlargement');
     await page.locator('#prognosis-target').fill('0');
@@ -163,7 +204,7 @@ try {
     await page.waitForFunction(() => frameBudget?.framedBytes>1000);
     assert(!await page.locator('#scale-source').isChecked(),'an automatic camera default must not overwrite the manual file preference');
     assert.deepEqual(errors, []);
-    console.log(`PASS: ${width}px scaling resets to payload-sized 2x/moderate strength; 1x--3x gestures bound quality and add real repetition; dense-grid warning, camera/file preferences and verified payload remain correct`);
+    console.log(`PASS: ${width}px mouse${mobile?'/touch':''}/keyboard quality drags stop at the actual bound with immediate return; payload-sized defaults, repetition, camera/file preferences and verified encoding remain correct`);
     await page.close();
   }
 } finally {

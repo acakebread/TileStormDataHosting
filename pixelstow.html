@@ -123,7 +123,8 @@
     .encoding-status .error { color: #ffb4b4; }
     .quality-label { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: .35em; }
     #encoding-quality-value { min-width: 4ch; margin: 0; font: inherit; line-height: inherit; font-variant-numeric: tabular-nums; }
-    .quality-scale { --quality-max: 100%; }
+    .quality-scale { position: relative; --quality-max: 100%; --quality-ratio: 1; --quality-thumb: 24px; }
+    .quality-scale::before { content: ""; position: absolute; left: 0; right: 0; top: calc(50% - 4px); height: 8px; background: #182931; border-radius: 4px; pointer-events: none; }
     .password-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; margin-top: 14px; }
     .password-heading label { margin: 0; }
     #change-encoding-password { padding: 6px 10px; min-height: 44px; font-size: .85rem; }
@@ -378,13 +379,14 @@
     #split::-moz-range-track { height: 8px; background: #385762; border-radius: 4px; }
     #split::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; width: 36px; height: 36px; margin-top: -14px; border: 2px solid #102028; border-radius: 50%; background: #69dccb; }
     #split::-moz-range-thumb { width: 32px; height: 32px; border: 2px solid #102028; border-radius: 50%; background: #69dccb; }
-    #encoding-quality { appearance: none; -webkit-appearance: none; width: 100%; min-height: 44px; padding: 0; background: transparent; touch-action: pan-y; }
-    #encoding-quality::-webkit-slider-runnable-track { height: 8px; background: linear-gradient(90deg, #385762 var(--quality-max), #182931 var(--quality-max)); border-radius: 4px; }
-    #encoding-quality::-moz-range-track { height: 8px; background: linear-gradient(90deg, #385762 var(--quality-max), #182931 var(--quality-max)); border-radius: 4px; }
+    #encoding-quality { position: relative; display: block; appearance: none; -webkit-appearance: none; width: calc(var(--quality-max) + (1 - var(--quality-ratio)) * var(--quality-thumb)); min-height: 44px; margin: 0; padding: 0; background: transparent; touch-action: pan-y; }
+    #encoding-quality::-webkit-slider-runnable-track { height: 8px; background: #385762; border-radius: 4px; }
+    #encoding-quality::-moz-range-track { height: 8px; background: #385762; border-radius: 4px; }
     #encoding-quality::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; box-sizing: border-box; width: 24px; height: 24px; margin-top: -8px; border: 2px solid #102028; border-radius: 50%; background: #69dccb; }
     #encoding-quality::-moz-range-thumb { box-sizing: border-box; width: 24px; height: 24px; border: 2px solid #102028; border-radius: 50%; background: #69dccb; }
     #encoding-quality:focus-visible { outline: 2px solid var(--tile-azure); outline-offset: 2px; border-radius: 8px; }
     @media (pointer: coarse) {
+      .quality-scale { --quality-thumb: 48px; }
       #encoding-quality { appearance: none; -webkit-appearance: none; height: 64px; padding: 0; background: transparent; touch-action: pan-y; }
       #encoding-quality::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; box-sizing: border-box; width: 48px; height: 48px; margin-top: -20px; border: 2px solid #102028; border-radius: 50%; background: #69dccb; }
       #encoding-quality::-moz-range-thumb { box-sizing: border-box; width: 48px; height: 48px; border: 2px solid #102028; border-radius: 50%; background: #69dccb; }
@@ -2155,9 +2157,13 @@
       qualityLimit = scaleSource.checked && sourcePlan?.fits
         ? PixelStowSizing.scaledQuality(sourcePlan, requestedQuality, Number(carrierSelect.value))
         : { min: 0, max: 1, quality: requestedQuality, strengthLimited: false };
+      // The native control must own the same bound as the visible value. Its
+      // shorter track preserves the full 0--100% scale; the rest is inert.
+      encodingQuality.max = String(qualityLimit.max);
       encodingQuality.value = String(qualityLimit.quality);
       encodingQuality.setAttribute("aria-valuemax", String(qualityLimit.max));
       encodingQuality.parentElement.style.setProperty("--quality-max", (100 * qualityLimit.max) + "%");
+      encodingQuality.parentElement.style.setProperty("--quality-ratio", String(qualityLimit.max));
       updateEncodingQualityValue();
     }
 
