@@ -149,8 +149,10 @@ divider does not reveal controls. Immediate handle/line dragging and desktop
 mouse scrubbing remain available. Escape closes the viewer.
 Successful reads start with marker overlays hidden. Failed photographs show
 diagnostic markers; continuous captures start clean. Fullscreen preview has a
-small **Analysis** checkbox below the image; it is absent from the main
-page. Native reads, including clipboard pastes and generated images, gather
+button-style **Analysis** toggle at the right end of the action row; it is absent
+from the main page. Its computer/binary icon has a full 44 × 48 pixel touch
+target, a highlighted checked state and a keyboard focus outline. Native reads,
+including clipboard pastes and generated images, gather
 diagnostics at the known marker positions on request without a broad search.
 For V5 this includes all four checksum-bearing corner markers and four smaller
 side references, whose matches do not increase the header count. Marker rectangles
@@ -166,9 +168,9 @@ checking frames; manual capture remains available during that framing period.
 The page places the image first, with its caption below it. The image toolbar has
 compact Browse, Paste, fullscreen, Capture and Photo actions. The speaker button
 sits on the same row as the main comparison slider. The same button and slider
-move into the fullscreen footer, then return on close. Speaker, Analysis,
-Fit, 100%, maximise and close share one action row, including at 320px width,
-with 44-pixel button targets. Icon buttons have accessible labels and tooltips;
+move into the fullscreen footer, then return on close. Speaker, Fit, 100%,
+maximise, close and Analysis share one action row, including at 320px width,
+with 44 × 48 pixel targets and at least eight pixels between controls. Icon buttons have accessible labels and tooltips;
 the speaker label tracks Play/Pause without removing its SVG. Audio is disabled
 and hidden when no audio is available. The footer occupies its own space below
 the image. Generated pixels appear immediately while source extraction prepares

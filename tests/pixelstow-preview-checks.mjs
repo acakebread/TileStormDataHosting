@@ -38,6 +38,7 @@ try {
     await page.getByRole('button', { name: 'Preview', exact: true }).click();
     assert(await page.evaluate(() => fullPreview.openNow && !fullPreview.clean));
     assert(await page.locator('#preview-audio').isDisabled());
+    assert(await page.getByRole('checkbox', { name: 'Analysis', exact: true }).isDisabled());
     await page.getByRole('button', { name: 'Close preview', exact: true }).click();
     if (!fixture) fixture = await page.evaluate(async () => {
       const rate = 8000, count = rate * 2, wav = new Uint8Array(44 + count * 2), view = new DataView(wav.buffer);
@@ -69,10 +70,22 @@ try {
     assert(Math.abs(mainAudio.y + mainAudio.height / 2 - mainSlider.y - mainSlider.height / 2) < 1);
     assert(mainAudio.x + mainAudio.width <= width);
     await page.getByRole('button', { name: 'Preview', exact: true }).click();
-    const controls = ['#preview-audio', '#preview-markers', '#preview-screen-fit', '#preview-screen-actual', '#preview-screen-hide', '#preview-screen-close'];
+    const controls = ['#preview-audio', '#preview-screen-fit', '#preview-screen-actual', '#preview-screen-hide', '#preview-screen-close', '#preview-markers'];
     const boxes = await Promise.all(controls.map(selector => page.locator(selector).boundingBox()));
-    assert(boxes.every(box => box && Math.abs(box.y - boxes[0].y) < 1 && box.x >= 0 && box.x + box.width <= width), JSON.stringify(boxes));
-    assert.equal((await page.locator('#preview-markers').textContent()).trim(), 'Analysis');
+    assert(boxes.every((box, index) => box && box.width >= 44 && box.height >= 48 && Math.abs(box.y - boxes[0].y) < 1 && box.x >= 0 && box.x + box.width <= width && (!index || box.x >= boxes[index - 1].x + boxes[index - 1].width + 7)), JSON.stringify(boxes));
+    assert.deepEqual(await page.locator('#show-transform').boundingBox(), boxes.at(-1), 'the entire Analysis button is the checkbox hit target');
+    const analysis = page.getByRole('checkbox', { name: 'Analysis', exact: true });
+    await analysis.uncheck();
+    const corner = boxes.at(-1);
+    if (mobile) await page.touchscreen.tap(corner.x + 4, corner.y + 4);
+    else await page.mouse.click(corner.x + 4, corner.y + 4);
+    assert(await analysis.isChecked(), 'touching a corner of the Analysis icon must toggle it');
+    await page.waitForFunction(() => !document.querySelector('#transform-outline').hidden);
+    assert(await page.locator('.analysis-icon').evaluate(node => getComputedStyle(node).backgroundColor !== 'rgba(7, 16, 24, 0.78)'));
+    await analysis.focus(); await page.keyboard.press('Space');
+    assert(!(await analysis.isChecked()));
+    assert(!(await page.locator('#transform-outline').isVisible()));
+    await page.locator('#preview-markers').screenshot({ path: path.join(snapshots, `analysis-off-${width}.png`) });
     assert(await page.locator('#preview-audio svg').isVisible());
     assert(!(await page.locator('.preview-audio-label').isVisible()));
     await page.getByRole('button', { name: 'Play audio', exact: true }).click();
