@@ -251,6 +251,30 @@ native pitches must remain known, or their choice must be identifiable from the
 pair. Existing four-pixel payload and five-pixel marker frequencies already give
 the current reader known references. This is appraisal, not another writer change.
 
+### Known-interval guide appraisal (15 October 2026)
+
+The intended fast path is a positive recognizer: weak guides at known native
+pixel intervals, potentially on perpendicular edge bands, promote promising
+frames and estimate marker-search scale. A missing guide retains ordinary
+recovery. Multiple related intervals/phases should be recognized together;
+the strongest raw frequency alone can belong to the source photograph. Band
+width as well as wavelength must survive the chosen reduction. Edge placement,
+visibility and optical reliability remain unvalidated.
+
+`node tools/pixelstow-coarse-guide-appraisal.mjs` checks two fixed pitches of
+96 and 64 native pixels and their known phase relationship, with a combined
+maximum signal of two grey levels and 8-bit input quantization. It recovers
+0.5x, 1x and 2x magnification after each of 4x, 8x and 12x box averaging (nine
+cases), despite a stronger unrelated source frequency. This is an ideal 1D
+sampling proof, not a camera detector or a codec/visibility test. Reports go
+to ignored `artifacts/research/coarse-guide/sampling-proof.json`. Production
+writing and scanning are unchanged.
+
+The earlier camera path resized to a maximum edge of 512, then the Fourier
+appraisal reduced again to 128. That can make a 4K capture approximately 32x
+smaller, rather than a controlled 4x, 8x or 12x. Any new detector must track
+the actual reduction and avoid this hidden second reduction.
+
 ### Historical full-image pilot
 
 The experimental V5 writer used a one-axis, three-tone pilot with wavelengths 128, 85⅓
