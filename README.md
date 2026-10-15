@@ -44,6 +44,9 @@ Change returns to the first entry. A blank password remains public.
 `node tests/pixelstow-password-checks.mjs` checks this flow, protected/public
 round trips and stable Encode positioning at mobile widths. It uses the same
 Playwright/Chrome environment overrides as the [camera checks](docs/CameraCapture.md).
+`node tests/pixelstow-preview-checks.mjs` checks the compact preview toolbar,
+shared speaker control, current-image Preview button and real touch long-press,
+tap, pinch and cancellation behaviour on mobile, plus desktop mouse/keyboard use.
 
 **Post to Facebook** shares the prepared encoded photo as a file only, with no
 title, text or URL in the native share payload. Choose Facebook in the share

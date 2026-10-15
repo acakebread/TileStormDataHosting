@@ -14,8 +14,9 @@
       this.comparison = document.querySelector("#comparison-control");
       this.comparisonPlaceholder = document.createComment("Comparison slider returns here");
       this.placeholder = document.createComment("Image preview returns here");
+      this.pointers = new Set();
       document.querySelector("#full-preview").addEventListener("click", () => this.open(false));
-      document.querySelector("#preview-encoded-image").addEventListener("click", () => this.open(true));
+      document.querySelector("#preview-encoded-image").addEventListener("click", () => this.open(false));
       document.querySelector("#preview-screen-close").addEventListener("click", () => this.close());
       document.querySelector("#preview-screen-fit").addEventListener("click", fit);
       document.querySelector("#preview-screen-actual").addEventListener("click", actualSize);
@@ -29,8 +30,10 @@
       // Pointer events work even when the touch viewer suppresses native clicks.
       // A two-finger gesture or a drag must never reveal presentation controls.
       viewport.addEventListener("pointerdown", (event) => {
-        if (!this.panel.open || event.button !== 0 || event.target.closest("button")) return;
-        if (this.tap) { this.tap = null; this.multitouch = true; return; }
+        if (!this.panel.open || event.button !== 0) return;
+        this.pointers.add(event.pointerId);
+        if (this.pointers.size > 1) { this.tap = null; this.multitouch = true; return; }
+        if (event.target.closest("button")) return;
         if (!this.multitouch) this.tap = { id: event.pointerId, x: event.clientX, y: event.clientY, at: Date.now() };
       }, true);
       viewport.addEventListener("pointermove", (event) => {
@@ -39,10 +42,16 @@
       viewport.addEventListener("pointerup", (event) => {
         const tap = this.tap;
         this.tap = null;
-        if (tap?.id === event.pointerId && !tap.moved && Date.now() - tap.at < 500 && (this.clean || this.toolbar.hidden)) this.controls(this.toolbar.hidden);
-        if (event.isPrimary) this.multitouch = false;
+        this.pointers.delete(event.pointerId);
+        if (!this.multitouch && tap?.id === event.pointerId && !tap.moved && Date.now() - tap.at < 450 && (this.clean || this.toolbar.hidden)) this.controls(this.toolbar.hidden);
+        if (!this.pointers.size) this.multitouch = false;
       }, true);
-      viewport.addEventListener("pointercancel", () => { this.tap = null; this.multitouch = false; }, true);
+      viewport.addEventListener("pointercancel", (event) => {
+        this.tap = null;
+        this.pointers.delete(event.pointerId);
+        if (!this.pointers.size) this.multitouch = false;
+      }, true);
+      root.addEventListener("blur", () => { this.tap = null; this.pointers.clear(); this.multitouch = false; });
       document.addEventListener("fullscreenchange", () => {
         if (document.fullscreenElement === this.panel) this.nativeFullscreen = true;
         else if (this.nativeFullscreen && this.panel.open) this.close();
@@ -51,8 +60,11 @@
     }
     get openNow() { return this.panel.open; }
     get clean() { return this.panel.open && this.panel.classList.contains("clean"); }
+    cancelTap() { this.tap = null; }
     controls(show) {
+      const focusInFooter = this.footer.contains(document.activeElement);
       this.toolbar.hidden = this.footer.hidden = !show;
+      if (!show && focusInFooter && this.panel.open) this.panel.focus({ preventScroll: true });
       if (this.panel.open) this.resize();
     }
     open(clean) {
@@ -62,7 +74,7 @@
       this.preview.before(this.placeholder);
       this.slot.append(this.preview);
       // Reuse the single audio player and comparison slider in the footer.
-      // Controls occupy their own rows below the image, preserving touch targets.
+      // Audio, analysis and view actions share a single row below the slider.
       this.audioButton.before(this.audioPlaceholder);
       this.actions.prepend(this.audioButton);
       this.comparison.before(this.comparisonPlaceholder);
@@ -89,6 +101,7 @@
     restore() {
       this.nativeFullscreen = false;
       this.tap = null; this.multitouch = false;
+      this.pointers.clear();
       this.placeholder.replaceWith(this.preview);
       this.audioPlaceholder.replaceWith(this.audioButton);
       this.comparisonPlaceholder.replaceWith(this.comparison);

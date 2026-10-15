@@ -205,8 +205,9 @@
       margin-top: 14px;
     }
 
-    .preview-toolbar { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
-    .preview-toolbar .preview-audio { margin-right: auto; }
+    .preview-bottom-row { display: flex; align-items: center; gap: 8px; }
+    .preview-bottom-row .comparison-control { flex: 1; min-width: 0; }
+    .preview-bottom-row .preview-audio { flex: 0 0 44px; width: 44px; padding: 0; }
     #preview-markers { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; margin: 0; color: var(--muted); font-size: 0.8rem; font-weight: 400; }
     .image-caption { margin: 8px 0; }
     .image-caption .loaded-image { margin: 0; font-size: 0.82rem; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -221,18 +222,22 @@
     .preview-panel[open] { display: grid; grid-template-rows: minmax(0, 1fr) auto; padding-top: env(safe-area-inset-top); }
     .preview-screen { position: relative; min-height: 0; }
     .preview-screen > .preview { position: relative; height: 100%; margin: 0; }
-    .preview-screen .viewport { height: 100%; border-radius: 0; background: #000; touch-action: none; overscroll-behavior: contain; }
-    .preview-screen .preview-toolbar,
+    .preview-screen .viewport { height: 100%; border-radius: 0; background: #000; touch-action: none; overscroll-behavior: contain; -webkit-touch-callout: none; }
+    .preview-screen .preview-bottom-row,
     .preview-screen .image-caption,
     .preview-screen #preview-note,
     .preview-screen #image-repetition { display: none !important; }
-    .preview-screen-footer { padding: 4px max(12px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); background: #081016; touch-action: manipulation; }
+    .preview-screen-footer { padding: 4px max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); background: #081016; touch-action: manipulation; }
     .preview-screen-footer .comparison-control { margin: 0 auto; max-width: 800px; }
-    .preview-screen-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; max-width: 800px; margin: 0 auto; }
+    .preview-screen-actions { display: contents; }
     .preview-screen-toolbar {
-      display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin: 4px auto 0;
+      display: flex; flex-wrap: nowrap; align-items: center; justify-content: center; gap: 2px; max-width: 800px; margin: 0 auto;
     }
-    .preview-screen-toolbar button { padding: 0 12px; font-size: 0.82rem; font-weight: 500; }
+    .preview-screen-toolbar button { flex: 0 0 44px; width: 44px; padding: 0; font-size: 0.82rem; font-weight: 500; }
+    .preview-screen-toolbar #preview-markers { white-space: nowrap; gap: 3px; font-size: .8rem; }
+    .preview-screen-toolbar #show-transform { margin: 0; width: 16px; height: 16px; }
+    #preview-audio svg { display: block; }
+    .preview-audio-label { display: none; }
     .preview-screen-toolbar #preview-screen-close { color: var(--tile-azure); font-weight: 700; }
     .preview-panel.clean #preview-source,
     .preview-panel.clean #transform-outline,
@@ -557,8 +562,6 @@
       .image-actions > #choose-image, .image-actions > #open-camera { font-weight: 700; }
       button, .button-link { font-size: 0.85rem; padding: 0 10px; }
       .preview { margin-top: 8px; }
-      .preview-toolbar { gap: 6px; margin: 6px 0; }
-      .preview-toolbar button { font-size: 0.85rem; }
       .image-label { margin-top: 0; }
       .payload-panel { padding: 12px; margin: 12px 0; }
       .image-caption { margin: 6px 0; }
@@ -654,17 +657,17 @@
             </div>
             <p class="hint preview-note" id="preview-note" hidden>(Scroll to zoom; right-drag to pan)</p>
           </div>
-          <div class="comparison-control" id="comparison-control" hidden>
-            <span>Encoded</span>
-            <input id="split" type="range" min="0" max="1000" value="500" aria-label="Comparison divider. Encoded image on the left, recovered source on the right.">
-            <span>Source</span>
+          <div class="preview-bottom-row" id="preview-bottom-row">
+            <div class="comparison-control" id="comparison-control" hidden>
+              <span>Encoded</span>
+              <input id="split" type="range" min="0" max="1000" value="500" aria-label="Comparison divider. Encoded image on the left, recovered source on the right.">
+              <span>Source</span>
+            </div>
+            <button class="preview-audio" id="preview-audio" type="button" aria-label="Play audio" title="Play audio" disabled hidden><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7m3-10a9 9 0 0 1 0 13"/></svg><span class="preview-audio-label">Play audio</span></button>
           </div>
           <div class="image-caption">
             <p class="loaded-image" id="loaded-image" hidden></p>
             <p class="hint" id="capacity">Your original stays unchanged.</p>
-          </div>
-          <div class="preview-toolbar">
-            <button class="preview-audio" id="preview-audio" type="button" hidden>Play audio</button>
           </div>
           <p class="hint" id="image-repetition" role="status" hidden></p>
         </div>
@@ -806,7 +809,7 @@
         <button id="share-image" type="button" hidden>Send via WhatsApp / Share</button>
         <button id="share-message" type="button" hidden>Opening link / WhatsApp message</button>
         <button id="post-facebook" type="button" hidden>Post to Facebook</button>
-        <button id="preview-encoded-image" type="button" hidden>Preview encoded image</button>
+        <button id="preview-encoded-image" type="button" disabled>Preview</button>
       </div>
       <p class="hint" id="share-help" hidden>Choose WhatsApp in the share menu. Include the opening link; send the PNG as a Document / original file if WhatsApp offers that option. Photo sharing can resize it and lose its contents.</p>
 
@@ -836,17 +839,17 @@
       </div>
     </section>
   </main>
-  <dialog class="preview-panel" id="preview-panel" aria-label="Full screen image preview. Tap the image to show controls; press Escape to close." tabindex="-1">
+  <dialog class="preview-panel" id="preview-panel" aria-label="Full screen image preview. Tap to show controls; hold one finger to drag the divider; pinch to zoom; press Escape to close." tabindex="-1">
     <div class="preview-screen" id="preview-screen"></div>
     <div class="preview-screen-footer" id="preview-screen-footer">
-      <div class="preview-screen-actions" id="preview-screen-actions">
-        <label id="preview-markers"><input id="show-transform" type="checkbox" checked> Show analysis</label>
-      </div>
       <div class="preview-screen-toolbar" id="preview-screen-toolbar">
+        <div class="preview-screen-actions" id="preview-screen-actions">
+          <label id="preview-markers"><input id="show-transform" type="checkbox" checked> Analysis</label>
+        </div>
         <button id="preview-screen-fit" type="button">Fit</button>
         <button id="preview-screen-actual" type="button">100%</button>
-        <button id="preview-screen-hide" type="button">Hide</button>
-        <button id="preview-screen-close" type="button">Close</button>
+        <button id="preview-screen-hide" type="button" aria-label="Hide controls" title="Hide controls"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" focusable="false"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg></button>
+        <button id="preview-screen-close" type="button" aria-label="Close preview" title="Close preview"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
       </div>
     </div>
   </dialog>
@@ -909,10 +912,10 @@
   <script src="./pixelstow-sizing.js?v=20261015-payload-size2"></script>
   <script src="./pixelstow-export.js?v=20261011-exports"></script>
   <script src="./pixelstow-voice.js?v=20261013-voice-clock2"></script>
-  <script src="./pixelstow-media.js?v=20261015-attachment-count1"></script>
+  <script src="./pixelstow-media.js?v=20261015-preview-icons1"></script>
   <script src="./pixelstow-sharing.js?v=20261014-compact-actions1"></script>
   <script src="./pixelstow-camera.js?v=20261015-camera-mode-warning1"></script>
-  <script src="./pixelstow-preview.js?v=20261014-mobile-layout1"></script>
+  <script src="./pixelstow-preview.js?v=20261015-preview-touch1"></script>
   <script>
     const fileInput = document.querySelector("#file");
     const chooseImageButton = document.querySelector("#choose-image");
@@ -1275,7 +1278,6 @@
       downloadLink.hidden = true;
       downloadLink.removeAttribute("href");
       saveEncodedJpegButton.hidden = true;
-      previewEncodedButton.hidden = true;
       sharing.setFile(null);
     }
 
@@ -1341,8 +1343,7 @@
       sharing.sync();
       camera?.sync();
       saveEncodedJpegButton.disabled = working;
-      previewEncodedButton.hidden = !encodedPng;
-      previewEncodedButton.disabled = working;
+      previewEncodedButton.disabled = !hasImage;
       downloadLink.setAttribute("aria-disabled", String(working));
       saveMessageButton.hidden = !hasMessage;
       saveSourceButton.hidden = !hasDecoded;
@@ -1393,6 +1394,13 @@
       sharing.setFile(encodedPng ? new File([encodedPng], downloadLink.download, { type: "image/png" }) : current.hasFingerprint ? current.file : null);
       current.carrierAbort?.abort();
       current.carrierPromise = null;
+      if (pixels !== current.pixels || size.width !== current.width || size.height !== current.height) {
+        // The current encoded buffer is ready even if source extraction is
+        // still running or fails. Never leave Preview showing the older source.
+        hideComparison();
+        paintCanvas(previewEncoded, pixels, size.width, size.height);
+        sizeViewport();
+      }
       setBusy(busy);
       startComparison();
     }
@@ -1892,7 +1900,17 @@
     split.addEventListener("input", () => setSplit(split.value));
     let splitPointer = null;
     let splitCapture = null;
+    let splitHold = null;
+    function cancelSplitHold(event) {
+      if (!splitHold || (event && event.pointerId !== splitHold.id)) return;
+      clearTimeout(splitHold.timer);
+      splitHold = null;
+    }
     function endSplit(event) {
+      // A long press transfers the touch's implicit canvas capture to the
+      // viewport. Losing that old capture must not end the new divider drag.
+      if (event?.type === "lostpointercapture" && splitCapture && event.target !== splitCapture) return;
+      cancelSplitHold(event);
       if (splitPointer === null || (event && event.pointerId !== splitPointer)) return;
       const id = splitPointer, capture = splitCapture;
       splitPointer = null;
@@ -1924,7 +1942,8 @@
 
     // Leave a single finger to native page scrolling (and button taps). Touch
     // events keep the two-finger view usable when pan-y cancels pointer events.
-    // Only the comparison handle captures a single touch pointer.
+    // The divider captures immediately. A full-screen hold can grab it from
+    // anywhere; ordinary page touches stay available for scrolling and pinch.
     viewport.addEventListener("touchstart", (event) => {
       if (!imagePixels().w) return;
       trackPreviewTouches(event);
@@ -1955,6 +1974,7 @@
     viewport.addEventListener("touchend", endPreviewTouch);
     viewport.addEventListener("touchcancel", endPreviewTouch);
     window.addEventListener("blur", clearPreviewTouches);
+    window.addEventListener("pagehide", clearPreviewTouches);
     // Also suppress Safari's native gesture events within this viewer only.
     ["gesturestart", "gesturechange"].forEach((name) => viewport.addEventListener(name, (event) => event.preventDefault(), { passive: false }));
 
@@ -1964,18 +1984,36 @@
       split.value = String(Math.round(1000 * Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width))));
       setSplit(split.value);
     }
+    function beginSplit(event, capture) {
+      cancelSplitHold();
+      splitPointer = event.pointerId;
+      splitCapture = capture;
+      splitCapture.setPointerCapture(event.pointerId);
+      dragSplit(event);
+    }
     viewport.addEventListener("pointerdown", (event) => {
       const onHandle = splitHandle.contains(event.target);
       const onDivider = splitLine.contains(event.target);
+      if (event.pointerType === "touch" && !event.isPrimary) { cancelSplitHold(); return; }
       if (event.button !== 0 || fullPreview.clean || compareUi.hidden || panning || splitPointer !== null || previewTouches.size > 1) return;
+      if (!onDivider && event.pointerType === "touch" && event.isPrimary && fullPreview.openNow) {
+        cancelSplitHold();
+        const hold = { id: event.pointerId, x: event.clientX, y: event.clientY };
+        splitHold = hold;
+        hold.timer = setTimeout(() => {
+          if (splitHold !== hold || previewTouches.size > 1 || !fullPreview.openNow || fullPreview.clean || compareUi.hidden) return cancelSplitHold();
+          splitHold = null;
+          fullPreview.cancelTap();
+          beginSplit({ pointerId: hold.id, clientX: hold.x, clientY: hold.y }, viewport);
+        }, 450);
+        return;
+      }
       if (!onDivider && (event.pointerType === "touch" || !compare.contains(event.target))) return;
       event.preventDefault();
-      splitPointer = event.pointerId;
-      splitCapture = onHandle ? splitHandle : onDivider ? splitLine : viewport;
-      splitCapture.setPointerCapture(event.pointerId);
-      dragSplit(event);
+      beginSplit(event, onHandle ? splitHandle : onDivider ? splitLine : viewport);
     });
     viewport.addEventListener("pointermove", (event) => {
+      if (splitHold?.id === event.pointerId && Math.hypot(event.clientX - splitHold.x, event.clientY - splitHold.y) > 8) cancelSplitHold();
       if (event.pointerId === splitPointer) dragSplit(event);
     });
     ["pointerup", "pointercancel", "lostpointercapture"].forEach((name) => viewport.addEventListener(name, endSplit));

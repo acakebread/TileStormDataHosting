@@ -337,7 +337,7 @@
       handle.hasPointerCapture = () => handleCaptured;
       handle.releasePointerCapture = () => { handleCaptured = false; };
       const comparisonRect = element("compare-ui").getBoundingClientRect();
-      const touch = (name, ratio) => handle.dispatchEvent(new app.PointerEvent(name, { bubbles: true, cancelable: true, pointerId: 42, pointerType: "touch", button: 0, clientX: comparisonRect.left + comparisonRect.width * ratio }));
+      const touch = (name, ratio) => handle.dispatchEvent(new app.PointerEvent(name, { bubbles: true, cancelable: true, pointerId: 42, pointerType: "touch", isPrimary: true, button: 0, clientX: comparisonRect.left + comparisonRect.width * ratio }));
       try {
         touch("pointerdown", 0.25); touch("pointermove", 0.75);
         check(element("split").value === "750" && element("preview-source").style.clipPath.includes("75%") && handleCaptured && !element("viewport").classList.contains("panning"), "Touch dragging captures the divider and moves both comparison controls without starting a pan");
@@ -349,7 +349,7 @@
       divider.setPointerCapture = () => { dividerCaptured = true; };
       divider.hasPointerCapture = () => dividerCaptured;
       divider.releasePointerCapture = () => { dividerCaptured = false; };
-      const lineTouch = (name, ratio) => divider.dispatchEvent(new app.PointerEvent(name, { bubbles: true, cancelable: true, pointerId: 43, pointerType: "touch", button: 0, clientX: comparisonRect.left + comparisonRect.width * ratio }));
+      const lineTouch = (name, ratio) => divider.dispatchEvent(new app.PointerEvent(name, { bubbles: true, cancelable: true, pointerId: 43, pointerType: "touch", isPrimary: true, button: 0, clientX: comparisonRect.left + comparisonRect.width * ratio }));
       try {
         lineTouch("pointerdown", .75); lineTouch("pointermove", .5);
         check(dividerCaptured && element("split").value === "500", "The full divider line starts the same continuous touch drag as its handle");

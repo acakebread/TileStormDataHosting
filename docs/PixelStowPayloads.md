@@ -138,14 +138,18 @@ its existing retained main player and gesture handling.
 
 **Full screen preview** beside the image uses the existing zoom, pan and comparison
 canvases in a viewport-filling dialog. Fit and 100% controls are available; closing
-restores the previous page view. **Preview encoded image** at the end of the export
-actions opens a clean presentation of the generated image, hiding the comparison
-divider, recovery overlay, audio button and toolbar. Tap to reveal controls or
-press Escape to close. Pinch/two-finger pan still work. Browsers with element
-fullscreen can also hide their chrome; iPhones use the viewport dialog fallback.
+restores the previous page view. **Preview** at the end of the export actions opens
+the same viewer for the current generated, imported, pasted or captured image.
+It is disabled only when no image is available. The maximise icon hides controls;
+a short tap reveals them again. With a comparison available, holding one finger
+still for 450 milliseconds grabs the divider from anywhere in the fullscreen
+viewport, even when its handle is offscreen. Movement before that delay cancels
+the hold; a second finger cancels it for pinch/two-finger pan. Releasing a held
+divider does not reveal controls. Immediate handle/line dragging and desktop
+mouse scrubbing remain available. Escape closes the viewer.
 Successful reads start with marker overlays hidden. Failed photographs show
 diagnostic markers; continuous captures start clean. Fullscreen preview has a
-small **Show analysis** checkbox below the image; it is absent from the main
+small **Analysis** checkbox below the image; it is absent from the main
 page. Native reads, including clipboard pastes and generated images, gather
 diagnostics at the known marker positions on request without a broad search.
 For V5 this includes all four checksum-bearing corner markers and four smaller
@@ -159,12 +163,16 @@ Choose image becomes Cancel search while automatic image recovery runs, leaving
 the loaded image ready for encoding after cancellation. Continuous camera
 scanning waits four seconds after the live video starts before buffering or
 checking frames; manual capture remains available during that framing period.
-The page places the image first, with caption, audio and fullscreen actions
-below it. Mobile uses two compact rows for choosing/scanning images and smaller
-secondary controls, while keeping 44-pixel touch targets. There is one image
-audio button. The same DOM node and comparison slider move into a fullscreen
-footer with compact Fit/100%/Hide/Close controls, then return on close. The
-footer occupies its own space below the image. Native attachment players retain their controls;
+The page places the image first, with its caption below it. The image toolbar has
+compact Browse, Paste, fullscreen, Capture and Photo actions. The speaker button
+sits on the same row as the main comparison slider. The same button and slider
+move into the fullscreen footer, then return on close. Speaker, Analysis,
+Fit, 100%, maximise and close share one action row, including at 320px width,
+with 44-pixel button targets. Icon buttons have accessible labels and tooltips;
+the speaker label tracks Play/Pause without removing its SVG. Audio is disabled
+and hidden when no audio is available. The footer occupies its own space below
+the image. Generated pixels appear immediately while source extraction prepares
+the comparison. Native attachment players retain their controls;
 there is no second decoded-message Play button. The audio element and tap handler
 are reused rather than recreated, preserving the existing Safari playback flow.
 

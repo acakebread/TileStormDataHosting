@@ -180,6 +180,7 @@
       });
       this.audioAction = document.querySelector("#audio-action");
       this.previewVoiceButton = document.querySelector("#preview-audio");
+      this.previewVoiceLabel = this.previewVoiceButton.querySelector(".preview-audio-label");
       this.voiceStatus = document.querySelector("#voice-status");
       this.voiceAudio = null;
       // Safari grants playback permission per media element. Retain the main
@@ -353,8 +354,9 @@
         this.voiceAudio = null;
         this.audioAction.hidden = true;
         this.previewVoiceButton.hidden = true;
+        this.previewVoiceButton.disabled = true;
         this.voiceStatus.textContent = "";
-        this.previewVoiceButton.textContent = "Play audio";
+        this.setPreviewVoiceLabel("Play audio");
       }
       container.querySelectorAll("audio").forEach((audio) => {
         this.audioVoices.get(audio)?.dispose();
@@ -452,7 +454,7 @@
               ? "This browser cannot play this audio format. Download the file to listen in another player."
               : "Playback was interrupted. Press Play to try again.";
             if (this.voiceAudio === voice) {
-              this.previewVoiceButton.textContent = "Play audio";
+              this.setPreviewVoiceLabel("Play audio");
               this.voiceStatus.textContent = hint.textContent;
             }
           });
@@ -462,7 +464,7 @@
               this.decoded.querySelectorAll("audio").forEach((other) => { if (other !== audio) other.pause(); });
               this.voiceAudio = voice;
               voice.playing = false;
-              this.previewVoiceButton.textContent = "Play audio";
+              this.setPreviewVoiceLabel("Play audio");
               this.voiceStatus.textContent = "Starting " + file.name + "…";
               hint.textContent = "";
             });
@@ -470,7 +472,7 @@
             listen("waiting", () => {
               voice.playing = false;
               if (this.voiceAudio !== voice) return;
-              this.previewVoiceButton.textContent = "Play audio";
+              this.setPreviewVoiceLabel("Play audio");
               this.voiceStatus.textContent = "Audio buffering. Tap Play to retry if it does not start.";
             });
             ["pause", "ended"].forEach((event) => listen(event, () => {
@@ -480,7 +482,7 @@
               voice.playing = false;
               voice.playAttempt++;
               if (this.voiceAudio !== voice) return;
-              this.previewVoiceButton.textContent = "Play audio";
+              this.setPreviewVoiceLabel("Play audio");
               this.voiceStatus.textContent = audio.ended ? "Message finished. Tap Play to hear it again." : "Message paused.";
             }));
           }
@@ -502,12 +504,18 @@
       this.sync();
     }
 
+    setPreviewVoiceLabel(text) {
+      this.previewVoiceLabel.textContent = text;
+      this.previewVoiceButton.setAttribute("aria-label", text);
+      this.previewVoiceButton.title = text;
+    }
+
     voiceStarted(voice) {
       const audio = voice.audio;
       if (this.voiceAudio !== voice || !this.decoded.contains(audio) || audio.paused || audio.ended || audio.currentSrc !== audio.src) return;
       voice.playing = true;
       voice.hint.textContent = "";
-      this.previewVoiceButton.textContent = "Pause audio";
+      this.setPreviewVoiceLabel("Pause audio");
       this.voiceStatus.textContent = "Playing " + voice.name;
     }
 
@@ -524,7 +532,7 @@
       this.voiceStatus.textContent = "Starting " + voice.name + "…";
       const failed = (error) => {
         if (this.voiceAudio !== voice || voice.playAttempt !== attempt || voice.playing) return;
-        this.previewVoiceButton.textContent = "Play audio";
+        this.setPreviewVoiceLabel("Play audio");
         const hint = voice.audio.error?.code === 3 || voice.audio.error?.code === 4 || error.name === "NotSupportedError"
           ? "This browser cannot play this audio format. Download the file to listen in another player."
           : error.name === "AbortError" ? "Playback was interrupted. Press Play to try again."
