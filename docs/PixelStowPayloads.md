@@ -170,23 +170,25 @@ are reused rather than recreated, preserving the existing Safari playback flow.
 
 With a source and payload selected, a **Photo-read prognosis** bar above the export actions
 runs green through amber to red, with a difficulty marker and textual label.
-The baseline uses redundancy and parity. It now also responds immediately to
-the quality/durability slider, using nominal strength, local texture gain and
-marker peaks with their hard ceilings. More durable settings move the marker
-towards green; low repetition and reduced parity retain a minimum risk. 0.8
-keeps the previous baseline. This is a qualitative estimate, not a calibrated
-camera success percentage. If settings change after export, it estimates the
-next encoding and asks the user to re-encode; the saved PNG remains unchanged.
-Dragging the prognosis at a fixed source size adjusts quality within its
-achievable range. Unavailable portions of the scale are shaded.
-The sizing risk curve interpolates strength-adjusted anchors at one, two and
-five full-parity copies. It reserves a distinct continuous interval for reduced
-parity, comparing capacity on the same 12-bit basis across the 12-to-9-bit coding
-transition. This avoids ranking weaker protection as safer just because its raw
-repeat count is larger. The final risky tick no longer skips all dimensions that
-previously shared the clipped 0.98 risk. Actual carrier coding and signal strength
-are unchanged. Reported repetition still uses the actual selected coding; reduced
-error correction is identified explicitly.
+It estimates camera sampling margin from the native carrier's longest edge and
+wavelet intensity. At the same framing, a larger native grid makes each wavelet
+smaller in the capture, so larger resolutions move towards red. A smooth bounded
+curve uses a 1,280-pixel reference edge; this is a heuristic, not a camera limit
+or a calibrated success percentage. Relative quality gain is evaluated at a fixed
+two-copy reference, including strength/texture/marker ceilings, so capacity changes
+cannot reverse the resolution direction. Actual codec boost policies are unchanged.
+The quality/durability slider only changes wavelet intensity. Its 0.8 setting
+still preserves the accepted encoding strength. It never resizes the carrier,
+including when scaling is enabled. More durable settings move prognosis towards
+green on the already chosen grid. If settings change after export, prognosis
+estimates the next encoding and asks the user to re-encode; the saved PNG remains
+unchanged. Without source scaling, dragging prognosis adjusts intensity within
+its achievable range. With scaling, it selects resolution while leaving intensity
+unchanged. Unavailable portions of the scale are shaded in both modes.
+Repetition and parity remain separate capacity warnings. Smaller carriers have
+coarser patterns but fewer repeated payload bits; a green sampling estimate does
+not remove the fragility of near-1x or reduced-parity payloads. Reported repetition
+still uses the actual coding and reduced error correction is identified explicitly.
 The slider has a 64-pixel-high touch area and a larger visible handle. Tapping
 anywhere across that area chooses a target immediately; dragging retains the
 gesture outside the bar while page scrolling remains available elsewhere.
@@ -203,12 +205,15 @@ Zoom/pan help is a small, muted, noninteractive overlay within the preview. It
 disappears after a zoom or pan and returns when a new image is loaded; comparison
 taps and ordinary page scrolling leave it alone.
 
-Optional **Scale source for payload** keeps the selected quality and changes
-carrier dimensions to reach the requested prognosis, using compressed payload
-bytes, error correction and reserved marker space. It selects the smallest
-size meeting the target, preserves the source aspect ratio and bounds output
-to 24 megapixels. If the requested margin exceeds that limit, the interface
-shows the closest available size. Sizing may enlarge a small source if needed.
+Optional **Scale source for payload** starts at the original dimensions, capped
+at 24 megapixels. It enlarges only if required to fit the compressed payload,
+including framing, password overhead, error correction and reserved marker space.
+The prognosis control can downscale towards green as far as those bytes allow;
+it cannot go below the minimum fitting grid or enlarge a source just to buy more
+repetition. Source aspect ratio is preserved. If the source must be enlarged to
+fit, that minimum fitting size is also the upper bound. A payload that cannot fit
+within 24 megapixels is rejected. Changing image quality leaves the chosen
+dimensions unchanged. Payload edits may increase the minimum required size.
 The sliders calculate dimensions without resampling. On Encode, a copy of the
 retained original is resized first, the same text and attachment bytes are
 embedded into that resized source, and the exported PNG is verified. Re-encoding
@@ -216,6 +221,11 @@ always starts from the original source rather than resizing a previous result.
 Source exports and the comparison preview use the generated carrier dimensions.
 Camera photos explicitly taken for encoding enable scaling automatically;
 opening a file or pasting an image restores the last manually selected setting.
+`node tests/pixelstow-sizing-checks.mjs` covers capacity bounds, size direction,
+native round trips and unchanged source pixels. `node tests/pixelstow-prognosis-checks.mjs`
+checks the real mobile controls, independent intensity/size changes, forced
+enlargement and verified encoding at the minimum selectable size. Its Playwright
+environment overrides match the camera checks.
 
 Capture focus, glare, source detail and distortion
 still affect recovery. Recovery status/signature, near-miss advice and overlays

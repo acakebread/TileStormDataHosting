@@ -28,8 +28,11 @@ See [payload format and rollout](docs/PixelStowPayloads.md). Run
 `node tests/pixelstow-checks.mjs` for codec checks and
 `node tests/pixelstow-v5-default-checks.mjs` for the default/opt-in recovery policy,
 and `node tests/pixelstow-sizing-checks.mjs` for optional source sizing and
-bounded prognosis targets,
-then serve this directory on localhost and open `tests/pixelstow-browser.html`
+bounded prognosis targets. `node tests/pixelstow-prognosis-checks.mjs` checks
+that quality controls intensity without resizing, while prognosis can downscale
+within the payload capacity limit (using the camera checks' Playwright setup).
+For the older combined browser suite,
+serve this directory on localhost and open `tests/pixelstow-browser.html`
 for the browser and real
 MediaRecorder checks; those use a synthetic tone and never access the microphone.
 The browser checks also cover separate encoding/unlocking passwords, the visible

@@ -906,7 +906,7 @@
   <script src="./pixelstow-transform.js?v=20261014-v5-default1"></script>
   <script src="./pixelstow-lattice.js?v=20261013-marker-follow2"></script>
   <script src="./pixelstow.js?v=20261015-attachment-count1"></script>
-  <script src="./pixelstow-sizing.js?v=20261015-prognosis-curve1"></script>
+  <script src="./pixelstow-sizing.js?v=20261015-payload-size2"></script>
   <script src="./pixelstow-export.js?v=20261011-exports"></script>
   <script src="./pixelstow-voice.js?v=20261013-voice-clock2"></script>
   <script src="./pixelstow-media.js?v=20261015-attachment-count1"></script>
@@ -980,7 +980,9 @@
     let repetitionGeneration = 0, repetitionTimer;
     let prognosisBudget = null, encodedPrognosis = null;
     let composerBytes = null;
-    let frameBudget = null, sourcePlan = null, autoTargetRisk = .2, prognosisBounds = { min: .04, max: .99 };
+    // Retain a geometric size choice across quality edits; only payload bounds
+    // may force a larger grid. A prognosis gesture explicitly changes this scale.
+    let frameBudget = null, sourcePlan = null, sourceScale = 1, prognosisBounds = { min: .04, max: .99 };
     let manualScaleSource = false;
     try { manualScaleSource = localStorage.getItem("pixelstow-scale-source") === "true"; } catch (_) { /* Session choices still work. */ }
     scaleSource.checked = manualScaleSource;
@@ -1206,6 +1208,7 @@
     }
 
     function showReadPrognosis(data) {
+      if (data && current) data = { ...resultDimensions(current), ...data };
       prognosisBudget = data;
       readPrognosis.hidden = !data || !Number.isFinite(data.repetitionRatio);
       payloadBudget.hidden = sourceSizePlan.hidden = Boolean(current?.hasFingerprint);
@@ -1214,7 +1217,9 @@
       const ratio = data.repetitionRatio, weakParity = data.parityBits === 1;
       const quality = Number(encodingQuality.value), version = Number(carrierSelect.value);
       const risk = PixelStowSizing.prognosis(data, quality, version);
-      prognosisBounds = scaleSource.checked && sourcePlan?.fits ? { min: sourcePlan.min, max: sourcePlan.max }
+      prognosisBounds = scaleSource.checked && sourcePlan?.fits ? {
+        min: PixelStowSizing.prognosis(sourcePlan.minimum, quality, version),
+        max: PixelStowSizing.prognosis(sourcePlan.maximum, quality, version) }
         : { min: PixelStowSizing.prognosis(data, 0, version), max: PixelStowSizing.prognosis(data, 1, version) };
       prognosisTarget.value = risk.toFixed(3);
       prognosisTarget.disabled = busy || prognosisBounds.max - prognosisBounds.min < .001;
@@ -1228,8 +1233,8 @@
       prognosisTitle.textContent = "Photo-read prognosis: " + level;
       prognosisPointer.style.left = (100 * risk).toFixed(1) + "%";
       prognosisDetail.textContent = ratio.toFixed(2) + "× redundancy. " + (weakParity ? "Reduced error correction. " : "") +
-        (data.fits === false ? "The contents do not fit this image. " : ratio < 2 ? "Tricky camera read; reduce the payload or enlarge the carrier. " : "") +
-        "Focus, glare and image detail also affect recovery." +
+        (data.fits === false ? "The contents do not fit this image. " : ratio < 2 ? "Little repeated data; a smaller payload leaves more protection. " : "") +
+        "Smaller carriers give the camera a coarser pattern; focus, glare and framing also matter." +
         (needsEncoding ? " Re-encode to apply these settings." : "");
       prognosisDetail.classList.toggle("repetition-warning", weakParity || ratio < 1.25 || data.fits === false);
     }
@@ -1244,15 +1249,16 @@
     }
     function refreshEncodingPlan() {
       if (!current || !frameBudget || current.hasFingerprint) return;
-      const version = Number(carrierSelect.value), quality = Number(encodingQuality.value);
+      const version = Number(carrierSelect.value);
       sourcePlan = scaleSource.checked ? PixelStowSizing.plan(current.width, current.height, frameBudget.framedBytes,
-        quality, autoTargetRisk, version) : null;
+        sourceScale, version) : null;
       const data = sourcePlan?.fits ? sourcePlan : PixelStow.repetitionForFrame(current.width, current.height, frameBudget.framedBytes, version) ||
         { ...frameBudget, fits: false, repetitionRatio: 0, parityBits: 1, carrierVersion: version };
       sourceSizePlan.textContent = scaleSource.checked ? sourcePlan.fits
         ? "Encode at " + sourcePlan.width + " × " + sourcePlan.height + " (" + Math.round(100 * sourcePlan.width / current.width) +
           "% of source width)." +
-          (sourcePlan.limited ? " The selected margin exceeds the size limit; this is the closest available size." : "")
+          (sourcePlan.forcedUpscale ? " Enlarged only as far as the payload needs." : " Move prognosis towards green to downscale within the payload limit.") +
+          (sourcePlan.limited ? " Size capped at the encoding limit." : "")
         : sourcePlan.reason : "Original size: " + current.width + " × " + current.height + ".";
       updatePayloadBudget();
       showReadPrognosis(data);
@@ -1782,6 +1788,7 @@
       composerBytes = null;
       previewHelpDismissed = false;
       frameBudget = sourcePlan = null;
+      sourceScale = 1;
       scaleSource.checked = origin === "camera" && captured?.sourceOnly ? true : manualScaleSource;
       transformOutline.hidden = true;
       transformOutline.width = 0;
@@ -2040,8 +2047,7 @@
     message.addEventListener("input", updateByteCounts);
     encodingQuality.addEventListener("input", () => {
       updateEncodingQualityValue();
-      if (scaleSource.checked) refreshEncodingPlan();
-      else showReadPrognosis(prognosisBudget || current?.repetition);
+      showReadPrognosis(prognosisBudget || current?.repetition);
     });
     scaleSource.addEventListener("change", () => {
       manualScaleSource = scaleSource.checked;
@@ -2051,8 +2057,12 @@
     prognosisTarget.addEventListener("input", () => {
       if (!prognosisBudget || busy) return;
       const target = Math.max(prognosisBounds.min, Math.min(prognosisBounds.max, Number(prognosisTarget.value)));
-      autoTargetRisk = target;
-      if (scaleSource.checked) refreshEncodingPlan();
+      if (scaleSource.checked && frameBudget) {
+        const selected = PixelStowSizing.planForTarget(current.width, current.height, frameBudget.framedBytes,
+          Number(encodingQuality.value), target, Number(carrierSelect.value));
+        if (selected.fits) sourceScale = selected.scale;
+        refreshEncodingPlan();
+      }
       else {
         const selected = PixelStowSizing.qualityForTarget(prognosisBudget, target, Number(carrierSelect.value));
         encodingQuality.value = selected.quality.toFixed(2);
@@ -2132,8 +2142,7 @@
         let input = { pixels: job.pixels, width: job.width, height: job.height };
         if (scaleSource.checked) {
           setStatus("Resizing the source before encoding…");
-          const prepared = await PixelStowSizing.prepare(input, content, Boolean(password.value), Number(encodingQuality.value),
-            autoTargetRisk, Number(carrierSelect.value));
+          const prepared = await PixelStowSizing.prepare(input, content, Boolean(password.value), sourceScale, Number(carrierSelect.value));
           input = prepared.image;
         }
         const encoded = await PixelStow.encodePayload(input.pixels, input.width, input.height, content, password.value,
