@@ -1,8 +1,6 @@
 // Camera acquisition belongs to the browser front end. The existing codec still
 // decides whether a frame contains a complete, checksum-valid payload.
 (function () {
-  const LIVE_MARKER_MS = 6000, TRACKED_MARKER_MS = 3000, LIVE_READ_MS = 8000;
-  const READ_GRACE_MS = 2500, FRESH_FRAME_MS = 12000;
   class PixelStowCamera {
     constructor({ importImage, report, working, changed, drawGuides, clearFeedback, prepareCapture }) {
       Object.assign(this, { importImage, report, working, changed, drawGuides, clearFeedback, prepareCapture });
@@ -530,7 +528,7 @@
       const session = { facing, purpose, deviceId, deviceLabel: this.devices.find(device => device.deviceId === deviceId)?.label || "",
         manualCapture: Boolean(options.manualCapture), ready: false,
         paused: purpose === "source" || Boolean(options.manualCapture || options.paused) || !this.backgroundAvailable, frames: 0, lastTime: -1,
-        rotation: 0, portrait: this.isPortrait(), history: [] };
+        rotation: 0, portrait: this.isPortrait(), history: [], appraised: 0 };
       this.session = session;
       this.clearFeedback?.();
       this.signature.textContent = "";
@@ -658,11 +656,10 @@
     }
 
     cancelSearches(session, clearHistory = false) {
-      clearTimeout(session.promotionTimer);
-      session.freshPromotions = 0;
       session.abort?.abort();
       session.readAbort?.abort();
       session.pending = null;
+      session.appraised = 0;
       if (clearHistory) {
         this.signature.textContent = "";
         session.history = []; session.best = null;
@@ -682,7 +679,7 @@
       // occupy every history slot and starve newer candidates of a payload read.
       const attempted = history.filter((frame) => frame.attempted).sort((a, b) => b.score - a.score)[0];
       const retained = history.filter((frame) => !frame.attempted || frame === attempted);
-      retained.sort((a, b) => Number(a.attempted || false) - Number(b.attempted || false) || this.framePriority(b) - this.framePriority(a) || b.frameNumber - a.frameNumber);
+      retained.sort((a, b) => Number(a.attempted || false) - Number(b.attempted || false) || b.score - a.score || b.frameNumber - a.frameNumber);
       let bytes = 0;
       session.history = retained.filter((frame, index) => {
         bytes += frame.image.pixels.byteLength;
@@ -690,41 +687,6 @@
       });
       session.best = session.history[0];
       this.showBestFrame(session);
-    }
-
-    framePriority(entry) {
-      // Age is a small tie-break/near-tie penalty, never enough to promote a
-      // poor marker fit over a substantially stronger one.
-      return entry.score - Math.min(6, Math.max(0, Date.now() - entry.capturedAt) * .00075);
-    }
-
-    nextReadFrame(session, capturedAfter = -Infinity) {
-      return session.history.filter(frame => !frame.attempted && frame.scan.candidates?.length &&
-        frame.capturedAt > capturedAfter &&
-        Date.now() - frame.capturedAt < FRESH_FRAME_MS)
-        .sort((a, b) => this.framePriority(b) - this.framePriority(a) || b.frameNumber - a.frameNumber)[0];
-    }
-
-    promoteFreshFrame(session) {
-      clearTimeout(session.promotionTimer);
-      if (this.session !== session || session.paused || session.adjusting || session.handingOff || !session.reading || session.readAbort?.signal.aborted) return;
-      const current = session.readEntry, fresh = current && this.nextReadFrame(session, current.capturedAt);
-      if (!current || !fresh) return;
-      const stronger = fresh.score > current.score + 1;
-      if (!stronger && fresh.score < current.score - 2) return;
-      // Repeated near-ties must not continually restart a productive decoder.
-      // After two freshness replacements, allow one full (still bounded) turn.
-      if (!stronger && session.freshPromotions >= 2) return;
-      const remaining = READ_GRACE_MS - (Date.now() - session.readStartedAt);
-      if (!stronger && remaining > 0) {
-        session.promotionTimer = setTimeout(() => this.promoteFreshFrame(session), remaining);
-        return;
-      }
-      current.state = stronger ? "replaced by a stronger capture" : "replaced by a fresher capture";
-      current.replacedForFreshness = !stronger;
-      session.freshPromotions = stronger ? 0 : (session.freshPromotions || 0) + 1;
-      session.readAbort.abort(); // Terminates the old payload worker immediately.
-      this.progress.textContent = "Switching to fresh capture · frame " + fresh.frameNumber + "…";
     }
 
     showBestFrame(session) {
@@ -789,7 +751,6 @@
       const { image, frameNumber } = entry;
       const controller = new AbortController();
       session.abort = controller;
-      let timer;
       try {
         const prefix = "Frame " + frameNumber + " · " + image.width + " × " + image.height + ": ";
         if (!session.reading) {
@@ -799,17 +760,8 @@
         }
         const previous = session.tracking?.scan;
         const header = previous?.markers?.find((m) => m.verification === "header");
-        const budget = header ? TRACKED_MARKER_MS : LIVE_MARKER_MS;
-        // Let the detector return its partial verified fit at the soft limit;
-        // terminate a worker that does not yield within the following 500ms.
-        timer = setTimeout(() => {
-          // A stalled tracked search must not trap later captures in the short
-          // tracking budget after the picture has moved out of that old pose.
-          if (this.session === session) session.tracking = null;
-          controller.abort();
-        }, budget + 500);
         const scan = await PixelStow.scanMarkers(image.pixels, image.width, image.height, {
-          mode: "perspective", camera: true, deadline: Date.now() + budget, signal: controller.signal,
+          mode: "perspective", camera: true, deadline: Date.now() + (header ? 12000 : 24000), signal: controller.signal,
           seed: previous?.width === image.width && previous?.height === image.height && header
             ? { ...header, initialMatrix: previous.geometry?.matrix } : undefined,
           onProgress: (text) => { if (this.session === session && !controller.signal.aborted && !session.reading) {
@@ -825,7 +777,13 @@
         session.tracking = scan.markers?.some((m) => m.verification === "header") ? { scan } : null;
         entry.score = scan.candidates?.[0]?.geometry.rank ?? (scan.markers?.length || 0);
         this.retainFrame(session, entry);
-        this.promoteFreshFrame(session);
+        session.appraised++;
+        if (scan.candidates?.length && session.readEntry && !session.readAbort?.signal.aborted && entry.score > session.readEntry.score) {
+          session.readEntry.state = "replaced by a stronger capture";
+          session.appraised = Math.max(2, session.appraised);
+          session.readAbort.abort(); // Terminates the payload worker, not just its UI updates.
+          this.progress.textContent = "A stronger marker fit was found. Switching to frame " + frameNumber + "…";
+        }
         this.signature.textContent = scan.highConfidence
           ? "All markers agree strongly. Reading the most promising capture."
           : scan.markers?.length ? "Recovery markers verified. Comparing captures before reading contents."
@@ -844,7 +802,6 @@
         this.readProgress.finish(this.progress.textContent, "failed");
         this.sync();
       } finally {
-        clearTimeout(timer);
         session.scanning = false;
         if (session.abort === controller) session.abort = null;
         if (this.session === session && !session.paused && !session.adjusting && !session.handingOff) this.scanMarkers(session);
@@ -853,30 +810,29 @@
 
     async readBestFrame(session) {
       if (this.session !== session || session.purpose === "source" || session.paused || session.adjusting || session.reading || session.handingOff) return;
-      const entry = this.nextReadFrame(session);
+      const entry = session.history.find((frame) => !frame.attempted && frame.scan.candidates?.length && Date.now() - frame.capturedAt < 45000);
       if (!entry) return; // Never spend a payload read on a marker-free capture.
+      if (session.appraised < 2 && !entry.scan.highConfidence) return;
+      session.appraised = 0;
       session.reading = true;
       session.readEntry = entry;
-      session.readStartedAt = Date.now();
       this.clearFeedback?.();
       this.signature.textContent = "";
       this.progress.textContent = "Reading best capture · frame " + entry.frameNumber + "…";
       this.readProgress.update(this.progress.textContent);
       entry.attempted = true;
       entry.state = undefined;
-      entry.replacedForFreshness = false;
       const controller = new AbortController();
       session.readAbort = controller;
       // A bad capture cannot monopolize the reader indefinitely. Fresh marker
       // scans continue independently; their best result is next in rank order.
-      const deadline = Date.now() + LIVE_READ_MS;
+      const deadline = Date.now() + 30000;
       const timer = setTimeout(() => controller.abort(), Math.max(0, deadline - Date.now()));
       this.showBestFrame(session);
       try {
         const { image, scan, frameNumber } = entry;
-        const inspection = await PixelStow.readMarkerCandidates(image.pixels, image.width, image.height,
-          { ...scan, candidates: scan.candidates.slice(0, 2) }, {
-          signal: controller.signal, deadline, resumeDiscovery: false,
+        const inspection = await PixelStow.readMarkerCandidates(image.pixels, image.width, image.height, scan, {
+          signal: controller.signal, deadline, resumeDiscovery: true,
           onProgress: (text) => { if (this.session === session && !controller.signal.aborted) {
             this.progress.textContent = "Reading best capture · frame " + frameNumber + ": " + text;
             this.readProgress.update(this.progress.textContent);
@@ -904,8 +860,6 @@
         }
       } finally {
         clearTimeout(timer);
-        clearTimeout(session.promotionTimer);
-        if (!entry.replacedForFreshness) session.freshPromotions = 0;
         session.reading = false;
         session.readEntry = null;
         if (session.readAbort === controller) session.readAbort = null;
