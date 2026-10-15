@@ -729,14 +729,6 @@
       <p class="hint" id="payload-budget" role="status">Choose a photo to see how much it can hold.</p>
       <p class="hint" id="payload-repetition" role="status" hidden></p>
 
-      <div id="encoding-passwords">
-        <label for="password">Password for encoding</label>
-        <input id="password" type="password" autocomplete="off" spellcheck="false">
-        <p class="hint">Leave this blank for a public message. A password locks the text and every attachment, including filenames. It is not stored in the image.</p>
-
-        <label for="confirm">Confirm password</label>
-        <input id="confirm" type="password" autocomplete="off" spellcheck="false">
-      </div>
       </section>
 
       <label for="carrier-version">Encoding format</label>
@@ -761,6 +753,15 @@
         <div class="prognosis-labels" aria-hidden="true"><span>More margin</span><span>Moderate</span><span>Tricky read</span></div>
         <p class="hint" id="prognosis-detail"></p>
       </section>
+
+      <div id="encoding-passwords">
+        <label for="password">Password for encoding</label>
+        <input id="password" type="password" autocomplete="off" spellcheck="false">
+        <p class="hint">Leave this blank for a public message. A password locks the text and every attachment, including filenames. It is not stored in the image.</p>
+
+        <label for="confirm">Confirm password</label>
+        <input id="confirm" type="password" autocomplete="off" spellcheck="false">
+      </div>
 
       <div class="actions">
         <button id="encode" type="button" disabled>Encode into a new image</button>
@@ -1265,7 +1266,7 @@
       encodeButton.hidden = composition.hidden;
       decodeButton.hidden = protectedTarget || Boolean(current && current.hasFingerprint);
       decodeButton.disabled = working || !hasImage;
-      encodingPasswords.hidden = Boolean(current && current.hasFingerprint) || needsUnlock;
+      encodingPasswords.hidden = composition.hidden;
       unlockForm.hidden = !needsUnlock;
       unlockPassword.disabled = working || !needsUnlock;
       unlockButton.disabled = working || !needsUnlock;
