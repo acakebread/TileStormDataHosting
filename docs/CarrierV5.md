@@ -200,9 +200,50 @@ explicitly selects carrier 3 to keep its measured baseline separate.
 local-noise estimator, whole-range mapping, header persistence through PNG,
 source reconstruction on black/white/saturated RGB, and source/alpha preservation.
 
-## Low-frequency scale pilot
+## Scale-pilot experiment: disabled
 
-New V5 images include a one-axis, three-tone pilot with wavelengths 128, 85⅓
+Normal V5 encoding no longer writes the full-image pilot or reserves its extra
+headroom. Ordinary file recovery does not run its FFT precheck. Continuous
+capture does not make a guide thumbnail or start a guide worker. Marker search
+and payload recovery retain their original budgets, candidates and fallbacks.
+Existing three- and sixteen-level pilot images remain readable, including source
+extraction with their recorded amplitudes.
+
+The full-image boost was visually intrusive, and the synthetic/file-based checks
+did not establish a live-camera benefit. It was abandoned after phone evaluation.
+A final research prototype restricted a three-level signal to a four-pixel edge
+band, using shorter wavelengths 32, 21⅓ and 12.8 pixels. In the controlled planar
+capture model it recovered scale in only 2/12 cases even with exact carrier
+corners supplied, and 0/12 with two-pixel boundary error. The standalone flat
+edge positive control passes. This prototype is not a production format.
+
+Reproduce it with `node tools/pixelstow-edge-pilot-appraisal.mjs`, optionally
+followed by paths to existing public V5 PNGs. With two local photos, four source
+textures and three capture models produced the above totals. Capture models add
+padding, scale, rotation, perspective, blur, exposure and noise; they are not
+optical evidence. Results go under ignored `artifacts/research/edge-pilot-appraisal`.
+
+The old full-image experiment below is retained for compatibility/research only.
+It requires `{ scalePilot: true }` when encoding and `{ scaleGuide: true }` for
+automatic guide appraisal during marker scanning. `scanScaleGuide` is an explicit
+diagnostic operation; the application does not invoke it in normal operation.
+The camera's `scaleGuideEnabled` is false on every new instance and has no UI
+toggle or saved preference. No new adaptive-frequency signal has been deployed.
+
+### Possible future direction: quiet frequency bands
+
+A source-adaptive signal could choose the quietest pair from a small predefined
+set of native frequencies, with a known frequency/phase relationship. Quiet
+bands offer contrast against the source spectrum without a large absolute RGB
+offset. The reader must recognise the chosen pair without having the original
+source FFT. A relative ratio alone is invariant under resizing, so the allowed
+native pitches must remain known, or their choice must be identifiable from the
+pair. Existing four-pixel payload and five-pixel marker frequencies already give
+the current reader known references. This is appraisal, not another writer change.
+
+### Historical full-image pilot
+
+The experimental V5 writer used a one-axis, three-tone pilot with wavelengths 128, 85⅓
 and 51.2 **native pixels**. A fixed native wavelength, rather than a fixed cycle
 count per image, lets the measured capture wavelength estimate capture pixels
 per native pixel. Checksum-valid marker headers remain authoritative for native

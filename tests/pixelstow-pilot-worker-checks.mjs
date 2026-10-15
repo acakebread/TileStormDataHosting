@@ -25,7 +25,10 @@ try{
     const w=800,h=600,pixels=new Uint8Array(w*h*4);
     for(let y=0;y<h;y++)for(let x=0;x<w;x++)pixels.set([Math.round(110+18*Math.sin(x/70)),128,140,255],(x+y*w)*4);
     const content={text:'Public worker pilot and exact-payload check.',attachments:[]};
-    const encoded=await PixelStow.encodePayload(pixels,w,h,content,'');
+    if(camera.scaleGuideEnabled!==false)throw Error('Normal camera capture must not enable pilot analysis.');
+    const normal=await PixelStow.encodePayload(pixels,w,h,content,'');
+    if(normal.scalePilot||normal.scalePilotAmplitude)throw Error('Normal writing must not add a pilot.');
+    const encoded=await PixelStow.encodePayload(pixels,w,h,content,'',{scalePilot:true});
     const photo=await PixelStowSizing.resize(encoded,1096,822),before=photo.pixels.slice();
     // Exercise exactly the frozen capture -> 512px guide raster -> worker route.
     camera.captureCanvas.width=photo.width;camera.captureCanvas.height=photo.height;

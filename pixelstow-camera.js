@@ -20,6 +20,8 @@
         (/Macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1));
       this.captureCanvas = document.createElement("canvas");
       this.guideCanvas = document.createElement("canvas");
+      // Research-only opt-in. No extra guide raster/worker in normal capture.
+      this.scaleGuideEnabled = false;
       this.openButton = document.querySelector("#open-camera");
       this.sourceButton = document.querySelector("#camera-source");
       this.input = document.querySelector("#camera-file");
@@ -794,7 +796,7 @@
         // Refresh this one slot even during a long payload read. The next marker
         // scan starts from the current framing, rather than an old queued frame.
         const entry = { image: this.captureFrame(), frameNumber: ++session.frames, capturedAt: Date.now() };
-        if (typeof PixelStow.scanScaleGuide === "function") {
+        if (this.scaleGuideEnabled && typeof PixelStow.scanScaleGuide === "function") {
           entry.guideImage = this.captureGuideImage(entry.image);
           session.guidePending = entry;
           this.checkScaleGuide(session);

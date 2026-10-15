@@ -15,7 +15,14 @@ for(let y=0;y<h;y++)for(let x=0;x<w;x++)source.set([Math.round(110+18*Math.sin(x
 let seed=313;
 const bytes=Uint8Array.from({length:900},()=>{seed^=seed<<13;seed^=seed>>>17;seed^=seed<<5;return seed&255;});
 const content={text:'Public V5 scale-pilot fixture.',attachments:[{name:'public.bin',type:'application/octet-stream',bytes}]};
-const original=source.slice(),encoded=await c.encodePayload(source,w,h,content,'');
+const original=source.slice(),normal=await c.encodePayload(source,w,h,content,'');
+assert.equal(normal.scalePilot,false);assert.equal(normal.scalePilotAmplitude,0);
+const explicitOff=await c.encodePayload(source,w,h,content,'',{scalePilot:false});
+assert.deepEqual(normal.pixels,explicitOff.pixels);
+assert(c.payloadsEqual(await c.decode(normal.pixels,w,h,'',{nativeOnly:true}),content));
+const encoded=await c.encodePayload(source,w,h,content,'',{scalePilot:true});
+assert(encoded.rangeHeadroom>normal.rangeHeadroom,'normal encoding must no longer reserve pilot headroom');
+console.log('PASS: normal V5 writing has no pilot or extra pilot headroom; original marker/payload decoding remains intact');
 assert(encoded.scalePilot);assert.equal(encoded.scalePilotAmplitude,16);assert.deepEqual(source,original);
 const png=await c.decodePng(new Uint8Array(await(await c.writePng(encoded.pixels,w,h)).arrayBuffer()));
 const decoded=await c.decode(png.pixels,w,h,'',{nativeOnly:true});
@@ -26,7 +33,7 @@ assert(painted.every((value,i)=>i%4===3?value===reference[i]:Math.abs(value-refe
 const extracted=await c.extractCarrier(png.pixels,w,h,encoded.strength);
 let error=0;for(let i=0;i<source.length;i++){if(i%4===3)assert.equal(extracted[i],source[i]);else error+=Math.abs(extracted[i]-source[i]);}
 assert(error/(w*h*3)<2,'source extraction removes the pilot before restoring RGB range');
-console.log('PASS: default V5 pilot flag/PNG/payload, bounded reversible signal, source/alpha preservation and source removal');
+console.log('PASS: explicit research pilot flag/PNG/payload, bounded reversible signal, source/alpha preservation and source removal');
 
 for(const scale of [.73,1,1.37,2.1]){
   const photo=await S.resize(encoded,Math.round(w*scale),Math.round(h*scale));
@@ -65,7 +72,7 @@ console.log('PASS: twelve broad-spectrum unencoded landscapes and a wrong phase-
 
 // The guide is measured again by the real reader, not supplied as an exact fit.
 const photo=await S.resize(encoded,1096,822),photoBefore=photo.pixels.slice();
-const guided=await c.scanMarkers(photo.pixels,photo.width,photo.height,{worker:false,deadline:Date.now()+24000});
+const guided=await c.scanMarkers(photo.pixels,photo.width,photo.height,{worker:false,scaleGuide:true,deadline:Date.now()+24000});
 assert(guided.scaleGuide?.detected);assert.equal(guided.markers.filter(m=>m.verification==='header').length,4);
 assert(guided.candidates.some(f=>Math.abs(f.localizationResolution.width/w-1)<.03));
 const inspected=await c.readMarkerCandidates(photo.pixels,photo.width,photo.height,guided,{worker:false,resumeDiscovery:true});
@@ -120,6 +127,14 @@ let weakError=0;for(let i=0;i<weakClean.length;i++){if(i%4===3)assert.equal(weak
 assert(weakError/(w*h*3)<2,'old three-level images must remove their original pilot, not the new sixteen-level wave');
 console.log('PASS: frozen three-level V5 pilot decodes and reconstructs with its original amplitude');
 
+const strong=await c.decodePng(new Uint8Array(await fs.readFile('tests/fixtures/public-v5-sixteen-level-pilot.png')));
+const strongDecoded=await c.decode(strong.pixels,strong.width,strong.height,'',{nativeOnly:true});
+assert.equal(strongDecoded.text,'Public V5 sixteen-level pilot compatibility.');assert.equal(strongDecoded.scalePilotAmplitude,16);
+const strongClean=await c.extractCarrier(strong.pixels,strong.width,strong.height,strongDecoded.strength);
+let strongError=0;for(let i=0;i<strongClean.length;i++)if(i%4!==3)strongError+=Math.abs(strongClean[i]-source[i]);else assert.equal(strongClean[i],source[i]);
+assert(strongError/(w*h*3)<2);
+console.log('PASS: frozen sixteen-level V5 pilot remains readable and reconstructs after the experiment was disabled');
+
 // Even a perfect isolated pilot is insufficient to establish encoding.
 const pilotOnly=I.applyScalePilot(reference,w);
 assert((await c.scanScaleGuide(pilotOnly,w,h,{worker:false}))?.detected);
@@ -133,6 +148,15 @@ const find=window.PixelStowTransform.find,calls=[];
 window.PixelStowTransform.find=async(p,width,height,options)=>{calls.push({width,height,options});return {markers:[],candidates:[],geometry:null};};
 try{
   const blank=new Uint8Array(w*h*4);
+  const originalGuide=window.PixelStowSpectrum.scaleGuide;let guideCalls=0;
+  window.PixelStowSpectrum.scaleGuide=async()=>{guideCalls++;return null;};
+  try{
+    await c.scanMarkers(blank,w,h,{worker:false,deadline:Date.now()+10000});
+    assert.equal(guideCalls,0,'ordinary image recovery must not run the abandoned FFT guide');
+    await c.scanMarkers(blank,w,h,{worker:false,scaleGuide:true,deadline:Date.now()+10000});
+    assert.equal(guideCalls,1,'the experimental guide must require explicit opt-in');
+  }finally{window.PixelStowSpectrum.scaleGuide=originalGuide;}
+  calls.length=0;
   const badHint={detected:true,scale:1.37,width:w,height:h,fx:1/(128*1.37),fy:0};
   const scan=await c.scanMarkers(blank,w,h,{worker:false,scaleGuide:badHint,deadline:Date.now()+10000});
   assert.deepEqual([calls[0].width,calls[0].height],[Math.round(w/1.37),Math.round(h/1.37)]);

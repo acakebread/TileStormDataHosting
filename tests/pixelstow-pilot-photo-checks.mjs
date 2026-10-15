@@ -1,3 +1,4 @@
+// Explicit research opt-in for the abandoned full-image pilot.
 // Optional local photo regression. Inputs/contents never enter versioned fixtures.
 // node tests/pixelstow-pilot-photo-checks.mjs <encoded-public-photo.png> [...]
 import assert from 'node:assert/strict';
@@ -16,7 +17,7 @@ for(let index=0;index<paths.length;index++){
   assert.equal(content.status,'success','This local comparison requires a public, readable image.');
   assert.equal(content.carrierVersion,5);
   const clean=await c.extractCarrier(input.pixels,input.width,input.height,content.strength);
-  const encoded=await c.encodePayload(clean,input.width,input.height,content,'');
+  const encoded=await c.encodePayload(clean,input.width,input.height,content,'',{scalePilot:true});
   const png=new Uint8Array(await(await c.writePng(encoded.pixels,encoded.width,encoded.height)).arrayBuffer());
   const reopened=await c.decodePng(png),decoded=await c.decode(reopened.pixels,reopened.width,reopened.height,'',{nativeOnly:true});
   assert.equal(decoded.scalePilotAmplitude,16);assert(c.payloadsEqual(decoded,content));
@@ -35,7 +36,7 @@ for(let index=0;index<paths.length;index++){
   // The reconstructed photo has no pilot and must not acquire pilot priority.
   assert.equal(await c.scanScaleGuide(clean,input.width,input.height,{worker:false}),null);
   const capture=await S.resize(reopened,Math.round(reopened.width*1.37),Math.round(reopened.height*1.37));
-  const scan=await c.scanMarkers(capture.pixels,capture.width,capture.height,{worker:false,deadline:Date.now()+24000});
+  const scan=await c.scanMarkers(capture.pixels,capture.width,capture.height,{worker:false,scaleGuide:true,deadline:Date.now()+24000});
   assert(scan.scaleGuide?.detected);assert.equal(scan.markers.filter(m=>m.verification==='header').length,4);
   const read=await c.readMarkerCandidates(capture.pixels,capture.width,capture.height,scan,{worker:false,resumeDiscovery:true,deadline:Date.now()+30000});
   assert(read.found&&!read.unreadable);assert(c.payloadsEqual(await c.decode(capture.pixels,capture.width,capture.height,''),content));

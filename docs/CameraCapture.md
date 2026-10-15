@@ -77,8 +77,7 @@ then rectify the full capture onto the encoded dimensions for wavelet reading.
 The captured raster and marker guides remain in original-resolution coordinates.
 The camera captures a fresh full-resolution raster every 900 ms into one pending
 slot. That slot is replaced while a marker worker is busy; there is no growing
-queue of stale camera frames. A pending frame with a scale pilot is retained
-ahead of unhinted arrivals. Initial marker acquisition has a 24-second budget;
+queue of stale camera frames. Initial marker acquisition has a 24-second budget;
 subsequent scans with a verified tracking header have 12 seconds. The tracking
 header is confirmed against the new pixels before reuse, and cleared after a
 scan without a verified header. Known patches below the detector's basis range
@@ -117,9 +116,17 @@ exports/sharing. Later decoding/unlocking still verifies the complete frame.
 Workers return inspection metadata/geometry only, not decrypted text, attachment
 bytes or passwords. Payload formats do not change.
 
-### V5 Fourier guide and frame priority
+### Abandoned V5 Fourier guide
 
-New V5 images carry a faint fixed-pitch scale pilot, described in
+The added pilot and its automatic precheck are disabled. Normal capture creates
+no guide thumbnail, starts no guide worker and does not wait for an FFT appraisal
+before marker discovery. Fresh frames go directly to the original latest-frame
+slot. The 24/12-second marker and 30-second payload allowances, complete ranked
+candidate list and remaining-scale fallback remain intact. Existing pilot images
+still decode and reconstruct; new V5 encodes do not contain the added signal.
+
+The following describes the retained research-only opt-in (`scaleGuideEnabled =
+true` on the camera instance), not normal application behaviour. The old fixed-pitch scale pilot is described in
 [CarrierV5.md](CarrierV5.md#low-frequency-scale-pilot). Each sampled capture has
 a separate guide copy with maximum edge 512, taken from the same frozen raster,
 including its rotation. A disposable worker runs the bounded low-frequency FFT

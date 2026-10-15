@@ -56,6 +56,7 @@ function workerQueue(){
 {
   const {camera,session}=setup();let id=0;const scans=[];
   camera.video={readyState:2,currentTime:1};camera.captureFrame=()=>image(++id);
+  codec.scanScaleGuide=()=>{throw Error('Normal capture must not run pilot analysis');};
   codec.scanMarkers=(pixels,width,height,options)=>new Promise(resolve=>scans.push({id:pixels[0],options,resolve}));
   camera.scan(session);camera.video.currentTime=2;camera.scan(session);camera.video.currentTime=3;camera.scan(session);
   assert.equal(scans.length,1);assert.equal(session.pending.image.pixels[0],3);
@@ -64,6 +65,7 @@ function workerQueue(){
   scans[0].resolve({markers:[],candidates:[]});await flush();
   assert.equal(scans[1].id,3,'latest-slot capture replacement still skips the intermediate frame');
   session.paused=true;camera.cancelSearches(session);scans[1].resolve({markers:[],candidates:[]});await flush();
+  delete codec.scanScaleGuide;
 }
 {
   const {camera,session}=setup();let options;
@@ -84,6 +86,7 @@ console.log('PASS: working search budgets, complete fit list/fallback, uninterru
 const pilot={detected:true,confirmed:false,scale:1,fx:1/128,fy:0,width:16,height:16};
 {
   const {camera,session}=setup(),guides=[],markers=[];let id=0,reads=0;
+  camera.scaleGuideEnabled=true;
   camera.video={readyState:2,currentTime:1};camera.captureFrame=()=>image(++id);camera.captureGuideImage=img=>img;
   codec.scanScaleGuide=(p,w,h,options)=>new Promise(resolve=>guides.push({id:p[0],options,resolve}));
   codec.scanMarkers=(p,w,h,options)=>new Promise((resolve,reject)=>{

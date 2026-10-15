@@ -1403,7 +1403,7 @@
 
   function searchInWorker(pixels, width, height, options, operation = "geometry") {
     return new Promise((resolve, reject) => {
-      const url = new URL("pixelstow-transform-worker.js?v=20261015-v5-pilot2", codecScriptUrl);
+      const url = new URL("pixelstow-transform-worker.js?v=20261015-no-pilot1", codecScriptUrl);
       const worker = new Worker(url);
       let finished = false;
       const abort = () => { if (finished) return; cleanup(); reject(new DOMException("Search cancelled.", "AbortError")); };
@@ -1863,7 +1863,7 @@
       options.scaleGuide.scale <= 8 && Number.isFinite(options.scaleGuide.fx) && Number.isFinite(options.scaleGuide.fy) &&
       Math.hypot(options.scaleGuide.fx, options.scaleGuide.fy) > 0 ? options.scaleGuide : null);
     if (!scaleGuide && !options.searchState && !options.seed && !options.singleResolution && options.mode !== "padding" &&
-      options.scaleGuide !== false && recoveryVersions(options).includes(CARRIER_V5)) {
+      options.scaleGuide === true && recoveryVersions(options).includes(CARRIER_V5)) {
       try { scaleGuide = await scanScaleGuide(pixels, width, height, { worker: false, signal: options.signal, deadline: options.deadline }); }
       catch (error) { if (error?.name === "AbortError") throw error; } // An optional guide must not break ordinary recovery.
     }
@@ -2582,7 +2582,7 @@
     }
   }
 
-  async function encodeAt(reference, width, height, payload, passwordProtected, strength, adaptive, bundle, carrierVersion, quality = DEFAULT_QUALITY, scalePilot = true) {
+  async function encodeAt(reference, width, height, payload, passwordProtected, strength, adaptive, bundle, carrierVersion, quality = DEFAULT_QUALITY, scalePilot = false) {
     strength = Math.max(1, Math.min(32, strength));
     const version = locatorProfile(carrierVersion) ? carrierVersion : CARRIER_V1;
     const map = locatorProfile(version) ? locatorBlockMap(width, height, Infinity, version) : null;
@@ -2665,7 +2665,7 @@
       const usedVersion = wantLocators && locatorFits(width, height, preferredCarrier) ? preferredCarrier : CARRIER_V1;
       const payload = locked ? await encryptEnvelope(plain, password, bundle) : plain.slice();
       try {
-        let encoded = await encodeAt(pixels, width, height, payload, locked, STRENGTHS[0], true, bundle, usedVersion, quality, options.scalePilot !== false);
+        let encoded = await encodeAt(pixels, width, height, payload, locked, STRENGTHS[0], true, bundle, usedVersion, quality, options.scalePilot === true);
         for (;;) {
           const recovery = await readNative(encoded.pixels, width, height, usedVersion, encoded.strength, undefined, encoded.map);
           if (recovery && !recovery.locatorOnly && recovery.carrierVersion === usedVersion &&
@@ -2698,7 +2698,7 @@
           if (next === 0) {
             throw new Error("The message could not be verified in this image. Try another picture or a shorter message.");
           }
-          encoded = await encodeAt(pixels, width, height, payload, locked, next, false, bundle, usedVersion, quality, options.scalePilot !== false);
+          encoded = await encodeAt(pixels, width, height, payload, locked, next, false, bundle, usedVersion, quality, options.scalePilot === true);
         }
       } finally { payload.fill(0); }
     } finally { plain.fill(0); }
