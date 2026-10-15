@@ -20,7 +20,7 @@ payload recovery; photo and print recovery remain research features.
 
 ## Four corner markers
 
-Four logical 50 x 50 pixel square patches use the same 52 x 52 reservations. IDs
+Four 50 x 50 pixel square patches contain 10 x 10 five-pixel symbols. IDs
 0, 2, 6 and 8 identify top-left, top-right, bottom-left and bottom-right.
 Orientation comes from these identifiers, rather than a rectangular shape.
 Four widely separated marker centres constrain a planar projective transform;
@@ -39,58 +39,6 @@ at coordinates `(i + 0.5) * 4 / 5 - 0.5`, clamped to 0..3. Each kernel's mean
 is removed. The outer row and column are multiplied by 0.7 each. Strength now
 adapts as described below. Reading samples at `1.25 * i + 0.125` with the existing four-pixel
 difference template.
-
-### Diagonal finder rulers (15 October 2026)
-
-New V5 writing adds a geometric frame to IDs 0 and 8, within their existing
-reservations. IDs 2 and 6 retain the five-pixel layout above. The framed corners
-have a two-pixel light outer ring, a four-pixel dark border and a 40 x 40 header
-grid at local offset (6, 6). The grid still has all 100 scattered cells and all
-eight checksum-protected header bytes, using four-pixel wavelets. The black
-frame's outer edges span local coordinates 1.5 to 49.5: a known 48-pixel ruler.
-The canonical patch coordinates and native origins do not change.
-
-`pixelstow-finder.js` scans a raster bounded to 960 pixels on its longest edge,
-finds dark connected components, fits quadrilaterals and refines their edges
-against the light ring. Quadrilaterals only propose positions and scale. The
-codec tests orientations and both diagonal IDs and requires a real header CRC.
-Two verified rulers propose an initial projective plane. The other two corners
-are then independently measured by the existing marker reader before payload
-recovery. A guided pyramid size targets readable symbol spacing; all original
-pyramid sizes remain available. No source-image dimensions are guessed from
-the capture bounds, and no full-image calibration signal is added.
-
-For the new layout, local/global fitting uses a small continuous wavelet-energy
-term as well as sign agreement. A local search compares neighbouring phase
-basins when error correction has accepted a weak alignment. This avoids treating
-a readable header as proof of subpixel geometry. Payload acceptance still needs
-the complete frame checksum and, for locked data, authentication.
-
-Only these two marker reservations change. Payload mapping, capacity, headroom,
-PCF1 envelopes, other corner markers, side references and alpha are unchanged.
-The ring/frame maps the compressed source locally to `round(value / 8 + offset)`,
-with offset 223 for light and 0 for dark, and extraction applies the inverse.
-This adds local quantization; the two finder frames are deliberately visible.
-The original input buffer/file is never modified.
-
-The reader recognizes both layouts without a new payload flag. Existing V5
-images retain ordinary marker/frequency fallback; research writing can select
-`finderMarkers: false` for comparison. Older reader builds retain native payload
-compatibility, but need this update to use the new photo finder layout.
-
-`node tests/pixelstow-finder-checks.mjs` checks arbitrary scales, tilt and a
-projective capture without supplying bounds/scale, including full checked payload
-recovery and a subpixel geometry regression. `tools/pixelstow-finder-appraisal.mjs`
-accepts local public PNG carriers and puts private re-encodes/reports in ignored
-artifacts. Controlled resampling is not an optical camera test.
-
-Local appraisal of two supplied textured examples found both ruler headers at
-0.73x, 1x and 1.37x scales. At 1.37x, header calibration took about 0.07–0.2 s,
-followed by 2.9–3.5 s for all four corner measurements; both complete payloads
-verified. Disabling only the ruler prepass on those same captures found zero
-markers within 20–24 s. These are local timing observations, not device guarantees.
-Coarse processing yields by elapsed work time; unconditional zero-delay timers
-had previously added roughly 16 ms per yield on this Windows host.
 
 The painter uses the same linearly compressed RGB reference as the payload.
 It preserves that reference's local colour average through rounding. Marker
@@ -283,6 +231,16 @@ The camera's `scaleGuideEnabled` is false on every new instance and has no UI
 toggle or saved preference. No new adaptive-frequency signal has been deployed.
 
 ### Possible future direction: quiet frequency bands
+
+Any future calibration guide must be visually imperceptible and measurable on
+a capture reduced by 8x or 12x, so discovery can start with a cheap coarse pass.
+Its measured wavelength, converted back to capture pixels, must yield the
+native-to-capture scale used to target the existing embedded markers. A reduced
+FFT input alone does not establish that the guide survives that reduction:
+test the complete faint-signal encoding, capture, filtered reduction and scale
+estimate before enabling another writer change. Visible black/white corner
+frames were explicitly rejected and have been removed from normal encoding
+and scanning. The original embedded markers and fallback remain in use.
 
 A source-adaptive signal could choose the quietest pair from a small predefined
 set of native frequencies, with a known frequency/phase relationship. Quiet

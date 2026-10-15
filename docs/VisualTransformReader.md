@@ -310,14 +310,6 @@ Four possible quarter-turn orientations are tried for each selected basis. These
 are heuristic proposals, not calibrated probabilities or format verification.
 The global magnitude spectrum cannot count or locate eight individual patches.
 
-New V5 images first offer two checksum-verified geometric rulers through
-`pixelstow-finder.js`; see [the diagonal finder layout](CarrierV5.md#diagonal-finder-rulers-15-october-2026).
-Their measured pitch proposes a working resolution and their local corners
-propose a plane before the ordinary marker search. Rulers do not replace the
-other corner measurements or the payload checksum. Missing rulers retain the
-frequency/outline and full pyramid fallback described here. The abandoned
-full-image Fourier pilot remains disabled in normal encoding and scanning.
-
 The frequency gate now requires both independent peaks to exceed the mean
 spectral power by a factor of 32, with sum/difference support. Local contrast
 alone previously accepted ordinary photographic texture at every pyramid level.

@@ -116,29 +116,12 @@ exports/sharing. Later decoding/unlocking still verifies the complete frame.
 Workers return inspection metadata/geometry only, not decrypted text, attachment
 bytes or passwords. Payload formats do not change.
 
-### V5 geometric finder lookahead
-
-A separate bounded worker checks the latest captured raster for the two diagonal
-finder rulers in new V5 images. It retains one active raster and one replaceable
-pending raster; it does not build a frame queue. The geometric pass is bounded
-to 600 ms and header refinement to one second overall, with a 1.5-second worker
-abort guard. Failure or an absent frame uses ordinary marker discovery.
-
-Only checksum-valid ruler headers can promote a frame. Raw squares cannot start
-a payload read. A fresh ruler-bearing frame may interrupt an older marker search
-that has not confirmed a header. Its calibration is reused by the main marker
-worker, ahead of stale tracking geometry. After stable corner geometry is found,
-it bypasses the two-appraisal wait and outranks captures without rulers. Equal
-fits do not repeatedly interrupt a payload read. The complete ranked candidate
-list, remaining-scale recovery and 24/12/30-second allowances stay intact.
-Pause, close, camera changes and rotation cancel lookahead and reject late results.
-
 ### Abandoned V5 Fourier guide
 
 The added pilot and its automatic precheck are disabled. Normal capture creates
 no guide thumbnail, starts no guide worker and does not wait for an FFT appraisal
-before marker discovery. Fresh frames use the geometric finder lookahead above,
-then the original latest-frame slot. The 24/12-second marker and 30-second payload allowances, complete ranked
+before marker discovery. Fresh frames go directly to the original latest-frame
+slot. The 24/12-second marker and 30-second payload allowances, complete ranked
 candidate list and remaining-scale fallback remain intact. Existing pilot images
 still decode and reconstruct; new V5 encodes do not contain the added signal.
 
