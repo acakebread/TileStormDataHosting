@@ -9,6 +9,7 @@
       this.devicesKnown = false;
       this.preferredDeviceId = null;
       this.failedDevices = new Set();
+      this.deviceHistory = new Map();
       this.switchOperation = null;
       // Desktop file inputs ignore capture and open a file picker. Keep the
       // native still-camera route for phones/tablets, including desktop-UA iPads.
@@ -95,6 +96,7 @@
       this.switchButton.addEventListener("click", () => this.switchCamera());
       navigator.mediaDevices?.addEventListener?.("devicechange", async () => {
         this.failedDevices.clear();
+        for (const [id, history] of this.deviceHistory) if (history.failed) this.deviceHistory.set(id, { ...history, failed: false });
         if (!this.active) return;
         await this.refreshDevices();
         this.sync();
@@ -168,18 +170,132 @@
       this.input.click(); // Remain in the user gesture for iPhone's picker.
     }
 
-    async refreshDevices() {
+    deviceRank(device) {
+      let capabilities = {};
+      try { capabilities = device.getCapabilities?.() || {}; } catch { /* Optional browser/driver information. */ }
+      const history = this.deviceHistory.get(device.deviceId) || {}, label = device.label || "";
+      const facing = capabilities.facingMode || (history.facing ? [history.facing] : []);
+      const virtual = /virtual|\bobs\b|manycam|snap camera|xsplit|camtwist|loopback/i.test(label);
+      const unusual = /\b(?:dual(?:[\s_-]*wide)?|triple|ultra[\s_-]*wide|telephoto)\b/i.test(label);
+      const rear = facing.includes("environment") || /\b(back|rear|environment)\b/i.test(label);
+      const front = facing.includes("user") || /\b(front|facetime|selfie)\b/i.test(label);
+      const category = virtual ? 4 : unusual ? 3 : this.nativePhotoCapture && rear ? 0 : this.nativePhotoCapture && front ? 2 : 1;
+      // Reported maximum dimensions are a ranking hint, not a format request or
+      // a claim of optical quality. Unknown cameras use a neutral HD estimate.
+      const pixels = Math.min(32000000, (capabilities.width?.max || history.width || 1280) *
+        (capabilities.height?.max || history.height || 720));
+      const autofocus = Array.isArray(capabilities.focusMode) && capabilities.focusMode.some(mode => ["continuous", "single-shot"].includes(mode)) ? 1 : 0;
+      return [history.failed ? 1 : 0, category, -pixels, -autofocus];
+    }
+
+    compareDevices(a, b) {
+      const left = this.deviceRank(a), right = this.deviceRank(b);
+      for (let i = 0; i < left.length; i++) if (left[i] !== right[i]) return left[i] - right[i];
+      return 0; // Retain browser order when available evidence is equal.
+    }
+
+    async refreshDevices(rank = false) {
       if (!navigator.mediaDevices?.enumerateDevices) return;
       try {
         const devices = await navigator.mediaDevices.enumerateDevices();
+        const previous = new Map(this.devices.map((device, index) => [device.deviceId, index]));
         const ids = new Set();
         this.devices = devices.filter(device => {
           if (device.kind !== "videoinput" || !device.deviceId || ids.has(device.deviceId)) return false;
           ids.add(device.deviceId);
           return true;
         });
+        this.devices.sort((a, b) => rank ? this.compareDevices(a, b)
+          : (previous.get(a.deviceId) ?? Infinity) - (previous.get(b.deviceId) ?? Infinity) || this.compareDevices(a, b));
         this.devicesKnown = true;
       } catch { /* A permitted video stream remains usable without enumeration. */ }
+    }
+
+    noteDeviceFailure(deviceId, error) {
+      if (!deviceId || ["NotAllowedError", "SecurityError"].includes(error?.name)) return;
+      this.failedDevices.add(deviceId);
+      this.deviceHistory.set(deviceId, { ...this.deviceHistory.get(deviceId), failed: true });
+    }
+
+    stopStream(session) {
+      const stream = session.stream;
+      session.stream = null;
+      if (this.video.srcObject === stream) { this.video.pause(); this.video.srcObject = null; }
+      stream?.getTracks().forEach(track => track.stop());
+    }
+
+    async startDevice(session, facing, deviceId) {
+      this.stopStream(session);
+      session.deviceId = deviceId;
+      session.deviceLabel = this.devices.find(device => device.deviceId === deviceId)?.label || "";
+      const stream = await this.acquireStream(session, facing, deviceId);
+      if (this.session !== session) { stream.getTracks().forEach(track => track.stop()); throw new DOMException("Camera closed.", "AbortError"); }
+      session.stream = stream;
+      const track = stream.getVideoTracks()[0], settings = track.getSettings();
+      session.facing = settings.facingMode || facing;
+      session.deviceId = settings.deviceId || deviceId;
+      session.deviceLabel = track.label;
+      await this.refreshDevices();
+      if (this.session !== session) throw new DOMException("Camera closed.", "AbortError");
+      if (!session.deviceId) session.deviceId = this.devices.find(device => device.label === track.label)?.deviceId || null;
+      track.addEventListener("ended", () => {
+        if (this.session !== session || session.stream !== stream || session.handingOff) return;
+        this.close();
+        this.report("Camera disconnected. Tap Capture to try again, or Browse to load a saved photo.", true);
+      });
+      this.video.muted = true;
+      this.video.playsInline = true;
+      this.video.srcObject = stream;
+      await this.video.play();
+      if (this.session !== session) throw new DOMException("Camera closed.", "AbortError");
+      if (session.deviceId) this.deviceHistory.set(session.deviceId, { failed: false, facing: settings.facingMode,
+        width: this.video.videoWidth || settings.width, height: this.video.videoHeight || settings.height });
+    }
+
+    async startBestDevice(session, facing) {
+      await this.refreshDevices(true);
+      if (this.session !== session) throw new DOMException("Camera closed.", "AbortError");
+      let choices = this.devices.some(device => device.label) ? this.devices.slice() : [{ deviceId: null }];
+      let bootstrap = choices[0]?.deviceId === null, reconsider = true, lastError;
+      const skipped = [];
+      for (let index = 0; index < choices.length; index++) {
+        const device = choices[index];
+        try {
+          await this.startDevice(session, facing, device.deviceId);
+          if (reconsider) {
+            // Opening the first stream can expose more IDs, labels and optional
+            // capabilities. Re-rank once before enabling capture controls.
+            bootstrap = false; reconsider = false;
+            await this.refreshDevices(true);
+            if (this.session !== session) throw new DOMException("Camera closed.", "AbortError");
+            const eligible = this.devices.filter(candidate => !this.failedDevices.has(candidate.deviceId));
+            if (eligible[0] && eligible[0].deviceId !== session.deviceId) {
+              const restore = this.devices.find(candidate => candidate.deviceId === session.deviceId) ||
+                { deviceId: session.deviceId, label: session.deviceLabel };
+              choices = eligible.filter(candidate => candidate.deviceId !== session.deviceId);
+              choices.push(restore);
+              index = -1;
+              continue;
+            }
+          }
+          session.skippedDevices = skipped;
+          return;
+        } catch (error) {
+          if (this.session !== session || ["NotAllowedError", "SecurityError"].includes(error?.name)) throw error;
+          lastError = error;
+          this.noteDeviceFailure(session.deviceId, error);
+          this.stopStream(session);
+          skipped.push(device.label || session.deviceLabel || "camera");
+          if (bootstrap) {
+            bootstrap = false;
+            await this.refreshDevices(true);
+            if (this.session !== session) throw error;
+            choices = this.devices.slice(); index = -1;
+          }
+          this.progress.textContent = "Trying the next available camera…";
+        }
+      }
+      throw lastError || new DOMException("No camera is available.", "NotFoundError");
     }
 
     async switchCamera() {
@@ -383,7 +499,7 @@
         this.report("Live camera needs a supported browser on HTTPS or localhost. Use Browse to load a saved photo.", true);
         return;
       }
-      let deviceId = options.deviceId === undefined ? this.preferredDeviceId : options.deviceId;
+      const deviceId = options.deviceId ?? null;
       const session = { facing, purpose, deviceId, deviceLabel: this.devices.find(device => device.deviceId === deviceId)?.label || "",
         manualCapture: Boolean(options.manualCapture), ready: false,
         paused: purpose === "source" || Boolean(options.manualCapture || options.paused) || !this.backgroundAvailable, frames: 0, lastTime: -1,
@@ -401,37 +517,8 @@
         document.body.classList.add("camera-modal-open");
         // Ideals allow a lower-resolution webcam to work too. Never request the
         // microphone, crop to the CSS preview, or rescale captured video pixels.
-        let stream;
-        try {
-          stream = await this.acquireStream(session, facing, deviceId);
-        } catch (error) {
-          // A remembered camera may have been unplugged since the last session.
-          // An explicit switch must fail rather than silently reopen the old one.
-          const missingDevice = error?.name === "NotFoundError" ||
-            (error?.name === "OverconstrainedError" && error.constraint === "deviceId");
-          if (this.session !== session || !deviceId || options.deviceId !== undefined || !missingDevice) throw error;
-          this.preferredDeviceId = null;
-          deviceId = session.deviceId = null;
-          stream = await this.acquireStream(session, facing, null);
-        }
-        if (this.session !== session) { stream.getTracks().forEach((track) => track.stop()); return { cancelled: true }; }
-        session.stream = stream;
-        const track = stream.getVideoTracks()[0];
-        session.facing = track.getSettings().facingMode || facing;
-        session.deviceId = track.getSettings().deviceId || deviceId;
-        session.deviceLabel = track.label;
-        await this.refreshDevices();
-        if (this.session !== session) return { cancelled: true };
-        if (!session.deviceId) session.deviceId = this.devices.find(device => device.label === track.label)?.deviceId || null;
-        track.addEventListener("ended", () => {
-          if (this.session !== session || session.handingOff) return;
-          this.close();
-          this.report("Camera disconnected. Tap Capture to try again, or Browse to load a saved photo.", true);
-        });
-        this.video.muted = true;
-        this.video.playsInline = true;
-        this.video.srcObject = stream;
-        await this.video.play();
+        if (options.deviceId === undefined) await this.startBestDevice(session, facing);
+        else await this.startDevice(session, facing, deviceId);
         if (this.session !== session) return { cancelled: true };
         session.ready = true;
         // Only a live, playable camera becomes the remembered selection.
@@ -449,11 +536,13 @@
           : "Preview ready. Tap Capture and read. Automatic background scanning needs HTTPS or localhost.";
         if (session.captureProfile !== "preferred") this.progress.textContent += " Compatibility mode: " +
           this.video.videoWidth + " × " + this.video.videoHeight + " actual pixels.";
+        if (session.skippedDevices?.length) this.progress.textContent += " Skipped unavailable cameras: " + session.skippedDevices.join(", ") + ".";
         this.refreshOrientation(session);
         this.schedule(session, 900);
         return { ready: true };
       } catch (error) {
         if (this.session !== session) return { cancelled: true };
+        this.noteDeviceFailure(session.deviceId, error);
         this.close(Boolean(options.switchOperation));
         const closePreviews = /Windows/i.test(navigator.userAgent)
           ? "Close OBS, webcam-test tabs and the Windows Settings camera preview, then retry."

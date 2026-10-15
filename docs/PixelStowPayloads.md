@@ -176,6 +176,24 @@ Choose image becomes Cancel search while automatic image recovery runs, leaving
 the loaded image ready for encoding after cancellation. Continuous camera
 scanning waits four seconds after the live video starts before buffering or
 checking frames; manual capture remains available during that framing period.
+Each fresh Capture or Photo enumerates and ranks available cameras rather than
+retaining the previous selection. Physical cameras rank ahead of virtual feeds;
+on phones, a standard rear lens ranks ahead of the front camera and unusual
+Dual Wide/Triple/Ultra Wide/telephoto modes. Within a group, reported resolution
+and autofocus capabilities provide hints, with observed capture dimensions as a
+fallback. Recent startup failures lower a device's rank until it works again or
+the camera list changes. Ranking is an estimate of suitability, not measured
+optical decoding quality. Per-device capability inspection is optional.
+If initial permission hides cameras, the first stream exposes the list and is
+replaced when a better-ranked device appears. All discarded streams are stopped.
+Only the selected camera and necessary fallbacks are opened; enumeration does
+not start every camera. Once ready, Switch camera cycles through the fixed ranked
+order, wraps around and skips failed devices. A new Capture ranks again.
+`node tests/pixelstow-camera-ranking-checks.mjs` covers ordering, permission-hidden
+and partially exposed lists, fallback, cancellation and standard rear-lens choice
+using synthetic camera streams. Browser visibility and capability limits are
+documented by [enumerateDevices](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/enumerateDevices)
+and [InputDeviceInfo.getCapabilities](https://developer.mozilla.org/en-US/docs/Web/API/InputDeviceInfo/getCapabilities).
 The page places the image first, with its caption below it. The image toolbar has
 compact Browse, Paste, fullscreen, Capture and Photo actions. The speaker button
 sits on the same row as the main comparison slider. The same button and slider

@@ -128,7 +128,7 @@ try {
   assert((await page.locator('#camera-help').textContent()).includes(second.label));
   await page.locator('#close-camera').click();
   await page.locator('#open-camera').click(); await ready();
-  assert.equal(await page.evaluate(() => camera.session.deviceId), second.device);
+  assert.equal(await page.evaluate(() => camera.session.deviceId), first.device, 'a fresh Capture ranks cameras instead of retaining the last selection');
   await page.locator('#camera-view').click();
   await page.waitForFunction(() => !camera.active && current && !busy);
   const photo = await page.evaluate(async () => {
@@ -140,9 +140,10 @@ try {
   assert(photo.sameBuffer && photo.bytesEqual && photo.width > 0 && photo.height > 0);
   assert.equal(await page.evaluate(() => importedCaptures.length), 1, 'One preview tap imports only one frame');
   assert.equal(filePickers, 0);
-  console.log('PASS: Capture offers scanning and a manual shutter; exact device switching changes cameras, stops old tracks and remembers the selection; captured PNG preserves the video raster');
+  console.log('PASS: fresh Capture selects the ranked camera rather than the last selection; exact device cycling stops old tracks and captured PNG preserves the video raster');
 
   await page.locator('#camera-source').click(); await ready();
+  await page.locator('#switch-camera').click(); await ready();
   await page.locator('#switch-camera').click(); await ready();
   assert.equal(await page.evaluate(() => camera.session.purpose), 'source');
   assert(await page.evaluate(() => camera.failedDevices.has(unavailableDeviceId) && camera.session.deviceId === firstTracks[0].getSettings().deviceId));
@@ -159,17 +160,17 @@ try {
   assert.equal(await page.evaluate(() => markerCalls), 0);
   console.log('PASS: A → B → inactive OBS → A continues automatically; later switches skip the failed camera and preserve source mode, last working selection and source sizing');
 
-  // A temporarily missing remembered device falls back on the next ordinary open.
+  // A temporarily missing top-ranked device falls back on the next ranked ID.
   await page.evaluate(() => {
     const acquire = navigator.mediaDevices.getUserMedia;
     let fail = true;
     navigator.mediaDevices.getUserMedia = constraints => {
-      if (fail && constraints.video.deviceId) { fail = false; cameraRequests.push(constraints); throw new DOMException('Test missing camera', 'NotFoundError'); }
+      if (fail && constraints.video.deviceId) { fail = false; window.missingStartupDevice = constraints.video.deviceId.exact; cameraRequests.push(constraints); throw new DOMException('Test missing camera', 'NotFoundError'); }
       return acquire(constraints);
     };
   });
   await page.locator('#open-camera').click(); await ready();
-  assert(await page.evaluate(() => !cameraRequests.at(-1).video.deviceId));
+  assert(await page.evaluate(() => cameraRequests.at(-1).video.deviceId.exact !== missingStartupDevice && camera.failedDevices.has(missingStartupDevice)));
   // Exhausting every candidate, including the previous camera, stops once.
   await page.evaluate(() => {
     navigator.mediaDevices.getUserMedia = async constraints => {
@@ -179,7 +180,7 @@ try {
   await page.locator('#switch-camera').click();
   await page.waitForFunction(() => !camera.active && document.querySelector('#status').textContent.includes('selected camera'));
   assert.equal(filePickers, 0);
-  console.log('PASS: unplugged remembered camera permits a fresh default; exhausting remaining cameras reports a bounded failure');
+  console.log('PASS: unavailable top-ranked camera falls through to the next ranked device; exhausting remaining cameras reports a bounded failure');
 
   const compatibility = await context.newPage(); compatibility.on('pageerror', error => errors.push(error.message));
   await compatibility.goto(url);
