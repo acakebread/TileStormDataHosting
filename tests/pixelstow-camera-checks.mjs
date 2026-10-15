@@ -48,7 +48,7 @@ try {
     camera.importImage = (file, origin, captured) => { importedCaptures.push({ file, origin, captured }); return importImage(file, origin, captured); };
   });
   const ready = () => page.waitForFunction(() => camera.session?.ready && !document.querySelector('#capture-frame').disabled);
-  assert.deepEqual(await page.locator('.image-actions > button').allTextContents().then(labels => labels.map(text => text.trim())), ['Browse', 'Paste', '', 'Capture', 'Photo']);
+  assert.deepEqual(await page.locator('.image-actions > button').allTextContents().then(labels => labels.map(text => text.trim())), ['Browse', 'Paste', 'Decode', 'Create']);
   assert(await page.locator('#full-preview').isDisabled());
   await page.evaluate(() => {
     window.clipboardReads = 0;

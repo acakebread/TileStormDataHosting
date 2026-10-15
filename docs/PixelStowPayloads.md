@@ -176,7 +176,7 @@ Choose image becomes Cancel search while automatic image recovery runs, leaving
 the loaded image ready for encoding after cancellation. Continuous camera
 scanning waits four seconds after the live video starts before buffering or
 checking frames; manual capture remains available during that framing period.
-The first Capture or Photo discovers and ranks cameras, caching that information
+The first camera Decode or Create discovers and ranks cameras, caching that information
 for the page session. Reopening or cycling uses the cached list and opens the
 best eligible camera directly, independently of the last manual selection.
 Physical cameras rank ahead of virtual feeds;
@@ -203,7 +203,9 @@ using synthetic camera streams. Browser visibility and capability limits are
 documented by [enumerateDevices](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/enumerateDevices)
 and [InputDeviceInfo.getCapabilities](https://developer.mozilla.org/en-US/docs/Web/API/InputDeviceInfo/getCapabilities).
 The page places the image first, with its caption below it. The image toolbar has
-compact Browse, Paste, fullscreen, Capture and Photo actions. The speaker button
+compact Browse, Paste, Decode and Create actions, with fullscreen at the top right
+of the image toolbar. Browse and Paste can open either encoded images or raw
+sources; Decode opens the camera reader, while Create takes a source photo. The speaker button
 sits to the left of the main comparison slider on the same row. The same button and slider
 move into the fullscreen footer, then return on close. Speaker, Fit, 100%,
 maximise, Analysis and close share one action row, including at 320px width,

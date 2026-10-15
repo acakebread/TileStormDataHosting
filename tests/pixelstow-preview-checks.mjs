@@ -28,6 +28,14 @@ try {
     await page.goto('http://127.0.0.1:' + server.address().port + '/pixelstow.html');
     assert(await page.getByRole('button', { name: 'Preview', exact: true }).isDisabled());
     assert(await page.locator('#preview-audio').isDisabled());
+    const toolbar = await page.locator('.image-toolbar').boundingBox(), maximise = await page.locator('#full-preview').boundingBox();
+    assert(Math.abs(maximise.x + maximise.width - toolbar.x - toolbar.width) < 1 && Math.abs(maximise.y - toolbar.y) < 1, 'fullscreen stays at the image toolbar top right');
+    const entryButtons = await page.locator('.image-actions > button').evaluateAll(buttons => buttons.map(button => {
+      const box = button.getBoundingClientRect();
+      return { x: box.x, y: box.y, width: box.width, height: box.height, fits: button.scrollWidth <= button.clientWidth };
+    }));
+    assert(entryButtons.every((box, index) => box.fits && box.width >= 44 && box.height >= 44 && Math.abs(box.y - entryButtons[0].y) < 1 && box.x + box.width < maximise.x && (!index || box.x > entryButtons[index - 1].x + entryButtons[index - 1].width)), 'entry actions must remain legible in one row: ' + JSON.stringify(entryButtons));
+    await page.locator('.image-toolbar').screenshot({ path: path.join(snapshots, `image-actions-${width}.png`) });
     await page.evaluate(async () => {
       const width = 480, height = 640, pixels = new Uint8Array(width * height * 4);
       for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) pixels.set([60 + Math.round(x / 4), 100 + Math.round(y / 8), 150, 255], (x + y * width) * 4);

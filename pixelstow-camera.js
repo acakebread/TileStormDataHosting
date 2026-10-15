@@ -129,7 +129,7 @@
       document.addEventListener("visibilitychange", () => {
         if (document.hidden && this.active) {
           this.close();
-          this.report("Camera closed while the page was away. Tap Capture to resume.");
+          this.report("Camera closed while the page was away. Tap Decode to resume.");
         }
       });
       this.sync();
@@ -256,7 +256,7 @@
       track.addEventListener("ended", () => {
         if (this.session !== session || session.stream !== stream || session.handingOff) return;
         this.close();
-        this.report("Camera disconnected. Tap Capture to try again, or Browse to load a saved photo.", true);
+        this.report("Camera disconnected. Tap Decode to try again, or Browse to load a saved photo.", true);
       });
       this.video.muted = true;
       this.video.playsInline = true;
@@ -892,7 +892,7 @@
       } catch (error) {
         if (this.session !== session) return;
         this.close();
-        this.report(error?.message || "Could not open the captured frame. Tap Capture to try again.", true);
+        this.report(error?.message || "Could not open the captured frame. Tap Decode to try again.", true);
       }
     }
   }
