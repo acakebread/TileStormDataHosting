@@ -4,17 +4,19 @@
   "use strict";
   const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
   function prognosis(data, quality = .8, version = data?.carrierVersion ?? 5) {
-    const edge = Math.max(data?.width || 0, data?.height || 0);
-    if (!data?.fits || !Number.isFinite(data.repetitionRatio) || !Number.isFinite(edge) || edge < 1) return .99;
-    // Qualitative camera sampling burden, not a success probability. At the
-    // same framing, a larger native grid makes each 4-pixel wavelet smaller in
-    // the capture. Extra stored repeats must not reverse that size ordering.
-    // 1280px is a reference edge, not a camera requirement or a recovery limit.
-    // Use a fixed two-copy reference for the quality control's relative gain;
-    // neither this estimate nor either slider changes the codec's boost policy.
-    const gain = root.PixelStow.estimateSignalGain(2, quality, version);
-    const burden = Math.pow(edge / (1280 * gain), 2);
-    return .04 + .95 * burden / (1 + burden);
+    if (!data?.fits || !Number.isFinite(data.repetitionRatio)) return .99;
+    // Qualitative protection margin, not a camera success probability. Compare
+    // coverage on the same 12-bit basis when reading reduced-parity carriers.
+    const coverage = data.repetitionRatio * (data.parityBits === 1 ? 9 / 12 : 1);
+    const anchor = (copies, base, floor) => clamp(base - .2 * Math.log2(
+      root.PixelStow.estimateSignalGain(copies, quality, version)), floor, .98);
+    const one = anchor(1, .9, .75), two = anchor(2, .6, .5), five = anchor(5, .2, .04);
+    // Smooth between strength-adjusted repetition anchors. A non-flat tail
+    // keeps the green endpoint from suddenly selecting the largest carrier.
+    if (coverage < 1) return one + (1 - one) * .8 * clamp((1 - coverage) / .25, 0, 1);
+    if (coverage < 2) return one + (two - one) * (coverage - 1);
+    if (coverage < 5) return two + (five - two) * (coverage - 2) / 3;
+    return .04 + (five - .04) * 5 / coverage;
   }
   function qualityForTarget(data, target, version = data?.carrierVersion ?? 5) {
     // Match the real 0.01 quality steps, including flat portions at hard limits.
@@ -37,22 +39,27 @@
     if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width < 1 || height < 1)
       throw new Error("Choose a source image before sizing it.");
     const maximum = maxDimensions(width, height, maxPixels);
-    const at = (scale) => {
+    const budgetAt = (scale) => {
       const w = Math.max(1, Math.min(maximum.width, Math.ceil(width * scale)));
       const h = Math.max(1, Math.min(maximum.height, Math.ceil(height * scale)));
       const budget = root.PixelStow.repetitionForFrame(w, h, framedBytes, version);
       return budget?.fits ? { ...budget, scale } : null;
     };
-    if (!at(maximum.scale)) return null;
+    const largest = budgetAt(maximum.scale);
+    if (!largest) return null;
+    // Keep the best parity available within the size limit throughout a size
+    // gesture. Otherwise growing across the 9 -> 12-bit switch drops the raw
+    // repeat count from ~1.33 to 1 despite adding error-correction protection.
+    const at = (scale) => {
+      const budget = budgetAt(scale);
+      return budget?.parityBits === largest.parityBits ? budget : null;
+    };
     let low = 0, high = maximum.scale;
     for (let i = 0; i < 44; i++) {
       const middle = (low + high) / 2;
       if (at(middle)) high = middle; else low = middle;
     }
     const smallest = at(high);
-    // Enlarge only to fit the actual payload. The prognosis may downscale an
-    // existing source; it must never invent a larger source to buy repetition.
-    const largest = at(Math.max(high, Math.min(1, maximum.scale)));
     return { at, smallest, largest };
   }
   function selection(range, scale) {
@@ -68,16 +75,16 @@
   function planForTarget(width, height, framedBytes, quality, target, version = 5, maxPixels) {
     const range = sizeRange(width, height, framedBytes, version, maxPixels);
     if (!range) return plan(width, height, framedBytes, 1, version, maxPixels);
-    const min = prognosis(range.smallest, quality, version), max = prognosis(range.largest, quality, version);
+    const min = prognosis(range.largest, quality, version), max = prognosis(range.smallest, quality, version);
     const reachable = clamp(Number.isFinite(target) ? target : max, min, max);
-    if (reachable <= min) return selection(range, range.smallest.scale);
-    if (reachable >= max) return selection(range, range.largest.scale);
+    if (reachable <= min) return selection(range, range.largest.scale);
+    if (reachable >= max) return selection(range, range.smallest.scale);
     let low = range.smallest.scale, high = range.largest.scale;
     // Only the prognosis gesture selects a resolution. Quality changes are
     // evaluated on the already selected grid, never fed back into this search.
     for (let i = 0; i < 44; i++) {
       const middle = (low + high) / 2, candidate = range.at(middle);
-      if (prognosis(candidate, quality, version) < reachable) low = middle; else high = middle;
+      if (prognosis(candidate, quality, version) > reachable) low = middle; else high = middle;
     }
     return selection(range, high);
   }

@@ -237,7 +237,9 @@
     .preview-screen-footer .comparison-control { margin: 0 auto; max-width: 800px; }
     .preview-screen-actions { display: contents; }
     .preview-screen-toolbar {
-      display: flex; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 8px; max-width: 480px; margin: 0 auto;
+      display: flex; flex-wrap: nowrap; align-items: center; justify-content: center; max-width: 480px; margin: 0 auto;
+      /* Keep six 44px targets on narrow screens, with gaps capped below half a button. */
+      gap: clamp(8px, calc((100% - 264px) / 5), 20px);
     }
     .preview-screen-toolbar button { flex: 0 0 44px; width: 44px; min-height: 48px; padding: 0; font-size: 0.82rem; font-weight: 500; }
     #preview-audio svg { display: block; }
@@ -912,7 +914,7 @@
   <script src="./pixelstow-transform.js?v=20261014-v5-default1"></script>
   <script src="./pixelstow-lattice.js?v=20261013-marker-follow2"></script>
   <script src="./pixelstow.js?v=20261015-attachment-count1"></script>
-  <script src="./pixelstow-sizing.js?v=20261015-payload-size2"></script>
+  <script src="./pixelstow-sizing.js?v=20261015-redundancy-margin"></script>
   <script src="./pixelstow-export.js?v=20261011-exports"></script>
   <script src="./pixelstow-voice.js?v=20261013-voice-clock2"></script>
   <script src="./pixelstow-media.js?v=20261015-preview-icons1"></script>
@@ -1224,8 +1226,8 @@
       const quality = Number(encodingQuality.value), version = Number(carrierSelect.value);
       const risk = PixelStowSizing.prognosis(data, quality, version);
       prognosisBounds = scaleSource.checked && sourcePlan?.fits ? {
-        min: PixelStowSizing.prognosis(sourcePlan.minimum, quality, version),
-        max: PixelStowSizing.prognosis(sourcePlan.maximum, quality, version) }
+        min: PixelStowSizing.prognosis(sourcePlan.maximum, quality, version),
+        max: PixelStowSizing.prognosis(sourcePlan.minimum, quality, version) }
         : { min: PixelStowSizing.prognosis(data, 0, version), max: PixelStowSizing.prognosis(data, 1, version) };
       prognosisTarget.value = risk.toFixed(3);
       prognosisTarget.disabled = busy || prognosisBounds.max - prognosisBounds.min < .001;
@@ -1240,7 +1242,7 @@
       prognosisPointer.style.left = (100 * risk).toFixed(1) + "%";
       prognosisDetail.textContent = ratio.toFixed(2) + "× redundancy. " + (weakParity ? "Reduced error correction. " : "") +
         (data.fits === false ? "The contents do not fit this image. " : ratio < 2 ? "Little repeated data; a smaller payload leaves more protection. " : "") +
-        "Smaller carriers give the camera a coarser pattern; focus, glare and framing also matter." +
+        "Estimated from redundancy, error correction and signal strength; camera focus, framing and pattern size also matter." +
         (needsEncoding ? " Re-encode to apply these settings." : "");
       prognosisDetail.classList.toggle("repetition-warning", weakParity || ratio < 1.25 || data.fits === false);
     }
@@ -1263,7 +1265,7 @@
       sourceSizePlan.textContent = scaleSource.checked ? sourcePlan.fits
         ? "Encode at " + sourcePlan.width + " × " + sourcePlan.height + " (" + Math.round(100 * sourcePlan.width / current.width) +
           "% of source width)." +
-          (sourcePlan.forcedUpscale ? " Enlarged only as far as the payload needs." : " Move prognosis towards green to downscale within the payload limit.") +
+          " Move prognosis left for more repetition, right for a smaller carrier." +
           (sourcePlan.limited ? " Size capped at the encoding limit." : "")
         : sourcePlan.reason : "Original size: " + current.width + " × " + current.height + ".";
       updatePayloadBudget();

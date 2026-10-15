@@ -54,6 +54,15 @@ try {
     assert(await page.getByRole('button', { name: 'Fit', exact: true }).isVisible());
     assert(await page.getByRole('button', { name: '100%', exact: true }).isVisible());
     await checkCleanLayers();
+    const cleanBoxes = await Promise.all(['#preview-screen-fit', '#preview-screen-actual', '#preview-screen-hide', '#preview-screen-close'].map(selector => page.locator(selector).boundingBox()));
+    const checkActionSpacing = boxes => {
+      for (let i = 1; i < boxes.length; i++) {
+        const gap = boxes[i].x - boxes[i - 1].x - boxes[i - 1].width;
+        assert(gap >= 7 && gap <= 22, 'action gaps must stay between 8px and half a button width: ' + gap);
+      }
+      assert(Math.abs(boxes[0].x - (width - boxes.at(-1).x - boxes.at(-1).width)) < 1, 'the action group must be centred');
+    };
+    checkActionSpacing(cleanBoxes);
     await page.getByRole('button', { name: 'Close preview', exact: true }).click();
     if (!fixture) fixture = await page.evaluate(async () => {
       const rate = 8000, count = rate * 2, wav = new Uint8Array(44 + count * 2), view = new DataView(wav.buffer);
@@ -118,6 +127,7 @@ try {
     const controls = ['#preview-audio', '#preview-screen-fit', '#preview-screen-actual', '#preview-screen-hide', '#preview-markers', '#preview-screen-close'];
     const boxes = await Promise.all(controls.map(selector => page.locator(selector).boundingBox()));
     assert(boxes.every((box, index) => box && box.width >= 44 && box.height >= 48 && Math.abs(box.y - boxes[0].y) < 1 && box.x >= 0 && box.x + box.width <= width && (!index || box.x >= boxes[index - 1].x + boxes[index - 1].width + 7)), JSON.stringify(boxes));
+    checkActionSpacing(boxes);
     const analysisBox = boxes[controls.indexOf('#preview-markers')];
     assert.deepEqual(await page.locator('#show-transform').boundingBox(), analysisBox, 'the entire Analysis button is the checkbox hit target');
     const analysis = page.getByRole('checkbox', { name: 'Analysis', exact: true });

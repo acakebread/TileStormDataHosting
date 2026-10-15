@@ -176,7 +176,8 @@ compact Browse, Paste, fullscreen, Capture and Photo actions. The speaker button
 sits on the same row as the main comparison slider. The same button and slider
 move into the fullscreen footer, then return on close. Speaker, Fit, 100%,
 maximise, Analysis and close share one action row, including at 320px width,
-with 44 × 48 pixel targets and at least eight pixels between controls. Icon buttons have accessible labels and tooltips;
+with 44 × 48 pixel targets. The group is centred with gaps from eight to twenty
+pixels, including in the clean four-button viewer; Close is always last. Icon buttons have accessible labels and tooltips;
 the speaker label tracks Play/Pause without removing its SVG. Audio is disabled
 and hidden when no audio is available. The footer occupies its own space below
 the image. Generated pixels appear immediately while source extraction prepares
@@ -186,13 +187,12 @@ are reused rather than recreated, preserving the existing Safari playback flow.
 
 With a source and payload selected, a **Photo-read prognosis** bar above the export actions
 runs green through amber to red, with a difficulty marker and textual label.
-It estimates camera sampling margin from the native carrier's longest edge and
-wavelet intensity. At the same framing, a larger native grid makes each wavelet
-smaller in the capture, so larger resolutions move towards red. A smooth bounded
-curve uses a 1,280-pixel reference edge; this is a heuristic, not a camera limit
-or a calibrated success percentage. Relative quality gain is evaluated at a fixed
-two-copy reference, including strength/texture/marker ceilings, so capacity changes
-cannot reverse the resolution direction. Actual codec boost policies are unchanged.
+It estimates protection from payload repetition, error correction and wavelet
+intensity. More repetition moves towards green. Strength-adjusted anchors at
+one, two and five copies join smoothly, with a non-flat tail beyond five copies.
+Reduced-parity images are compared on the same 12-bit coverage basis. This is a
+heuristic, not a calibrated camera success percentage: native pattern size,
+focus, glare and framing still affect capture. Actual codec boost policies are unchanged.
 The quality/durability slider only changes wavelet intensity. Its 0.8 setting
 still preserves the accepted encoding strength. It never resizes the carrier,
 including when scaling is enabled. More durable settings move prognosis towards
@@ -201,10 +201,8 @@ estimates the next encoding and asks the user to re-encode; the saved PNG remain
 unchanged. Without source scaling, dragging prognosis adjusts intensity within
 its achievable range. With scaling, it selects resolution while leaving intensity
 unchanged. Unavailable portions of the scale are shaded in both modes.
-Repetition and parity remain separate capacity warnings. Smaller carriers have
-coarser patterns but fewer repeated payload bits; a green sampling estimate does
-not remove the fragility of near-1x or reduced-parity payloads. Reported repetition
-still uses the actual coding and reduced error correction is identified explicitly.
+Repetition and parity also appear as capacity warnings. Reported repetition uses
+the actual coding, and reduced error correction is identified explicitly.
 The slider has a 64-pixel-high touch area and a larger visible handle. Tapping
 anywhere across that area chooses a target immediately; dragging retains the
 gesture outside the bar while page scrolling remains available elsewhere.
@@ -222,13 +220,15 @@ disappears after a zoom or pan and returns when a new image is loaded; compariso
 taps and ordinary page scrolling leave it alone.
 
 Optional **Scale source for payload** starts at the original dimensions, capped
-at 24 megapixels. It enlarges only if required to fit the compressed payload,
+at 24 megapixels. Initially it enlarges only if required to fit the compressed payload,
 including framing, password overhead, error correction and reserved marker space.
-The prognosis control can downscale towards green as far as those bytes allow;
-it cannot go below the minimum fitting grid or enlarge a source just to buy more
-repetition. Source aspect ratio is preserved. If the source must be enlarged to
-fit, that minimum fitting size is also the upper bound. A payload that cannot fit
-within 24 megapixels is rejected. Changing image quality leaves the chosen
+Moving prognosis left enlarges the carrier to add repetition; moving right shrinks
+it towards the minimum fit. Source aspect ratio is preserved, and the maximum is
+the 24-megapixel encoding limit, including when the source already fits. The
+selectable range retains standard four-bit parity whenever that can fit within
+the limit; otherwise it retains one-bit parity throughout. This prevents a parity
+switch from making the displayed repeat count fall during a leftward gesture.
+A payload that cannot fit within 24 megapixels is rejected. Changing image quality leaves the chosen
 dimensions unchanged. Payload edits may increase the minimum required size.
 The sliders calculate dimensions without resampling. On Encode, a copy of the
 retained original is resized first, the same text and attachment bytes are
@@ -239,8 +239,8 @@ Camera photos explicitly taken for encoding enable scaling automatically;
 opening a file or pasting an image restores the last manually selected setting.
 `node tests/pixelstow-sizing-checks.mjs` covers capacity bounds, size direction,
 native round trips and unchanged source pixels. `node tests/pixelstow-prognosis-checks.mjs`
-checks the real mobile controls, independent intensity/size changes, forced
-enlargement and verified encoding at the minimum selectable size. Its Playwright
+checks the real mobile controls, independent intensity/size changes, monotonic
+repetition, forced enlargement and verified encoding at the minimum selectable size. Its Playwright
 environment overrides match the camera checks.
 
 Capture focus, glare, source detail and distortion
