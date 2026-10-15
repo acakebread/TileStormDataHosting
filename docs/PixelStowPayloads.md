@@ -196,7 +196,7 @@ documented by [enumerateDevices](https://developer.mozilla.org/en-US/docs/Web/AP
 and [InputDeviceInfo.getCapabilities](https://developer.mozilla.org/en-US/docs/Web/API/InputDeviceInfo/getCapabilities).
 The page places the image first, with its caption below it. The image toolbar has
 compact Browse, Paste, fullscreen, Capture and Photo actions. The speaker button
-sits on the same row as the main comparison slider. The same button and slider
+sits to the left of the main comparison slider on the same row. The same button and slider
 move into the fullscreen footer, then return on close. Speaker, Fit, 100%,
 maximise, Analysis and close share one action row, including at 320px width,
 with 44 × 48 pixel targets. The group is centred with gaps from eight to twenty

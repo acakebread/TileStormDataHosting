@@ -156,6 +156,7 @@ try {
     const mainAudio = await page.locator('#preview-audio').boundingBox(), mainSlider = await page.locator('#comparison-control').boundingBox();
     assert(Math.abs(mainAudio.y + mainAudio.height / 2 - mainSlider.y - mainSlider.height / 2) < 1);
     assert(mainAudio.x + mainAudio.width <= width);
+    assert(mainAudio.x + mainAudio.width <= mainSlider.x, 'the main speaker stays left of the slider after returning from fullscreen');
     await page.getByRole('button', { name: 'Full screen preview', exact: true }).click();
     assert(await page.evaluate(() => !fullPreview.clean));
     const controls = ['#preview-audio', '#preview-screen-fit', '#preview-screen-actual', '#preview-screen-hide', '#preview-markers', '#preview-screen-close'];
