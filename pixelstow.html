@@ -243,8 +243,8 @@
     .preview-screen-actions { display: contents; }
     .preview-screen-toolbar {
       display: flex; flex-wrap: nowrap; align-items: center; justify-content: center; max-width: 480px; margin: 0 auto;
-      /* Keep five 44px targets on narrow screens, with gaps capped below half a button. */
-      gap: clamp(8px, calc((100% - 220px) / 4), 20px);
+      /* Keep six 44px targets on narrow screens, with gaps capped below half a button. */
+      gap: clamp(8px, calc((100% - 264px) / 5), 20px);
     }
     #preview-screen-scale { display: grid; place-items: center; }
     #preview-screen-scale svg { display: block; }
@@ -262,10 +262,8 @@
     .camera-calibration[data-state="detected"] { color: #b8f3c7; }
     .camera-calibration[data-state="detected"]::before { background: #61e28b; box-shadow: 0 0 7px #61e28b99; }
     .preview-panel.clean #preview-source,
-    .preview-panel.clean #transform-outline,
     .preview-panel.clean #compare-ui,
-    .preview-panel.clean #comparison-control,
-    .preview-panel.clean #preview-markers { display: none !important; }
+    .preview-panel.clean #comparison-control { display: none !important; }
     .preview-panel.clean.show-source #preview-source { display: block !important; clip-path: none !important; }
     .preview-panel.clean.show-source #preview-encoded { visibility: hidden; }
 

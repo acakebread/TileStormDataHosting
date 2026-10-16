@@ -47,7 +47,7 @@ try {
       window.sourceFixture = image;
     });
     await page.locator('#preview-encoded-image').locator('..').screenshot({ path: path.join(snapshots, `image-actions-lower-${width}.png`) });
-    const cleanLayers = ['#preview-source', '#transform-outline', '#compare-ui', '#comparison-control', '#tag-encoded', '#tag-source', '#preview-markers'];
+    const cleanLayers = ['#preview-source', '#transform-outline', '#compare-ui', '#comparison-control', '#tag-encoded', '#tag-source'];
     const checkCleanLayers = async (source = false) => {
       for (const selector of cleanLayers.filter(selector => selector !== '#preview-source')) assert(!(await page.locator(selector).isVisible()), selector + ' must never appear in the transmission viewer');
       assert.equal(await page.locator('#preview-source').isVisible(), source);
@@ -84,9 +84,9 @@ try {
     assert(await page.getByRole('button', { name: '100%', exact: true }).isVisible());
     assert(await page.getByRole('button', { name: 'Show source image', exact: true }).isDisabled(), 'a source-only image has no alternate preview');
     await checkCleanLayers();
-    const cleanControls = ['#preview-screen-scale', '#preview-screen-toggle', '#preview-screen-hide', '#preview-screen-close'];
+    const cleanControls = ['#preview-screen-scale', '#preview-screen-toggle', '#preview-screen-hide', '#preview-markers', '#preview-screen-close'];
     const cleanBoxes = await Promise.all(cleanControls.map(selector => page.locator(selector).boundingBox()));
-    assert(cleanBoxes.every((box, index) => box && box.width >= 44 && box.height >= 48 && Math.abs(box.y - cleanBoxes[0].y) < 1 && box.x >= 0 && box.x + box.width <= width && (!index || box.x >= cleanBoxes[index - 1].x + cleanBoxes[index - 1].width + 7)), 'all four clean-view controls must fit one row, with source toggle after the scale button and Close last: ' + JSON.stringify(cleanBoxes));
+    assert(cleanBoxes.every((box, index) => box && box.width >= 44 && box.height >= 48 && Math.abs(box.y - cleanBoxes[0].y) < 1 && box.x >= 0 && box.x + box.width <= width && (!index || box.x >= cleanBoxes[index - 1].x + cleanBoxes[index - 1].width + 7)), 'all five clean-view controls must fit one row, with Analysis before Close: ' + JSON.stringify(cleanBoxes));
     const checkActionSpacing = boxes => {
       for (let i = 1; i < boxes.length; i++) {
         const gap = boxes[i].x - boxes[i - 1].x - boxes[i - 1].width;
@@ -436,8 +436,9 @@ try {
     await page.waitForFunction(() => !document.querySelector('#preview-screen-toggle').disabled);
     const cleanAudio = page.getByRole('button', { name: 'Play audio', exact: true });
     assert(await cleanAudio.isVisible(), 'available audio joins the left of the clean preview icon row');
-    const [audioBox, scaleBox] = await Promise.all(['#preview-audio', '#preview-screen-scale'].map(selector => page.locator(selector).boundingBox()));
-    assert(audioBox && scaleBox && audioBox.x + audioBox.width <= scaleBox.x && Math.abs(audioBox.y - scaleBox.y) < 1, 'the clean preview speaker stays left of the scale button');
+    const cleanRow = ['#preview-audio', '#preview-screen-scale', '#preview-screen-toggle', '#preview-screen-hide', '#preview-markers', '#preview-screen-close'];
+    const cleanRowBoxes = await Promise.all(cleanRow.map(selector => page.locator(selector).boundingBox()));
+    assert(cleanRowBoxes.every((box, index) => box && box.width >= 44 && box.height >= 48 && Math.abs(box.y - cleanRowBoxes[0].y) < 1 && (!index || box.x >= cleanRowBoxes[index - 1].x + cleanRowBoxes[index - 1].width + 7)), 'audio and Analysis join the clean preview icon row: ' + JSON.stringify(cleanRowBoxes));
     await page.getByRole('button', { name: 'Show source image', exact: true }).click();
     await checkCleanLayers(true);
     await page.getByRole('button', { name: 'Show encoded image', exact: true }).click();

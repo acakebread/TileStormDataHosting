@@ -141,9 +141,10 @@ canvases in a viewport-filling dialog. Fit and 100% controls are available; clos
 restores the previous page view. **Preview** at the end of the export actions
 opens a clean transmission view of the current generated, imported, pasted or
 captured image, with every control initially hidden. It never displays the
-comparison divider, Encoded/Source labels or analysis overlay. When a recording
-is available, the same audio button used beside the main preview appears at the
-left of the icon row once the controls are shown. The
+comparison divider or Encoded/Source labels. When a recording is available, the
+same audio button used beside the main preview appears at the left of the icon
+row once the controls are shown. The Analysis button sits just before Close and
+shows the same recovery diagnostics as the main preview. The
 maximise icon hides those controls completely for phone-to-phone capture.
 Holding still for 450 milliseconds toggles the entire view between encoded
 pixels and recovered source when that comparison is ready. It preserves zoom,
@@ -161,8 +162,8 @@ divider does not reveal controls. Immediate handle/line dragging and desktop
 mouse scrubbing remain available. Escape closes the viewer.
 Successful reads start with marker overlays hidden. Failed photographs show
 diagnostic markers; continuous captures start clean. Fullscreen preview has a
-button-style **Analysis** toggle just before Close in the action row; it is absent
-from the main page. Its computer/binary icon has a full 44 × 48 pixel touch
+button-style **Analysis** toggle just before Close in the action row, including
+the lower Preview. It is absent from the main page. Its computer/binary icon has a full 44 × 48 pixel touch
 target, a highlighted checked state and a keyboard focus outline. Native reads,
 including clipboard pastes and generated images, gather
 diagnostics at the known marker positions on request without a broad search.
