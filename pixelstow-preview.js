@@ -2,8 +2,8 @@
 (function (root) {
   "use strict";
   class PixelStowPreview {
-    constructor({ preview, viewport, canToggleSource, canCopyImage, copyImage, captureView, restoreView, toggleScale, resize, onFrame }) {
-      Object.assign(this, { preview, viewport, canToggleSource, canCopyImage, copyImage, captureView, restoreView, toggleScale, resize, onFrame });
+    constructor({ preview, viewport, canToggleSource, canCopyImage, copyImage, captureView, restoreView, fit, toggleScale, resize, onFrame }) {
+      Object.assign(this, { preview, viewport, canToggleSource, canCopyImage, copyImage, captureView, restoreView, fit, toggleScale, resize, onFrame });
       this.panel = document.querySelector("#preview-panel");
       this.slot = document.querySelector("#preview-screen");
       this.toolbar = document.querySelector("#preview-screen-toolbar");

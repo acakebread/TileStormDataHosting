@@ -163,7 +163,11 @@ Immediate handle/line dragging and desktop mouse scrubbing remain available.
 Escape closes the viewer.
 Successful reads and failed photographs both leave Analysis off. Marker outlines
 are drawn only after Analysis is switched on in the full-screen preview, and
-every new decode turns that option off again. Fullscreen preview has a
+every new decode turns that option off again. When recovery knows the grabbed
+picture's corners, the preview frames that area and does not pan outside it.
+Analysis adds a margin of surrounding pixels, about one label high, so the
+marker and calibration text remain visible and the view can zoom out slightly
+past the tight frame. Fullscreen preview has a
 button-style **Analysis** toggle just before Close in the action row, including
 the lower Preview. It is absent from the main page. Its computer/binary icon has a full 44 × 48 pixel touch
 target, a highlighted checked state and a keyboard focus outline. Native reads,

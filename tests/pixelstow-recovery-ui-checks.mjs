@@ -100,7 +100,12 @@ try{
   assert(positive.overlay&&positive.purple&&positive.trace.used,'Analysis must draw the measured calibration bands');
   await page.locator('#show-transform').uncheck();
   assert(await page.evaluate(()=>document.querySelector('#calibration-analysis').hidden&&transformOutline.hidden));
+  await page.locator('#show-transform').check();
+  await page.waitForFunction(()=>!transformOutline.hidden);
   await page.locator('#preview-screen-close').click();
+  await page.waitForFunction(()=>!fullPreview.openNow&&!showTransform.checked&&transformOutline.hidden&&calibrationAnalysis.hidden);
+  assert(await page.evaluate(()=>!showTransform.checked&&transformOutline.hidden&&calibrationAnalysis.hidden),'leaving fullscreen revokes Analysis');
+  const strokesBeforeImport=await page.evaluate(()=>calibrationStrokes.length);
   console.log('PASS: Analysis shows measured calibration provenance and purple bands only while enabled');
 
   await page.locator('#file').setInputFiles({name:'public-native-guide.png',mimeType:'image/png',buffer:Buffer.from(files.native)});
@@ -110,6 +115,7 @@ try{
   assert(native.encodedFlag,'control must contain the new guide');
   assert(!native.trace?.used&&!native.guide?.detected,'a native read must not claim the guide was used just because its encoded flag exists');
   assert(!native.checked&&native.hidden);
+  assert.equal(await page.evaluate(()=>calibrationStrokes.length),strokesBeforeImport,'new imports must not paint diagnostics before Analysis is requested');
   await page.locator('#full-preview').click();
   await page.locator('#show-transform').check();
   await page.waitForFunction(()=>current?.transformResult?.calibration?.analysisOnly===true);
@@ -118,6 +124,8 @@ try{
   assert.equal(nativeAnalysis.state,'detected');
   assert(nativeAnalysis.trace.analysisOnly&&!nativeAnalysis.trace.used);
   assert(/checked during analysis/i.test(nativeAnalysis.text)&&/original read.*native pixel grid/i.test(nativeAnalysis.text));
+  await page.evaluate(()=>camera.clearFeedback());
+  assert(await page.evaluate(()=>!showTransform.checked&&transformOutline.hidden&&calibrationAnalysis.hidden),'starting the next camera capture revokes Analysis immediately');
   assert.deepEqual(errors,[]);assert.deepEqual(failed,[]);
   console.log('PASS: native imports distinguish an encoded guide from an actually detected/used calibration; no page errors or failed requests');
 }finally{

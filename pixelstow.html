@@ -990,7 +990,7 @@
   <script src="./pixelstow-sharing.js?v=20261016-preview-copy1"></script>
   <script src="./pixelstow-read-progress.js?v=20261016-frame-outline"></script>
   <script src="./pixelstow-camera.js?v=20261016-camera-zoom"></script>
-  <script src="./pixelstow-preview.js?v=20261016-analysis-off"></script>
+  <script src="./pixelstow-preview.js?v=20261016-analysis-reset2"></script>
   <script>
     const fileInput = document.querySelector("#file");
     const chooseImageButton = document.querySelector("#choose-image");
@@ -1106,6 +1106,7 @@
         if (view) ({ fitMode, viewScale, originX, originY } = view);
         sizeViewport();
       },
+      fit: resetView,
       toggleScale: () => { if (fitMode) setActualSize(); else resetView(); },
       canCopyImage: () => !busy && !media.active && !camera?.active,
       copyImage: () => {
@@ -1149,8 +1150,8 @@
     camera = new PixelStowCamera({
       importImage: useFile, report: setStatus, working: () => busy || media.active,
       changed: () => setBusy(busy), drawGuides: paintTransform,
-      clearFeedback: () => { clearReadFeedback(); clearImageAppraisal(); },
-      prepareCapture: () => media.preparePlayback()
+      clearFeedback: () => { disarmAnalysis(); clearReadFeedback(); clearImageAppraisal(); },
+      prepareCapture: () => { disarmAnalysis(); media.preparePlayback(); }
     });
 
     const carrierSelect = document.querySelector("#carrier-version");
@@ -1548,29 +1549,74 @@
         h: Number(previewEncoded.dataset.imageHeight) || previewEncoded.height };
     }
 
+    function grabbedFrame(job = current) {
+      const corners = job?.transformResult?.geometry?.corners;
+      const w = job?.width, h = job?.height;
+      const shown = imagePixels();
+      if (!w || !h || shown.w !== w || shown.h !== h || !corners || corners.length < 4) return null;
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const point of corners) {
+        if (!Number.isFinite(point?.x) || !Number.isFinite(point?.y)) return null;
+        minX = Math.min(minX, point.x); minY = Math.min(minY, point.y);
+        maxX = Math.max(maxX, point.x); maxY = Math.max(maxY, point.y);
+      }
+      const x = Math.max(0, Math.floor(minX));
+      const y = Math.max(0, Math.floor(minY));
+      const right = Math.min(w, Math.ceil(maxX + 1));
+      const bottom = Math.min(h, Math.ceil(maxY + 1));
+      if (right - x < 16 || bottom - y < 16) return null;
+      return { x, y, w: right - x, h: bottom - y, imageW: w, imageH: h };
+    }
+
+    function viewFrame(job = current) {
+      const bounds = grabbedFrame(job);
+      if (!bounds) return null;
+      // Analysis labels sit just outside the detected picture. Extra source
+      // pixels around it let the fullscreen view zoom out far enough to show them.
+      if (!showTransform.checked || !fullPreview.openNow) return bounds;
+      const band = Math.ceil(Math.max(12, bounds.imageW / 70) + 8);
+      const x = Math.max(0, bounds.x - band);
+      const y = Math.max(0, bounds.y - band);
+      const right = Math.min(bounds.imageW, bounds.x + bounds.w + band);
+      const bottom = Math.min(bounds.imageH, bounds.y + bounds.h + band);
+      return { x, y, w: Math.max(1, right - x), h: Math.max(1, bottom - y) };
+    }
+
+    function frameOf(img) {
+      return viewFrame() || { x: 0, y: 0, w: img.w, h: img.h };
+    }
+
     function viewBox() {
       return { w: viewport.clientWidth, h: viewport.clientHeight };
     }
 
     function fittedScale(img, box) {
-      if (!img.w || !img.h || !box.w || !box.h) return 1;
-      return Math.min(box.w / img.w, box.h / img.h);
+      const frame = frameOf(img);
+      if (!frame.w || !frame.h || !box.w || !box.h) return 1;
+      return Math.min(box.w / frame.w, box.h / frame.h);
     }
 
     function clampScale(value, img, box) {
       const fit = fittedScale(img, box);
       const max = Math.max(fit * 16, 16 / (window.devicePixelRatio || 1));
-      const min = fullPreview.openNow ? Math.min(fit, 1 / (window.devicePixelRatio || 1)) : fit;
+      const min = viewFrame() ? fit : fullPreview.openNow ? Math.min(fit, 1 / (window.devicePixelRatio || 1)) : fit;
       return Math.max(min, Math.min(max, value));
     }
 
+    function centerFrame(img, box, scale) {
+      const frame = frameOf(img);
+      originX = (box.w - frame.w * scale) / 2 - frame.x * scale;
+      originY = (box.h - frame.h * scale) / 2 - frame.y * scale;
+    }
+
     function clampOrigin(img, box) {
-      const width = img.w * viewScale;
-      const height = img.h * viewScale;
-      if (width <= box.w) originX = (box.w - width) / 2;
-      else originX = Math.min(0, Math.max(box.w - width, originX));
-      if (height <= box.h) originY = (box.h - height) / 2;
-      else originY = Math.min(0, Math.max(box.h - height, originY));
+      const frame = frameOf(img);
+      const width = frame.w * viewScale, height = frame.h * viewScale;
+      const left = originX + frame.x * viewScale, top = originY + frame.y * viewScale;
+      const nextLeft = width <= box.w ? (box.w - width) / 2 : Math.min(0, Math.max(box.w - width, left));
+      const nextTop = height <= box.h ? (box.h - height) / 2 : Math.min(0, Math.max(box.h - height, top));
+      originX = nextLeft - frame.x * viewScale;
+      originY = nextTop - frame.y * viewScale;
     }
 
     function applyView() {
@@ -1579,8 +1625,7 @@
       if (!img.w || !img.h || !box.w || !box.h) return;
       if (fitMode) {
         viewScale = fittedScale(img, box);
-        originX = (box.w - img.w * viewScale) / 2;
-        originY = (box.h - img.h * viewScale) / 2;
+        centerFrame(img, box, viewScale);
       } else {
         viewScale = clampScale(viewScale, img, box);
         clampOrigin(img, box);
@@ -1602,9 +1647,10 @@
       const img = imagePixels();
       const width = viewport.clientWidth;
       if (!img.w || !img.h || !width) return;
+      const frame = frameOf(img);
       const maxHeight = window.matchMedia("(max-width: 620px)").matches ? Math.min(360, window.innerHeight * 0.42) : 420;
       const height = fullPreview.openNow ? document.querySelector("#preview-screen").clientHeight :
-        Math.max(120, Math.min(maxHeight, width * img.h / img.w));
+        Math.max(120, Math.min(maxHeight, width * frame.h / frame.w));
       const next = height + "px";
       if (viewport.style.height !== next) viewport.style.height = next;
       applyView();
@@ -1624,7 +1670,7 @@
       dismissPreviewHelp();
       clearPreviewTouches(); fitMode = false; viewScale = 1 / (window.devicePixelRatio || 1);
       const img = imagePixels(), box = viewBox();
-      originX = (box.w - img.w * viewScale) / 2; originY = (box.h - img.h * viewScale) / 2;
+      centerFrame(img, box, viewScale);
       applyView();
     }
 
@@ -1688,6 +1734,10 @@
     }
 
     function paintTransform(canvas, result, width, height) {
+      if (canvas === transformOutline && (!fullPreview.openNow || !showTransform.checked)) {
+        canvas.hidden = true;
+        return;
+      }
       const ratio = Math.min(1, 2048 / Math.max(width, height));
       canvas.width = Math.round(width * ratio);
       canvas.height = Math.round(height * ratio);
@@ -1772,6 +1822,7 @@
     }
 
     function syncAnalysisOverlay(open = fullPreview.openNow) {
+      if (!open) disarmAnalysis();
       if (!open || !showTransform.checked || !current?.transformResult) {
         transformOutline.hidden = true;
         calibrationAnalysis.hidden = true;
@@ -1797,6 +1848,8 @@
     showTransform.addEventListener("change", async () => {
       if (current) current.markerGuideOverride = showTransform.checked;
       const job = current;
+      const framed = Boolean(grabbedFrame(job));
+      if (job && !preview.hidden) resetView();
       let result = job?.transformResult;
       if (showTransform.checked && job && !result?.geometry && !result?.markers?.length && [3,4,5].includes(job.carrierVersion)) {
         const size = resultDimensions(job), pixels = job.recoverPixels || job.decodePixels || job.pixels;
@@ -1823,6 +1876,7 @@
       }
       if (showTransform.checked && result) drawTransform(result);
       else {transformOutline.hidden = true;calibrationAnalysis.hidden=true;}
+      if (current === job && !preview.hidden && !framed && grabbedFrame(job)) resetView();
     });
 
     function recoveryOptions(controller) {
@@ -1862,6 +1916,7 @@
       transformOutline.hidden = true;
       calibrationAnalysis.hidden = true;
       job.hasFingerprint = job.hasFingerprint || result.found;
+      if (job === current && !preview.hidden && job.transformResult?.geometry?.corners) resetView();
       if (result.geometry && result.found && !result.unreadable) {
         const geometry = result.geometry;
         transformStatus.textContent = "Recovered " + geometry.originalWidth + " × " + geometry.originalHeight +
