@@ -13,6 +13,9 @@
       this.failedDevices = new Set();
       this.deviceHistory = new Map();
       this.switchOperation = null;
+      // Some cameras apply zoom in place. Others restart the preview to do it.
+      this.liveZoomDevices = new Set();
+      this.restartZoomDevices = new Set();
       // Desktop file inputs ignore capture and open a file picker. Keep the
       // native still-camera route for phones/tablets, including desktop-UA iPads.
       this.nativePhotoCapture = Boolean(navigator.userAgentData?.mobile ||
@@ -282,6 +285,7 @@
         width: this.video.videoWidth || settings.width, height: this.video.videoHeight || settings.height });
       await this.preferSharpFrame(track);
       this.configureZoom(session, track);
+      await this.classifyHardwareZoom(session, track);
     }
 
     async preferSharpFrame(track) {
@@ -472,17 +476,20 @@
       const frameWidth = sideways ? height : width, frameHeight = sideways ? width : height;
       const viewW = this.view.clientWidth || 1;
       const viewH = this.fitPortraitPreview(frameWidth, frameHeight) || this.view.clientHeight;
-      // Hardware zoom is already in the video frames. Simulated zoom enlarges
-      // the same centred preview and the capture crops to the visible part.
+      // Hardware zoom is already in the video frames. A preview zoom enlarges
+      // that same centred frame. Keep the layout size still and scale the
+      // transform: resizing the video on every pinch restarts older cameras.
+      const fit = Math.min(Math.max(1, viewW - 8) / frameWidth, Math.max(1, viewH - 8) / frameHeight);
       const zoom = session.zoomMode === "simulated" ? (session.zoom || 1) : 1;
-      const scale = Math.min(Math.max(1, viewW - 8) / frameWidth, Math.max(1, viewH - 8) / frameHeight) * zoom;
+      const scale = fit * zoom;
       const w = frameWidth * scale, h = frameHeight * scale;
       const videoLeft = (viewW - w) / 2, videoTop = (viewH - h) / 2;
       const left = Math.max(0, videoLeft), top = Math.max(0, videoTop);
       const right = Math.min(viewW, videoLeft + w), bottom = Math.min(viewH, videoTop + h);
-      this.video.style.width = width * scale + "px";
-      this.video.style.height = height * scale + "px";
-      this.video.style.transform = "translate(-50%, -50%) rotate(" + session.rotation + "deg)";
+      this.video.style.width = width * fit + "px";
+      this.video.style.height = height * fit + "px";
+      this.video.style.transform = "translate(-50%, -50%) rotate(" + session.rotation + "deg)" +
+        (zoom > 1.001 ? " scale(" + zoom + ")" : "");
       Object.assign(this.frame.style, {
         left: left + "px", top: top + "px",
         width: Math.max(0, right - left) + "px", height: Math.max(0, bottom - top) + "px"
@@ -502,17 +509,102 @@
       try { caps = track?.getCapabilities?.() || {}; } catch { caps = {}; }
       const spec = caps.zoom;
       const min = Number(spec?.min), max = Number(spec?.max);
-      const hardware = Number.isFinite(min) && Number.isFinite(max) && max > min + 0.01;
+      const id = session.deviceId || session.deviceLabel || "";
+      session.zoomDevice = id;
+      let hardware = Number.isFinite(min) && Number.isFinite(max) && max > min + 0.01;
+      if (id && this.restartZoomDevices?.has(id)) hardware = false;
       const range = hardware
         ? { min, max, step: Number(spec.step) > 0 ? Number(spec.step) : 0 }
         : { min: 1, max: 4, step: 0 };
       const held = session.zoom;
       session.zoomMode = hardware ? "hardware" : "simulated";
+      session.zoomLive = Boolean(hardware && id && this.liveZoomDevices?.has(id));
       session.zoomRange = range;
       if (held == null) {
         const current = Number(track?.getSettings?.().zoom);
         session.zoom = hardware && Number.isFinite(current) ? this.snapZoom(current, range) : 1;
       } else session.zoom = this.snapZoom(held, range);
+      if (hardware && !(session.zoomApplied > 0)) session.zoomApplied = session.zoom;
+    }
+
+    async classifyHardwareZoom(session, track) {
+      if (this.session !== session || session.zoomMode !== "hardware" || session.zoomLive) return;
+      const id = session.zoomDevice || session.deviceId || session.deviceLabel || "";
+      if (id && this.restartZoomDevices.has(id)) { this.usePreviewZoom(session); return; }
+      const range = session.zoomRange;
+      const current = session.zoom || range.min;
+      const delta = Math.max(range.step || 0, Math.min(0.4, (range.max - range.min) * 0.08));
+      let probe = this.snapZoom(current + delta, range);
+      if (Math.abs(probe - current) < 0.01) probe = this.snapZoom(current - delta, range);
+      if (Math.abs(probe - current) < 0.01 || typeof track?.applyConstraints !== "function") {
+        session.zoomLive = true;
+        if (id) this.liveZoomDevices.add(id);
+        return;
+      }
+      // Ask for a small zoom before the picture is shown. A live camera returns
+      // immediately; a camera that restarts its preview does not, and then pinch
+      // uses the preview scale instead of interrupting the picture again.
+      let live = false;
+      try { live = await this.zoomLeavesPreviewRunning(track, probe); }
+      catch { live = false; }
+      if (this.session !== session) return;
+      try { await track.applyConstraints({ advanced: [{ zoom: current }] }); }
+      catch { live = false; }
+      if (this.session !== session) return;
+      if (live) {
+        session.zoomLive = true;
+        session.zoom = this.snapZoom(current, range);
+        if (id) this.liveZoomDevices.add(id);
+      } else {
+        if (id) this.restartZoomDevices.add(id);
+        this.usePreviewZoom(session);
+      }
+    }
+
+    async zoomLeavesPreviewRunning(track, zoom) {
+      const video = this.video;
+      if (!video || typeof track?.applyConstraints !== "function") return false;
+      let interrupted = false;
+      const interrupt = () => { interrupted = true; };
+      video.addEventListener?.("emptied", interrupt);
+      track.addEventListener?.("mute", interrupt);
+      const started = Date.now();
+      let rejected = false;
+      try {
+        try { await track.applyConstraints({ advanced: [{ zoom }] }); }
+        catch { rejected = true; }
+        const elapsed = Date.now() - started;
+        if (rejected || interrupted || video.readyState < 2 || !video.videoWidth || elapsed > 350) return false;
+        // A restart can begin just after the constraint promise resolves.
+        await new Promise(resolve => setTimeout(resolve, 200));
+        return !interrupted && video.readyState >= 2 && video.videoWidth > 0;
+      } finally {
+        video.removeEventListener?.("emptied", interrupt);
+        track.removeEventListener?.("mute", interrupt);
+      }
+    }
+
+    usePreviewZoom(session) {
+      session.zoomMode = "simulated";
+      session.zoomLive = false;
+      session.zoomRange = { min: 1, max: 4, step: 0 };
+      session.zoom = 1;
+    }
+
+    async abandonHardwareZoom(session, track) {
+      const id = session.zoomDevice || session.deviceId || session.deviceLabel || "";
+      if (id) this.restartZoomDevices.add(id);
+      const basis = session.zoomApplied > 0 ? session.zoomApplied : 1;
+      const wanted = session.zoom || basis;
+      session.zoomMode = "simulated";
+      session.zoomLive = false;
+      session.zoomRange = { min: 1, max: 4, step: 0 };
+      session.zoom = Math.min(4, Math.max(1, wanted / basis));
+      const current = Number(track?.getSettings?.().zoom);
+      if (track && typeof track.applyConstraints === "function" && Number.isFinite(current) && Math.abs(current - basis) > 0.01) {
+        try { await track.applyConstraints({ advanced: [{ zoom: basis }] }); } catch { /* The preview scale still enlarges the current frames. */ }
+      }
+      if (this.session === session) this.layoutPreview();
     }
 
     setZoom(session, factor) {
@@ -526,22 +618,46 @@
     }
 
     async applyHardwareZoom(session) {
+      if (session.zoomMode !== "hardware") { this.layoutPreview(); return; }
       if (session.zoomPending) { session.zoomQueued = true; return; }
       session.zoomPending = true;
+      const video = this.video;
+      let interrupted = false;
+      const interrupt = () => { interrupted = true; };
       try {
         do {
           session.zoomQueued = false;
+          interrupted = false;
           const track = session.stream?.getVideoTracks?.()[0];
-          if (!track || this.session !== session) return;
-          await track.applyConstraints({ advanced: [{ zoom: session.zoom }] });
+          if (!track || this.session !== session || session.zoomMode !== "hardware") return;
+          video?.addEventListener("emptied", interrupt);
+          track.addEventListener("mute", interrupt);
+          const started = Date.now();
+          const timeStarted = Number(video?.currentTime) || 0;
+          try {
+            await track.applyConstraints({ advanced: [{ zoom: session.zoom }] });
+          } finally {
+            video?.removeEventListener("emptied", interrupt);
+            track.removeEventListener("mute", interrupt);
+          }
+          if (this.session !== session) return;
+          const elapsed = Date.now() - started;
+          const moved = (Number(video?.currentTime) || 0) > timeStarted + 0.02;
+          // A slow in-place zoom keeps the picture moving. A restart stops it.
+          const restarted = interrupted || video?.readyState < 2 || !video?.videoWidth || (elapsed > 400 && !moved);
+          if (restarted) {
+            await this.abandonHardwareZoom(session, track);
+            return;
+          }
           const applied = Number(track.getSettings?.().zoom);
-          if (this.session === session && Number.isFinite(applied)) session.zoom = applied;
-        } while (session.zoomQueued && this.session === session);
+          if (Number.isFinite(applied)) {
+            session.zoom = applied;
+            session.zoomApplied = applied;
+          }
+        } while (session.zoomQueued && this.session === session && session.zoomMode === "hardware");
       } catch {
         if (this.session !== session) return;
-        session.zoomMode = "simulated";
-        session.zoomRange = { min: 1, max: 4, step: 0 };
-        session.zoom = Math.min(4, Math.max(1, session.zoom || 1));
+        await this.abandonHardwareZoom(session, session.stream?.getVideoTracks?.()[0]);
       } finally {
         session.zoomPending = false;
         if (this.session === session) this.layoutPreview();

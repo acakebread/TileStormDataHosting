@@ -34,6 +34,26 @@ const entry=(id,score=100)=>({image:image(id),scan:scan(score),score,frameNumber
   const held={zoom:3.2};camera.configureZoom(held,track);assert.equal(held.zoom,3);assert.equal(held.zoomMode,'hardware');
   const plain={};camera.configureZoom(plain,{getCapabilities:()=>({})});
   assert.equal(plain.zoomMode,'simulated');assert.equal(plain.zoom,1);assert.equal(plain.zoomRange.max,4);
+  camera.restartZoomDevices=new Set(['xr']);
+  const older={deviceId:'xr'};
+  camera.configureZoom(older,{getCapabilities:()=>({zoom:{min:1,max:6,step:0.1}}),getSettings:()=>({zoom:2})});
+  assert.equal(older.zoomMode,'simulated');assert.equal(older.zoom,1);assert.equal(older.zoomRange.max,4);
+  const video={readyState:2,videoWidth:1280,currentTime:1,addEventListener(){},removeEventListener(){}};
+  camera.video=video;
+  const live=camera.zoomLeavesPreviewRunning({applyConstraints(){return Promise.resolve();}},1.2);
+  await flush();
+  await advance(250);
+  assert.equal(await live,true);
+  video.readyState=1;
+  assert.equal(await camera.zoomLeavesPreviewRunning({applyConstraints(){video.readyState=1;return Promise.resolve();}},1.2),false);
+  video.readyState=2;
+  assert.equal(await camera.zoomLeavesPreviewRunning({applyConstraints(){now+=400;return Promise.resolve();}},1.2),false);
+  let hardwareCalls=0;
+  camera.applyHardwareZoom=()=>{hardwareCalls+=1;};
+  camera.layoutPreview=()=>{};
+  const preview=camera.session={zoomMode:'simulated',zoomRange:{min:1,max:4,step:0},zoom:1};
+  camera.setZoom(preview,2);
+  assert.equal(hardwareCalls,0);assert.equal(preview.zoom,2);
 }
 const ui={readProgress:{begin(){},update(){},signature(){},finish(){},syncFrame(){}},showBestFrame(){},clearFeedback(){},sync(){},schedule(){}};
 function setup(){
