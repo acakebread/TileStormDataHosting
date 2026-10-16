@@ -65,7 +65,11 @@ on short landscape screens. The frame border follows the fitted video's actual
 dimensions; inset corner guides suggest leaving room around all four corners of
 the encoded picture. While scanning, that border and the corner guides use the
 same red-to-orange recovery-stage colour as the status line. A found calibration
-replaces it with green. Guides and controls are never included in captured pixels.
+replaces it with green and holds that frame on screen for three seconds. Marker
+appraisal continues on the same raster; new camera frames are not taken while it
+is held. A stable marker fit is opened for decoding without another tap. If that
+frame is not a decode candidate, the live preview resumes when the hold ends.
+Guides and controls are never included in captured pixels.
 Status text and retained near misses occupy a fixed-height, scrollable area below
 the controls. Updates do not move the preview or buttons; on short landscape
 screens, feedback scrolls within the existing controls column. Viewport changes

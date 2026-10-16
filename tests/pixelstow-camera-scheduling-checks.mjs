@@ -71,6 +71,32 @@ function workerQueue(){
   return calls;
 }
 {
+  const {camera,session}=setup();
+  assert.equal(camera.frozenDecodeCandidate({candidates:[{geometry:{rank:1}}]}),true);
+  assert.equal(camera.frozenDecodeCandidate({highConfidence:true,candidates:[]}),true);
+  assert.equal(camera.frozenDecodeCandidate({signature:{likely:true},candidates:[],markers:[{verification:'header'}]}),false);
+  const image={pixels:Uint8Array.of(4),width:1,height:1};
+  const ready={image,scan:{candidates:[{geometry:{rank:3}}],highConfidence:false},frameNumber:4};
+  session.calibrationHold={entry:ready};
+  let accepted=null,scheduled=0;
+  camera.accept=(s,img,inspection,markerScan)=>{s.handingOff=true;accepted={img,markerScan};};
+  camera.schedule=()=>{scheduled+=1;};
+  camera.layoutPreview=()=>{};
+  camera.updateCalibrationLight=()=>{};
+  camera.settleCalibrationHold(session,ready);
+  assert.equal(accepted.img,image);
+  assert.equal(accepted.markerScan,ready.scan);
+  assert.equal(scheduled,0);
+  const missed={image,scan:{candidates:[],signature:{likely:true}},frameNumber:5};
+  session.handingOff=false;
+  const missedHold={entry:missed};
+  session.calibrationHold=missedHold;
+  camera.settleCalibrationHold(session,missed);
+  assert.equal(session.calibrationHold,missedHold);
+  assert.equal(scheduled,0);
+  console.log('PASS: a frozen calibration frame opens when it is a decode candidate and stays up when it is not');
+}
+{
   const {camera,session}=setup(),calls=workerQueue();let accepted;
   session.history=[entry(1)];camera.accept=async(s,img)=>{s.handingOff=true;accepted=img;};
   camera.readBestFrame(session);await flush();

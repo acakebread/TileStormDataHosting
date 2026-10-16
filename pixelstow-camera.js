@@ -1087,18 +1087,33 @@
       this.frozenFrame.hidden = false;
       const hold = { entry };
       session.calibrationHold = hold;
-      // Keep checking this exact raster in the background, with the camera
-      // stream alive behind it. Discard queued lookahead from before the hold.
+      // Stay on this raster. New frames and any other queued appraisal would
+      // replace the picture the user is looking at.
       clearTimeout(session.timer);
       session.guidePending = null;
+      if (session.pending && session.pending !== entry) session.pending = null;
+      if (session.scanningEntry && session.scanningEntry !== entry) session.abort?.abort();
+      if (session.readEntry && session.readEntry !== entry) session.readAbort?.abort();
       this.captureButton.toggleAttribute("data-calibration-hold", true);
       hold.timer = setTimeout(() => {
         if (this.session !== session || session.calibrationHold !== hold || session.handingOff) return;
         this.clearCalibrationHold(session);
-        this.updateCalibrationLight(session);
+        this.updateCalibrationLight(session, entry);
         this.layoutPreview();
         this.schedule(session, 0);
-      }, 2000);
+      }, 3000);
+    }
+
+    frozenDecodeCandidate(scan) {
+      return Boolean(scan?.highConfidence || scan?.candidates?.length);
+    }
+
+    settleCalibrationHold(session, entry) {
+      if (this.session !== session || session.calibrationHold?.entry !== entry || session.handingOff) return;
+      if (!this.frozenDecodeCandidate(entry.scan)) return;
+      // The frozen picture is already a decode candidate. Open it; do not
+      // wait for the rest of the three-second hold or for another tap.
+      this.accept(session, entry.image, undefined, entry.scan, true);
     }
 
     clearCalibrationHold(session) {
@@ -1241,7 +1256,8 @@
       } catch (_) { /* An unavailable/unclear guide always uses ordinary discovery. */ }
       finally {
         clearTimeout(timer); entry.guideImage = null;
-        if (generation === session.guideGeneration && (!entry.markerDispatched || entry.scaleGuide?.detected)) this.enqueueFrame(session, entry);
+        if (generation === session.guideGeneration && (!entry.markerDispatched || entry.scaleGuide?.detected) &&
+          (!session.calibrationHold || session.calibrationHold.entry === entry)) this.enqueueFrame(session, entry);
         session.guideBusy = false;
         if (session.guideAbort === controller) session.guideAbort = null;
         this.checkScaleGuide(session);
@@ -1387,12 +1403,21 @@
           ? "Marker scan complete. Ranking the recent captures…"
           : "No stable marker fit. Reframe and hold steady; checking a fresh capture…");
         if (!session.reading) this.readProgress.update(this.progress.textContent);
+        if (session.calibrationHold?.entry === entry) {
+          this.settleCalibrationHold(session, entry);
+          return;
+        }
         this.readBestFrame(session);
       } catch (error) {
-        if (this.session !== session || controller.signal.aborted) return;
+        if (this.session !== session || controller.signal.aborted) {
+          if (this.session === session && !session.handingOff && session.calibrationHold?.entry === entry)
+            this.settleCalibrationHold(session, entry);
+          return;
+        }
         if (entry.calibratedOnly) {
           entry.state = "calibrated marker check could not finish";
           if (!session.reading) this.progress.textContent = "This calibrated frame did not decode. Checking a fresh capture…";
+          if (session.calibrationHold?.entry === entry) this.settleCalibrationHold(session, entry);
           return;
         }
         session.paused = true;
