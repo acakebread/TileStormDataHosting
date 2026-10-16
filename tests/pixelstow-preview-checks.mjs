@@ -481,6 +481,8 @@ try {
     const cleanRow = ['#preview-audio', '#preview-screen-scale', '#preview-screen-toggle', '#preview-screen-hide', '#preview-markers', '#preview-screen-close'];
     const cleanRowBoxes = await Promise.all(cleanRow.map(selector => page.locator(selector).boundingBox()));
     assert(cleanRowBoxes.every((box, index) => box && box.width >= 44 && box.height >= 48 && Math.abs(box.y - cleanRowBoxes[0].y) < 1 && (!index || box.x >= cleanRowBoxes[index - 1].x + cleanRowBoxes[index - 1].width + 7)), 'audio and Analysis join the clean preview icon row: ' + JSON.stringify(cleanRowBoxes));
+    await checkCleanLayers();
+    await page.getByRole('button', { name: 'Show source image', exact: true }).click();
     await checkCleanLayers(true);
     await page.getByRole('button', { name: 'Show encoded image', exact: true }).click();
     await checkCleanLayers();

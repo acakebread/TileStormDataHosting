@@ -2,8 +2,8 @@
 (function (root) {
   "use strict";
   class PixelStowPreview {
-    constructor({ preview, viewport, canToggleSource, canCopyImage, copyImage, captureView, restoreView, fit, toggleScale, resize, onFrame }) {
-      Object.assign(this, { preview, viewport, canToggleSource, canCopyImage, copyImage, captureView, restoreView, fit, toggleScale, resize, onFrame });
+    constructor({ preview, viewport, canToggleSource, preferSourceOnOpen, canCopyImage, copyImage, captureView, restoreView, fit, toggleScale, resize, onFrame }) {
+      Object.assign(this, { preview, viewport, canToggleSource, preferSourceOnOpen, canCopyImage, copyImage, captureView, restoreView, fit, toggleScale, resize, onFrame });
       this.panel = document.querySelector("#preview-panel");
       this.slot = document.querySelector("#preview-screen");
       this.toolbar = document.querySelector("#preview-screen-toolbar");
@@ -142,7 +142,7 @@
       this.comparison.before(this.comparisonPlaceholder);
       this.footer.prepend(this.comparison);
       this.panel.classList.toggle("clean", clean);
-      this.preferSource = clean;
+      this.preferSource = clean && this.preferSourceOnOpen?.() !== false;
       this.panel.classList.remove("show-source");
       this.panel.setAttribute("aria-label", clean ? "Full screen image preview. Tap for controls; hold to switch encoded image and source when available; drag with the left mouse button or one or two fingers to pan; pinch to zoom; Escape to close."
         : "Full screen image comparison. Tap for controls; drag with one finger to pan; hold still to drag the divider; pinch to zoom; Escape to close.");
