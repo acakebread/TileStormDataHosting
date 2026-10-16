@@ -58,6 +58,7 @@ try {
           const started = performance.now();
           const hint = await PixelStow.scanEdgeGuide(pixels, image.width, image.height, {maxMilliseconds: 3000});
           row.rawBeacon = {detected: Boolean(hint), milliseconds: Math.round(performance.now()-started), scale: hint?.scale};
+          if(row.encodedBeacon&&!hint)throw Error('Known beacon capture failed live-budget calibration detection');
           if (hint) {
             const guidedPixels=pixels.slice(),guidedStart=performance.now();
             const guidedScan=await PixelStow.scanMarkers(guidedPixels,image.width,image.height,

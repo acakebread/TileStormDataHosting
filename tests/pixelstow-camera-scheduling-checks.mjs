@@ -150,7 +150,7 @@ const pilot={detected:true,confirmed:false,scale:1,fx:1/128,fy:0,width:16,height
   session.abort=new AbortController();
   const positive={...entry(2),scaleGuide:pilot};camera.enqueueFrame(session,positive);camera.enqueueFrame(session,entry(3));
   assert.equal(session.pending,positive,'unhinted arrivals cannot displace a pending pilot');
-  assert(!session.abort.signal.aborted,'a verified marker protects useful acquisition until the later frame is appraised');
+  assert(session.abort.signal.aborted,'positive calibration preempts an acquisition that started without calibration, even after a marker verifies');
 }
 {
   const {camera,session}=setup(),calls=workerQueue();
@@ -203,9 +203,7 @@ console.log('PASS: independent latest-frame Fourier lookahead, pilot-first prior
   camera.video.currentTime=4;camera.scan(session);camera.video.currentTime=5;camera.scan(session);
   assert.equal(session.guidePending.frameNumber,5);guides[3].resolve(null);await flush();assert.equal(guides[4].id,5);
   guides[4].resolve(pilot);await flush();
-  assert(!markers[0].options.signal.aborted,'an ordinary fallback must finish despite later calibration hints');
-  assert.equal(session.pending.frameNumber,5);
-  markers[0].resolve({markers:[],candidates:[]});await flush();
+  assert(markers[0].options.signal.aborted,'a green frame immediately preempts an uncalibrated fallback');
   assert.equal(markers[1].id,5);assert.equal(markers[1].options.calibratedOnly,true);assert.equal(markers[1].options.deadline-now,8000);
   assert.equal(markers[1].options.seed,undefined);assert.equal(markers[1].options.scaleGuide.scale,pilot.scale);assert.equal(markers[1].options.scaleGuide.fx,pilot.fx);
   assert.equal(camera.calibrationLight['data-state'],'detected');assert.match(camera.calibrationLight.textContent,/Calibration found/);
@@ -276,6 +274,28 @@ console.log('PASS: calibration-first full-raster appraisal, delayed/periodic fal
   assert.equal(accepted.pixels[0],3);assert.equal(timers.size,0);
 }
 console.log('PASS: repeated calibration positives retain full fallback, first-fit payload handoff and score-jitter protection');
+
+
+{
+  const {camera,session}=setup(),reads=workerQueue(),markerCalls=[];let accepted;
+  session.history=[entry(1)];camera.readBestFrame(session);await flush();
+  codec.scanMarkers=(p,w,h,o)=>new Promise((resolve,reject)=>{
+    markerCalls.push({id:p[0],options:o,resolve});o.signal.addEventListener('abort',()=>reject(new DOMException('Cancelled','AbortError')),{once:true});
+  });
+  camera.accept=async(s,img)=>{s.handingOff=true;accepted=img;};
+  camera.enqueueFrame(session,{...entry(2),guideKind:'edge',scaleGuide:pilot});
+  assert(reads[0].options.signal.aborted,'a green frame cancels an uncalibrated payload read before marker appraisal completes');
+  await flush();assert.equal(markerCalls[0].id,2);assert(markerCalls[0].options.calibratedOnly);
+  assert.equal(reads.length,1,'the new frame still requires its own marker fit before reading');
+  markerCalls[0].resolve(scan(50));await flush();
+  assert.equal(reads[1].id,2);
+  camera.enqueueFrame(session,{...entry(3),guideKind:'edge',scaleGuide:pilot});await flush();
+  assert(!reads[1].options.signal.aborted,'another green frame must not interrupt a read already started from calibration');
+  markerCalls[1].resolve({markers:[],candidates:[]});await flush();
+  reads[1].resolve({found:true,unreadable:false});await flush();
+  assert.equal(accepted.pixels[0],2);assert.equal(timers.size,0);
+}
+console.log('PASS: a green frame immediately replaces uncalibrated payload reads, while calibrated reads remain protected');
 
 {
   const {camera,session}=setup();

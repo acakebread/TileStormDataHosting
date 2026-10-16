@@ -272,10 +272,16 @@
   async function searchQuarter(q,options,check) {
     let best=null,lastYield=Date.now();
     const low=options.minimumScale||.5,high=options.maximumScale||2.5,step=options.scaleStep||.01;
+    try {
     for(let scale=low;scale<=high+step/2;scale+=step) {
       check();const candidate=matchFrame(q,scale,check);
       if(candidate&&(!best||candidate.score>best.score))best=candidate;
       if(Date.now()-lastYield>40){await pause();lastYield=Date.now();}
+    }
+    } catch(error) {
+      // A completed phase-verified match stays valid when later scales exhaust
+      // the budget. Cancellation still discards the frame; partial fits do not count.
+      if(error.name!=='EdgeGuideLimit'||!best)throw error;
     }
     return best;
   }
@@ -330,16 +336,20 @@
         }
       }
       if(!best){original.knownBounds=true;best=await searchQuarter(original,searchOptions,check);original.knownBounds=false;}
-      if(!best)best=await searchQuarter(original,searchOptions,check);
       if(!best&&options.contentSearch!==false) {
-        for(const quad of contentQuads(coarse,w,h,check)) {
+        // Give inner-picture proposals a bounded turn before integrating over
+        // all the surrounding clutter. Keep time for the original global search.
+        const contentDeadline=Math.min(deadline,Date.now()+Math.min(800,(deadline-Date.now())*.4));
+        const contentCheck=()=>{check();if(Date.now()>=contentDeadline){const error=new Error('Content proposal budget');error.name='EdgeGuideLimit';throw error;}};
+        try {for(const quad of contentQuads(coarse,w,h,contentCheck)) {
           const full=quad.map(p=>({x:(p.x+.5)*reduction-.5,y:(p.y+.5)*reduction-.5}));
           if(polygonArea(full)/(width*height)<(options.minimumCoverage??.5))continue;
-          const rectified=rectify(original,full,check);if(!rectified)continue;
-          const candidate=await searchQuarter(rectified,searchOptions,check);
+          const rectified=rectify(original,full,contentCheck);if(!rectified)continue;
+          const candidate=await searchQuarter(rectified,searchOptions,contentCheck);
           if(candidate){best=candidate;selected=rectified;break;}
-        }
+        }}catch(error){if(error.name!=='EdgeGuideLimit'||Date.now()>=deadline)throw error;}
       }
+      if(!best)best=await searchQuarter(original,searchOptions,check);
       if(!best)return null;
       const horizontal=best.pairs[0],vertical=best.pairs[1];
       const bounds={left:vertical.first.position*reduction-INSET*best.scale,

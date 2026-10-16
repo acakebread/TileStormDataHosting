@@ -1,0 +1,20 @@
+// Preserve complete calibration evidence when later scale trials run out of time.
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import vm from 'node:vm';
+let source=await fs.readFile(new URL('../pixelstow-edge-guide.js',import.meta.url),'utf8');
+source=source.replace('function matchFrame(q,scale,check) {','function matchFrame(q,scale,check) { return root.testFrame(scale);');
+source=source.replace('root.PixelStowEdgeGuide={','root.searchQuarter=searchQuarter;root.PixelStowEdgeGuide={');
+const window={};vm.runInNewContext(source,{window,Float64Array,Float32Array,Uint8Array,Math,Date,setTimeout});
+const options={minimumScale:.5,maximumScale:.6,scaleStep:.01};
+const limit=()=>Object.assign(new Error('budget'),{name:'EdgeGuideLimit'});
+const first={scale:.5,score:1.2},better={scale:.51,score:1.5};
+let trials=0;
+window.testFrame=()=>++trials===1?first:better;
+const result=await window.searchQuarter({},options,()=>{if(trials===2)throw limit();});
+assert.equal(result,better,'completed beacon matches survive a later scale timing out');
+window.testFrame=()=>null;trials=0;
+await assert.rejects(window.searchQuarter({},options,()=>{if(++trials===2)throw limit();}),{name:'EdgeGuideLimit'},'a timeout with no completed match remains a miss');
+window.testFrame=()=>first;trials=0;
+await assert.rejects(window.searchQuarter({},options,()=>{if(++trials===2)throw Object.assign(new Error('cancelled'),{name:'AbortError'});}),{name:'AbortError'},'user cancellation must still discard previously measured evidence');
+console.log('PASS: calibration retains the strongest complete match at the deadline, never invents a match on timeout, and still honours cancellation');

@@ -1030,10 +1030,19 @@
       session.pending = entry;
       entry.markerDispatched = true;
       const active = session.scanningEntry;
-      if (entry.scaleGuide?.detected && active && !active.fallback && !active.markerGuideUsed && !active.markerConfirmed) {
-        session.abort?.abort();
-        if (!session.reading) this.progress.textContent = (entry.guideKind === "edge" ? "Edge guide found. " : "Scale pilot found. ") +
-          "Prioritising frame " + entry.frameNumber + " for marker checks…";
+      if (entry.scaleGuide?.detected) {
+        const replaceScan = active && active !== entry && !active.markerGuideUsed;
+        const read = session.readEntry;
+        const replaceRead = read && read !== entry && !(read.markerGuideUsed ?? read.scaleGuide?.detected);
+        if (replaceScan || replaceRead) {
+          entry.fallback = false;
+          if (replaceScan) session.abort?.abort();
+          if (replaceRead) {
+            read.state = "replaced by a calibrated capture";
+            session.readAbort?.abort();
+          }
+          this.progress.textContent = "Calibration found. Switching to frame " + entry.frameNumber + "…";
+        }
       }
       this.scanMarkers(session);
     }
