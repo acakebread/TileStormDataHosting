@@ -258,6 +258,8 @@
     .preview-context-menu button { display: block; width: 100%; white-space: nowrap; text-align: left; }
     .camera-calibration { position: absolute; top: 12px; left: 50%; z-index: 2; box-sizing: border-box; max-width: calc(100% - 24px); transform: translateX(-50%); padding: 5px 10px; border-radius: 6px; background: #081016df; color: #bdc8cf; font-size: .8rem; line-height: 1.3; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
     .camera-calibration::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 50%; background: #86939b; }
+    .camera-calibration[data-state="none"] { color: #8b98a1; }
+    .camera-calibration[data-state="none"]::before { background: #6a767e; }
     .camera-calibration[data-state="detected"] { color: #b8f3c7; }
     .camera-calibration[data-state="detected"]::before { background: #61e28b; box-shadow: 0 0 7px #61e28b99; }
     .preview-panel.clean #preview-source,
@@ -362,7 +364,7 @@
       .camera-header .hint { grid-column: 1 / -1; grid-row: 2; margin: 0; font-size: 0.75rem; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .camera-header button { grid-column: 2; grid-row: 1; padding: 4px 8px; }
       .camera-view { width: 100%; min-height: 0; }
-      .camera-footer { min-height: 0; overflow: visible; gap: 4px; grid-template-rows: auto minmax(0, 1fr); }
+      .camera-footer { position: relative; min-height: 0; overflow: visible; gap: 4px; grid-template-rows: auto minmax(0, 1fr); }
       .camera-footer .read-live-status {
         position: absolute; left: 0; right: 0; bottom: calc(100% + 2px); z-index: 2;
         margin: 0; height: auto; padding: 1px 6px; pointer-events: none;
@@ -677,7 +679,7 @@
           </header>
           <div class="camera-view" id="camera-view" role="button" tabindex="0" aria-label="Capture and read the live camera preview" aria-disabled="true">
             <video id="camera-video" autoplay muted playsinline aria-label="Live camera preview"></video>
-            <span class="camera-calibration" id="camera-calibration" data-state="searching" role="status" hidden>Looking for calibration</span>
+            <span class="camera-calibration" id="camera-calibration" data-state="searching" role="status" hidden>Searching</span>
             <div class="camera-frame" id="camera-frame" hidden aria-hidden="true">
               <div class="camera-target"><span></span><span></span><span></span><span></span></div>
               <p class="camera-frame-note">Tap the preview to capture</p>
@@ -905,7 +907,7 @@
       </div>
     </section>
   </main>
-  <dialog class="preview-panel" id="preview-panel" aria-label="Full screen image preview. Tap to show controls; hold one finger to drag the divider; pinch to zoom; press Escape to close." tabindex="-1">
+  <dialog class="preview-panel" id="preview-panel" aria-label="Full screen image preview. Tap to show controls; drag with one finger to pan; hold still to drag the divider; pinch to zoom; press Escape to close." tabindex="-1">
     <div class="preview-screen" id="preview-screen"></div>
     <div class="preview-screen-footer" id="preview-screen-footer">
       <div class="preview-screen-toolbar" id="preview-screen-toolbar">
@@ -987,8 +989,8 @@
   <script src="./pixelstow-media.js?v=20261015-preview-icons1"></script>
   <script src="./pixelstow-sharing.js?v=20261016-preview-copy1"></script>
   <script src="./pixelstow-read-progress.js?v=20261016-frame-outline"></script>
-  <script src="./pixelstow-camera.js?v=20261016-portrait-width"></script>
-  <script src="./pixelstow-preview.js?v=20261016-scale-toggle1"></script>
+  <script src="./pixelstow-camera.js?v=20261016-status-copy"></script>
+  <script src="./pixelstow-preview.js?v=20261016-comparison-pan"></script>
   <script>
     const fileInput = document.querySelector("#file");
     const chooseImageButton = document.querySelector("#choose-image");
@@ -2124,9 +2126,9 @@
     function startTouchView(continuePan = false) {
       const [a, b] = [...previewTouches.values()];
       if (!b) {
-        // The clean viewer has no divider or page to scroll. Let a single
-        // moving finger pan, while a stationary finger keeps tap/hold actions.
-        touchView = a && fullPreview.clean ? { single: true, x: a.x, y: a.y,
+        // A full-screen viewer has no page to scroll. A moving finger pans.
+        // In the comparison viewer a finger that stays still can still take the divider.
+        touchView = a && fullPreview.openNow ? { single: true, x: a.x, y: a.y,
           originX, originY, dragging: continuePan } : null;
         return;
       }
@@ -2143,8 +2145,8 @@
       }
     }
 
-    // Single-finger page scrolling stays native outside the clean full-screen
-    // viewer. Touch events also keep pinch/pan usable when pan-y cancels pointers.
+    // Single-finger page scrolling stays native outside a full-screen viewer.
+    // Touch events also keep pinch/pan usable when pan-y cancels pointers.
     viewport.addEventListener("touchstart", (event) => {
       if (!imagePixels().w) return;
       trackPreviewTouches(event);
@@ -2152,15 +2154,17 @@
         if (event.cancelable) event.preventDefault();
         endSplit();
         startTouchView();
-      } else if (fullPreview.clean) startTouchView();
+      } else if (fullPreview.openNow) startTouchView();
     }, { passive: false });
     viewport.addEventListener("touchmove", (event) => {
       trackPreviewTouches(event);
       if (!touchView) return;
-      if (touchView.single && previewTouches.size === 1 && fullPreview.clean) {
+      if (touchView.single && previewTouches.size === 1 && fullPreview.openNow && splitPointer === null) {
         const [finger] = previewTouches.values();
         if (!touchView.dragging) {
           if (fullPreview.tap?.held || Math.hypot(finger.x - touchView.x, finger.y - touchView.y) <= 8) return;
+          // Movement wins over the divider hold. A stationary finger can still grab it.
+          cancelSplitHold();
           touchView.dragging = true;
           fullPreview.cancelTap();
         }

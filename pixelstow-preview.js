@@ -142,7 +142,7 @@
       this.panel.classList.toggle("clean", clean);
       this.panel.classList.remove("show-source");
       this.panel.setAttribute("aria-label", clean ? "Full screen image preview. Tap for controls; hold to switch encoded image and source when available; drag with the left mouse button or one or two fingers to pan; pinch to zoom; Escape to close."
-        : "Full screen image comparison. Tap for controls; hold to drag the divider; pinch to zoom; Escape to close.");
+        : "Full screen image comparison. Tap for controls; drag with one finger to pan; hold still to drag the divider; pinch to zoom; Escape to close.");
       this.controls(!clean);
       document.documentElement.classList.add("preview-modal-open");
       document.body.classList.add("preview-modal-open");

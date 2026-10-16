@@ -132,8 +132,9 @@ calibration outline must cover at least 75% of the frame; this is a reasonably
 framed scan rather than a search for small distant images.
 
 Normal capture waits for calibration before dispatching that frame's marker
-worker. A positive result lights a green **Calibration found** indicator on
-the live preview and shows **Edge guide · ~1.25× scale** beside the status. This
+worker. The live-preview indicator reads **Searching** until a frame is checked,
+**No signal** when that check finds no guide, and **Calibration found** when it
+does. The scan notes still show **Edge guide · ~1.25× scale**. This
 indicates measured guide evidence, not a confirmed payload. The two local
 frequencies, transverse envelope and spatial phases must agree. Visible padding
 can propose a tilted rectangle, but its outline alone is never a detection.
@@ -244,7 +245,7 @@ is absent from the live feed and remains available when live access fails. It
 also has a shortcut inside the live-camera dialog, using the same input and import
 flow as the page's **Take photo** button. On desktop it uses manual live capture
 and never substitutes a file picker for the camera. Scan camera retains continuous
-scanning with the four-second framing delay.
+scanning with the two-second framing delay.
 
 A high-confidence marker fit can start a read before every image scale was
 visited. For ordinary uncalibrated fallback, a failed payload resumes the unvisited marker

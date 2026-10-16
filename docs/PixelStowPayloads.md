@@ -156,10 +156,11 @@ requested where supported; iPhones retain the viewport-filling dialog fallback.
 The upper fullscreen button keeps the comparison/analysis viewer. There, the
 maximise icon hides controls and a short tap reveals them again. Holding one finger
 still for 450 milliseconds grabs the divider from anywhere in the fullscreen
-viewport, even when its handle is offscreen. Movement before that delay cancels
-the hold; a second finger cancels it for pinch/two-finger pan. Releasing a held
-divider does not reveal controls. Immediate handle/line dragging and desktop
-mouse scrubbing remain available. Escape closes the viewer.
+viewport, even when its handle is offscreen. A one-finger drag before that delay
+pans the picture, as in the lower preview. A second finger cancels the hold for
+pinch or two-finger pan. Releasing a held divider does not reveal controls.
+Immediate handle/line dragging and desktop mouse scrubbing remain available.
+Escape closes the viewer.
 Successful reads start with marker overlays hidden. Failed photographs show
 diagnostic markers; continuous captures start clean. Fullscreen preview has a
 button-style **Analysis** toggle just before Close in the action row, including
@@ -176,7 +177,7 @@ The separate overlay never changes captured or exported pixels. The comparison r
 slider has a larger thumb and a 48-pixel-high touch target.
 Choose image becomes Cancel search while automatic image recovery runs, leaving
 the loaded image ready for encoding after cancellation. Continuous camera
-scanning waits four seconds after the live video starts before buffering or
+scanning waits two seconds after the live video starts before buffering or
 checking frames; manual capture remains available during that framing period.
 The first camera Decode or Create discovers and ranks cameras, caching that information
 for the page session. Reopening or cycling uses the cached list and opens the

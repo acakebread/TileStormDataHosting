@@ -158,7 +158,8 @@ console.log('PASS: independent latest-frame Fourier lookahead, pilot-first prior
   camera.scan(session);assert.equal(guides.length,1);assert.equal(markers.length,0,'uncalibrated frames only start cheap appraisal');
   assert.equal(guides[0].pixels,captured[0].pixels);assert.equal(guides[0].options.deadline-now,1000);
   assert.equal(guides[0].options.minimumCoverage,.75,'camera-only fast calibration assumes the carrier fills three quarters of the view');
-  guides[0].resolve(null);await flush();assert.equal(markers.length,0);assert.equal(camera.calibrationLight['data-state'],'searching');
+  guides[0].resolve(null);await flush();assert.equal(markers.length,0);assert.equal(camera.calibrationLight['data-state'],'none');
+  assert.equal(camera.calibrationLight.textContent,'No signal');
   await advance(4900);camera.video.currentTime=2;camera.scan(session);guides[1].resolve(null);await flush();assert.equal(markers.length,0);
   await advance(100);camera.video.currentTime=3;camera.scan(session);guides[2].resolve(null);await flush();
   assert.equal(markers.length,1);assert.equal(markers[0].id,3);assert.equal(markers[0].options.deadline-now,8000);assert.equal(markers[0].options.calibratedOnly,false);

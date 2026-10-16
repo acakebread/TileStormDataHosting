@@ -489,7 +489,8 @@
       const footerGaps = footerGap * (statusOut ? 1 : 2);
       const available = this.panel.clientHeight - header - controls - statusH - padY - gap * 2 - footerPad - footerGaps;
       const needed = this.view.clientWidth * frameHeight / frameWidth;
-      const next = Math.max(120, Math.floor(Math.min(needed, Math.max(120, available))));
+      const room = Math.max(120, available);
+      const next = Math.floor(needed > room && needed - room <= 8 ? needed : Math.min(needed, room));
       if (this.view.style.height !== next + "px") {
         this.view.style.minHeight = "0px";
         this.view.style.height = next + "px";
@@ -631,7 +632,7 @@
         this.failedDevices.delete(session.deviceId);
         // Start the grace period when the live picture is ready, rather than
         // counting camera permission/startup time as time spent framing it.
-        session.scanAfter = Date.now() + 4000;
+        session.scanAfter = Date.now() + 2000;
         session.fallbackAfter = Date.now() + 5000;
         this.updateCalibrationLight(session);
         this.sync();
@@ -639,7 +640,7 @@
           : session.manualCapture ? "Camera ready. Frame your picture, then tap Capture and read."
           : session.paused && this.backgroundAvailable ? "Camera ready. Scanning paused; capture a photo or resume scanning."
           : this.backgroundAvailable
-          ? "Frame your picture. Automatic scanning starts in four seconds; Capture and read is available now."
+          ? "Frame your picture. Automatic scanning starts in two seconds; Capture and read is available now."
           : "Preview ready. Tap Capture and read. Automatic background scanning needs HTTPS or localhost.";
         if (session.captureProfile !== "preferred") this.progress.textContent += " Compatibility mode: " +
           this.video.videoWidth + " × " + this.video.videoHeight + " actual pixels.";
@@ -802,13 +803,13 @@
     updateCalibrationLight(session, entry) {
       if (this.session !== session) return;
       const detected = session.purpose !== "source" && Boolean(entry?.scaleGuide?.detected);
+      const state = detected ? "detected" : entry?.guideChecked ? "none" : "searching";
       if (this.frame) this.frame.dataset.calibration = detected ? "detected" : "searching";
       this.readProgress?.syncFrame();
       if (!this.calibrationLight) return;
       this.calibrationLight.hidden = session.purpose === "source";
-      this.calibrationLight.setAttribute?.("data-state", detected ? "detected" : "searching");
-      this.calibrationLight.textContent = detected
-        ? "Calibration found · ~" + entry.scaleGuide.scale.toFixed(2) + "×" : "Looking for calibration";
+      this.calibrationLight.setAttribute?.("data-state", state);
+      this.calibrationLight.textContent = detected ? "Calibration found" : state === "none" ? "No signal" : "Searching";
     }
 
     preserveCalibration(entry, result) {

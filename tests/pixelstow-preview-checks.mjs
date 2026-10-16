@@ -379,9 +379,20 @@ try {
       await send('touchEnd');
       assert.equal(await split(), baseline); assert(await page.evaluate(before => viewScale > before, scale));
       assert(!(await page.locator('#preview-screen-footer').isVisible()));
-      // A moving first finger cancels the hold rather than grabbing mid-swipe.
+      // A moving first finger pans and cancels the hold rather than grabbing mid-swipe.
+      await page.evaluate(() => {
+        const image = imagePixels(), box = viewBox();
+        fitMode = false; viewScale = fittedScale(image, box) * 3;
+        originX = (box.w - image.w * viewScale) / 2;
+        originY = (box.h - image.h * viewScale) / 2;
+        applyView();
+      });
+      const panBefore = await page.evaluate(() => ({ x: originX, y: originY, scale: viewScale }));
       await send('touchStart', [point(1, width * .2, y)]);
       await send('touchMove', [point(1, width * .3, y + 25)]);
+      const panAfter = await page.evaluate(() => ({ x: originX, y: originY, scale: viewScale }));
+      assert(panAfter.x > panBefore.x + 20 && panAfter.y > panBefore.y + 15, 'a one-finger drag pans the comparison when it does not grab the divider: ' + JSON.stringify({ before: panBefore, after: panAfter }));
+      assert.equal(panAfter.scale, panBefore.scale);
       await page.waitForTimeout(550); await send('touchEnd');
       assert.equal(await split(), baseline); assert(!(await page.locator('#preview-screen-footer').isVisible()));
       await send('touchStart', [point(1, width * .2, y)]); await send('touchCancel');
@@ -389,7 +400,7 @@ try {
       await page.touchscreen.tap(width * .8, y);
       assert(await page.locator('#preview-screen-footer').isVisible());
       await cdp.detach();
-      console.log(`PASS: ${width}px one-row icons and audio labels; hidden-controls long press grabs an offscreen divider, tracks continuously and leaves short taps/pinch/swipes/cancellation intact`);
+      console.log(`PASS: ${width}px one-row icons and audio labels; hidden-controls long press grabs an offscreen divider; a one-finger drag pans instead; short taps, pinch and cancellation stay intact`);
     } else {
       const box = await page.locator('#compare-ui').boundingBox(), y = box.y + box.height * .3;
       await page.mouse.move(box.x + box.width * .2, y); await page.mouse.down();
