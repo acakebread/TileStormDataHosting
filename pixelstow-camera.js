@@ -453,9 +453,16 @@
     }
 
     layoutPreview() {
-      const session = this.session, width = this.video.videoWidth, height = this.video.videoHeight;
-      this.frame.hidden = !session?.ready || !width || !height;
-      if (this.frame.hidden) { this.resetPortraitPreview(); this.placeCalibration(); return; }
+      const session = this.session;
+      if (!session) { this.frame.hidden = true; this.video.style.visibility = "hidden"; this.resetPortraitPreview(); this.placeCalibration(); return; }
+      // Permission and device startup must not collapse the preview row. Use
+      // the requested orientation until actual video dimensions are available.
+      const ready = session.ready && this.video.videoWidth && this.video.videoHeight;
+      const portrait = this.isPortrait();
+      const width = ready ? this.video.videoWidth : portrait ? 1920 : 2560;
+      const height = ready ? this.video.videoHeight : portrait ? 2560 : 1920;
+      this.frame.hidden = false;
+      this.video.style.visibility = ready ? "visible" : "hidden";
       const sideways = session.rotation % 180 !== 0;
       const frameWidth = sideways ? height : width, frameHeight = sideways ? width : height;
       const viewW = this.view.clientWidth || 1;
@@ -758,6 +765,7 @@
         this.panel.showModal();
         document.documentElement.classList.add("camera-modal-open");
         document.body.classList.add("camera-modal-open");
+        this.sync();
         // Ideals allow a lower-resolution webcam to work too. Never request the
         // microphone, crop to the CSS preview, or rescale captured video pixels.
         if (options.deviceId === undefined) await this.startBestDevice(session, facing);
