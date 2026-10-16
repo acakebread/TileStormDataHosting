@@ -341,6 +341,7 @@
     .camera-controls { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: stretch; gap: 8px; margin: 0; }
     .camera-controls button { margin: 0; padding: 9px 6px; min-width: 0; line-height: 1.15; }
     .camera-controls .camera-shutter { color: #081016; background: var(--tile-azure); font-weight: 700; }
+    .camera-controls .camera-shutter[data-calibration-hold] { background: #61e28b; border-color: #61e28b; }
     #capture-frame { grid-column: 1 / -1; grid-row: 1; margin-right: 104px; }
     #pause-camera { grid-column: 2; grid-row: 1; justify-self: end; width: 44px; margin-right: 52px; padding: 0; z-index: 1; }
     #pause-camera svg { display: block; }
@@ -990,7 +991,7 @@
   <script src="./pixelstow-media.js?v=20261015-preview-icons1"></script>
   <script src="./pixelstow-sharing.js?v=20261016-preview-copy1"></script>
   <script src="./pixelstow-read-progress.js?v=20261016-frame-outline"></script>
-  <script src="./pixelstow-camera.js?v=20261016-calibration-priority1"></script>
+  <script src="./pixelstow-camera.js?v=20261016-calibration-hold1"></script>
   <script src="./pixelstow-preview.js?v=20261016-encoded-default"></script>
   <script>
     const fileInput = document.querySelector("#file");

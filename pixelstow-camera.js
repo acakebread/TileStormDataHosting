@@ -49,7 +49,7 @@
       this.guides = document.querySelector("#camera-guides");
       this.frozenFrame = document.createElement("canvas");
       this.frozenFrame.hidden = true;
-      this.frozenFrame.style.cssText = "position:absolute;inset:0;width:100%;height:100%;object-fit:contain;pointer-events:none";
+      this.frozenFrame.style.cssText = "position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;pointer-events:none";
       this.video.after(this.frozenFrame);
       this.useNearButton = document.querySelector("#use-camera-near-miss");
       // file:// can show a camera preview where permitted, but cannot run this
@@ -157,7 +157,7 @@
       if (!session?.ready || session.adjusting || session.handingOff || this.switchOperation || this.working() || this.video.readyState < 2) return;
       // Keep audio permission preparation in the actual shutter/tap gesture.
       this.prepareCapture?.();
-      try { this.accept(session, this.captureFrame(), undefined, undefined, false); }
+      try { this.accept(session, session.calibrationHold?.entry.image || this.captureFrame(), undefined, undefined, false); }
       catch (error) { this.progress.textContent = error.message; }
     }
 
@@ -458,7 +458,7 @@
 
     layoutPreview() {
       const session = this.session;
-      if (session?.handingOff && this.frozenFrame && !this.frozenFrame.hidden) return;
+      if ((session?.handingOff || session?.calibrationHold) && this.frozenFrame && !this.frozenFrame.hidden) return;
       if (!session) { this.frame.hidden = true; this.video.style.visibility = "hidden"; this.resetPortraitPreview(); this.placeCalibration(); return; }
       // Permission and device startup must not collapse the preview row. Use
       // the requested orientation until actual video dimensions are available.
@@ -884,7 +884,7 @@
     }
 
     schedule(session, delay = 700) {
-      if (this.session !== session || session.purpose === "source" || session.paused || session.adjusting || session.handingOff) return;
+      if (this.session !== session || session.purpose === "source" || session.paused || session.adjusting || session.handingOff || session.calibrationHold) return;
       clearTimeout(session.timer);
       session.timer = setTimeout(() => this.scan(session), Math.max(delay, (session.scanAfter || 0) - Date.now()));
     }
@@ -911,6 +911,7 @@
     }
 
     cancelSearches(session, clearHistory = false) {
+      this.clearCalibrationHold(session);
       this.updateCalibrationLight(session);
       session.abort?.abort();
       session.readAbort?.abort();
@@ -958,6 +959,42 @@
       const hint = entry.scaleGuide;
       return hint?.detected && (entry.guideKind === "edge" || hint.kind === "edge") && Number.isFinite(hint.scale)
         ? "Edge guide · ~" + hint.scale.toFixed(2) + "× scale." : "";
+    }
+
+    holdCalibrationFrame(session, entry) {
+      if (this.session !== session || session.purpose === "source" || session.paused || session.adjusting ||
+        session.handingOff || session.calibrationHold || !entry.scaleGuide?.detected || !this.frozenFrame) return;
+      const { image } = entry;
+      this.frozenFrame.width = image.width;
+      this.frozenFrame.height = image.height;
+      this.frozenFrame.getContext("2d").putImageData(new ImageData(new Uint8ClampedArray(image.pixels), image.width, image.height), 0, 0);
+      this.frozenFrame.hidden = false;
+      const hold = { entry };
+      session.calibrationHold = hold;
+      // Keep checking this exact raster in the background, with the camera
+      // stream alive behind it. Discard queued lookahead from before the hold.
+      clearTimeout(session.timer);
+      session.guidePending = null;
+      this.captureButton.toggleAttribute("data-calibration-hold", true);
+      hold.timer = setTimeout(() => {
+        if (this.session !== session || session.calibrationHold !== hold || session.handingOff) return;
+        this.clearCalibrationHold(session);
+        this.updateCalibrationLight(session);
+        this.layoutPreview();
+        this.schedule(session, 0);
+      }, 2000);
+    }
+
+    clearCalibrationHold(session) {
+      const hold = session.calibrationHold;
+      if (!hold) return;
+      clearTimeout(hold.timer);
+      session.calibrationHold = null;
+      if (this.session === session || !this.session) {
+        this.captureButton?.toggleAttribute("data-calibration-hold", false);
+        // A successful/manual handoff owns the frozen canvas from here on.
+        if (!session.handingOff && this.frozenFrame) this.frozenFrame.hidden = true;
+      }
     }
 
     updateCalibrationLight(session, entry) {
@@ -1048,7 +1085,7 @@
     }
 
     async checkScaleGuide(session) {
-      if (this.session !== session || session.purpose === "source" || session.paused || session.adjusting || session.handingOff || session.guideBusy || !session.guidePending) return;
+      if (this.session !== session || session.purpose === "source" || session.paused || session.adjusting || session.handingOff || session.calibrationHold || session.guideBusy || !session.guidePending) return;
       session.guideBusy = true;
       const entry = session.guidePending; session.guidePending = null;
       const generation = session.guideGeneration;
@@ -1083,6 +1120,7 @@
         }
         this.preserveCalibration(entry, entry.scan);
         this.preserveCalibration(entry, entry.inspection);
+        this.holdCalibrationFrame(session, entry);
         this.updateCalibrationLight(session, entry);
       } catch (_) { /* An unavailable/unclear guide always uses ordinary discovery. */ }
       finally {
@@ -1130,7 +1168,7 @@
     }
 
     scan(session) {
-      if (this.session !== session || session.purpose === "source" || session.paused || session.adjusting || session.handingOff) return;
+      if (this.session !== session || session.purpose === "source" || session.paused || session.adjusting || session.handingOff || session.calibrationHold) return;
       if (Date.now() < (session.scanAfter || 0)) { this.schedule(session, 0); return; }
       if (this.video.readyState < 2 || this.video.currentTime === session.lastTime) {
         this.schedule(session);
