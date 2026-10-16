@@ -732,8 +732,8 @@
       const pauseLabel = session?.paused ? "Resume scanning" : "Pause scanning";
       this.pauseButton.setAttribute("aria-label", pauseLabel);
       this.pauseButton.title = pauseLabel;
-      this.pauseButton.querySelector(".pause-icon").hidden = Boolean(session?.paused);
-      this.pauseButton.querySelector(".play-icon").hidden = !session?.paused;
+      this.pauseButton.querySelector(".pause-icon").toggleAttribute("hidden", Boolean(session?.paused));
+      this.pauseButton.querySelector(".play-icon").toggleAttribute("hidden", !session?.paused);
       this.rotateButton.disabled = locked || !ready || Boolean(this.switchOperation || session?.handingOff);
       const next = this.nextDevices(session?.deviceId)[0];
       this.switchButton.disabled = this.rotateButton.disabled || (!this.nativePhotoCapture && this.devicesKnown && !next);

@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<title>PixelStow: a wavelet carrier for portable pictures</title>
+<style>
+  @page { size: A4; margin: 16mm 15mm 18mm; }
+  html { font-size: 10.4pt; }
+  body { margin: 0; color: #1a1d21; font-family: "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif; line-height: 1.42; }
+  h1 { font-size: 20pt; line-height: 1.15; margin: 0 0 6px; font-weight: 600; }
+  h2 { font-size: 13.5pt; margin: 1.15em 0 .35em; page-break-after: avoid; border-top: 1px solid #c5cdd4; padding-top: .55em; }
+  h3 { font-size: 11.4pt; margin: .9em 0 .25em; page-break-after: avoid; }
+  p { margin: .38em 0; orphans: 3; widows: 3; }
+  .kicker { letter-spacing: .12em; text-transform: uppercase; font-size: 8.5pt; color: #3d4c5c; margin: 0 0 8px; }
+  .meta { color: #3d4c5c; font-size: 9.5pt; margin-bottom: 1em; }
+  .eq { margin: .55em 0 .55em 1.2em; page-break-inside: avoid; }
+  .eq .n { float: right; color: #5c6b78; }
+  code, .sym { font-family: "Cambria Math", Cambria, Georgia, serif; font-style: italic; }
+  table { border-collapse: collapse; width: 100%; margin: .6em 0 1em; font-size: 9.2pt; page-break-inside: avoid; }
+  th, td { border-bottom: 1px solid #d5dde3; text-align: left; vertical-align: top; padding: 3px 6px 3px 0; }
+  th { border-bottom-color: #8ea0ae; font-weight: 600; }
+  ul, ol { margin: .3em 0 .5em; padding-left: 1.2em; }
+  li { margin: .15em 0; }
+  .note { font-size: 9.3pt; color: #243140; }
+  .abs { margin-top: .4em; }
+</style>
+</head>
+<body>
+<p class="kicker">Technical paper · PixelStow / PCF1</p>
+<h1>A diagonal-wavelet carrier for photographs that remain photographs</h1>
+<p class="meta">Andrew Cakebread · Massive Hadron · October 2026<br>
+Implementation reference: PictureCodec core (PCF1, carrier preamble C7) and the browser writer (carriers 3–5, default carrier 5). This paper describes the algorithms as implemented. It does not report a new optical trial.</p>
+
+<h2>Abstract</h2>
+<p class="abs">PixelStow embeds an arbitrary byte string in an ordinary RGBA picture by adding a known, mean-balanced diagonal wavelet to every complete 4×4 block. The same picture is a normal JPEG or PNG: a casual viewer sees the source, slightly softened by a reversible contrast reservation, and does not need to know that a payload is present. A reader that knows the carrier recovers the bytes from the pixels alone. A second, inverse step removes the wavelet and undoes the contrast reservation, restoring a source that is close to the original wherever the pixel lattice itself survived.</p>
+<p>Reliability is bought with three separate mechanisms, and they must not be confused. Repetition, a soft correlator and a short parity code absorb small numeric errors such as JPEG quantisation on an unchanged pixel grid. Geometric markers and a low-amplitude edge calibration recover that grid after a photograph, a resize or a modest projective warp. A planning index — the photo-read prognosis — tells the writer how to spend resolution, repetition and wavelet amplitude before any camera is involved. The index is a designed margin, not a measured probability of a successful photograph.</p>
+<p>The payload is opaque. Text, files and short voice recordings share one framed byte string. Voice is the retail path: a birthday card or a talking advert is a picture that plays audio when opened in a PixelStow viewer, and is still only a picture everywhere else. The inverse wavelet and the stored range map are sufficient for a future viewer plug-in to restore the source without interpreting the payload.</p>
+
+<h2>1. What the utility is trying to be</h2>
+<p>The design target is not a covert channel in the cryptographic sense, and it is not a separate container file. It is a picture that can be copied, posted and printed as a picture, and that still contains a checksummed byte string. Four properties follow from that target.</p>
+<ul>
+<li><strong>Native viewability.</strong> Before any decoder runs, the file is a JPEG or PNG. Most of the source contrast remains. The embedded signal is a structured, low-amplitude pattern, visible if one looks for it and easy to ignore if one does not.</li>
+<li><strong>Lattice survival.</strong> JPEG recompression that does not resample the image moves each sample by a small integer. The carrier is built so that a correlation against a known shape, summed over repeated copies, still has the correct sign.</li>
+<li><strong>Geometric survival.</strong> A phone photograph is a different lattice. Markers establish a homography back onto the original carrier pixels. A calibration band estimates scale before that search, so the expensive fit is not a blind scan of every magnification.</li>
+<li><strong>Opaque bytes, with audio as the default object.</strong> The carrier does not know whether it holds a greeting, a PDF, a game level or an Opus recording. Playback of audio is a front-end behaviour on top of that byte string, which is what makes “audio pictures” ordinary for a birthday card or an advert.</li>
+</ul>
+<p>The C# core writes and reads the public PCF1 frame on carrier version 1. The browser adds carriers 3, 4 and 5, which keep the same payload frame and the same 4×4 wavelet, and add geometric markers so a photograph can be mapped back. Carrier 5 is the browser default. Desktop and older game readers still require carrier 1 until they are upgraded. Nothing in this paper changes the PCF1 byte layout.</p>
+
+<h2>2. Image model</h2>
+<p>Pixels are unpremultiplied 8-bit RGBA, rows top to bottom. Only complete 4×4 blocks are used. A picture of width <em>W</em> and height <em>H</em> therefore has</p>
+<p class="eq"><em>N</em> = ⌊<em>W</em>/4⌋ · ⌊<em>H</em>/4⌋<span class="n">(1)</span></p>
+<p>carrier cells. The incomplete right and bottom strips are never modified by the payload wavelet. Alpha is never modified. Encoding is limited to 24 megapixels in the browser writer and to 8,388,608 carrier blocks in the core settings; input photographs may be larger than the encoded carrier, up to a 32-megapixel read.</p>
+<p>Colour samples are treated as integers in {0,…,255}. The luma used by the correlator is the sum of the three channels, not a television weighted luma. That choice is deliberate: the same integer kernel is added to R, G and B, so the decision statistic is exactly the inner product of the written pattern with itself, and a later JPEG step that treats the channels differently still leaves a large common-mode component.</p>
+
+<h2>3. The diagonal wavelet</h2>
+<h3>3.1 Kernel</h3>
+<p>One bit occupies one 4×4 block. The shape is a seven-tap diagonal stencil</p>
+<p class="eq"><em>w</em> = (−19, −11, 5, 13, 5, −11, −19),<span class="n">(2)</span></p>
+<p>indexed so that the centre weight 13 sits at offset 0. For a pixel at local coordinates (<em>x</em>, <em>y</em>) ∈ {0,1,2,3}² the signed distance is</p>
+<p class="eq"><em>d</em><sub>1</sub> = <em>x</em> − <em>y</em>, &nbsp;&nbsp; <em>d</em><sub>0</sub> = <em>x</em> + <em>y</em> − 3,<span class="n">(3)</span></p>
+<p>and the ideal integer step at amplitude <em>a</em> ∈ {1,…,32} is</p>
+<p class="eq"><em>δ</em>(<em>x</em>,<em>y</em>; <em>b</em>, <em>a</em>) = round<sub>½</sub>(<em>a</em> · <em>w</em><sub><em>d<sub>b</sub></em>+3</sub> / 16),<span class="n">(4)</span></p>
+<p>where round<sub>½</sub> is the bias-free form (<em>p</em>+8)/16 for <em>p</em>≥0 and the matching negative form otherwise. Bit 1 therefore lies on the main diagonal and bit 0 on the anti-diagonal. The two patterns are not orthogonal in the strict inner-product sense, but they are opposite in sign along the diagonal that the reader measures, which is what the decision needs.</p>
+<p>At amplitude 8 the centre weight is round(8·13/16) = 7 code values. At amplitude 20 it is 16. These are large compared with a fine JPEG quantiser and small compared with the 255-wide channel. That is the whole visibility bargain: the pattern is a few levels, repeated, and shaped so that a matched filter still sees it after the host texture and a quantiser have been added.</p>
+
+<h3>3.2 Staying inside the cube</h3>
+<p>An ideal step can push a channel outside [0,255]. For each channel the writer solves for a single bias <em>s</em> that brings every pixel of the block back inside the cube, choosing <em>s</em> = 0 whenever that is feasible. If no bias works, the legacy fallback reflects the step (<em>δ</em> becomes −<em>δ</em>) when that reflection fits, and writes nothing when neither orientation fits. A block whose simulated bit-1 score is not strictly positive, or whose bit-0 score is not strictly negative, is given a lower amplitude down to 1 and then abandoned. Abandoned blocks still occupy a grid slot; they are not a hidden mask. There is no external mask file and no template channel.</p>
+<p>The simulated score is the same statistic the reader will compute. Let <em>L</em><sub>1</sub> and <em>L</em><sub>0</sub> be the 16 luma patterns of the two fitted bits, and let <em>L</em> be the pattern that would actually be written. The block is acceptable for amplitude <em>a</em> when</p>
+<p class="eq">∑ <em>L</em> <em>L</em><sub>1</sub> − ∑ <em>L</em> <em>L</em><sub>0</sub> &nbsp; has the sign of the written bit.<span class="n">(5)</span></p>
+<p>Writing therefore refuses amplitudes that the matched filter cannot separate on that particular texture. This is why a bright sky and a nearly black corner do not silently destroy a copy: the amplitude drops, or the block is skipped, rather than painting a clipped shape whose correlation has flipped.</p>
+
+<h3>3.3 Reading one block</h3>
+<p>The reader does not need the original picture. It correlates the observed luma with the two ideal shapes at a candidate amplitude and takes the sign. Repeated copies of the same coded bit are not decided one by one. Their scores are summed first — soft combining — and only then thresholded. A JPEG error that flips a minority of copies leaves the sum on the correct side of zero. The weakest absolute combined score is retained as a diagnostic of how close the frame came to a sign error; it is not itself the prognosis.</p>
+
+<h2>4. Framing, whitening, shuffle and parity</h2>
+<h3>4.1 The preamble</h3>
+<p>The first 504 blocks are a fixed preamble: 9 bytes, 72 bits, each bit written seven times. Byte 0 is the magic 0xC7. Byte 1 is the carrier version. Byte 2 holds flags. Bytes 3–6 are the framed length as a little-endian 32-bit integer. Bytes 7–8 are the low 16 bits of CRC-32 over the first seven bytes. Seven repeats are enough to read the length and the flags even when a later payload code changes, which is why a newer carrier can be recognised and refused instead of being decoded as garbage.</p>
+<p>On carrier 5, byte 2 still uses bit 1 to select one-parity mode. Bits 2–6 store the range headroom in steps of two code values. Two further bits select the calibration profile: no guide, the subtle edge guide, or a historical full-frame pilot. The preamble CRC covers those bits, so a reader does not guess which inverse to apply.</p>
+
+<h3>4.2 The payload frame</h3>
+<p>Inside the carrier sits a whitened PCF1 frame. Public text is envelope version 1, kind 1. Password-protected text is envelope 2. Attachments, including audio, are envelope 3 (public) or 4 (protected). The 20-byte header carries the ASCII magic, the envelope, the kind, a compression flag, the amplitude that was actually used, the uncompressed and stored lengths, and a CRC-32 of the header prefix plus the uncompressed body. The body is raw bytes or DEFLATE, whichever is smaller for public data. A decoder accepts the frame only after the checksum and, for text, a strict UTF-8 check.</p>
+<p>Whitening is an xorshift byte stream with seed 0x50434631, the same seed that drives the Fisher–Yates shuffle of block order. Whitening stops the payload bytes from painting long runs of identical wavelets, which would be both more visible and more fragile to a local JPEG artefact. The shuffle spreads the copies of each coded bit across the picture so that one glare spot or one JPEG block does not remove every copy of the same bit.</p>
+<p>Password protection does not change the wavelet. It wraps the body in a PSP1 envelope: PBKDF2-HMAC-SHA256 at 600,000 iterations, then AES-256-GCM. The GCM tag is checked before decompression. A locked image is detected from the envelope kind without the password, and a locked image is refused for re-encoding. No password is stored, and none is placed in a file name, a process argument or an export sidecar.</p>
+
+<h3>4.3 Repetition and the two parity modes</h3>
+<p>After the preamble, <em>N</em><sub>p</sub> = <em>N</em> − 504 blocks remain. Each stored byte is expanded to either 12 or 9 coded symbols. Twelve symbols are an 8-bit value plus four Hamming parity checks. Nine symbols are the 8-bit value plus one parity bit, used when four checks would not leave even one full copy. If <em>B</em> is the framed length,</p>
+<p class="eq"><em>ρ</em> = <em>N</em><sub>p</sub> / (<em>B</em> · <em>β</em>), &nbsp;&nbsp; <em>β</em> ∈ {12, 9},<span class="n">(6)</span></p>
+<p>is the repetition ratio actually achieved, including the fraction of a copy. The integer copy count ⌊<em>ρ</em>⌋ is what soft combining sums. The fraction is what the amplitude policy and the prognosis use. Rounding <em>ρ</em> down to an integer before choosing amplitude would make a 1.9× payload look as fragile as a 1× payload, and would make the quality curve jump when the grid crosses a block boundary. The implementation therefore keeps the fraction until the final quantisation of amplitude to an integer.</p>
+<p>Carrier 5 also refuses to place payload blocks under its markers. Four 52×52 corner reservations and four small side references remove 12,352 pixels, about 55% less reserved area than the eight large patches of carriers 3 and 4. Capacity is zero when those patches would not fit, or would exceed 30% of the picture. There is no silent fall-back from carrier 5 to carrier 1.</p>
+
+<h2>5. Prognosis, quality and resolution</h2>
+<p>This section is the planning layer. It runs before encoding, in the browser, and it never claims to be a camera success probability. The comments in the planner state that explicitly, and the shapes below are the reason the controls move the way they do.</p>
+
+<h3>5.1 Three quantities the user can actually trade</h3>
+<p>A fixed payload and a fixed source determine a capacity surface. The writer exposes three coordinates on it.</p>
+<ul>
+<li><strong>Resolution</strong> <em>s</em>, a scale of the source, snapped to a whole number of 4×4 blocks. More pixels mean more copies, and also a finer carrier pitch.</li>
+<li><strong>Repetition</strong> <em>ρ</em>, equation (6), on a common 12-symbol basis. A 9-symbol frame is scored as <em>ρ</em>·9/12 so that switching on Hamming parity does not look like a sudden loss of protection.</li>
+<li><strong>Quality</strong> <em>q</em> ∈ [0,1], default 0.8. This is not a JPEG quality factor. It is a gain on the wavelet amplitude,</li>
+</ul>
+<p class="eq"><em>g</em>(<em>q</em>) = 2<sup>0.8 − <em>q</em></sup>.<span class="n">(7)</span></p>
+<p>At <em>q</em> = 0.8 the gain is 1 and the accepted amplitude curve is used unchanged. At <em>q</em> = 1 the signal is about 13% gentler (2<sup>−0.2</sup> ≈ 0.87). At <em>q</em> = 0 it is about 74% stronger (2<sup>0.8</sup> ≈ 1.74), before the hard ceilings. Quality does not change the payload bytes, the shuffle, or the number of copies. It only spends contrast.</p>
+
+<h3>5.2 Why resolution is not free</h3>
+<p>A larger carrier holds more copies, which helps. It also makes each carrier pixel a smaller fraction of a camera sensor, which hurts. The planner separates those effects instead of pretending that “more pixels” is monotone in reliability.</p>
+<p>The reference lattice is 1200×800, chosen because that is the envelope in which camera reads of this carrier have been comfortable, not because it is an information-theoretic optimum. The resolution load of a candidate grid is</p>
+<p class="eq"><em>Λ</em> = max(1, √(<em>WH</em> / (1200·800)) ).<span class="n">(8)</span></p>
+<p>Below the reference, <em>Λ</em> = 1: shrinking further does not buy a sampling bonus in this model, because the failure mode of interest is undersampling a fine grid, not oversampling a coarse one. Above the reference, load grows with the geometric mean of the dimensions, so a 2× linear enlargement is load 2. Orientation does not matter. <em>Λ</em> is a planning weight. It is not a measured MTF of any lens.</p>
+<p>The practical consequence is a bounded size gesture rather than “use the camera’s full 12 megapixels.” The planner searches scales whose repetition, on the same parity mode as the largest legal grid, lies between 1× and 3×. The search is a bisection on scale, 44 iterations, and each trial rounds width and height up to a multiple of 4 so that a one-pixel seam cannot change the parity mode. Crossing from the 9-symbol code to the 12-symbol code would otherwise drop the raw repeat count from about 1.33 to 1 at the same moment that error correction improved, and the slider would jump backwards. Holding the parity mode fixed during the gesture avoids that.</p>
+<p>Moving the prognosis control to the left enlarges the carrier to buy repetition, up to 3× or until the 24-megapixel cap. Moving it to the right shrinks the carrier. The recommended default is 2×. A payload that cannot reach 1× inside the cap is reported as not fitting; carrier 5 will not quietly omit its markers to make room.</p>
+
+<h3>5.3 The protection curve against repetition</h3>
+<p>Let <em>c</em> = <em>ρ</em> · (9/12) when the short parity code is in use, and <em>c</em> = <em>ρ</em> otherwise. The planner turns <em>c</em> into a protection index <em>π</em> ∈ (0,1) by interpolating three anchors. The anchors themselves move with quality, because a stronger wavelet is a real change in margin, but they must move continuously: the writer’s amplitude is an integer, and a slider that jumped at each integer would feel broken and would not match the underlying fraction <em>ρ</em>.</p>
+<p>The gain used in the anchor is not the full <em>g</em>(<em>q</em>) of equation (7). It is <em>g</em>(<em>q</em>) after the hard ceilings of the amplitude policy, estimated by</p>
+<p class="eq"><em>ĝ</em> = 0.5 <em>a</em>/<em>a</em><sub>0</sub> + 0.35 <em>t</em>/<em>t</em><sub>0</sub> + 0.15 <em>m</em>/<em>m</em><sub>0</sub>,<span class="n">(9)</span></p>
+<p>where <em>a</em>, <em>t</em> and <em>m</em> are the policy’s nominal strength, texture gain and marker peak at the requested quality, and the subscript 0 is the same policy at <em>q</em> = 0.8. The weights say that nominal strength is most of the durability, texture boost is the next share, and the marker ceiling is a smaller share because markers are few and already have a high floor. Then each anchor is</p>
+<p class="eq"><em>A</em>(<em>c</em><sub>0</sub>, <em>b</em>, <em>f</em>) = clamp( <em>b</em> − 0.2 log<sub>2</sub> <em>ĝ</em>(<em>c</em><sub>0</sub>), &nbsp; <em>f</em>, &nbsp; 0.98 ).<span class="n">(10)</span></p>
+<p>The three anchors are <em>A</em><sub>1</sub> = <em>A</em>(1, 0.90, 0.75), <em>A</em><sub>2</sub> = <em>A</em>(2, 0.60, 0.50) and <em>A</em><sub>5</sub> = <em>A</em>(5, 0.20, 0.04). Their bases 0.90, 0.60 and 0.20 are judgements of remaining risk at one, two and five copies when the signal is at its nominal gain: one copy is still a poor photograph, two copies is the design point, and five copies is close to the floor of this index. The floors stop a quality boost from claiming that one copy has become safe. The coefficient 0.2 on the log gain is about one fifth of a stop of index per doubling of signal, which is intentionally modest: amplitude helps, but it does not replace a missing copy.</p>
+<p>Between the anchors the index is piecewise linear in <em>c</em>, with a short ramp below one copy and a hyperbolic tail above five:</p>
+<p class="eq"><em>π</em>(<em>c</em>) =
+<span style="display:inline-block; vertical-align:middle; margin-left:.4em">
+<em>A</em><sub>1</sub> + (1−<em>A</em><sub>1</sub>)·0.8·clamp((1−<em>c</em>)/0.25, 0, 1) &nbsp; if <em>c</em> &lt; 1,<br>
+<em>A</em><sub>1</sub> + (<em>A</em><sub>2</sub>−<em>A</em><sub>1</sub>)(<em>c</em>−1) &nbsp; if 1 ≤ <em>c</em> &lt; 2,<br>
+<em>A</em><sub>2</sub> + (<em>A</em><sub>5</sub>−<em>A</em><sub>2</sub>)(<em>c</em>−2)/3 &nbsp; if 2 ≤ <em>c</em> &lt; 5,<br>
+0.04 + (<em>A</em><sub>5</sub>−0.04)·5/<em>c</em> &nbsp; if <em>c</em> ≥ 5.
+</span><span class="n">(11)</span></p>
+<p>The factor 0.8 on the sub-unity ramp means that even a very short payload, which cannot reach one copy, does not immediately sit at “certain failure”; it sits near the one-copy anchor. The 1/<em>c</em> tail is diminishing returns: the tenth copy is worth less than the second, both visually (more amplitude is already available) and statistically (soft combining’s error rate falls quickly once the mean score is a few standard deviations from zero).</p>
+
+<h3>5.4 Folding in the resolution load</h3>
+<p>The number drawn on the prognosis bar is not <em>π</em>. It is the residual risk after the sampling penalty:</p>
+<p class="eq"><em>R</em> = clamp( 1 − (1 − <em>π</em>) / <em>Λ</em> , &nbsp; 0.04, &nbsp; 0.9999 ).<span class="n">(12)</span></p>
+<p>If <em>π</em> is read as a notional failure tendency before sampling, then (1−<em>π</em>) is a notional success tendency, and dividing by <em>Λ</em> says that a grid twice as fine as the reference keeps only half of that tendency. The clamp at 0.04 matches the floor of the five-copy anchor: the bar never claims impossibility, and it never claims certainty. When the payload does not fit, the planner returns 0.99 so the bar sits at the dangerous end rather than at an undefined position.</p>
+<p>Equation (12) is the reason a huge carrier with many copies can still look worse than a 2× carrier with fewer copies. The copies help <em>π</em>. The load <em>Λ</em> takes the help away again. Inside the 1×–3× window the repetition term wins as one moves left, which is why that window exists. Outside it, the model refuses to cooperate, because neither “tiny and fragile” nor “enormous and undersampled” is a setting the writer wants to recommend.</p>
+
+<h3>5.5 The quality ceiling at a chosen repetition</h3>
+<p>Once a grid is chosen, quality is not free to run to 1. The planner asks what gain would be required to hold the design point of 2× redundancy at quality 0.8, given the coverage actually achieved and the resolution load:</p>
+<p class="eq"><em>g</em><sub>req</sub> = √(2 / max(<em>c</em>, 0.01)) · <em>Λ</em>.<span class="n">(13)</span></p>
+<p>The square root is the compromise between “repetition and amplitude are interchangeable on a linear scale,” which would be too kind to a 1× grid, and “amplitude cannot buy copies at all,” which would make the quality slider pointless. Solving (7) for the greatest <em>q</em> that still supplies <em>g</em><sub>req</sub> gives</p>
+<p class="eq"><em>q</em><sub>max</sub> = clamp( 0.8 − log<sub>2</sub> <em>g</em><sub>req</sub> , &nbsp; 0, &nbsp; 1 ).<span class="n">(14)</span></p>
+<p>The slider then lives in [0, <em>q</em><sub>max</sub>]. If the amplitude policy’s estimated gain (9) cannot reach <em>g</em><sub>req</sub> even at full strength, the control is marked strength-limited: the ceilings have saturated, and asking for a prettier picture would drop the wavelet below the gain the planner used when it drew the bar. That warning is separate from the bar on purpose. Saturating the gain must not be drawn as if the optical problem had been solved.</p>
+<p>Inverting the bar — the user drags the prognosis, and the writer picks either a scale or a quality — is a one-dimensional search, again 44 bisections, or a 101-step scan of quality when the grid is held fixed. Flat regions at the clamps are allowed. When several qualities hit the same risk, the one nearest 0.8 wins, so the control rests on the accepted curve instead of on an extreme that happens to score the same after a ceiling.</p>
+
+<h3>5.6 What this curve is not</h3>
+<p>There is no likelihood in equation (12). There is no training set. The anchors, the 0.2 coefficient, the square root in (13) and the 1200×800 reference are engineering judgements, written down so that the slider, the amplitude and the resize search agree with each other. A later optical campaign can replace <em>Λ</em> or the anchors without touching the wavelet, the frame or the checksum. Until that campaign exists, the honest statement is: the prognosis is a monotone planning coordinate for repetition, amplitude and carrier pitch. It is not a probability that a given phone, print or social network will decode.</p>
+
+<h2>6. How amplitude follows repetition</h2>
+<p>Carriers 4 and 5 do not use a single strength for every payload. Let <em>r</em> be the fractional repetition. Define the pressure toward the fragile end, and a smooth urgency that is zero at 2× and saturated at 1×:</p>
+<p class="eq"><em>p</em> = clamp((5 − <em>r</em>)/4, 0, 1), &nbsp;&nbsp; <em>u</em> = clamp(2 − <em>r</em>, 0, 1), &nbsp;&nbsp; <em>υ</em> = <em>u</em>(2 − <em>u</em>).<span class="n">(15)</span></p>
+<p>A reciprocal uplift raises the whole curve by 15% at <em>r</em> = 2 and relaxes as copies increase:</p>
+<p class="eq"><em>U</em>(<em>r</em>) = 1 + 0.15 · (2 + 1) / (max(1, <em>r</em>) + 1).<span class="n">(16)</span></p>
+<p>Nominal strength, before the quality gain (7), is</p>
+<p class="eq"><em>a</em><sub>0</sub> = clamp( round( (8 + 12<em>p</em> + 12<em>υ</em>) <em>U</em> ) , &nbsp; 8, &nbsp; 32 ),<span class="n">(17)</span></p>
+<p>and at least the base discovery amplitude 8. At the 2× design point, <em>p</em> = 0.75, <em>υ</em> = 0 and <em>U</em> = 1.15, so the unrounded value is 19.55 and the stored amplitude is 20. At 5× and above, <em>p</em> = <em>υ</em> = 0 and the amplitude sits near 8, scaled only by the small remaining uplift. At 1.5× and below, urgency drives the value into the ceiling of 32. Spending contrast where copies are scarce, and withholding it where copies are plentiful, is the same idea as the prognosis anchors: the second copy is the precious one.</p>
+<p>Texture is extra, and it is measured on the source, never on the bits about to be written. Over the 4×4 block (or the marker cell) the writer removes the mean and the best-fit brightness plane. The residual mean square is</p>
+<p class="eq"><em>σ</em><sup>2</sup> = max(0, &nbsp; ∑<em>v</em><sup>2</sup> − (∑<em>v</em>)<sup>2</sup>/<em>n</em> − (<em>s<sub>x</sub></em><sup>2</sup> + <em>s<sub>y</sub></em><sup>2</sup>)/<em>E</em> ) / <em>n</em>,<span class="n">(18)</span></p>
+<p>with <em>n</em> = 16 and <em>E</em> the usual centred-axis energy <em>n</em>(<em>n</em>−1)/12 for a unit grid. A smooth gradient has <em>σ</em> ≈ 0, so a sky does not get a boost merely for being brighter on one side. The working amplitude is min(peak, <em>a</em><sub>0</sub> + round(<em>σ</em> · <em>t</em>)), where the texture gain <em>t</em> is (0.175 + 0.825<em>p</em>)(1+<em>υ</em>)<em>U</em> and then multiplied by <em>g</em>(<em>q</em>). Payload peaks are capped at 64 and marker peaks at 32. A boost that would force a large per-channel bias, or a bias that differs by more than two levels across channels, is rejected and the nominal amplitude is kept. The boost is allowed to hide in texture. It is not allowed to repaint a flat colour or to clip a highlight.</p>
+<p>Older carriers use a coarser table: four or more copies keep the base amplitude, three copies multiply by 1.5, two by 2, and one by 4, then clamp to 32. Carrier 5’s smooth curve is the one the prognosis assumes.</p>
+
+<h2>7. Range compression and the inverse that restores colour</h2>
+<p>A wavelet added to an already extreme colour either clips or shifts the whole block. Carrier 5 avoids both by reserving symmetric headroom before any wavelet is painted:</p>
+<p class="eq"><em>c</em>′ = <em>h</em> + <em>c</em> · (255 − 2<em>h</em>) / 255, &nbsp;&nbsp; <em>h</em> even, &nbsp; 0 ≤ <em>h</em> ≤ 62.<span class="n">(19)</span></p>
+<p>Mid-grey, <em>c</em> = 127.5 in the real line, stays fixed. Black moves up to <em>h</em> and white moves down to 255−<em>h</em>. Alpha is untouched, and so is every pixel, including marker margins and the partial edge strips. The headroom is</p>
+<p class="eq"><em>h</em> = min(62, &nbsp; 2 ⌈ (max(12, <em>a</em>) · 19/16 + <em>b</em><sub>lim</sub> + <em>a</em><sub>pilot</sub>) / 2 ⌉ ),<span class="n">(20)</span></p>
+<p>that is, enough room for the raised centre lobe of the kernel, the permitted bias, and the calibration pilot if one is present, rounded up to the two-level step stored in the preamble. Because <em>h</em> is in the preamble and the preamble is checksummed, the inverse does not estimate black and white from the picture. After the wavelets have been subtracted it is exactly</p>
+<p class="eq"><em>c</em> = (<em>c</em><sub>clean</sub> − <em>h</em>) · 255 / (255 − 2<em>h</em>).<span class="n">(21)</span></p>
+<p>This is the colour restoration. It is not a colour-matching algorithm and it does not invent texture that the wavelet overwrote. It puts the host back on the original 0…255 range so that a viewer plug-in can show a source whose contrast matches the input, rather than a picture that looks slightly washed out because headroom was left in.</p>
+<p>The subtraction itself is a pair of projections, the same idea as the writer’s two shapes. From the fitted bit-0 and bit-1 luma kernels one builds the common-mode pattern <em>κ</em> = (<em>L</em><sub>1</sub>+<em>L</em><sub>0</sub>)/2, with its mean removed, and the difference pattern <em>Δ</em> = <em>L</em><sub>1</sub>−<em>L</em><sub>0</sub>. Observed luma <em>y</em> gives two scalars</p>
+<p class="eq"><em>μ</em> = clamp( 〈<em>y</em>, <em>κ</em>〉 / ‖<em>κ</em>‖² , 0, 1 ), &nbsp;&nbsp; <em>β</em> = clamp( 〈<em>y</em>, <em>Δ</em>〉 / ‖<em>Δ</em>‖² , −½, ½ ),<span class="n">(22)</span></p>
+<p>and the reconstructed signal <em>μ κ</em> + <em>β Δ</em> is subtracted from each channel. The clamps stop a wild correlator, on a block the writer never touched, from carving a wavelet out of genuine texture. The wavelet view shown in the desktop tools is 128 + 4·signal, so zero signal is neutral grey.</p>
+<p>Two losses remain, and both should be stated. Rounding to 8 bits at each step means (21) is not an integer inverse of (19) for every input value. JPEG quantisation, or any other small perturbation, means the subtracted pattern is the pattern the correlator believes, not necessarily the pattern that was added. On a native PNG round trip the residual is a level or two. On a photograph it is the residual of the resampling as well. The implementation does not call this a perfect inverse. It calls it a near restoration of range and of the host, which is the right claim for a viewer plug-in.</p>
+
+<h2>8. Markers and the projective model</h2>
+<h3>8.1 What a marker is</h3>
+<p>A photograph does not present the 4×4 lattice. Carrier 5 therefore paints four square patches, each 50×50 pixels, inset from the corners. Each patch is a 10×10 array of symbols that are the same diagonal wavelet, resampled from four pixels to five by the symmetric map (<em>i</em>+½)·4/5 − ½, with the kernel mean removed and the outer row and column tapered by 0.7. The patch carries eight bytes: a magic, an identifier in {0, 2, 6, 8} for the four corners, the original width and height as little-endian 16-bit integers, and the low 16 bits of a CRC over the first six bytes. Whitening and scatter use a marker seed distinct from the payload seed. The first 24 coded bits are pilots. A marker is accepted only when the decoded header matches its CRC. A strong periodic score is not acceptance.</p>
+<p>The identifiers fix orientation. The stored width and height fix the source rectangle that the homography must explain. Four centres in the plane, no three collinear, determine a homography; three centres do not, because a homography has eight degrees of freedom and each point in the plane supplies two.</p>
+<p>Four smaller patches, 24×16, sit at the side midpoints. They repeat only a fragment of the magic and the identifier, at 0.65 of the main marker strength. They are checked after the homography exists. A hit records a displacement in carrier pixels. A miss does not fail the picture. They are there for a later lens model; they are not yet a lens model.</p>
+<p>Marker amplitude has a floor of at least 12, and a texture-gain floor of 0.5, because a marker header has far fewer repeats than the payload. The same quality gain (7) scales them, and the same headroom (19) bounds them. They are visible if one crops in on a corner. They are not a QR code, and they are not required for a native, unresampled read: a generated image is verified on the integer grid with no search.</p>
+
+<h3>8.2 The homography</h3>
+<p>A carrier pixel (<em>x</em>, <em>y</em>) is sent to the photograph by a 3×3 matrix <em>H</em>, stored row-major and scaled so that <em>H</em><sub>33</sub> = 1:</p>
+<p class="eq"><em>u</em> = (<em>H</em><sub>11</sub><em>x</em> + <em>H</em><sub>12</sub><em>y</em> + <em>H</em><sub>13</sub>) / <em>D</em>, &nbsp;
+<em>v</em> = (<em>H</em><sub>21</sub><em>x</em> + <em>H</em><sub>22</sub><em>y</em> + <em>H</em><sub>23</sub>) / <em>D</em>, &nbsp;
+<em>D</em> = <em>H</em><sub>31</sub><em>x</em> + <em>H</em><sub>32</sub><em>y</em> + 1.<span class="n">(23)</span></p>
+<p>This is the standard projective map of the plane. It includes translation, rotation, scale, shear and the keystone of a page photographed at an angle. It does not include a fisheye. The inverse, used when sampling the photograph back onto the carrier lattice, is the adjugate of <em>H</em> divided by det <em>H</em>, rejected if the determinant is below 10<sup>−12</sup>.</p>
+<p>Given pairs (<em>x<sub>i</sub></em>, <em>y<sub>i</sub></em>) ↔ (<em>u<sub>i</sub></em>, <em>v<sub>i</sub></em>), the fit is a weighted least-squares problem on a normalised copy of the points. Each cloud is translated to its centroid and scaled so that the root-mean-square distance from the centroid is √2, the Hartley normalisation that keeps the eight-by-eight normal matrix from mixing pixels with pixels-squared. The projective unknowns satisfy, for each pair,</p>
+<p class="eq"><em>x</em> <em>h</em><sub>1</sub> + <em>y</em> <em>h</em><sub>2</sub> + <em>h</em><sub>3</sub> − <em>u x</em> <em>h</em><sub>7</sub> − <em>u y</em> <em>h</em><sub>8</sub> = <em>u</em>,<br>
+<em>x</em> <em>h</em><sub>4</sub> + <em>y</em> <em>h</em><sub>5</sub> + <em>h</em><sub>6</sub> − <em>v x</em> <em>h</em><sub>7</sub> − <em>v y</em> <em>h</em><sub>8</sub> = <em>v</em>,<span class="n">(24)</span></p>
+<p>and the six-unknown affine case is the same system with <em>h</em><sub>7</sub> = <em>h</em><sub>8</sub> = 0. The normal equations are solved by Gaussian elimination with partial pivoting, abandoned if a pivot falls below 10<sup>−10</sup>. The normalisation is then undone by <em>T</em><sub>target</sub><sup>−1</sup> <em>H</em><sub>norm</sub> <em>T</em><sub>source</sub>. Four correspondences determine the projective map. Further marker-interior samples, taken at 0.65 of the way from a patch centre to its measured local axes, overdetermine it and let a bad fourth corner be dropped.</p>
+<p>A candidate is refused if any three of the points are nearly collinear, measured by the area of the triangle against the longest side. The three top patches plus one side midpoint are the classic singular set, and the fitter knows that. It is also refused if any corner of the recovered rectangle falls more than a search margin outside the photograph: a homography that explains the markers by sending the payload off the sensor is not a read.</p>
+
+<h3>8.3 Sampling back onto the carrier</h3>
+<p>Once <em>H</em> is accepted, every output pixel is a carrier pixel, not a triangle in the photograph. For carrier site (<em>x</em>, <em>y</em>) the map (23) gives the centre in the capture. The local derivatives of (23) give the footprint of that one carrier pixel in capture pixels, and the sampler takes an <em>n<sub>x</sub></em>×<em>n<sub>y</sub></em> grid over that footprint, with 1 ≤ <em>n</em> ≤ 8, bilinear in the capture. The projective denominator is evaluated at each subsample, so the footprint is not a parallelogram frozen at the centre. The result is a picture whose 4×4 blocks sit on the original lattice, and the ordinary native decoder runs on it. No second copy of the payload format exists for the camera path.</p>
+
+<h2>9. Calibration, and why it makes the search fast</h2>
+<p>A blind search would try many scales, many positions and many small rotations, and at each one would hunt for the four markers. Carrier 5 paints a second, much quieter signal whose only job is to estimate scale and the rough quadrilateral before that hunt.</p>
+<p>Along each edge, inset by 8 pixels and avoiding the marker reservations, a band 48 pixels deep carries</p>
+<p class="eq"><em>γ</em>(<em>t</em>, <em>n</em>) = round( cos(2π <em>t</em>/64 + 0.31) + cos(2π <em>t</em>/96 + 1.19) ) · sin(π (<em>n</em>+½)/48) · cos(2π <em>n</em>/24 + 0.43),<span class="n">(25)</span></p>
+<p>clipped to ±2 code values. The tangent <em>t</em> runs along the edge and the normal <em>n</em> runs across the band. The two pitches, 64 and 96, are incommensurate enough to identify a scale rather than a harmonic. The sine envelope rises and falls once across the band so that a hard edge in the host picture is not itself a detection. The normal cosine keeps the band from being a flat tint.</p>
+<p>The colour pattern is the part that makes the guide nearly invisible and still measurable. The integer <em>γ</em> is added to red, subtracted from green, and added to blue. On a luminance the three steps cancel to first order: +<em>γ</em> −<em>γ</em> +<em>γ</em> leaves +<em>γ</em> only if one looks at red or blue against green. A casual glance, and a JPEG quantiser that spends its bits on luma, mostly sees nothing. A reader that forms a chroma difference sees a pair of known spatial frequencies.</p>
+<p>Detection, on a reduced working image, is a set of sliding inner products against the complex tones <em>e</em><sup>±i 2π x / (pitch · scale)</sup>, implemented as prefix sums so each window is a subtraction. The 48-pixel envelope is itself detrended — mean and slope removed — before the correlation, for the same reason the texture boost ignores a brightness plane. A candidate scale is kept when the two pitches agree, the four edges form a quadrilateral of plausible area, and the phase residual is small. The reported scale is capture pixels per carrier pixel.</p>
+<p>That single number changes the decoder. Marker search can be started at the predicted pitch instead of at a ladder of unrelated magnifications. The homography fitter can be seeded with the quadrilateral of the bands. Frames that do not contain the guide are not failed; they take the ordinary search. Frames that contain a false guide are not accepted either, because acceptance is still the marker CRC and then the payload CRC. The guide is a hint with a budget of a few seconds. It is not evidence.</p>
+<p>In the live camera this is also a scheduling device. A cheap guide check on a downscaled copy decides whether a full-resolution frame is worth a marker worker. The preview shows only “searching”, “no signal” or “calibration found”. The scale number stays in the scan notes. None of that guide is required for a file that was never resampled.</p>
+
+<h2>10. Sub-pixel phase on the carrier lattice</h2>
+<p>A homography lands each carrier pixel on a point that is not an integer capture pixel. Residual error after the homography is often a slowly varying shift of a fraction of a carrier pixel, from lens distortion, from a page that is not perfectly flat, or from the bilinear kernel itself. The reader looks for that shift in the carrier’s own four-pixel periodicity.</p>
+<p>Over a window, second differences of luma are correlated with a complex tone of period 4. The phase of that correlation is a local offset (<em>o<sub>x</sub></em>, <em>o<sub>y</sub></em>). Neighbouring windows unwrap the phase by adding or subtracting 4 when the jump exceeds half a period, so the field stays continuous. An offset larger than 8 pixels is rejected: the homography was wrong, and a phase tracker must not invent an eight-pixel slide. Windows are kept only when a large fraction of them, currently 70%, show a strong four-pixel peak.</p>
+<p>The rectifying sampler adds this field, or a spline built from it, to the carrier coordinate before evaluating (23). Where the spline is used, each subsample also gets the local Jacobian, so the integration footprint follows the curved pixel instead of a rigid square. Sixteen spline controls are not revisited for every subsample; a quadratic expansion of the displacement is enough inside one carrier pixel. This is what “fast transform decoding” means in the implementation: the calibration picks the scale, four markers fix <em>H</em>, and a single resampled lattice is handed to the same wavelet decoder that reads a PNG.</p>
+
+<h2>11. JPEG, social platforms, and what “immune” can mean</h2>
+<p>A JPEG file of this carrier is already a normal photograph. The useful claim is narrower than “any repost survives,” and wider than “only PNG works.”</p>
+<h3>11.1 Same lattice, new quantiser</h3>
+<p>Baseline JPEG transforms non-overlapping 8×8 blocks. The carrier’s energy lives on a 4×4 diagonal, so inside each 8×8 block it occupies a small set of DCT coefficients, mostly at mid frequencies rather than in the DC term. A quantiser replaces each coefficient <em>F</em> by a multiple of a step <em>Q</em>. The error in the pixel domain is bounded by the synthesis of those steps. Two properties of the writer meet that error.</p>
+<ul>
+<li>The matched filter (5) is a sum of sixteen pixels against a shape whose centre lobe is many quantiser steps wide once <em>a</em> is in the tens. A small <em>Q</em> moves the score. It rarely flips the sign of a single clean copy, and it more rarely flips the sign of the soft sum over <em>ρ</em> copies.</li>
+<li>The copies are shuffled. A quantiser artefact is local to an 8×8 block. The copies of one payload bit are not local to one block. Soft combining is then an average over independent quantiser errors, which is the classical reason repetition coding survives a memoryless channel.</li>
+</ul>
+<p>The parity bits sit inside that average. They are not a substitute for repetition. They correct the rare bit whose combined score was on the wrong side after the quantiser, provided the surrounding bytes were right. This is why the planner treats the 12-symbol code as more protection rather than as fewer copies, and why equation (6) rescales the 9-symbol code before drawing the bar.</p>
+<p>Headroom (19) matters here as well. A wavelet that was already clipped has a distorted shape, and the inner product with the ideal shape shrinks. Reserving range before painting means the shape that JPEG quantises is the shape the reader knows.</p>
+<p>So the designed immunity is: <em>re-encode as JPEG at the same width and height, at a quality that does not wipe mid-frequency coefficients below the correlator’s margin.</em> That is exactly the operation a messaging application performs when it recompresses a photo without resizing it. It is why a picture can move through such a channel as a picture.</p>
+
+<h3>11.2 A new lattice is a different problem</h3>
+<p>The moment a platform scales, crops, or heavily recompresses after a resize, the 4×4 phase is gone and section 11.1 no longer applies. Nothing in the wavelet is immune to that. The markers and the calibration of sections 8 and 9 are the answer, and they are a search, not a guarantee. The project’s own measurements say the same thing: a native round trip, including a JPEG that keeps the grid, is a different result from a social down-sample or a photograph of a screen. The prognosis exists so that a sender who expects a resize can buy copies and a coarser pitch before the picture leaves, instead of discovering the loss afterwards. Buying those copies does not extend a promise to every network’s image pipeline.</p>
+
+<h3>11.3 Why the untouched JPEG is already distributable</h3>
+<p>Before any of that damage, the encoded file does not need a special extension or a special viewer to be posted. It is a JPEG. The host image occupies the same pixels. The contrast change is the global map (19), a few levels at each end of the histogram, which readers experience as a slightly softer master rather than as a damaged one. The wavelet is a diagonal shimmer at the amplitude chosen in section 6, strongest where the picture is already busy, withheld on flat regions that cannot hide it, and withheld entirely where it would clip. The markers are four small corner patches and four slivers on the sides. A person who is not looking for a carrier sees a photograph. A person who is looking can find the corners. That asymmetry is the portability.</p>
+
+<h2>12. Any byte string, and audio as the ordinary object</h2>
+<p>The carrier’s contract is a length-prefixed, checksummed byte string. PCF1 kind 1 is UTF-8 text, limited to 16 KiB. Kind 3 is a bundle: optional text plus between one and eight files, the uncompressed bundle limited to 1 MiB, each file opaque. Filenames and media types travel inside the bundle. A game level can be one JSON file and one zip file. A PDF can be one file. A voice note is one audio file. The wavelet, the repetition and the prognosis do not branch on the media type. Capacity is a function of <em>N</em><sub>p</sub>, <em>β</em> and the framed length, nothing else.</p>
+<p>Voice is special only in the front end, and that is a product decision rather than a codec one. A short recording is encoded as Opus in a WebM or M4A container, at a low bitrate so that a greeting fits a modest picture, and stored as one attachment. On decode, the viewer sees that the attachment is audio and plays it. The picture is the card; the sound is what the card was for. The same mechanism is a talking advert: the poster is the JPEG, the speech is the payload, and a platform that only displays the JPEG has still displayed the advert. A platform, or a future plug-in, that understands the carrier also plays it.</p>
+<p>Protected bundles are compressed, then sealed with the same AES-GCM envelope as protected text. The password never becomes part of the image metadata. Re-locking discards the decoded bytes. A locked image cannot be used as a source for a new encode, because the writer refuses any picture whose preamble and frame already check out.</p>
+
+<h2>13. A viewer plug-in, and restoration without curiosity</h2>
+<p>Everything required to show a cleaner source is in the pixels. A plug-in does not need to parse the payload, and it does not need a network.</p>
+<ol>
+<li>Read the 4×4 grid far enough to combine the preamble copies. Check the magic, the version and the CRC. Refuse a version the plug-in does not know.</li>
+<li>Read the flags: parity mode, headroom <em>h</em>, calibration profile, and the framed length.</li>
+<li>If the grid is not the native lattice, this plug-in may stop and show the JPEG as it stands. A full plug-in runs the marker fit and the resample of sections 8–10, then continues on the rectified lattice.</li>
+<li>Soft-combine and parity-decode the frame far enough to know the amplitude that was stored in the PCF1 header. That amplitude, not a guessed one, selects the kernels <em>κ</em> and <em>Δ</em>.</li>
+<li>Subtract (22). If the calibration profile says an edge guide or a pilot is present, subtract that integer field too. It was added with the opposite sign on green, so the inverse is the same formula with the sign flipped, and it is an exact integer inverse when no quantiser has touched it.</li>
+<li>Apply (21) with the <em>h</em> from the preamble.</li>
+</ol>
+<p>Steps 4–6 are the “near perfect” restoration on a file whose lattice survived. They are deterministic. They do not need the message, the files or the password. A locked picture restores its host exactly as a public picture does; the password only opens the body. The residual is quantisation and rounding, which on a native file is at the level of the 8-bit grid, and on a requantised JPEG is at the level of the surviving correlator. The plug-in can offer “show original” as a view, while the file on disk remains the ordinary JPEG that everyone else is already passing around.</p>
+<p>The same plug-in is the retail player. If it does continue into the payload and finds an audio attachment, it plays it. If it finds text, it shows it. If it finds nothing it understands, the restored picture was still worth the click. That is the sense in which simple viewing and audio pictures are the same mechanism: one carrier, one inverse, and a front end that prefers to play sound when sound is what the bytes contain.</p>
+
+<h2>14. Other mechanisms that earn their keep</h2>
+<p><strong>No mask.</strong> Early experiments excluded a rectangle with an external mask. The current writer does not. Every complete block is in the grid, markers punch explicit holes that the reader can recompute from the width and height, and a legacy import may only <em>infer</em> an old exclusion from the signal itself. A file never depends on a sidecar to be readable.</p>
+<p><strong>Strength is stored, then rediscovered.</strong> The header records the amplitude that was written. Readers still try the ladder 8, 12, 16, 24, 32 when the header is not yet known, and they keep a candidate only when the frame checksum matches. A photograph that was decoded at the wrong amplitude does not return plausible text.</p>
+<p><strong>Adaptive amplitude is local and reversible in intent.</strong> Texture gain is computed from the source before painting. The inverse uses the amplitude the header names, not a second measurement of the encoded texture, so the reader and the writer agree on the kernel even where the boost differed from block to block. Where the boost was rejected by the bias limit, the nominal kernel is what was written, and it is what is removed.</p>
+<p><strong>The guide is chroma-neutral on purpose.</strong> Equation (25) plus the opposing green step is a small example of the same idea as the whole carrier: put the information in a subspace people and JPEG quantisers under-use, and put a matched filter in the decoder that looks only there. The payload uses a diagonal subspace of luma. The guide uses a pair of spatial frequencies in a red-minus-green direction. They do not share a detection statistic, so a strong guide cannot impersonate a payload, and a strong payload cannot impersonate a guide.</p>
+<p><strong>Scheduling on the camera is part of the algorithm.</strong> A live preview produces more frames than a decoder can finish. The implementation keeps a short history of marker-bearing frames, prefers a frame whose calibration scale agreed, and will not spend a payload read on a frame with no marker candidate. A homography that fails its checksum yields to a newer frame. The calibration budget is intentionally cheaper than the marker budget. This is not a mathematical curiosity; it is why a phone can show a live picture and still decode, instead of freezing on the first blurry grab.</p>
+<p><strong>Comparison without a second encode.</strong> After a read, the source view is the inverse of section 7 applied to the pixels just decoded. It is not a stored original. That is what lets a viewer show “before and after” for a file that arrived with no companion, and what a plug-in can do in place.</p>
+
+<h2>15. Limits that the mathematics does not remove</h2>
+<p>These are part of the design, not a list of future work disguised as modesty.</p>
+<ul>
+<li>The prognosis is not a probability. Replacing equation (12) with a fitted model would be a new measurement, not a bug fix.</li>
+<li>A homography is not a lens. Curved paper, strong fisheye and heavy motion blur are outside sections 8–10. Side-reference displacements are recorded and not yet consumed by a distortion model.</li>
+<li>The inverse (21)–(22) cannot recreate texture that was never captured, or that a platform removed by scaling. “Near perfect” applies to the host on a surviving lattice.</li>
+<li>Carrier 1 and carrier 5 are different marker layouts. A reader must honour the version byte. There is no single image that is native to every historical reader.</li>
+<li>Capacity is real. A long recording or a large file that cannot reach one copy at the encoding cap is refused. Repetition cannot be conjured from a grid that does not have the blocks.</li>
+<li>The embedded pattern is a signal, not a secret. Anyone who knows this paper can detect and remove it. The goal is portability and restoration, not concealment from a determined analyst.</li>
+</ul>
+
+<h2>16. Constants</h2>
+<table>
+<tr><th>Symbol</th><th>Value</th><th>Role</th></tr>
+<tr><td>Block</td><td>4×4</td><td>One coded symbol</td></tr>
+<tr><td><em>w</em></td><td>(−19,−11,5,13,5,−11,−19)</td><td>Diagonal stencil</td></tr>
+<tr><td><em>a</em></td><td>1…32, discovery ladder 8,12,16,24,32</td><td>Wavelet amplitude</td></tr>
+<tr><td>Preamble</td><td>9 bytes × 7 repeats = 504 blocks</td><td>Magic C7, version, flags, length, CRC-16</td></tr>
+<tr><td><em>β</em></td><td>12 or 9</td><td>Symbols per byte, four-parity or one-parity</td></tr>
+<tr><td>Whitening seed</td><td>0x50434631</td><td>Payload shuffle and whitening</td></tr>
+<tr><td>Marker seed</td><td>0x50534C35 on carrier 5</td><td>Corner-patch scatter</td></tr>
+<tr><td>Corners</td><td>50×50, ids 0,2,6,8</td><td>Homography constraints</td></tr>
+<tr><td>References</td><td>24×16, ids 1,3,5,7</td><td>Optional local displacement</td></tr>
+<tr><td>Reserved</td><td>12,352 pixels</td><td>Carrier 5 holes in the payload grid</td></tr>
+<tr><td><em>q</em>, <em>g</em></td><td>default 0.8, gain 2<sup>0.8−<em>q</em></sup></td><td>Quality slider</td></tr>
+<tr><td><em>U</em></td><td>15% at 2×, denominator 1</td><td>Redundancy uplift</td></tr>
+<tr><td>Reference grid</td><td>1200×800</td><td>Unit resolution load</td></tr>
+<tr><td>Size window</td><td>1× to 3× repetition</td><td>Planner’s legal scales</td></tr>
+<tr><td><em>h</em></td><td>even, ≤ 62</td><td>Symmetric RGB headroom</td></tr>
+<tr><td>Guide</td><td>pitches 64 and 96, band 48, inset 8, ±2</td><td>Chroma-opposed edge calibration</td></tr>
+<tr><td>Payload caps</td><td>16 KiB text, 1 MiB bundle, 8 files</td><td>Opaque byte string</td></tr>
+</table>
+
+<h2>17. Conclusion</h2>
+<p>PixelStow is a carrier that respects the fact that its cover is the product. The mathematics that makes the bytes reliable — a known diagonal shape, a cube-safe integer amplitude, a shuffled repetition code, a soft sum, a short parity check, a checksummed frame — is the same mathematics that makes a mild JPEG survivable, because a mild JPEG is a small error on that shape. The mathematics that makes a photograph readable — four identified corners, a normalised homography, a chroma-opposed scale guide, a four-pixel phase field — is separate, and it is what puts the bytes back on the lattice the first mathematics understands. The prognosis is the negotiated truce between those two: more copies help the code, a finer pitch hurts the camera, and amplitude can only pay for part of the difference.</p>
+<p>The inverse is short enough to live in a viewer. Subtract the wavelet the header names, subtract the guide the preamble names, and expand the headroom the preamble names. The picture that comes back is the host. The bytes that come with it may be a sentence, a file, or a voice. For a birthday card or a talking advert, the voice is the point, and the fact that everyone else can still pass the JPEG around, oblivious, is the distribution system.</p>
+<p class="note">Sources for the formulae are the PictureCodec wavelet carrier and signal-removal path, the PCF1 frame, and the browser modules that implement carrier 5, the prognosis, the homography fitter, the edge guide and the projective resampler, as they stood in October 2026. Where a constant is an engineering judgement rather than a measured optical parameter, the paper says so in the section that uses it.</p>
+</body>
+</html>

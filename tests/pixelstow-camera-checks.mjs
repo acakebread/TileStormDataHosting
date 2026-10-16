@@ -111,6 +111,20 @@ try {
   await stableFeedback(page);
   await page.screenshot({ path: path.join(screenshots, 'desktop-scanner.png') });
   await page.locator('#pause-camera').click();
+  assert.equal(await page.locator('#pause-camera').getAttribute('aria-label'), 'Resume scanning');
+  assert(await page.locator('#pause-camera .play-icon').isVisible(), 'paused scanning must display the Play icon');
+  assert(!(await page.locator('#pause-camera .pause-icon').isVisible()));
+  const resumedIcons = await page.evaluate(() => {
+    camera.togglePause();
+    const icons = { label: camera.pauseButton.getAttribute('aria-label'),
+      play: getComputedStyle(camera.pauseButton.querySelector('.play-icon')).display,
+      pause: getComputedStyle(camera.pauseButton.querySelector('.pause-icon')).display };
+    camera.togglePause();
+    return icons;
+  });
+  assert.equal(resumedIcons.label, 'Pause scanning');
+  assert.equal(resumedIcons.play, 'none');
+  assert.notEqual(resumedIcons.pause, 'none', 'resuming scanning must restore the Pause icon');
   assert.equal(await page.locator('.camera-mode-warning').count(), 0);
   await page.evaluate(() => { camera.session.deviceLabel = 'Camera Back Dual Wide'; camera.sync(); });
   assert.match(await page.locator('.camera-mode-warning').textContent(), /distorted.*standard rear camera/);
