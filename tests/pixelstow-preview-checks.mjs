@@ -27,7 +27,11 @@ try {
     const errors = []; page.on('pageerror', error => errors.push(error.message));
     await page.goto('http://127.0.0.1:' + server.address().port + '/pixelstow.html');
     assert(await page.getByRole('button', { name: 'Preview', exact: true }).isDisabled());
+    assert(await page.locator('#preview-encoded-image').evaluate(button =>
+      button.parentElement.firstElementChild === button && getComputedStyle(button).backgroundColor === 'rgb(245, 230, 158)'),
+    'the lower Preview action comes first and has the yellow accent');
     assert(await page.locator('#preview-audio').isDisabled());
+    assert(await page.locator('#preview-screen-toggle').isHidden());
     const entryButtons = await page.locator('.image-actions > button').evaluateAll(buttons => buttons.map(button => {
       const box = button.getBoundingClientRect();
       return { x: box.x, y: box.y, width: box.width, height: box.height, fits: button.scrollWidth <= button.clientWidth };
@@ -42,6 +46,7 @@ try {
       await useFile(new File([await PixelStow.writePng(pixels, width, height)], 'public-source.png', { type: 'image/png' }), 'file', { image, sourceOnly: true });
       window.sourceFixture = image;
     });
+    await page.locator('#preview-encoded-image').locator('..').screenshot({ path: path.join(snapshots, `image-actions-lower-${width}.png`) });
     const cleanLayers = ['#preview-source', '#transform-outline', '#compare-ui', '#comparison-control', '#tag-encoded', '#tag-source', '#preview-audio', '#preview-markers'];
     const checkCleanLayers = async (source = false) => {
       for (const selector of cleanLayers.filter(selector => selector !== '#preview-source')) assert(!(await page.locator(selector).isVisible()), selector + ' must never appear in the transmission viewer');
@@ -77,8 +82,11 @@ try {
     await tapImage();
     assert(await page.getByRole('button', { name: 'Fit', exact: true }).isVisible());
     assert(await page.getByRole('button', { name: '100%', exact: true }).isVisible());
+    assert(await page.getByRole('button', { name: 'Show source image', exact: true }).isDisabled(), 'a source-only image has no alternate preview');
     await checkCleanLayers();
-    const cleanBoxes = await Promise.all(['#preview-screen-fit', '#preview-screen-actual', '#preview-screen-hide', '#preview-screen-close'].map(selector => page.locator(selector).boundingBox()));
+    const cleanControls = ['#preview-screen-fit', '#preview-screen-actual', '#preview-screen-toggle', '#preview-screen-hide', '#preview-screen-close'];
+    const cleanBoxes = await Promise.all(cleanControls.map(selector => page.locator(selector).boundingBox()));
+    assert(cleanBoxes.every((box, index) => box && box.width >= 44 && box.height >= 48 && Math.abs(box.y - cleanBoxes[0].y) < 1 && box.x >= 0 && box.x + box.width <= width && (!index || box.x >= cleanBoxes[index - 1].x + cleanBoxes[index - 1].width + 7)), 'all five clean-view controls must fit one row, with source toggle after 100% and Close last: ' + JSON.stringify(cleanBoxes));
     const checkActionSpacing = boxes => {
       for (let i = 1; i < boxes.length; i++) {
         const gap = boxes[i].x - boxes[i - 1].x - boxes[i - 1].width;
@@ -120,6 +128,19 @@ try {
       assert.equal(await page.locator('#split').inputValue(), dividerBefore, 'a clean-view tap must not change the comparison');
       await page.getByRole('button', { name: '100%', exact: true }).click();
       assert(await page.evaluate(() => Math.abs(viewScale - 1 / devicePixelRatio) < 1e-7));
+      const buttonView = await page.evaluate(() => [fitMode, viewScale, originX, originY]);
+      const toggle = page.locator('#preview-screen-toggle');
+      assert(!(await toggle.isDisabled()), 'a decoded carrier enables the source toggle');
+      assert.equal(await toggle.getAttribute('aria-pressed'), 'false');
+      await page.getByRole('button', { name: 'Show source image', exact: true }).click();
+      await checkCleanLayers(true);
+      assert.equal(await toggle.getAttribute('aria-pressed'), 'true');
+      assert.equal(await toggle.getAttribute('title'), 'Show encoded image');
+      assert.deepEqual(await page.evaluate(() => [fitMode, viewScale, originX, originY]), buttonView, 'the source button preserves zoom and pan');
+      await page.getByRole('button', { name: 'Show encoded image', exact: true }).click();
+      await checkCleanLayers();
+      assert.equal(await toggle.getAttribute('aria-pressed'), 'false');
+      assert.deepEqual(await page.evaluate(() => [fitMode, viewScale, originX, originY]), buttonView);
       await page.getByRole('button', { name: 'Fit', exact: true }).click();
       await page.getByRole('button', { name: 'Hide controls', exact: true }).click();
       assert(!(await page.locator('#preview-screen-footer').isVisible()));
@@ -127,6 +148,8 @@ try {
       const viewBefore = await page.evaluate(() => [fitMode, viewScale, originX, originY]);
       await holdImage();
       await checkCleanLayers(true);
+      assert.equal(await toggle.getAttribute('aria-label'), 'Show encoded image', 'holding and clicking share the source toggle state');
+      assert.equal(await toggle.getAttribute('aria-pressed'), 'true');
       assert(!(await page.locator('#preview-screen-footer').isVisible()));
       assert.equal(await page.locator('#split').inputValue(), dividerBefore);
       assert.deepEqual(await page.evaluate(() => [fitMode, viewScale, originX, originY]), viewBefore, 'a source toggle preserves zoom/pan');
@@ -135,6 +158,8 @@ try {
       await page.getByRole('button', { name: 'Hide controls', exact: true }).click();
       await holdImage();
       await checkCleanLayers();
+      assert.equal(await toggle.getAttribute('aria-label'), 'Show source image');
+      assert.equal(await toggle.getAttribute('aria-pressed'), 'false');
       if (origin === 'camera') {
         if (mobile) {
           const cdp = await page.context().newCDPSession(page), box = await page.locator('#viewport').boundingBox();
@@ -216,6 +241,48 @@ try {
           await page.getByRole('button', { name: 'Hide controls', exact: true }).click();
           await cdp.detach();
           console.log(`PASS: ${width}px clean preview one-finger continuous pan; tap/hold arbitration, pinch continuation, source mode and cancellation`);
+        } else {
+          await page.evaluate(() => {
+            const image = imagePixels(), box = viewBox();
+            fitMode = false; viewScale = fittedScale(image, box) * 3;
+            originX = (box.w - image.w * viewScale) / 2;
+            originY = (box.h - image.h * viewScale) / 2;
+            applyView();
+          });
+          const view = () => page.evaluate(() => ({ x: originX, y: originY, scale: viewScale, source: fullPreview.panel.classList.contains('show-source') }));
+          const box = await page.locator('#viewport').boundingBox(), x = box.x + box.width * .2, y = box.y + box.height * .4;
+          const before = await view();
+          await page.mouse.move(x, y); await page.mouse.down();
+          await page.mouse.move(x + 4, y + 3);
+          assert.deepEqual(await view(), before, 'mouse down and small movement leave the image still');
+          await page.mouse.move(x + 40, y + 30);
+          const first = await view();
+          assert(Math.abs(first.x - before.x - 40) < 1 && Math.abs(first.y - before.y - 30) < 1, 'LMB drag includes the full movement from mouse down');
+          await page.waitForTimeout(550);
+          await page.mouse.move(x + 75, y + 60); await page.mouse.up();
+          const second = await view();
+          assert(Math.abs(second.x - before.x - 75) < 1 && Math.abs(second.y - before.y - 60) < 1, 'LMB pan tracks continuously beyond the hold timer');
+          assert.equal(second.scale, before.scale);
+          assert.equal(second.source, before.source, 'dragging cancels the source-toggle hold');
+          assert.equal(await page.locator('#split').inputValue(), dividerBefore);
+          assert(!(await page.locator('#preview-screen-footer').isVisible()), 'dragging does not reveal hidden controls');
+          await holdImage();
+          await checkCleanLayers(true);
+          await tapImage();
+          assert(await page.locator('#preview-screen-footer').isVisible());
+          const sourceBefore = await view();
+          await page.mouse.move(x, y); await page.mouse.down();
+          await page.mouse.move(x - 30, y - 25); await page.mouse.up();
+          const sourceAfter = await view();
+          assert(Math.abs(sourceAfter.x - sourceBefore.x + 30) < 1 && Math.abs(sourceAfter.y - sourceBefore.y + 25) < 1, 'LMB pan works on the source with controls showing');
+          assert.equal(sourceAfter.scale, sourceBefore.scale);
+          await checkCleanLayers(true);
+          assert(await page.locator('#preview-screen-footer').isVisible(), 'dragging does not hide visible controls');
+          await page.getByRole('button', { name: 'Hide controls', exact: true }).click();
+          await holdImage();
+          await checkCleanLayers();
+          assert(await page.evaluate(() => !panning && panStart === null && panPointer === null), 'mouse pan state is cleared on release');
+          console.log('PASS: desktop clean preview continuous LMB pan preserves zoom and comparison; click/hold remain available');
         }
         await page.screenshot({ path: path.join(snapshots, `clean-capture-${width}.png`) });
       }
@@ -238,12 +305,18 @@ try {
       await cdp.detach();
     }
     await page.waitForFunction(() => document.querySelector('#preview-audio').parentElement.id === 'preview-bottom-row');
-    const mainAudio = await page.locator('#preview-audio').boundingBox(), mainSlider = await page.locator('#comparison-control').boundingBox();
+    // Measure in one frame: an inline mobile swipe can still be coasting,
+    // which changes viewport-relative Y between separate browser calls.
+    const [mainAudio, mainSlider] = await page.evaluate(() => ['#preview-audio', '#comparison-control'].map(selector => {
+      const { x, y, width, height } = document.querySelector(selector).getBoundingClientRect();
+      return { x, y, width, height };
+    }));
     assert(Math.abs(mainAudio.y + mainAudio.height / 2 - mainSlider.y - mainSlider.height / 2) < 1);
     assert(mainAudio.x + mainAudio.width <= width);
     assert(mainAudio.x + mainAudio.width <= mainSlider.x, 'the main speaker stays left of the slider after returning from fullscreen');
     await page.getByRole('button', { name: 'Full screen preview', exact: true }).click();
     assert(await page.evaluate(() => !fullPreview.clean));
+    assert(await page.locator('#preview-screen-toggle').isHidden(), 'the comparison viewer retains its divider rather than duplicating the clean-view toggle');
     const controls = ['#preview-audio', '#preview-screen-fit', '#preview-screen-actual', '#preview-screen-hide', '#preview-markers', '#preview-screen-close'];
     const boxes = await Promise.all(controls.map(selector => page.locator(selector).boundingBox()));
     assert(boxes.every((box, index) => box && box.width >= 44 && box.height >= 48 && Math.abs(box.y - boxes[0].y) < 1 && box.x >= 0 && box.x + box.width <= width && (!index || box.x >= boxes[index - 1].x + boxes[index - 1].width + 7)), JSON.stringify(boxes));
@@ -358,8 +431,15 @@ try {
     assert(!(await page.locator('#preview-screen-footer').isVisible()));
     await tapImage();
     await checkCleanLayers();
-    await page.getByRole('button', { name: 'Close preview', exact: true }).click();
+    assert(await page.getByRole('button', { name: 'Show source image', exact: true }).isDisabled(), 'the source button waits for pending extraction');
     await page.evaluate(async () => { PixelStow.extractCarrier = realExtraction; await finishExtraction(); await current.carrierPromise; });
+    await page.waitForFunction(() => !document.querySelector('#preview-screen-toggle').disabled);
+    await page.getByRole('button', { name: 'Show source image', exact: true }).click();
+    await checkCleanLayers(true);
+    await page.getByRole('button', { name: 'Show encoded image', exact: true }).click();
+    await checkCleanLayers();
+    await page.getByRole('button', { name: 'Close preview', exact: true }).click();
+    await page.waitForFunction(() => document.querySelector('#preview-audio').parentElement.id === 'preview-bottom-row');
     assert(await page.locator('#preview-audio').isVisible());
     assert(await page.locator('#comparison-control').isVisible());
     assert.deepEqual(errors, []);

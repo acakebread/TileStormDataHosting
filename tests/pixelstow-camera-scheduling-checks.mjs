@@ -95,6 +95,7 @@ const pilot={detected:true,confirmed:false,scale:1,fx:1/128,fy:0,width:16,height
   });
   codec.readMarkerCandidates=async()=>{reads++;return {found:false};};
   camera.scan(session);assert.equal(guides.length,1);assert.equal(markers.length,0);
+  assert.equal(guides[0].options.minimumCoverage,undefined,'the historical FFT research route keeps its existing contract');
   guides[0].resolve(null);await flush();assert.equal(markers[0].id,1);
   camera.video.currentTime=2;camera.scan(session);camera.video.currentTime=3;camera.scan(session);
   assert.equal(guides.length,2);assert.equal(session.guidePending.frameNumber,3);
@@ -145,121 +146,66 @@ console.log('PASS: independent latest-frame Fourier lookahead, pilot-first prior
 
 {
   const {camera,session}=setup(),guides=[],markers=[],captured=[];let id=0,reads=0;
+  camera.calibrationLight={textContent:'',setAttribute(name,value){this[name]=value;}};
   camera.video={readyState:2,currentTime:1};camera.captureFrame=()=>{const current=image(++id);captured.push(current);return current;};
-  camera.captureGuideImage=()=>{throw Error('The edge guide must receive the original raster, without the old 512-pixel reduction');};
-  codec.scanScaleGuide=()=>{throw Error('Default edge guidance must not run the old full-image pilot too');};
+  camera.captureGuideImage=()=>{throw Error('Do not reduce before edge appraisal');};
+  codec.scanScaleGuide=()=>{throw Error('Do not run the abandoned full-image pilot');};
   codec.scanEdgeGuide=(p,w,h,options)=>new Promise(resolve=>guides.push({pixels:p,id:p[0],w,h,options,resolve}));
   codec.scanMarkers=(p,w,h,options)=>new Promise((resolve,reject)=>{
-    markers.push({id:p[0],options,resolve});
-    options.signal.addEventListener('abort',()=>reject(new DOMException('Cancelled','AbortError')),{once:true});
+    markers.push({id:p[0],options,resolve});options.signal.addEventListener('abort',()=>reject(new DOMException('Cancelled','AbortError')),{once:true});
   });
   codec.readMarkerCandidates=async()=>{reads++;return {found:false};};
-  camera.scan(session);assert.equal(guides.length,1);assert.equal(markers.length,1,'ordinary marker discovery starts before the edge-guide promise settles');
-  assert.equal(guides[0].pixels,captured[0].pixels,'guide analysis receives the frozen full-resolution capture pixels');
-  assert.equal(guides[0].w,16);assert.equal(guides[0].h,16);
-  assert.equal(guides[0].options.deadline-now,1000);
-  guides[0].resolve(null);await flush();assert.equal(markers[0].id,1);assert.equal(markers.length,1,'a guide miss must not queue its active frame twice');
-  camera.video.currentTime=2;camera.scan(session);camera.video.currentTime=3;camera.scan(session);
-  assert.equal(guides.length,2);assert.equal(session.guidePending.frameNumber,3,'guide lookahead retains only the latest pending capture');
-  guides[1].resolve(null);await flush();assert.equal(guides[2].id,3);
-  guides[2].resolve(pilot);await flush();
-  assert(markers[0].options.signal.aborted,'a later edge-positive capture must jump an unconfirmed marker scan');
-  assert.equal(markers[1].id,3);assert.equal(markers[1].options.scaleGuide.scale,pilot.scale);
-  assert.equal(markers[1].options.scaleGuide.fx,pilot.fx,'the full-raster hint must not be scaled a second time');
-  assert.equal(markers[1].options.deadline-now,24000,'guide detection keeps the complete marker acquisition budget');
-  assert.equal(session.scanningEntry.guideKind,'edge');
-  assert.match(camera.progress.textContent,/Edge guide found\. Checking markers/);
-  assert.match(camera.signature.textContent,/Edge guide · ~1\.00× scale/,'the user can see guide acquisition throughout marker search');
-  markers[1].options.onSignature({confirmed:false,message:'Checking a candidate frequency.'});
-  assert.match(camera.signature.textContent,/Edge guide · ~1\.00× scale.*Checking a candidate frequency/);
-  markers[1].resolve({markers:[],candidates:[]});await flush();
-  assert.equal(reads,0,'an edge-frequency match cannot replace verified marker geometry');
-  assert.match(camera.signature.textContent,/Edge guide · ~1\.00× scale.*No encoding signature/,'scan completion retains calibration feedback');
-  assert.equal(timers.size,0);
-  delete codec.scanScaleGuide;
-}
-for(const completeFirst of [false,true]){
-  const {camera,session}=setup(),markers=[];let finishGuide;
-  camera.video={readyState:2,currentTime:1};camera.captureFrame=()=>image(1);
-  codec.scanEdgeGuide=()=>new Promise(resolve=>{finishGuide=resolve;});
-  codec.scanMarkers=(p,w,h,options)=>new Promise((resolve,reject)=>{
-    markers.push({options,resolve});
-    options.signal.addEventListener('abort',()=>reject(new DOMException('Cancelled','AbortError')),{once:true});
-  });
-  camera.scan(session);assert.equal(markers.length,1);
-  if(completeFirst){markers[0].resolve({markers:[],candidates:[]});await flush();}
-  finishGuide(pilot);await flush();
-  assert.equal(markers.length,1,'a late positive guide must never restart its own active or completed raster');
-  assert(!markers[0].options.signal.aborted,'a same-frame guide cannot abort work already running');
-  assert.equal(session.pending,null);
-  if(!completeFirst){
-    assert.match(camera.signature.textContent,/Edge guide · ~1\.00× scale/);
-    markers[0].resolve({markers:[],candidates:[]});await flush();
-  }
-  assert.equal(timers.size,0);
+  camera.scan(session);assert.equal(guides.length,1);assert.equal(markers.length,0,'uncalibrated frames only start cheap appraisal');
+  assert.equal(guides[0].pixels,captured[0].pixels);assert.equal(guides[0].options.deadline-now,1000);
+  assert.equal(guides[0].options.minimumCoverage,.75,'camera-only fast calibration assumes the carrier fills three quarters of the view');
+  guides[0].resolve(null);await flush();assert.equal(markers.length,0);assert.equal(camera.calibrationLight['data-state'],'searching');
+  await advance(4900);camera.video.currentTime=2;camera.scan(session);guides[1].resolve(null);await flush();assert.equal(markers.length,0);
+  await advance(100);camera.video.currentTime=3;camera.scan(session);guides[2].resolve(null);await flush();
+  assert.equal(markers.length,1);assert.equal(markers[0].id,3);assert.equal(markers[0].options.deadline-now,8000);assert.equal(markers[0].options.calibratedOnly,false);
+  camera.video.currentTime=4;camera.scan(session);camera.video.currentTime=5;camera.scan(session);
+  assert.equal(session.guidePending.frameNumber,5);guides[3].resolve(null);await flush();assert.equal(guides[4].id,5);
+  guides[4].resolve(pilot);await flush();assert(markers[0].options.signal.aborted,'positive calibration preempts unconfirmed ordinary work');
+  assert.equal(markers[1].id,5);assert.equal(markers[1].options.calibratedOnly,true);assert.equal(markers[1].options.deadline-now,8000);
+  assert.equal(markers[1].options.seed,undefined);assert.equal(markers[1].options.scaleGuide.scale,pilot.scale);assert.equal(markers[1].options.scaleGuide.fx,pilot.fx);
+  assert.equal(camera.calibrationLight['data-state'],'detected');assert.match(camera.calibrationLight.textContent,/Calibration found/);
+  markers[1].resolve({markers:[],candidates:[],calibratedOnly:true});await flush();assert.equal(reads,0);
+  await advance(7900);camera.video.currentTime=6;camera.scan(session);guides[5].resolve(null);await flush();assert.equal(markers.length,2);
+  await advance(100);camera.video.currentTime=7;camera.scan(session);guides[6].resolve(null);await flush();assert.equal(markers.length,3,'one ordinary sample per eight seconds');
+  markers[2].resolve({markers:[],candidates:[]});await flush();camera.video.currentTime=8;camera.scan(session);guides[7].resolve(null);await flush();assert.equal(markers.length,3);
+  session.paused=true;camera.cancelSearches(session);await flush();assert.equal(timers.size,0);delete codec.scanScaleGuide;
 }
 {
   const {camera,session}=setup(),guides=[],markers=[];let id=0;
   camera.video={readyState:2,currentTime:1};camera.captureFrame=()=>image(++id);
   codec.scanEdgeGuide=()=>new Promise(resolve=>guides.push(resolve));
   codec.scanMarkers=(p,w,h,options)=>new Promise((resolve,reject)=>{
-    markers.push({id:p[0],options,resolve});
-    options.signal.addEventListener('abort',()=>reject(new DOMException('Cancelled','AbortError')),{once:true});
+    markers.push({id:p[0],options,resolve});options.signal.addEventListener('abort',()=>reject(new DOMException('Cancelled','AbortError')),{once:true});
   });
-  camera.scan(session);
-  assert.equal(markers[0].options.scaleGuide,false);assert.equal(session.scanningEntry.markerGuideUsed,false);
-  guides[0](pilot);await flush();
-  assert(session.scanningEntry.scaleGuide.detected);assert.equal(session.scanningEntry.markerGuideUsed,false);
-  assert(!markers[0].options.signal.aborted,'a late hint does not restart its own unhinted worker');
+  camera.scan(session);assert.equal(markers.length,0);guides[0](pilot);await flush();assert.equal(markers.length,1);
+  camera.enqueueFrame(session,session.scanningEntry);assert.equal(markers.length,1,'same frame cannot restart its own worker');
   camera.video.currentTime=2;camera.scan(session);guides[1](pilot);await flush();
-  assert(markers[0].options.signal.aborted,'a newer positive frame must preempt an older worker that never received its late same-frame hint');
-  assert.equal(markers[1].id,2);assert(markers[1].options.scaleGuide.detected);
-  assert.equal(session.scanningEntry.markerGuideUsed,true);
-  camera.video.currentTime=3;camera.scan(session);guides[2](pilot);await flush();
-  assert(!markers[1].options.signal.aborted,'equal positive frames do not restart a worker that actually began with a guide');
-  assert.equal(markers.length,2);assert.equal(session.pending.frameNumber,3);
+  assert(!markers[0].options.signal.aborted,'equal positives do not repeatedly restart acquisition');assert.equal(session.pending.frameNumber,2);
+  camera.video.currentTime=3;camera.scan(session);guides[2](null);await flush();assert.equal(session.pending.frameNumber,2,'miss cannot evict pending positive');
   session.paused=true;camera.cancelSearches(session);await flush();assert.equal(timers.size,0);
 }
 {
-  const {camera,session}=setup(),guides=[];let id=0;
-  camera.video={readyState:2,currentTime:1};camera.captureFrame=()=>image(++id);
-  codec.scanEdgeGuide=()=>new Promise(resolve=>guides.push(resolve));
-  codec.scanMarkers=(p,w,h,{signal})=>new Promise((resolve,reject)=>signal.addEventListener('abort',()=>reject(new DOMException('Cancelled','AbortError')),{once:true}));
-  camera.scan(session);camera.video.currentTime=2;camera.scan(session);
-  assert.equal(session.pending.frameNumber,2);
-  guides[0](null);await flush();
-  assert.equal(session.pending.frameNumber,2,'a late guide miss cannot replace a newer ordinary pending capture');
-  session.paused=true;camera.cancelSearches(session);await flush();assert.equal(timers.size,0);
-}
-{
-  const {camera,session}=setup();session.scanning=true;
-  session.scanningEntry={...entry(1),guideKind:'edge',scaleGuide:pilot,markerGuideUsed:true};session.abort=new AbortController();
-  const latest={...entry(2),guideKind:'edge',scaleGuide:pilot};camera.enqueueFrame(session,latest);
-  assert(!session.abort.signal.aborted,'equal positive guides must not repeatedly restart acquisition');
-  assert.equal(session.pending,latest,'equal positive guides keep the newest pending frame');
-  camera.enqueueFrame(session,entry(3));assert.equal(session.pending,latest,'an unhinted frame cannot evict a recent positive guide');
-  session.scanningEntry={...entry(4),markerConfirmed:true};camera.enqueueFrame(session,{...entry(5),guideKind:'edge',scaleGuide:pilot});
-  assert(!session.abort.signal.aborted,'an edge hint alone cannot preempt a verified marker fit');
+  const {camera,session}=setup(),calls=workerQueue();session.history=[{...entry(1),guideKind:'edge',scaleGuide:pilot,calibratedOnly:true}];
+  camera.readBestFrame(session);await flush();assert.equal(calls[0].options.resumeDiscovery,false);assert.equal(calls[0].options.calibratedOnly,true);
+  calls[0].resolve({found:true,unreadable:true});await flush();assert(!session.paused);assert.equal(calls.length,1);
 }
 {
   const {camera,session}=setup();let finish;const enqueued=[];
   camera.enqueueFrame=(s,e)=>enqueued.push(e);session.guidePending={...entry(1),guideKind:'edge'};
-  codec.scanEdgeGuide=()=>new Promise(resolve=>{finish=resolve;});
-  camera.checkScaleGuide(session);await advance(1200);
-  assert.equal(enqueued.length,1,'an unresponsive guide still releases ordinary recovery at its hard timeout');
-  assert(!enqueued[0].scaleGuide);assert(!session.guideBusy);assert.equal(timers.size,0);
-  finish(pilot);await flush();assert.equal(enqueued.length,1,'a late timed-out hint cannot enqueue twice');assert(!enqueued[0].scaleGuide);
-  session.guidePending={...entry(2),guideKind:'edge'};camera.checkScaleGuide(session);
-  camera.cancelSearches(session);finish(pilot);await flush();
-  assert.equal(enqueued.length,1,'reframing invalidates edge results even when the detector ignores its abort');
-  session.guidePending={...entry(3),guideKind:'edge'};codec.scanEdgeGuide=async()=>{throw Error('Synthetic edge-guide failure');};
-  await camera.checkScaleGuide(session);assert.equal(enqueued[1].frameNumber,3);assert(!enqueued[1].scaleGuide);
-  session.purpose='source';session.guidePending={...entry(4),guideKind:'edge'};
-  codec.scanEdgeGuide=()=>{throw Error('Source photos must not run guide analysis');};await camera.checkScaleGuide(session);
+  codec.scanEdgeGuide=()=>new Promise(resolve=>{finish=resolve;});camera.checkScaleGuide(session);await advance(1200);
+  assert.equal(enqueued.length,1,'unresponsive appraisal releases frame to throttled fallback gate');assert(!enqueued[0].scaleGuide);assert(!session.guideBusy);assert.equal(timers.size,0);
+  finish(pilot);await flush();assert.equal(enqueued.length,1,'timed-out late hint cannot enqueue twice');
+  session.guidePending={...entry(2),guideKind:'edge'};camera.checkScaleGuide(session);camera.cancelSearches(session);finish(pilot);await flush();assert.equal(enqueued.length,1);
+  session.guidePending={...entry(3),guideKind:'edge'};codec.scanEdgeGuide=async()=>{throw Error('Synthetic edge-guide failure');};await camera.checkScaleGuide(session);assert.equal(enqueued[1].frameNumber,3);
+  session.purpose='source';session.guidePending={...entry(4),guideKind:'edge'};codec.scanEdgeGuide=()=>{throw Error('Source mode must not analyze');};await camera.checkScaleGuide(session);
   assert.equal(enqueued.length,2);assert.equal(timers.size,0);
 }
 delete codec.scanEdgeGuide;
-console.log('PASS: default edge-guide full-raster lookahead, newest-positive priority, no duplicate reductions, hard timeout, stale-result rejection and ordinary fallback');
+console.log('PASS: calibration-first full-raster appraisal, delayed/periodic fallback, positive preemption, one guided grid, green indicator, latest-slot replacement and cancellation');
 
 // Real codec regression: inaccurate higher-ranked transforms may precede the
 // correct one. The camera must not silently discard the third valid candidate.

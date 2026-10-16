@@ -60,6 +60,22 @@ for(const textured of[false,true]) {
   }
 }
 console.log('PASS: quarter-resolution scale calibration at .75x / 1x / 1.5x; all six unencoded controls rejected');
+// A photographed channel may attenuate the guide while one unrelated source
+// frequency dominates a single component. The other fixed-phase components
+// must still stand above neighbouring frequencies; one strong tone is not proof.
+const grey=source(w,h,false),fullGuide=E.apply(grey,w,h),weak=grey.slice(),interferenceOnly=grey.slice();
+for(let i=0;i<weak.length;i++)if(i%4!==3)weak[i]=Math.round(grey[i]+.55*(fullGuide[i]-grey[i]));
+for(let y=8;y<56;y++)for(let x=64;x<w-64;x++) {
+  const d=y-8,envelope=Math.sin(Math.PI*(d+.5)/48)*Math.cos(2*Math.PI*d/24+.43);
+  const delta=Math.round(1.2*Math.cos(2*Math.PI*x/64+.31+2.4)*envelope),i=(x+y*w)*4;
+  for(const pixels of [weak,interferenceOnly]){pixels[i]+=delta;pixels[i+1]-=delta;pixels[i+2]+=delta;}
+}
+const weakBefore=weak.slice(),weakHint=await E.detect(weak,w,h,{maxMilliseconds:1600,minimumCoverage:.75});
+assert(weakHint&&Math.abs(weakHint.scale-1)<.02);
+assert(weakHint.localSpectralSupport>=6);assert(weakHint.phaseSupport>=6);assert.equal(weakHint.outlierComponents,1);
+assert.equal(await E.detect(interferenceOnly,w,h,{maxMilliseconds:1600}),null,'one source-frequency peak is insufficient');
+assert.deepEqual(weak,weakBefore);
+console.log('PASS: attenuated guide with one obscured tone calibrates from six independent spectral/phase components');
 for(const scale of[.75,1,1.5])for(const angle of[-7,3,9]) {
   const image=capture(marked,w,h,scale,angle,24),hint=await E.detect(image.pixels,image.width,image.height,{maxMilliseconds:1600});
   assert(hint,`missing rotated hint at ${scale}x / ${angle}deg`);

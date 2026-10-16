@@ -54,12 +54,17 @@ try{
         // photographs already miss a marker while their full payload verifies.
         const baseline=await c.encodePayload(image.pixels,image.width,image.height,content,'',{quality,edgeGuide:false});
         const baselineMarkers=await c.analyzeNativeMarkers(baseline.pixels,image.width,image.height,5);
-        const measurements=[];
+        const measurements=[],negativeControls=[];
         for(const scale of [.73,1,1.37]){
           const capture=await S.resize(reopened,Math.round(reopened.width*scale),Math.round(reopened.height*scale));
           const hint=await c.scanEdgeGuide(capture.pixels,capture.width,capture.height,{maxMilliseconds:1000});
           measurements.push({captureScale:scale,detected:Boolean(hint),estimatedScale:hint?.scale??null,
             accurate:Boolean(hint&&Math.abs(hint.scale/scale-1)<.03)});
+          for(const [kind,control] of [['source',image],['without-guide',baseline]]) {
+            const negative=await S.resize({...control,width:image.width,height:image.height},Math.round(image.width*scale),Math.round(image.height*scale));
+            const found=await c.scanEdgeGuide(negative.pixels,negative.width,negative.height,{maxMilliseconds:1000});
+            negativeControls.push({kind,captureScale:scale,detected:Boolean(found),scale:found?.scale??null});
+          }
         }
         let binary='';for(let start=0;start<pngBytes.length;start+=32768)binary+=String.fromCharCode(...pngBytes.subarray(start,start+32768));
         const file=`photo-${index+1}-${mode}.png`;
@@ -68,7 +73,7 @@ try{
           framedBytes:encoded.framedBytes,redundancy:encoded.repetitionRatio,strength:encoded.strength,
           exactPayload:c.payloadsEqual(decoded,content),markers:markers.markers.filter(m=>m.verification==='header').length,
           markerIds:markers.markers.filter(m=>m.verification==='header').map(m=>m.id),
-          baselineMarkerIds:baselineMarkers.markers.filter(m=>m.verification==='header').map(m=>m.id),file,measurements});
+          baselineMarkerIds:baselineMarkers.markers.filter(m=>m.verification==='header').map(m=>m.id),file,measurements,negativeControls});
       }
       return{width:source.width,height:source.height,originalPixelsPreserved:source.pixels.every((v,i)=>v===original[i]),rows};
     },{input:Array.from(input),index});
@@ -78,6 +83,7 @@ try{
     report.push({photo:index+1,input:path.basename(inputs[index]),...result,originalFilePreserved:true});
     console.log(JSON.stringify(report.at(-1)));
     await fs.writeFile(path.join(directory,'results.json'),JSON.stringify(report,null,2)+'\n');
+    for(const row of result.rows)assert(row.negativeControls.every(control=>!control.detected),'An ordinary source or no-guide carrier produced a calibration false positive.');
   }
   assert.deepEqual(errors,[]);
   console.log('PASS: native and 2x-redundancy encodes, PNG import, marker counts match the existing writer, exact message/4096 attachment bytes and unchanged original files.');

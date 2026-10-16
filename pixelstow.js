@@ -1403,7 +1403,7 @@
 
   function searchInWorker(pixels, width, height, options, operation = "geometry") {
     return new Promise((resolve, reject) => {
-      const url = new URL("pixelstow-transform-worker.js?v=20261016-edge-guide2", codecScriptUrl);
+      const url = new URL("pixelstow-transform-worker.js?v=20261016-calibration3", codecScriptUrl);
       const worker = new Worker(url);
       let finished = false;
       const abort = () => { if (finished) return; cleanup(); reject(new DOMException("Search cancelled.", "AbortError")); };
@@ -1427,11 +1427,11 @@
         const copy = new Uint8Array(pixels);
         worker.postMessage({ pixels: copy, width, height, operation, mode: options.mode, forceSearch: options.forceSearch,
           includeLegacy: options.includeLegacy ?? legacyRecovery, carrierVersion: options.carrierVersion, nativeOnly: options.nativeOnly,
-          corners: options.corners, seed: options.seed, deadline: options.deadline, scaleGuide: options.scaleGuide,
-          reduction: options.reduction, maxMilliseconds: options.maxMilliseconds,
+          corners: options.corners, seed: options.seed, deadline: options.deadline, scaleGuide: options.scaleGuide, calibration: options.calibration,
+          reduction: options.reduction, maxMilliseconds: options.maxMilliseconds, minimumCoverage: options.minimumCoverage,
           seedDeadline: options.seedDeadline, camera: options.camera, scan: options.scan,
           searchState: options.searchState, stopOnHighConfidence: options.stopOnHighConfidence,
-          resumeDiscovery: options.resumeDiscovery,
+          resumeDiscovery: options.resumeDiscovery, calibratedOnly: options.calibratedOnly,
           strength: options.strength, visual: options.visual }, [copy.buffer]);
       } catch (error) { cleanup(); reject(error); }
     });
@@ -1788,9 +1788,21 @@
   function retainVisualResult(pixels, width, height, result, workingImage) {
     if (!result) return;
     if (result.geometry) visualMappings.set(pixels, { width, height, geometry: result.geometry,
-      readResolution: result.readResolution, carrierVersion: result.carrierVersion || result.markers?.[0]?.carrierVersion, workingImage });
+      readResolution: result.readResolution, carrierVersion: result.carrierVersion || result.markers?.[0]?.carrierVersion, workingImage,
+      scaleGuide: result.scaleGuide, calibration: result.calibration, diagnostics: result });
     else if (result.unreadable) visualMappings.set(pixels, { width, height, unreadable: true,
-      carrierVersion: result.carrierVersion || result.markers?.[0]?.carrierVersion });
+      carrierVersion: result.carrierVersion || result.markers?.[0]?.carrierVersion, scaleGuide: result.scaleGuide, calibration: result.calibration, diagnostics: result });
+  }
+
+  function calibrationTrace(hint, trace, method) {
+    const detected = Boolean(hint?.detected);
+    return { status: detected ? "detected" : trace?.status || "not-checked", attempted: false, used: false,
+      ...trace, ...(detected ? { status: "detected" } : {}), ...(method ? { method } : {}) };
+  }
+
+  function validScaleGuide(hint, width, height) {
+    return hint?.detected && hint.width === width && hint.height === height && Number.isFinite(hint.scale) &&
+      hint.scale >= .25 && hint.scale <= 8 && Number.isFinite(hint.fx) && Number.isFinite(hint.fy) && Math.hypot(hint.fx, hint.fy) > 0 ? hint : null;
   }
 
   function rankMarkerCandidates(candidates) {
@@ -1857,44 +1869,51 @@
     assertImage(pixels, width, height);
     checkCancelled(options.signal);
     if (canUseReaderWorker(options)) return searchInWorker(pixels, width, height, options, "markers");
-    const native = await findLocator(pixels, width, height, true, false, options.signal, options);
+    let scaleGuide = validScaleGuide(options.searchState?.scaleGuide || options.scaleGuide, width, height);
+    let calibration = calibrationTrace(scaleGuide, options.searchState?.calibration || options.calibration);
+    const native = options.calibratedOnly ? null : await findLocator(pixels, width, height, true, false, options.signal, options);
     if (native) {
       const patch = locatorLayout(width, height, native.carrierVersion).find((p) => p.id === native.id);
       const seed = readVisualLocator(pixels, width, height, [1, 0, patch.x, 0, 1, patch.y, 0, 0, 1], native.id, native.carrierVersion);
       const result = await findVisualTransform(pixels, width, height, { ...options, mode: "padding", seed,
         worker: false, geometryOnly: true });
-      const candidates = rankMarkerCandidates((result.candidates || []).map((geometry) => ({ geometry, markers: result.markers, markerSearch: result.markerSearch })));
-      return { ...result, candidates, geometry: candidates[0]?.geometry, highConfidence: Boolean(candidates[0]?.geometry.highConfidence), width, height };
+      calibration = { ...calibration, used: false, method: "native" };
+      const candidates = rankMarkerCandidates((result.candidates || []).map((geometry) => ({ geometry, markers: result.markers,
+        markerSearch: result.markerSearch, scaleGuide, calibration })));
+      return { ...result, scaleGuide, calibration, candidates, geometry: candidates[0]?.geometry, highConfidence: Boolean(candidates[0]?.geometry.highConfidence), width, height };
     }
     if (options.nativeOnly) return { found: false, geometry: null, candidates: [], markers: [], width, height,
-      reason: "No recovery marker headers were found on the native pixel grid." };
-    let scaleGuide = options.searchState?.scaleGuide || (options.scaleGuide?.detected && options.scaleGuide.width === width &&
-      options.scaleGuide.height === height && Number.isFinite(options.scaleGuide.scale) && options.scaleGuide.scale >= .25 &&
-      options.scaleGuide.scale <= 8 && Number.isFinite(options.scaleGuide.fx) && Number.isFinite(options.scaleGuide.fy) &&
-      Math.hypot(options.scaleGuide.fx, options.scaleGuide.fy) > 0 ? options.scaleGuide : null);
+      scaleGuide, calibration, reason: "No recovery marker headers were found on the native pixel grid." };
     if (!scaleGuide && options.scaleGuide !== false && options.scaleGuide !== true && !options.searchState && !options.seed &&
       !options.singleResolution && options.mode !== "padding" && recoveryVersions(options).includes(CARRIER_V5)) {
-      try { scaleGuide = await scanEdgeGuide(pixels, width, height, { worker: false, signal: options.signal, deadline: options.deadline }); }
+      try { scaleGuide = await scanEdgeGuide(pixels, width, height, { worker: false, signal: options.signal, deadline: options.deadline });
+        calibration = calibrationTrace(scaleGuide, { ...calibration, status: root.PixelStowEdgeGuide?.detect ? "not-detected" : "not-checked" }); }
       catch (error) { if (error?.name === "AbortError") throw error; }
     }
     if (!scaleGuide && !options.searchState && !options.seed && !options.singleResolution && options.mode !== "padding" &&
       options.scaleGuide === true && recoveryVersions(options).includes(CARRIER_V5)) {
-      try { scaleGuide = await scanScaleGuide(pixels, width, height, { worker: false, signal: options.signal, deadline: options.deadline }); }
+      try { scaleGuide = await scanScaleGuide(pixels, width, height, { worker: false, signal: options.signal, deadline: options.deadline });
+        calibration = calibrationTrace(scaleGuide, { ...calibration, status: root.PixelStowSpectrum?.scaleGuide ? "not-detected" : "not-checked" }); }
       catch (error) { if (error?.name === "AbortError") throw error; } // An optional guide must not break ordinary recovery.
     }
-    if ((options.singleResolution || options.mode === "padding" || (Math.max(width, height) < 640 && !scaleGuide)) && width * height <= MAX_PIXELS) {
+    if (options.calibratedOnly && !scaleGuide) return { found: false, geometry: null, candidates: [], markers: [], width, height,
+      scaleGuide, calibration, calibratedOnly: true, reason: "No calibration guide was detected for this capture." };
+    if (!options.calibratedOnly && (options.singleResolution || options.mode === "padding" || (Math.max(width, height) < 640 && !scaleGuide)) && width * height <= MAX_PIXELS) {
       const result = await findVisualTransform(pixels, width, height, { ...options, worker: false, geometryOnly: true });
-      const candidates = rankMarkerCandidates((result.candidates || []).map((geometry) => ({ geometry, markers: result.markers, markerSearch: result.markerSearch })));
-      return { ...result, candidates, geometry: candidates[0]?.geometry, highConfidence: Boolean(candidates[0]?.geometry.highConfidence), width, height };
+      calibration = { ...calibration, used: false, method: "fallback" };
+      const candidates = rankMarkerCandidates((result.candidates || []).map((geometry) => ({ geometry, markers: result.markers,
+        markerSearch: result.markerSearch, scaleGuide, calibration })));
+      return { ...result, scaleGuide, calibration, candidates, geometry: candidates[0]?.geometry, highConfidence: Boolean(candidates[0]?.geometry.highConfidence), width, height };
     }
     const deadline = Math.min(options.searchState?.deadline || Infinity, options.deadline || Infinity, Date.now() + 60000);
-    let best = null, known = options.searchState?.seed || options.seed || null;
-    let verifiedCurrent = Boolean(options.searchState?.seed);
+    let best = null, known = options.calibratedOnly ? null : options.searchState?.seed || options.seed || null;
+    let verifiedCurrent = !options.calibratedOnly && Boolean(options.searchState?.seed);
+    let seedFromGuide = !options.calibratedOnly && Boolean(options.searchState?.seedFromGuide);
     const candidates = [];
     // Start near a useful middle size. Marker agreement and measured spacing
     // choose the next level; both directions remain available after a weak miss.
     // Every working image comes directly from the original, never a resize chain.
-    const sizes = options.searchState?.sizes?.slice() || [16, 8, 4, 2, 1].map((divisor) => ({ divisor,
+    const sizes = options.searchState?.sizes?.slice() || (options.calibratedOnly ? [] : [16, 8, 4, 2, 1]).map((divisor) => ({ divisor,
       width: Math.round(width / divisor), height: Math.round(height / divisor) }))
       .filter((size, i, all) => (width * height <= MAX_PIXELS || size.width * size.height <= MAX_MARKER_PIXELS) &&
         (size.divisor === 1 || size.width >= 128 && size.height >= 96) &&
@@ -1938,6 +1957,7 @@
         if (basis > 3 || basis < 0.4) continue;
       }
       const image = full ? { pixels, width, height } : await reducePhoto(pixels, width, height, rw, rh, options.signal);
+      if (guided) calibration = { ...calibration, attempted: true };
       const remaining = deadline - Date.now();
       const seedBudget = Math.max(1500, remaining / Math.min(3, pending.length + 1));
       // A false pilot gets only a short extra attempt. Every original pyramid
@@ -1955,9 +1975,11 @@
         onProgress: (text) => options.onProgress?.(label + ": " + text) });
       const lifted = full ? result : liftPhotoResult(result, width, height, rw, rh);
       const header = lifted.markers?.filter((m) => m.verification === "header").sort((a, b) => b.quality - a.quality)[0];
-      if (header) { known = { ...header, initialMatrix: lifted.geometry?.matrix || header.initialMatrix }; verifiedCurrent = true; }
+      if (header) { known = { ...header, initialMatrix: lifted.geometry?.matrix || header.initialMatrix }; verifiedCurrent = true;
+        seedFromGuide = Boolean(guided || seedFromGuide); }
       for (const geometry of lifted.candidates || []) candidates.push({ geometry, markers: lifted.markers, markerSearch: lifted.markerSearch,
-        localizationResolution: { width: rw, height: rh }, photo: true });
+        scaleGuide, calibration: { ...calibration, used: Boolean(guided || seedFromGuide), method: guided || seedFromGuide ? "guide" : "fallback",
+          localizationResolution: { width: rw, height: rh } }, localizationResolution: { width: rw, height: rh }, photo: true });
       const markerScore = lifted.geometry?.rank ?? (lifted.markers?.length ? 30 + lifted.markers.length * 3 :
         Math.min(20, 20 * Math.max(0, lifted.evidence?.pilotQuality || 0)));
       if (!guided || header) samples.push({ index, score: markerScore });
@@ -1970,9 +1992,10 @@
       }
     }
     const ranked = rankMarkerCandidates(candidates);
-    return { ...best, width, height, scaleGuide, candidates: ranked, geometry: ranked[0]?.geometry,
+    return { found: false, ...best, width, height, scaleGuide, calibratedOnly: Boolean(options.calibratedOnly), calibration: { ...calibration, ...ranked[0]?.calibration,
+      attempted: calibration.attempted }, candidates: ranked, geometry: ranked[0]?.geometry,
       highConfidence: Boolean(ranked[0]?.geometry.highConfidence),
-      searchState: { pending, samples, seed: verifiedCurrent ? known : undefined, deadline, sizes, scaleGuide },
+      searchState: { pending, samples, seed: verifiedCurrent ? known : undefined, seedFromGuide, deadline, sizes, scaleGuide, calibration },
       markers: ranked[0]?.markers || best?.markers || [], markerSearch: ranked[0]?.markerSearch || best?.markerSearch };
   }
 
@@ -2017,7 +2040,8 @@
     const candidates = rankMarkerCandidates((scan.candidates || []).filter((c) => selected.includes(c.geometry.carrierVersion || CARRIER_V3)));
     const markers = (scan.markers || []).filter((m) => selected.includes(m.carrierVersion || scan.geometry?.carrierVersion || CARRIER_V3));
     let best = { found: Boolean(markers.length), unreadable: Boolean(markers.length),
-      markers, markerSearch: scan.markerSearch, signature: scan.signature, reason: scan.reason };
+      markers, markerSearch: scan.markerSearch, signature: scan.signature, reason: scan.reason,
+      scaleGuide: scan.scaleGuide, calibration: calibrationTrace(scan.scaleGuide, scan.calibration) };
     for (let i = 0; i < candidates.length; i++) {
       checkCancelled(options.signal);
       const candidate = candidates[i], geometry = candidate.geometry;
@@ -2030,9 +2054,12 @@
         recovered = await readPhotoMapping(pixels, width, height, geometry, options.signal, options.onProgress, candidate.markers, options);
       checkCancelled(options.signal);
       const inspection = describeRecovery(recovered);
+      const scaleGuide = candidate.scaleGuide || scan.scaleGuide;
+      const calibration = calibrationTrace(scaleGuide, { ...scan.calibration, ...candidate.calibration,
+        attempted: Boolean(scan.calibration?.attempted || candidate.calibration?.attempted) });
       const result = { ...inspection, found: true, unreadable: Boolean(recovered.locatorOnly) || !inspection.found,
         carrierVersion: geometry.carrierVersion || CARRIER_V3, geometry: recovered.geometry, readResolution: recovered.readResolution,
-        markers: candidate.markers, markerSearch: candidate.markerSearch || scan.markerSearch, signature: scan.signature,
+        markers: candidate.markers, markerSearch: candidate.markerSearch || scan.markerSearch, signature: scan.signature, scaleGuide, calibration,
         reason: inspection.found && !recovered.locatorOnly ? undefined : "Recovery markers were found, but the payload did not pass its checks." };
       if (!result.unreadable) {
         retainVisualResult(pixels, width, height, result, recovered.readImage);
@@ -2043,7 +2070,7 @@
     // Live scans can stop on a high-confidence fit before visiting every scale.
     // If its body fails, keep this exact frame and use the remaining scales,
     // just as ordinary file recovery does. Never borrow the next frame's pixels.
-    if (options.resumeDiscovery && scan.searchState?.pending.length) {
+    if (options.resumeDiscovery && !options.calibratedOnly && !scan.calibratedOnly && scan.searchState?.pending.length) {
       const deadline = options.deadline || Date.now() + 60000;
       if (Date.now() < deadline) {
         options.onProgress?.("The marker fit did not decode. Checking the remaining scales of this capture…");
@@ -2479,16 +2506,18 @@
     const visual = visualMappings.get(pixels);
     if (visual && visual.width === width && visual.height === height &&
       versions.includes(visual.carrierVersion || visual.geometry?.carrierVersion || CARRIER_V3)) {
-      if (visual.unreadable) return { locatorOnly: true, carrierVersion: visual.carrierVersion || visual.geometry?.carrierVersion || CARRIER_V3 };
+      const diagnostic = { scaleGuide: visual.diagnostics?.scaleGuide || visual.scaleGuide,
+        calibration: visual.diagnostics?.calibration || visual.calibration };
+      if (visual.unreadable) return { locatorOnly: true, carrierVersion: visual.carrierVersion || visual.geometry?.carrierVersion || CARRIER_V3, ...diagnostic };
       if (visual.readResolution) {
         const resolution = visual.readResolution;
         const image = visual.workingImage || { ...await rectifyPhoto(pixels, width, height, resolution.width, resolution.height,
           resolution.photoMatrix, options.signal, resolution.phaseCorrection), phaseCorrection: resolution.phaseCorrection };
         visual.workingImage = image;
         const recovered = await readVisualMapping(image.pixels, image.width, image.height, resolution.geometry, options.signal, { channel: resolution.channel });
-        return photoReadResult(recovered, image, geometryAt(visual.geometry, resolution.photoMatrix));
+        return { ...photoReadResult(recovered, image, geometryAt(visual.geometry, resolution.photoMatrix)), ...diagnostic };
       }
-      return readVisualMapping(pixels, width, height, visual.geometry, options.signal);
+      return { ...await readVisualMapping(pixels, width, height, visual.geometry, options.signal), ...diagnostic };
     }
     for (const version of versions) {
       const direct = await readNative(pixels, width, height, version, undefined, options.signal);
@@ -2508,7 +2537,8 @@
 
   function describeRecovery(recovery) {
     if (!recovery) return { found: false };
-    if (recovery.locatorOnly) return { found: true, unreadable: true, carrierVersion: recovery.carrierVersion || CARRIER_V3, geometry: recovery.geometry };
+    if (recovery.locatorOnly) return { found: true, unreadable: true, carrierVersion: recovery.carrierVersion || CARRIER_V3, geometry: recovery.geometry,
+      scaleGuide: recovery.scaleGuide, calibration: calibrationTrace(recovery.scaleGuide, recovery.calibration) };
     try {
       if (recovery.passwordProtected) validateEnvelope(recovery.payload, recovery.bundle);
       else if (recovery.bundle) unpackBundle(recovery.payload);
@@ -2528,6 +2558,9 @@
       scalePilot: recovery.scalePilot,
       scalePilotAmplitude: recovery.scalePilotAmplitude,
       edgeGuide: recovery.edgeGuide,
+      scaleGuide: recovery.scaleGuide,
+      calibration: calibrationTrace(recovery.scaleGuide, recovery.calibration,
+        recovery.calibration?.method || (recovery.scaleX === 1 && recovery.scaleY === 1 ? "native" : "fallback")),
       repetitionRatio: recovery.repetitionRatio,
       copies: recovery.copies,
       parityBits: recovery.parityBits,
@@ -2565,10 +2598,12 @@
     const recovery = await recover(pixels, width, height, options);
     checkCancelled(options.signal);
     if (!recovery) return { status: "none" };
-    if (recovery.locatorOnly) return { status: "markers", carrierVersion: recovery.carrierVersion || CARRIER_V3, geometry: recovery.geometry, scaleX: recovery.scaleX, scaleY: recovery.scaleY };
+    const diagnostic = { scaleGuide: recovery.scaleGuide, calibration: calibrationTrace(recovery.scaleGuide, recovery.calibration,
+      recovery.calibration?.method || (recovery.scaleX === 1 && recovery.scaleY === 1 ? "native" : "fallback")) };
+    if (recovery.locatorOnly) return { status: "markers", carrierVersion: recovery.carrierVersion || CARRIER_V3, geometry: recovery.geometry, scaleX: recovery.scaleX, scaleY: recovery.scaleY, ...diagnostic };
     if (recovery.passwordProtected && !password) {
       return { status: "password", strength: recovery.strength, repetitionRatio: recovery.repetitionRatio,
-        copies: recovery.copies, parityBits: recovery.parityBits, framedBytes: recovery.framedBytes };
+        copies: recovery.copies, parityBits: recovery.parityBits, framedBytes: recovery.framedBytes, ...diagnostic };
     }
     try {
       const textBytes = recovery.passwordProtected
@@ -2593,6 +2628,7 @@
           scalePilot: recovery.scalePilot,
           scalePilotAmplitude: recovery.scalePilotAmplitude,
           edgeGuide: recovery.edgeGuide,
+          ...diagnostic,
           repetitionRatio: recovery.repetitionRatio,
           copies: recovery.copies,
           parityBits: recovery.parityBits,

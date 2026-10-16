@@ -39,6 +39,9 @@
     return output;
   }
   const angleDistance=value=>Math.abs(Math.atan2(Math.sin(value),Math.cos(value)));
+  const polygonArea=points=>Math.abs(points.reduce((sum,point,i)=>{
+    const next=points[(i+1)%points.length];return sum+point.x*next.y-next.x*point.y;
+  },0))/2;
   function scanAxis(q,scale,vertical,check) {
     const {data,w,h,reduction}=q,N=vertical?h:w,M=vertical?w:h;
     const start=Math.round(64*scale/reduction),stop=N-start,L=Math.round(BAND*scale/reduction);
@@ -96,7 +99,30 @@
     const amplitude=[Math.hypot(z[0],z[1]),Math.hypot(z[2],z[3])].map(value=>value*2/(stop-start));
     return {...strip,amplitude,phase:[Math.atan2(z[1],z[0]),Math.atan2(z[3],z[2])],score:Math.min(...amplitude)};
   }
+  function stripNoise(q,scale,vertical,strip,start,stop) {
+    const {data,w,h,reduction}=q,N=vertical?h:w,{kernel,energy}=q.axes[vertical?1:0],L=kernel.length;
+    start=Math.max(0,Math.ceil(start));stop=Math.min(N,Math.floor(stop));
+    const key=[vertical,strip.position,strip.direction,start,stop].join(','),cache=q.noiseCache;
+    if(cache.has(key))return cache.get(key);
+    const values=new Float64Array(stop-start);
+    for(let j=0;j<L;j++) {
+      const y=strip.position+j,weight=kernel[strip.direction?L-1-j:j]/energy;
+      for(let x=start;x<stop;x++)values[x-start]+=(vertical?data[y+x*w]:data[x+y*w])*weight;
+    }
+    const result=PITCHES.map(pitch=> {
+      const samples=[];
+      for(const offset of [-6.5,-4.5,-1.5,1.5,4.5,6.5]) {
+        const step=TAU*(reduction/(pitch*scale)+offset/values.length),cr=Math.cos(step),ci=Math.sin(step);
+        let re=0,im=0,cs=Math.cos(step*(start+.5)),sn=Math.sin(step*(start+.5));
+        for(const value of values){re+=value*cs;im+=value*sn;const next=cs*cr-sn*ci;sn=sn*cr+cs*ci;cs=next;}
+        samples.push(2*Math.hypot(re,im)/values.length);
+      }
+      samples.sort((a,b)=>a-b);return Math.max(.04,samples[3]);
+    });
+    cache.set(key,result);return result;
+  }
   function matchFrame(q,scale,check) {
+    q.noiseCache=new Map();
     const sides=[scanAxis(q,scale,false,check),scanAxis(q,scale,true,check)],pairs=[];
     for(let axis=0;axis<2;axis++) {
       const candidates=[],values=sides[axis],dimension=axis===0?q.h:q.w;
@@ -106,7 +132,8 @@
         if(q.knownBounds&&(Math.abs(first.position-INSET*scale/q.reduction)>2.5||
           Math.abs((first===a?b:a).position-(dimension-(INSET+BAND)*scale/q.reduction))>2.5))continue;
         const coherence=Math.max(...a.phase.map((value,k)=>angleDistance(value-b.phase[k])));
-        if(coherence>(q.knownBounds?1.2:.4))continue;
+        const closest=Math.min(...a.phase.map((phase,k)=>angleDistance(phase-b.phase[k])));
+        if(q.knownBounds?closest>.6:coherence>.4)continue;
         const score=Math.min(a.score,b.score);
         candidates.push({score,coherence,first,second:first===a?b:a});
       }
@@ -133,12 +160,28 @@
       const error=Math.max(...phaseErrors),score=Math.min(...amplitudes);
       const strong=phaseErrors.filter((error,i)=>error<.75&&amplitudes[i]>.7).length;
       const robustScore=amplitudes.slice().sort((a,b)=>a-b)[2];
+      let localSpectralSupport=null;
       if(q.knownBounds) {
-        if(strong<6||robustScore<.8||phaseErrors.some((error,i)=>error>1.2&&amplitudes[i]>.3)||
-          coherences.filter(error=>error<.6).length<3||Math.max(...coherences)>1.2)continue;
+        const original=strong>=6&&robustScore>=.8&&!phaseErrors.some((error,i)=>error>1.2&&amplitudes[i]>.3)&&
+          coherences.filter(error=>error<.6).length>=3&&Math.max(...coherences)<=1.2;
+        if(!original) {
+          // A photographed colour channel can attenuate the guide, while a
+          // single source-photo frequency can obscure one of its eight tones.
+          // Require the remaining fixed-phase tones to rise above neighbouring
+          // frequencies; lowering an absolute RGB threshold alone is unsafe.
+          if(phaseErrors.filter((error,i)=>error<.75&&amplitudes[i]>.3).length<6||robustScore<.4||
+            phaseErrors.filter((error,i)=>error>1.2&&amplitudes[i]>.3).length>1||coherences.filter(error=>error<.6).length<3)continue;
+          const noise=[...stripNoise(q,scale,false,measured[0].first,sx,ex),...stripNoise(q,scale,false,measured[0].second,sx,ex),
+            ...stripNoise(q,scale,true,measured[1].first,sy,ey),...stripNoise(q,scale,true,measured[1].second,sy,ey)];
+          const supported=phaseErrors.filter((error,i)=>error<.75&&amplitudes[i]>.3&&amplitudes[i]/noise[i]>=1.3).length;
+          if(supported<6)continue;
+          localSpectralSupport=supported;
+        }
       } else if(error>.75||Math.max(...coherences)>.4||score<1.05)continue;
       const confidence=q.knownBounds?robustScore:score;
-      if(!best||confidence>best.score)best={scale,score:confidence,pairs:measured,phaseError:error};
+      if(!best||confidence>best.score)best={scale,score:confidence,pairs:measured,phaseError:error,localSpectralSupport,
+        phaseSupport:phaseErrors.filter((error,i)=>error<.75&&amplitudes[i]>.3).length,
+        outlierComponents:phaseErrors.filter((error,i)=>error>1.2&&amplitudes[i]>.3).length};
     }
     return best;
   }
@@ -239,6 +282,7 @@
         try {quads=await root.PixelStowTransform.proposeOutlines(pixels,width,height,{signal:options.signal,deadline:Math.min(deadline,Date.now()+250)});}
         catch(error){if(error.name==='AbortError')throw error;}
         for(const quad of orthogonalQuads(quads).concat(quads.slice(0,1))) {
+          if(polygonArea(quad)/(width*height)<(options.minimumCoverage??.5))continue;
           const rectified=rectify(original,quad,check);if(!rectified)continue;
           const candidate=await searchQuarter(rectified,options,check);
           if(candidate){best=candidate;selected=rectified;break;}
@@ -257,9 +301,12 @@
         corners=corners.map(point=>selected.map((point.x+.5)/(selected.w*reduction),(point.y+.5)/(selected.h*reduction)));
         orientation=Math.atan2(corners[1].y-corners[0].y,corners[1].x-corners[0].x);
       }
+      const coverage=polygonArea(corners)/(width*height);
+      if(coverage<(options.minimumCoverage??.5))return null;
       return {detected:true,confirmed:false,experimental:true,kind:'opponent-edge-guide',width,height,reduction,
         scale:best.scale,fx:Math.cos(orientation)/(128*best.scale),fy:Math.sin(orientation)/(128*best.scale),orientation,score:best.score,agreement:true,
-        contrast:best.score,support:4,...(selected.map?{rectifiedBounds:bounds}:{bounds}),corners,outlined:Boolean(selected.map),workingWidth:w,workingHeight:h,milliseconds:Date.now()-started,
+        contrast:best.score,support:4,coverage,localSpectralSupport:best.localSpectralSupport,phaseSupport:best.phaseSupport,outlierComponents:best.outlierComponents,
+        ...(selected.map?{rectifiedBounds:bounds}:{bounds}),corners,outlined:Boolean(selected.map),workingWidth:w,workingHeight:h,milliseconds:Date.now()-started,
         evidence:best.pairs.map(pair=>({coherence:pair.coherence,closure:[pair.first.closure,pair.second.closure],
           positions:[pair.first.position*reduction,pair.second.position*reduction]}))};
     } catch(error){if(error.name==='EdgeGuideLimit')return null;throw error;}

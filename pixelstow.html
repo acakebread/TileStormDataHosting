@@ -251,6 +251,11 @@
     .preview-audio-label { display: none; }
     #preview-audio.waiting-comparison { display: none !important; }
     .preview-screen-toolbar #preview-screen-close { color: var(--tile-azure); font-weight: 700; }
+    #preview-screen-toggle[aria-pressed="true"] { border-color: var(--tile-azure); color: var(--tile-azure); }
+    .camera-calibration { position: absolute; top: 10px; left: 10px; z-index: 2; padding: 5px 8px; border-radius: 6px; background: #081016df; color: #bdc8cf; font-size: .8rem; line-height: 1.3; pointer-events: none; }
+    .camera-calibration::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 50%; background: #86939b; }
+    .camera-calibration[data-state="detected"] { color: #b8f3c7; }
+    .camera-calibration[data-state="detected"]::before { background: #61e28b; box-shadow: 0 0 7px #61e28b99; }
     .preview-panel.clean #preview-source,
     .preview-panel.clean #transform-outline,
     .preview-panel.clean #compare-ui,
@@ -403,6 +408,7 @@
     .audio-action { margin: 0 0 14px; }
     .audio-action p { margin: 6px 0 0; }
     .preview-audio { background: #8cebed; color: #081016; }
+    #preview-encoded-image { background: var(--tile-community); border-color: var(--tile-community); color: #081016; }
     .paste-target { min-height: 100px; padding: 16px; border: 2px dashed var(--tile-azure); border-radius: 8px; }
     .paste-target:empty::before { content: "Touch and hold here, then choose Paste"; color: var(--muted); pointer-events: none; }
     #share-link { min-height: 72px; }
@@ -635,6 +641,7 @@
           </header>
           <div class="camera-view" id="camera-view" role="button" tabindex="0" aria-label="Capture and read the live camera preview" aria-disabled="true">
             <video id="camera-video" autoplay muted playsinline aria-label="Live camera preview"></video>
+            <span class="camera-calibration" id="camera-calibration" data-state="searching" role="status" hidden>Looking for calibration</span>
             <div class="camera-frame" id="camera-frame" hidden aria-hidden="true">
               <div class="camera-target"><span></span><span></span><span></span><span></span></div>
               <p class="camera-frame-note">Tap the preview to capture</p>
@@ -669,7 +676,7 @@
             <div class="compare" id="compare">
               <canvas id="preview-encoded"></canvas>
               <canvas id="preview-source" hidden></canvas>
-              <canvas id="transform-outline" hidden aria-label="Detected encoded image boundary and recovery markers"></canvas>
+              <canvas id="transform-outline" hidden aria-label="Detected image boundary, recovery markers and calibration bands"></canvas>
             </div>
             <div class="compare-ui" id="compare-ui" hidden>
               <span class="compare-tag left" id="tag-encoded">Encoded</span>
@@ -690,6 +697,7 @@
             <p class="loaded-image" id="loaded-image" hidden></p>
             <p class="read-live-status" id="image-read-status" role="status" aria-live="polite" aria-atomic="true"></p>
             <p class="hint" id="capacity">Your original stays unchanged.</p>
+            <p class="hint" id="calibration-analysis" hidden></p>
           </div>
           <p class="hint" id="image-repetition" role="status" hidden></p>
         </div>
@@ -820,6 +828,7 @@
       </div>
 
       <div class="actions">
+        <button id="preview-encoded-image" type="button" disabled>Preview</button>
         <button id="encode" type="button" disabled>Encode into a new image</button>
         <button id="decode" type="button" disabled>Decode image</button>
         <a class="button-link" id="download" href="#" hidden>Download encoded PNG</a>
@@ -831,7 +840,6 @@
         <button id="share-image" type="button" hidden>Send via WhatsApp / Share</button>
         <button id="share-message" type="button" hidden>Opening link / WhatsApp message</button>
         <button id="post-facebook" type="button" hidden>Post to Facebook</button>
-        <button id="preview-encoded-image" type="button" disabled>Preview</button>
       </div>
       <p class="hint" id="share-help" hidden>Choose WhatsApp in the share menu. Include the opening link; send the PNG as a Document / original file if WhatsApp offers that option. Photo sharing can resize it and lose its contents.</p>
 
@@ -868,6 +876,7 @@
         <div class="preview-screen-actions" id="preview-screen-actions"></div>
         <button id="preview-screen-fit" type="button">Fit</button>
         <button id="preview-screen-actual" type="button">100%</button>
+        <button id="preview-screen-toggle" type="button" aria-label="Show source image" title="Show source image" aria-pressed="false" disabled hidden><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 7h18m-4-4 4 4-4 4M21 17H3m4-4-4 4 4 4"/></svg></button>
         <button id="preview-screen-hide" type="button" aria-label="Hide controls" title="Hide controls"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" focusable="false"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg></button>
         <label id="preview-markers" title="Show recovery diagnostics for this image"><input id="show-transform" type="checkbox" aria-label="Analysis" checked><span class="analysis-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" focusable="false"><rect x="3" y="3" width="18" height="14" rx="2"/><path d="M8 21h8m-4-4v4"/><rect x="7" y="7" width="3" height="6" rx=".5"/><path d="m14 8 1-1v6m-1 0h3"/></svg></span></label>
         <button id="preview-screen-close" type="button" aria-label="Close preview" title="Close preview"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
@@ -927,18 +936,18 @@
     </form>
   </dialog>
   <script src="./pixelstow-spectrum.js?v=20261015-no-pilot1"></script>
-  <script src="./pixelstow-edge-guide.js?v=20261016-edge-guide2"></script>
-  <script src="./pixelstow-transform.js?v=20261016-edge-guide2"></script>
+  <script src="./pixelstow-edge-guide.js?v=20261016-calibration3"></script>
+  <script src="./pixelstow-transform.js?v=20261016-calibration3"></script>
   <script src="./pixelstow-lattice.js?v=20261013-marker-follow2"></script>
-  <script src="./pixelstow.js?v=20261016-edge-guide2"></script>
+  <script src="./pixelstow.js?v=20261016-calibration3"></script>
   <script src="./pixelstow-sizing.js?v=20261015-payload-range1"></script>
   <script src="./pixelstow-export.js?v=20261011-exports"></script>
   <script src="./pixelstow-voice.js?v=20261013-voice-clock2"></script>
   <script src="./pixelstow-media.js?v=20261015-preview-icons1"></script>
   <script src="./pixelstow-sharing.js?v=20261014-compact-actions1"></script>
   <script src="./pixelstow-read-progress.js?v=20261015-read-stages1"></script>
-  <script src="./pixelstow-camera.js?v=20261016-edge-guide2"></script>
-  <script src="./pixelstow-preview.js?v=20261015-clean-source-toggle1"></script>
+  <script src="./pixelstow-camera.js?v=20261016-calibration3"></script>
+  <script src="./pixelstow-preview.js?v=20261016-preview-pan1"></script>
   <script>
     const fileInput = document.querySelector("#file");
     const chooseImageButton = document.querySelector("#choose-image");
@@ -954,6 +963,7 @@
     const previewEncoded = document.querySelector("#preview-encoded");
     const previewSource = document.querySelector("#preview-source");
     const transformOutline = document.querySelector("#transform-outline");
+    const calibrationAnalysis = document.querySelector("#calibration-analysis");
     const transformReader = document.querySelector("#transform-reader");
     const recoveryProgress = document.querySelector("#recovery-progress");
     const recoveryFraming = document.querySelector("#recovery-framing");
@@ -1036,6 +1046,8 @@
     let originX = 0;
     let originY = 0;
     let panning = false;
+    let panPointer = null;
+    let panStart = null;
     let panX = 0;
     let panY = 0;
     let blockPanMenu = false;
@@ -1235,6 +1247,7 @@
       transformSignature.textContent = "";
       recoveryFraming.hidden = true;
       transformOutline.hidden = true;
+      calibrationAnalysis.hidden = true;
       showRepetition(imageRepetition, null);
     }
 
@@ -1344,9 +1357,10 @@
       transformMode.disabled = working;
       transformForce.disabled = working;
       legacyRecovery.disabled = working;
-      const canAnalyze = Boolean(current?.transformResult?.geometry || current?.transformResult?.markers?.length ||
+      const canAnalyze = Boolean(current?.transformResult?.geometry || current?.transformResult?.markers?.length || current?.transformResult?.scaleGuide?.detected ||
         ([3,4,5].includes(current?.carrierVersion) && (current?.hasFingerprint || current?.recoverPixels)));
       showTransform.disabled = working || !canAnalyze;
+      fullPreview.syncToggleSource();
       showTransform.parentElement.title = canAnalyze ? "Show recovery diagnostics for this image" : "No recovery markers are available for this image or format";
       cancelTransformButton.hidden = !transformAbort;
       chooseImageButton.textContent = transformAbort ? "Cancel search" : "Browse";
@@ -1650,13 +1664,51 @@
         path(corners, marker.verification === "reference" ? "#8cebed" : marker.verification === "pattern" ? "#a9f5b5" : "#f5e69e");
         ctx.fillText(String(marker.id), corners[0].x, corners[0].y - 4);
       }
+      const guide = result.scaleGuide;
+      canvas.dataset.calibration = guide?.detected ? "detected" : result.calibration?.status || "not-checked";
+      if (guide?.detected && guide.corners?.length === 4) {
+        const quad = guide.corners;
+        const side = (a,b) => Math.hypot(a.x-b.x,a.y-b.y);
+        const ow = result.geometry?.originalWidth || (side(quad[0],quad[1])+side(quad[3],quad[2]))/(2*guide.scale)+1;
+        const oh = result.geometry?.originalHeight || (side(quad[0],quad[3])+side(quad[1],quad[2]))/(2*guide.scale)+1;
+        const at = (x,y) => {
+          const u=x/ow,v=y/oh;
+          return {x:(1-v)*((1-u)*quad[0].x+u*quad[1].x)+v*((1-u)*quad[3].x+u*quad[2].x)+.5,
+            y:(1-v)*((1-u)*quad[0].y+u*quad[1].y)+v*((1-u)*quad[3].y+u*quad[2].y)+.5};
+        };
+        ctx.save();
+        ctx.fillStyle = "#de9aff26";
+        ctx.setLineDash([ctx.lineWidth*2,ctx.lineWidth*2]);
+        const profile=PixelStowEdgeGuide.profile,inset=profile.inset,end=inset+profile.band;
+        for(const [x0,y0,x1,y1] of [[64,inset,ow-64,end],[64,oh-end,ow-64,oh-inset],
+          [inset,64,end,oh-64],[ow-end,64,ow-inset,oh-64]]) {
+          const points=[at(x0,y0),at(x1,y0),at(x1,y1),at(x0,y1)];
+          path(points,"#de9aff");ctx.fill();
+        }
+        ctx.setLineDash([]);ctx.fillStyle="#de9aff";
+        ctx.fillText("Calibration "+guide.scale.toFixed(2)+"×",quad[0].x+4,Math.max(16,quad[0].y-8));
+        ctx.restore();
+      }
+    }
+
+    function showCalibrationAnalysis(result) {
+      const trace=result?.calibration,hint=result?.scaleGuide;
+      calibrationAnalysis.hidden=!showTransform.checked||!result;
+      calibrationAnalysis.dataset.state=hint?.detected?"detected":trace?.status||"not-checked";
+      const method=trace?.method==="native"?"native pixel grid":"normal recovery";
+      calibrationAnalysis.textContent=hint?.detected ? "Purple bands: calibration detected · "+hint.scale.toFixed(2)+"×. "+
+        (trace?.analysisOnly?"Checked during analysis; the original read used the "+method+".":
+          trace?.used?"Calibration was used for recovery.":result.found&&!result.unreadable?"The image was read using "+method+".":"A calibrated read has not been verified.")
+        : trace?.status==="not-detected"?"Calibration not detected. "+(result.found&&!result.unreadable?"The image was read using "+method+".":"Normal recovery remains available.")
+          : "Calibration was not checked"+(trace?.method==="native"?"; the native pixel grid was sufficient.":".");
     }
 
     function drawTransform(result) {
       if (!current) return;
       const size = resultDimensions(current);
       paintTransform(transformOutline, result, size.width, size.height);
-      transformOutline.hidden = !showTransform.checked || !(result.geometry || result.markers?.length) ||
+      showCalibrationAnalysis(result);
+      transformOutline.hidden = !showTransform.checked || !(result.geometry || result.markers?.length || result.scaleGuide?.detected) ||
         (current.markerGuideOverride !== true && (current.suppressMarkerOverlay || !result.unreadable));
     }
 
@@ -1676,8 +1728,19 @@
           showTransform.parentElement.title = "Recovery diagnostics could not be prepared for this image";
         }
       }
+      if(showTransform.checked&&job&&job.carrierVersion===5&&result?.calibration?.status!=="detected"&&
+        result?.calibration?.status!=="not-detected"&&!job.calibrationAnalysisChecked) {
+        job.calibrationAnalysisChecked=true;
+        const size=resultDimensions(job),pixels=job.decodePixels||job.pixels;
+        try {
+          const hint=await PixelStow.scanEdgeGuide(pixels,size.width,size.height,{maxMilliseconds:1000});
+          if(current!==job)return;
+          result=job.transformResult={...result,scaleGuide:hint||result?.scaleGuide,calibration:{...result?.calibration,
+            status:hint?"detected":"not-detected",analysisOnly:true}};
+        }catch(_){if(current!==job)return;}
+      }
       if (showTransform.checked && result) drawTransform(result);
-      else transformOutline.hidden = true;
+      else {transformOutline.hidden = true;calibrationAnalysis.hidden=true;}
     });
 
     function recoveryOptions(controller) {
@@ -1715,7 +1778,7 @@
       // captures stay clean unless the preview checkbox is explicitly enabled.
       showTransform.checked = job.markerGuideOverride ?? (nearMiss && !job.suppressMarkerOverlay);
       if (showTransform.checked) drawTransform(job.transformResult);
-      else transformOutline.hidden = true;
+      else {transformOutline.hidden = true;calibrationAnalysis.hidden=true;}
       job.hasFingerprint = job.hasFingerprint || result.found;
       if (result.geometry && result.found && !result.unreadable) {
         const geometry = result.geometry;
@@ -1740,7 +1803,7 @@
       if (transformAbort) cancelImageSearch();
       else if (!chooseImageButton.disabled) fileInput.click();
     });
-    findTransformButton.addEventListener("click", async () => {
+    async function retryImageRecovery(mode = transformMode.value) {
       if (!current || busy || media.active || camera?.active) return;
       const job = current;
       clearReadFeedback();
@@ -1760,9 +1823,9 @@
       transformSignature.textContent = "";
       try {
         const options = recoveryOptions(transformAbort);
-        const result = transformMode.value === "auto"
+        const result = mode === "auto"
           ? await PixelStow.inspect(job.pixels, job.width, job.height, { ...options, automatic: true, background: true })
-          : await PixelStow.findVisualTransform(job.pixels, job.width, job.height, { ...options, mode: transformMode.value });
+          : await PixelStow.findVisualTransform(job.pixels, job.width, job.height, { ...options, mode });
         if (current !== job) return;
         recordRecovery(job, result);
         if (!result.found || result.unreadable) {
@@ -1795,7 +1858,8 @@
         updateByteCounts();
         if (!unlockForm.hidden) unlockPassword.focus({ preventScroll: true });
       }
-    });
+    }
+    findTransformButton.addEventListener("click", () => retryImageRecovery());
 
     function carrierFor(job) {
       if (!job.carrierPromise) {
@@ -1828,6 +1892,7 @@
         paintCanvas(previewSource, carrier, size.width, size.height);
         split.value = "500";
         previewSource.hidden = false;
+        fullPreview.syncToggleSource();
         compareUi.hidden = false;
         comparisonControl.hidden = false;
         document.querySelector("#preview-audio").classList.remove("waiting-comparison");
@@ -1866,6 +1931,8 @@
       transformOutline.hidden = true;
       transformOutline.width = 0;
       transformOutline.height = 0;
+      calibrationAnalysis.hidden=true;
+      calibrationAnalysis.textContent="";
       recoveryVisible = false;
       recoveryFraming.hidden = true;
       showTransform.checked = true;
@@ -1991,6 +2058,7 @@
 
     function clearPreviewTouches() {
       endSplit();
+      endPan();
       previewTouches.clear();
       touchView = null;
       fullPreview.cancelTap();
@@ -2126,10 +2194,18 @@
     document.addEventListener("keydown", () => { if (!panning) blockPanMenu = false; }, true);
 
     viewport.addEventListener("pointerdown", (event) => {
-      if (event.button !== 2 || !imagePixels().w) return;
+      if (!imagePixels().w || panning) return;
+      if (event.button === 0 && event.pointerType !== "touch" && fullPreview.clean) {
+        // Wait for a drag before consuming the clean viewer's click or hold.
+        panStart = { id: event.pointerId, x: event.clientX, y: event.clientY };
+        viewport.setPointerCapture(event.pointerId);
+        return;
+      }
+      if (event.button !== 2) return;
       event.preventDefault();
       event.stopPropagation();
       panning = true;
+      panPointer = event.pointerId;
       panX = event.clientX;
       panY = event.clientY;
       viewport.classList.add("panning");
@@ -2137,7 +2213,18 @@
     }, true);
 
     viewport.addEventListener("pointermove", (event) => {
-      if (!panning) return;
+      if (!panning && panStart?.id === event.pointerId && fullPreview.clean) {
+        if (fullPreview.tap?.held || Math.hypot(event.clientX - panStart.x, event.clientY - panStart.y) <= 8) return;
+        panning = true;
+        panPointer = event.pointerId;
+        panX = panStart.x;
+        panY = panStart.y;
+        panStart = null;
+        fullPreview.cancelTap();
+        viewport.classList.add("panning");
+      }
+      if (!panning || event.pointerId !== panPointer) return;
+      event.preventDefault();
       dismissPreviewHelp();
       const img = imagePixels();
       const box = viewBox();
@@ -2151,15 +2238,19 @@
     });
 
     function endPan(event) {
-      if (!panning) return;
+      if (event && event.pointerId !== (panPointer ?? panStart?.id)) return;
+      const id = panPointer ?? panStart?.id;
       panning = false;
+      panPointer = null;
+      panStart = null;
       viewport.classList.remove("panning");
-      if (viewport.hasPointerCapture(event.pointerId)) viewport.releasePointerCapture(event.pointerId);
+      if (id !== undefined && id !== null && viewport.hasPointerCapture(id)) viewport.releasePointerCapture(id);
     }
 
     viewport.addEventListener("pointerup", endPan);
     viewport.addEventListener("pointercancel", endPan);
     viewport.addEventListener("lostpointercapture", endPan);
+    window.addEventListener("blur", () => endPan());
     document.addEventListener("contextmenu", (event) => {
       if (!viewport.contains(event.target) && !blockPanMenu) return;
       event.preventDefault();
@@ -2374,6 +2465,13 @@
 
     async function decodeImage(key = "") {
       if (!current || busy || media.active) return;
+      // Browse performs automatic geometric recovery before decoding. A
+      // cancelled import has no verified transform to reuse, so retry that same
+      // pipeline instead of calling only the direct/native payload reader.
+      if (!current.hasFingerprint || current.transformResult?.unreadable) {
+        await retryImageRecovery("auto");
+        return;
+      }
       clearReadFeedback();
       setBusy(true);
       setStatus("Decoding…");

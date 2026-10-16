@@ -1,5 +1,5 @@
 // Dedicated disposable worker; its input is a copy, never the UI's pixel buffer.
-importScripts("./pixelstow-spectrum.js?v=20261015-no-pilot1", "./pixelstow-edge-guide.js?v=20261016-edge-guide2", "./pixelstow-transform.js?v=20261016-edge-guide2", "./pixelstow.js?v=20261016-edge-guide2");
+importScripts("./pixelstow-spectrum.js?v=20261015-no-pilot1", "./pixelstow-edge-guide.js?v=20261016-calibration3", "./pixelstow-transform.js?v=20261016-calibration3", "./pixelstow.js?v=20261016-calibration3");
 importScripts("./pixelstow-lattice.js?v=20261013-marker-follow2");
 self.onmessage = async ({ data }) => {
   try {
@@ -8,7 +8,8 @@ self.onmessage = async ({ data }) => {
       includeLegacy: data.includeLegacy, carrierVersion: data.carrierVersion, nativeOnly: data.nativeOnly,
       corners: data.corners, deadline: data.deadline,
       reduction: data.reduction, maxMilliseconds: data.maxMilliseconds,
-      seed: data.seed, scaleGuide: data.scaleGuide,
+      minimumCoverage: data.minimumCoverage,
+      seed: data.seed, scaleGuide: data.scaleGuide, calibration: data.calibration, calibratedOnly: data.calibratedOnly,
       seedDeadline: data.seedDeadline,
       camera: data.camera,
       searchState: data.searchState, stopOnHighConfidence: data.stopOnHighConfidence,

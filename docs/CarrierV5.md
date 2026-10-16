@@ -302,6 +302,37 @@ ordinary marker recovery. A real phone-camera speed improvement still needs
 optical testing; modeled resizing, rotation, blur or colour changes cannot
 establish it.
 
+#### Captured-guide recovery and diagnostics (16 October 2026)
+
+A supplied photographed screen exposed a detector error: one source-photo tone
+could veto a match despite the intended six-of-eight component agreement. The
+reader now tolerates one such outlier only when at least six correctly phased
+components exceed their neighboring-frequency noise floors by 1.3 times and
+at least three of four opposite-edge phase comparisons agree. This also allows
+optical attenuation across unequal edges. The writer's two-level guide, profile
+flags, wavelengths and source removal are unchanged.
+
+That capture now detects at scale 1.00, versus approximately 1.02 from its known
+carrier dimensions, in about 0.6 seconds at 4x reduction without marker or header
+reads. Full recovery selects the guided marker grid and recovers the same exact
+payload as ordinary recovery. On this machine the complete reads took about
+8.9 and 9.7 seconds respectively; this is a reproduced capture, not a general
+camera speed claim. Three other source photos pass six native/scaled encode
+round-trips, 18 modeled scale checks and 36 guide-absent controls. Rotation,
+blur, glare and other cameras can still hide this faint signal.
+
+Recovery results retain calibration detection separately from whether that hint
+actually supplied the successful marker grid. Analysis draws purple bands at
+the measured guide locations and reports the scale and recovery route. A native
+read has not needed calibration; enabling Analysis can run a later guide check,
+which is explicitly labeled as a subsequent check rather than the original read.
+Image bounds or the V5 profile flag alone never count as guide detection.
+
+Continuous capture uses the single calibrated marker grid for positive frames,
+then moves to a fresh frame on failure. It retains occasional ordinary fallback
+for guide misses and older images; file import and manual recovery keep their
+full scale search. See [CameraCapture.md](CameraCapture.md#subtle-v5-edge-guide).
+
 #### Earlier sampling proof
 
 The intended fast path is a positive recognizer: weak guides at known native

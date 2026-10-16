@@ -9,6 +9,7 @@
       this.toolbar = document.querySelector("#preview-screen-toolbar");
       this.footer = document.querySelector("#preview-screen-footer");
       this.actions = document.querySelector("#preview-screen-actions");
+      this.toggleButton = document.querySelector("#preview-screen-toggle");
       this.audioButton = document.querySelector("#preview-audio");
       this.audioPlaceholder = document.createComment("Image audio control returns here");
       this.comparison = document.querySelector("#comparison-control");
@@ -20,6 +21,7 @@
       document.querySelector("#preview-screen-close").addEventListener("click", () => this.close());
       document.querySelector("#preview-screen-fit").addEventListener("click", fit);
       document.querySelector("#preview-screen-actual").addEventListener("click", actualSize);
+      this.toggleButton.addEventListener("click", () => this.toggleSource());
       document.querySelector("#preview-screen-hide").addEventListener("click", () => this.controls(false));
       this.panel.addEventListener("cancel", (event) => { event.preventDefault(); this.close(); });
       this.panel.addEventListener("close", () => this.restore());
@@ -38,9 +40,8 @@
           this.tap = { id: event.pointerId, x: event.clientX, y: event.clientY, at: Date.now() };
           if (this.clean) this.holdTimer = setTimeout(() => {
             this.holdTimer = null;
-            if (this.clean && this.tap?.id === event.pointerId && !this.tap.moved && this.canToggleSource?.()) {
+            if (this.clean && this.tap?.id === event.pointerId && !this.tap.moved && this.toggleSource()) {
               this.tap.held = true;
-              this.panel.classList.toggle("show-source");
             }
           }, 450);
         }
@@ -69,9 +70,27 @@
         else if (this.nativeFullscreen && this.panel.open) this.close();
       });
       root.visualViewport?.addEventListener("resize", () => { if (this.panel.open) resize(); });
+      this.syncToggleSource();
     }
     get openNow() { return this.panel.open; }
     get clean() { return this.panel.open && this.panel.classList.contains("clean"); }
+    syncToggleSource() {
+      const available = Boolean(this.canToggleSource?.());
+      if (!available) this.panel.classList.remove("show-source");
+      const source = this.panel.classList.contains("show-source");
+      this.toggleButton.hidden = !this.clean;
+      this.toggleButton.disabled = !available;
+      this.toggleButton.setAttribute("aria-pressed", String(source));
+      const label = source ? "Show encoded image" : "Show source image";
+      this.toggleButton.setAttribute("aria-label", label);
+      this.toggleButton.title = label;
+    }
+    toggleSource() {
+      if (!this.clean || !this.canToggleSource?.()) { this.syncToggleSource(); return false; }
+      this.panel.classList.toggle("show-source");
+      this.syncToggleSource();
+      return true;
+    }
     cancelTap() { this.tap = null; clearTimeout(this.holdTimer); this.holdTimer = null; }
     controls(show) {
       const focusInFooter = this.footer.contains(document.activeElement);
@@ -93,12 +112,13 @@
       this.footer.prepend(this.comparison);
       this.panel.classList.toggle("clean", clean);
       this.panel.classList.remove("show-source");
-      this.panel.setAttribute("aria-label", clean ? "Full screen image preview. Tap for controls; hold to switch encoded image and source when available; drag with one or two fingers to pan; pinch to zoom; Escape to close."
+      this.panel.setAttribute("aria-label", clean ? "Full screen image preview. Tap for controls; hold to switch encoded image and source when available; drag with the left mouse button or one or two fingers to pan; pinch to zoom; Escape to close."
         : "Full screen image comparison. Tap for controls; hold to drag the divider; pinch to zoom; Escape to close.");
       this.controls(!clean);
       document.documentElement.classList.add("preview-modal-open");
       document.body.classList.add("preview-modal-open");
       this.panel.showModal();
+      this.syncToggleSource();
       // Focus the dialog itself so a hidden toolbar cannot gain autofocus and
       // put a focus ring over the encoded picture on entry.
       this.panel.focus({ preventScroll: true });
@@ -117,6 +137,7 @@
       this.nativeFullscreen = false;
       this.cancelTap(); this.multitouch = false;
       this.panel.classList.remove("show-source");
+      this.syncToggleSource();
       this.pointers.clear();
       this.placeholder.replaceWith(this.preview);
       this.audioPlaceholder.replaceWith(this.audioButton);

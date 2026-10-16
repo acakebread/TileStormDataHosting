@@ -42,6 +42,7 @@
       this.progress = document.querySelector("#camera-progress");
       this.readProgress = new PixelStowReadProgress(document.querySelector("#camera-read-status"));
       this.signature = document.querySelector("#camera-signature");
+      this.calibrationLight = document.querySelector("#camera-calibration");
       this.nearMiss = document.querySelector("#camera-near-miss");
       this.nearSummary = document.querySelector("#camera-near-summary");
       this.still = document.querySelector("#camera-still");
@@ -534,6 +535,7 @@
         paused: purpose === "source" || Boolean(options.manualCapture || options.paused) || !this.backgroundAvailable, frames: 0, lastTime: -1,
         rotation: 0, portrait: this.isPortrait(), history: [], appraised: 0 };
       this.session = session;
+      this.updateCalibrationLight(session);
       this.clearFeedback?.();
       this.signature.textContent = "";
       if (purpose === "source") this.readProgress.finish("Frame your source photo, then capture it.", "source");
@@ -556,6 +558,8 @@
         // Start the grace period when the live picture is ready, rather than
         // counting camera permission/startup time as time spent framing it.
         session.scanAfter = Date.now() + 4000;
+        session.fallbackAfter = Date.now() + 5000;
+        this.updateCalibrationLight(session);
         this.sync();
         this.progress.textContent = purpose === "source" ? "Camera ready. Frame your source photo, then tap Take source photo."
           : session.manualCapture ? "Camera ready. Frame your picture, then tap Capture and read."
@@ -661,6 +665,7 @@
     }
 
     cancelSearches(session, clearHistory = false) {
+      this.updateCalibrationLight(session);
       session.abort?.abort();
       session.readAbort?.abort();
       session.guideAbort?.abort();
@@ -709,6 +714,26 @@
         ? "Edge guide · ~" + hint.scale.toFixed(2) + "× scale." : "";
     }
 
+    updateCalibrationLight(session, entry) {
+      if (!this.calibrationLight || this.session !== session) return;
+      this.calibrationLight.hidden = session.purpose === "source";
+      const detected = Boolean(entry?.scaleGuide?.detected);
+      this.calibrationLight.setAttribute?.("data-state", detected ? "detected" : "searching");
+      this.calibrationLight.textContent = detected
+        ? "Calibration found · ~" + entry.scaleGuide.scale.toFixed(2) + "×" : "Looking for calibration";
+    }
+
+    preserveCalibration(entry, result) {
+      if (!result) return result;
+      // The hint can settle after this frame's marker worker has started. Keep
+      // that same-frame evidence, without claiming it guided the winning fit.
+      const hint = entry.scaleGuide || result.scaleGuide;
+      result.scaleGuide = hint;
+      result.calibration = { status: entry.guideChecked ? "not-detected" : "not-checked", attempted: false, used: false,
+        ...result.calibration, ...(hint?.detected ? { status: "detected" } : entry.guideChecked ? { status: "not-detected" } : {}) };
+      return result;
+    }
+
     captureGuideImage(image) {
       const factor = Math.min(1, 512 / Math.max(image.width, image.height));
       const canvas = this.guideCanvas;
@@ -736,6 +761,14 @@
           this.readBestFrame(session);
         }
         return;
+      }
+      if (entry.guideKind === "edge" && !entry.scaleGuide?.detected) {
+        // Sample ordinary recovery occasionally; do not fill a marker queue
+        // with every uncalibrated video frame while the cheap guide is running.
+        session.fallbackAfter ??= Date.now() + 5000;
+        if (Date.now() < session.fallbackAfter || session.scanning || session.reading || session.pending) return;
+        entry.fallback = true;
+        session.fallbackAfter = Date.now() + 8000;
       }
       if (session.pending?.scaleGuide?.detected && !entry.scaleGuide?.detected && Date.now() - session.pending.capturedAt < 45000) return;
       session.pending = entry;
@@ -769,15 +802,20 @@
         let hint;
         try {
           hint = await Promise.race([scanner(sample.pixels, sample.width, sample.height,
-            { signal: controller.signal, deadline: Date.now() + 1000, maxMilliseconds: 1000 }), cancellation]);
+            { signal: controller.signal, deadline: Date.now() + 1000, maxMilliseconds: 1000,
+              ...(entry.guideKind === "edge" ? { minimumCoverage: .75 } : {}) }), cancellation]);
         } finally { controller.signal.removeEventListener("abort", aborted); }
         if (this.session !== session || controller.signal.aborted || generation !== session.guideGeneration) return;
+        entry.guideChecked = true;
         if (hint?.detected && Number.isFinite(hint.scale) && hint.scale > 0 && Number.isFinite(hint.fx) &&
           Number.isFinite(hint.fy) && Math.hypot(hint.fx, hint.fy) > 0) {
           const fx = hint.fx * sample.width / entry.image.width, fy = hint.fy * sample.height / entry.image.height;
           entry.scaleGuide = { ...hint, fx, fy, scale: hint.scale * Math.hypot(hint.fx, hint.fy) / Math.hypot(fx, fy),
             width: entry.image.width, height: entry.image.height };
         }
+        this.preserveCalibration(entry, entry.scan);
+        this.preserveCalibration(entry, entry.inspection);
+        this.updateCalibrationLight(session, entry);
       } catch (_) { /* An unavailable/unclear guide always uses ordinary discovery. */ }
       finally {
         clearTimeout(timer); entry.guideImage = null;
@@ -836,9 +874,7 @@
           // Downsampling happens once inside the guide worker. The original
           // raster is also retained for marker checks and lossless hand-off.
           entry.guideKind = "edge";
-          // Ordinary marker acquisition starts immediately; the independent
-          // latest-frame guide queue must never delay the established fallback.
-          this.enqueueFrame(session, entry);
+          session.fallbackAfter ??= Date.now() + 5000;
           session.guidePending = entry;
           this.checkScaleGuide(session);
         } else if (this.scaleGuideEnabled && typeof PixelStow.scanScaleGuide === "function") {
@@ -868,6 +904,7 @@
       // change the options used by an already-running marker worker.
       const scaleGuide = entry.scaleGuide || false;
       entry.markerGuideUsed = Boolean(scaleGuide?.detected);
+      entry.calibratedOnly = entry.guideKind === "edge" && Boolean(scaleGuide?.detected);
       try {
         const prefix = "Frame " + frameNumber + " · " + image.width + " × " + image.height + ": ";
         if (!session.reading) {
@@ -879,9 +916,10 @@
         const previous = session.tracking?.scan;
         const header = previous?.markers?.find((m) => m.verification === "header");
         const scan = await PixelStow.scanMarkers(image.pixels, image.width, image.height, {
-          mode: "perspective", camera: true, deadline: Date.now() + (header ? 12000 : 24000), signal: controller.signal,
-          scaleGuide,
-          seed: previous?.width === image.width && previous?.height === image.height && header
+          mode: "perspective", camera: true, calibratedOnly: entry.calibratedOnly,
+          deadline: Date.now() + (entry.calibratedOnly || entry.fallback ? 8000 : header ? 12000 : 24000), signal: controller.signal,
+          scaleGuide, calibration: { status: entry.guideChecked ? entry.scaleGuide?.detected ? "detected" : "not-detected" : "not-checked" },
+          seed: !entry.calibratedOnly && previous?.width === image.width && previous?.height === image.height && header
             ? { ...header, initialMatrix: previous.geometry?.matrix } : undefined,
           onProgress: (text) => { if (this.session === session && !controller.signal.aborted && !session.reading) {
             this.progress.textContent = prefix + text; this.readProgress.update(this.progress.textContent);
@@ -893,6 +931,7 @@
           } }
         });
         if (this.session !== session || controller.signal.aborted) return;
+        this.preserveCalibration(entry, scan);
         entry.scan = scan;
         entry.scaleGuide ||= scan.scaleGuide;
         session.tracking = scan.markers?.some((m) => m.verification === "header") ? { scan } : null;
@@ -919,6 +958,11 @@
         this.readBestFrame(session);
       } catch (error) {
         if (this.session !== session || controller.signal.aborted) return;
+        if (entry.calibratedOnly) {
+          entry.state = "calibrated marker check could not finish";
+          if (!session.reading) this.progress.textContent = "This calibrated frame did not decode. Checking a fresh capture…";
+          return;
+        }
         session.paused = true;
         this.cancelSearches(session);
         this.progress.textContent = (error?.message || "The camera scan could not finish.") + " Scanning paused; resume or tap Capture and read.";
@@ -957,13 +1001,14 @@
       try {
         const { image, scan, frameNumber } = entry;
         const inspection = await PixelStow.readMarkerCandidates(image.pixels, image.width, image.height, scan, {
-          signal: controller.signal, deadline, resumeDiscovery: true,
+          signal: controller.signal, deadline, resumeDiscovery: !entry.calibratedOnly, calibratedOnly: entry.calibratedOnly,
           onProgress: (text) => { if (this.session === session && !controller.signal.aborted) {
             this.progress.textContent = "Reading best capture · frame " + frameNumber + ": " + text;
             this.readProgress.update(this.progress.textContent);
           } }
         });
         if (this.session !== session || controller.signal.aborted) return;
+        this.preserveCalibration(entry, inspection);
         entry.inspection = inspection;
         if (inspection.found && !inspection.unreadable) {
           await this.accept(session, image, inspection);

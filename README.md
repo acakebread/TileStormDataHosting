@@ -46,7 +46,12 @@ round trips and stable Encode positioning at mobile widths. It uses the same
 Playwright/Chrome environment overrides as the [camera checks](docs/CameraCapture.md).
 `node tests/pixelstow-preview-checks.mjs` checks the compact preview toolbar,
 shared speaker control, current-image Preview button and real touch long-press,
-tap, pinch and cancellation behaviour on mobile, plus desktop mouse/keyboard use.
+tap, single-finger pan, pinch and cancellation behaviour on mobile, plus desktop
+left-drag panning and mouse/keyboard use. The yellow Preview action comes first
+in the lower action row. Its clean viewer supports a source/image toggle after
+100%, without adding a divider to the transmitted picture.
+`node tests/pixelstow-recovery-ui-checks.mjs` checks cancellation followed by the
+bottom Decode action, actual worker recovery and the Analysis calibration overlay.
 
 **Post to Facebook** shares the prepared encoded photo as a file only, with no
 title, text or URL in the native share payload. Choose Facebook in the share
@@ -65,5 +70,10 @@ Run `node tests/pixelstow-edge-guide-checks.mjs` and
 real browser workers. Optional local-photo checks are
 `node tests/pixelstow-edge-photo-checks.mjs <encoded-photo.png> [...]` and
 `node tests/pixelstow-jpeg-photo-checks.mjs <source.jpg> [...]`.
+`node tests/pixelstow-edge-capture-regression.mjs <camera-capture.png> <expected-scale>`
+checks a supplied optical capture without marker/header reads. Calibration
+provenance and the camera's single guided grid are checked with
+`node tests/pixelstow-calibration-data-checks.mjs`.
 Personal input images stay unchanged; generated copies/reports go under ignored
-`artifacts/research/edge-guide`. Fresh phone captures must establish optical benefit.
+`artifacts/research/edge-guide`. One supplied photographed screen now detects its
+existing guide in about 0.6 seconds; broader optical reliability still needs testing.

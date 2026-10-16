@@ -1,8 +1,9 @@
 # Browser camera acquisition
 
-The image toolbar has **Browse**, **Paste**, a **Full screen** icon, **Capture**
-for reading encoded images, and **Photo** for taking a new source image. Only the
-explicit Browse/Paste controls open their respective pickers; the Image heading
+The image toolbar has **Browse**, **Paste**, **Decode** for reading encoded
+images, **Create** for taking a new source image, and a **Full screen** icon last
+in that same row. This document calls the two camera purposes Capture and Photo.
+Only the explicit Browse/Paste controls open their respective pickers; the Image heading
 and spaces between buttons are inert. Keyboard image paste remains available.
 
 **Photo** opens the same camera preview for taking a new source
@@ -77,11 +78,11 @@ then rectify the full capture onto the encoded dimensions for wavelet reading.
 The captured raster and marker guides remain in original-resolution coordinates.
 The camera captures a fresh full-resolution raster every 900 ms into one pending
 slot. That slot is replaced while a marker worker is busy; there is no growing
-queue of stale camera frames. Initial marker acquisition has a 24-second budget;
-subsequent scans with a verified tracking header have 12 seconds. The tracking
+queue of stale camera frames. Normal capture checks calibration before dispatching
+marker work, with the occasional fallback described below. The tracking
 header is confirmed against the new pixels before reuse, and cleared after a
-scan without a verified header. Known patches below the detector's basis range
-skip unusably small pyramid levels. These are maximum discovery allowances,
+scan without a verified header. Ordinary recovery can use marker spacing to skip
+unusably small pyramid levels. Discovery budgets are maximum allowances,
 not a promise of video-frame-rate decoding.
 
 After two marker scans, the best eligible capture in recent history is read in
@@ -122,31 +123,46 @@ New V5 encodes include a low-contrast colour guide in perpendicular edge bands.
 Normal capture checks it in a separate disposable worker, directly from the
 frozen full-resolution frame with one explicit 4x box reduction. There is no
 512px thumbnail followed by another reduction. One active guide check and one
-latest pending frame are retained, while ordinary marker/payload work continues.
-Marker fallback starts immediately rather than waiting for the guide. A late
-same-frame result does not restart its own scan. The next positive frame can
-replace an older worker that actually started without a guide, even if that
-older frame subsequently received a late hint.
-A positive result shows **Edge guide · ~1.25× scale** beside the scan status and
-proposes a marker-search scale. Its size estimate is not a payload confirmation.
-The two local frequencies, envelope and spatial phases must agree. Visible
-padding can propose a rectangle for a tilted guide check; uncertain geometry
-or a missed signal uses the existing reader.
+latest pending frame are retained, while marker/payload work continues. The
+calibration outline must cover at least 75% of the frame; this is a reasonably
+framed scan rather than a search for small distant images.
+
+Normal capture waits for calibration before dispatching that frame's marker
+worker. A positive result lights a green **Calibration found** indicator on
+the live preview and shows **Edge guide · ~1.25× scale** beside the status. This
+indicates measured guide evidence, not a confirmed payload. The two local
+frequencies, transverse envelope and spatial phases must agree. Visible padding
+can propose a tilted rectangle, but its outline alone is never a detection.
+
+A calibrated frame attempts one guided marker grid with an eight-second budget.
+Its payload worker uses only the resulting verified candidates, without
+restarting a multi-scale search on the same raster. Failure returns to fresh
+captures. Uncalibrated frames get occasional ordinary recovery: after an initial
+five-second wait, at most once every eight seconds when marker/payload workers
+and the pending slot are idle. This retains a route for missed guides and older
+images. Such fallback marker checks have an eight-second budget. **Capture and
+read**, file imports and bottom **Decode image** retain ordinary full recovery;
+canceling an import and pressing Decode no longer skips geometric discovery.
 
 A guide-positive frame can interrupt older unhinted marker work until a real
 marker header is verified. Verified marker work is protected; a payload read is
 interrupted only after the newer frame has produced better verified geometry.
-An unclear/missing guide, an error or the 1.2-second cancellation uses ordinary
-discovery. Guide appraisal has a one-second budget; the original 24/12-second
-marker and 30-second payload allowances, complete ranked candidates and
-remaining-scale fallback are retained. Source-photo mode does not appraise guides.
+Guide appraisal has a one-second budget and a separate 1.2-second hard
+cancellation. Errors and missed guides remain eligible for occasional fallback.
+Payload reads retain their 30-second budget and checksum requirements. The light
+clears on a subsequent miss, pause, reframe or close, and source-photo mode does
+not appraise guides. Calibration coordinates and detection/use provenance follow
+the successful image into its Analysis display.
 
 `tests/pixelstow-edge-guide-checks.mjs` covers bounded faint encoding and modeled
 resized/rotated captures. `tests/pixelstow-edge-codec-checks.mjs` covers actual
 V5 flags, payloads, source removal and older images. The real browser guide,
 marker, payload and extraction workers are exercised by
 `tests/pixelstow-edge-worker-checks.mjs`; queue/preemption behavior is covered by
-`tests/pixelstow-camera-scheduling-checks.mjs`. Fresh V5 optical captures must
+`tests/pixelstow-camera-scheduling-checks.mjs`. Calibration provenance and the
+single-grid restriction are checked by `tests/pixelstow-calibration-data-checks.mjs`.
+A supplied photographed screen now detects its existing guide in about 0.6
+seconds and recovers through its guided grid; further optical captures must
 establish how often the faint guide survives phone cameras and screens.
 
 ### Abandoned full-image Fourier guide
@@ -224,13 +240,14 @@ and never substitutes a file picker for the camera. Scan camera retains continuo
 scanning with the four-second framing delay.
 
 A high-confidence marker fit can start a read before every image scale was
-visited. If its payload fails, live reading now resumes the unvisited marker
+visited. For ordinary uncalibrated fallback, a failed payload resumes the unvisited marker
 scales on that same retained raster, then ranks and reads the resulting fits.
 This matches the fallback used by ordinary file recovery. The discovery retry
 and payload work share the existing 30-second live-read limit; a stronger new
 capture or cancellation still terminates that worker. Inspect this capture also
 uses the fallback. Saving to Photos is not required by the decoder, and this
 change does not make the video feed equivalent to a native still photograph.
+Calibrated continuous frames instead retain the single guided grid described above.
 
 The experimental short-turn scheduling was rolled back after live scanning
 regressed. Continuous capture again uses 24-second initial / 12-second tracked
