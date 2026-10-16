@@ -2051,7 +2051,10 @@
         preview.hidden = false;
         previewNote.hidden = previewHelpDismissed;
         previewNote.textContent = previewHelp(true);
-        resetView();
+        // Source preparation finishes asynchronously. Preserve any zoom/pan
+        // the user has already chosen while inspecting this same image.
+        if (fullPreview.openNow) applyView();
+        else resetView();
       } catch (error) {
         if (generation !== previewGeneration || current !== job) return;
         previewSource.hidden = true;

@@ -445,8 +445,14 @@ try {
     await tapImage();
     await checkCleanLayers();
     assert(await page.getByRole('button', { name: 'Show source image', exact: true }).isDisabled(), 'the source button waits for pending extraction');
+    await page.evaluate(()=>{
+      const rect=viewport.getBoundingClientRect();
+      zoomAt(rect.left+rect.width*.4,rect.top+rect.height*.4,2);
+    });
+    const beforeCorrection=await page.evaluate(()=>[fitMode,viewScale,originX,originY]);
     await page.evaluate(async () => { PixelStow.extractCarrier = realExtraction; await finishExtraction(); await current.carrierPromise; });
     await page.waitForFunction(() => !document.querySelector('#preview-screen-toggle').disabled);
+    assert.deepEqual(await page.evaluate(()=>[fitMode,viewScale,originX,originY]),beforeCorrection,'asynchronous colour correction must preserve the current zoom and pan');
     const cleanAudio = page.getByRole('button', { name: 'Play audio', exact: true });
     assert(await cleanAudio.isVisible(), 'available audio joins the left of the clean preview icon row');
     const cleanRow = ['#preview-audio', '#preview-screen-scale', '#preview-screen-toggle', '#preview-screen-hide', '#preview-markers', '#preview-screen-close'];
