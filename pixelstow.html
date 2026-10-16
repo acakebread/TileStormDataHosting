@@ -2253,7 +2253,7 @@
       if (touchView.single && previewTouches.size === 1 && fullPreview.openNow && splitPointer === null) {
         const [finger] = previewTouches.values();
         if (!touchView.dragging) {
-          if (fullPreview.tap?.held || Math.hypot(finger.x - touchView.x, finger.y - touchView.y) <= 8) return;
+          if (Math.hypot(finger.x - touchView.x, finger.y - touchView.y) <= 8) return;
           // Movement wins over the divider hold. A stationary finger can still grab it.
           cancelSplitHold();
           touchView.dragging = true;

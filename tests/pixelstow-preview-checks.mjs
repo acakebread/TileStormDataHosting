@@ -210,18 +210,18 @@ try {
           await checkCleanLayers();
           assert(!(await page.locator('#preview-screen-footer').isVisible()));
           assert.equal(await page.locator('#split').inputValue(), dividerBefore);
-          // A stationary hold remains available after pan/pinch and shares
-          // precisely the same transform with the source-image mode.
-          await holdImage();
+          // The same held finger can switch to source, then pan without lifting.
+          await send('touchStart', [point(1, x, y)]);
+          await page.waitForTimeout(550);
           await checkCleanLayers(true);
           const sourceBefore = await view();
-          await send('touchStart', [point(1, x, y)]);
           await send('touchMove', [point(1, x + 35, y + 25)]);
           await page.waitForTimeout(550);
           await send('touchEnd');
           const sourceAfter = await view();
           assert(sourceAfter.x > sourceBefore.x + 20 && sourceAfter.y > sourceBefore.y + 15, 'source mode also supports single-touch panning');
           assert.equal(sourceAfter.scale, sourceBefore.scale);
+          assert.equal(sourceAfter.source, sourceBefore.source, 'panning after a hold preserves the chosen source mode');
           await checkCleanLayers(true);
           assert(!(await page.locator('#preview-screen-footer').isVisible()));
           await holdImage();
