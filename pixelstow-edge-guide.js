@@ -283,7 +283,10 @@
         let quads=[];
         // Propose the outline on the very same coarse raster. Re-scanning the
         // full camera image here could exhaust the deadline before calibration.
-        const outlineBudget=Math.min(1500,(options.maxMilliseconds||1000)/4);
+        // A quarter of the live one-second budget was 250ms, which expired
+        // before a photographed screen's bezel could be returned. Share the
+        // appraisal deadline instead, and keep the file cap at 1.5 seconds.
+        const outlineBudget=Math.min(1500,Math.max(0,deadline-Date.now()));
         try {quads=(await root.PixelStowTransform.proposeOutlines(coarse,w,h,{signal:options.signal,maxMilliseconds:outlineBudget,deadline:Math.min(deadline,Date.now()+outlineBudget)}))
           .map(quad=>quad.map(p=>({x:(p.x+.5)*reduction-.5,y:(p.y+.5)*reduction-.5})));}
         catch(error){if(error.name==='AbortError')throw error;}

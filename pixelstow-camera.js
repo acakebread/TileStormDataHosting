@@ -147,7 +147,7 @@
       if (!session?.ready || session.adjusting || session.handingOff || this.switchOperation || this.working() || this.video.readyState < 2) return;
       // Keep audio permission preparation in the actual shutter/tap gesture.
       this.prepareCapture?.();
-      try { this.accept(session, this.captureFrame()); }
+      try { this.accept(session, this.captureFrame(), undefined, undefined, false); }
       catch (error) { this.progress.textContent = error.message; }
     }
 
@@ -270,6 +270,22 @@
       if (this.session !== session) throw new DOMException("Camera closed.", "AbortError");
       if (session.deviceId) this.deviceHistory.set(session.deviceId, { failed: false, facing: settings.facingMode,
         width: this.video.videoWidth || settings.width, height: this.video.videoHeight || settings.height });
+      await this.preferSharpFrame(track);
+    }
+
+    async preferSharpFrame(track) {
+      // A browsed still is the sensor's finished photo. The preview stream is
+      // often a smaller, softer image, which is enough to erase a two-level guide.
+      if (!track?.applyConstraints) return;
+      let caps = {};
+      try { caps = track.getCapabilities?.() || {}; } catch { return; }
+      const current = track.getSettings?.() || {};
+      const constraints = {};
+      if (caps.width?.max > (current.width || 0)) constraints.width = { ideal: caps.width.max };
+      if (caps.height?.max > (current.height || 0)) constraints.height = { ideal: caps.height.max };
+      const advanced = Array.isArray(caps.focusMode) && caps.focusMode.includes("continuous") ? [{ focusMode: "continuous" }] : [];
+      if (!advanced.length && !constraints.width && !constraints.height) return;
+      try { await track.applyConstraints({ ...constraints, advanced }); } catch { /* Keep the stream that already started. */ }
     }
 
     async startBestDevice(session, facing) {
@@ -788,22 +804,25 @@
       const entry = session.guidePending; session.guidePending = null;
       const generation = session.guideGeneration;
       const controller = new AbortController(); session.guideAbort = controller;
-      const timer = setTimeout(() => controller.abort(), 1200);
-      try {
-        const sample = entry.guideKind === "edge" ? entry.image : entry.guideImage;
-        const scanner = entry.guideKind === "edge" ? PixelStow.scanEdgeGuide : PixelStow.scanScaleGuide;
-        // The worker normally rejects on abort. Also release the latest-frame
-        // queue if a failed implementation ignores cancellation or settles late.
-        let aborted;
-        const cancellation = new Promise((_, reject) => {
-          aborted = () => reject(new DOMException("Cancelled", "AbortError"));
-          controller.signal.addEventListener("abort", aborted, { once: true });
-        });
-        let hint;
+        const timer = setTimeout(() => controller.abort(), 3500);
         try {
-          hint = await Promise.race([scanner(sample.pixels, sample.width, sample.height,
-            { signal: controller.signal, deadline: Date.now() + 1000, maxMilliseconds: 1000,
-              ...(entry.guideKind === "edge" ? { minimumCoverage: .75 } : {}) }), cancellation]);
+          const sample = entry.guideKind === "edge" ? entry.image : entry.guideImage;
+          const scanner = entry.guideKind === "edge" ? PixelStow.scanEdgeGuide : PixelStow.scanScaleGuide;
+          // The worker normally rejects on abort. Also release the latest-frame
+          // queue if a failed implementation ignores cancellation or settles late.
+          let aborted;
+          const cancellation = new Promise((_, reject) => {
+            aborted = () => reject(new DOMException("Cancelled", "AbortError"));
+            controller.signal.addEventListener("abort", aborted, { once: true });
+          });
+          let hint;
+          try {
+            // Same coverage floor as a browsed photo. A screen inside a bezel
+            // or a little background is still the framed carrier. Three seconds
+            // matches a slow run of the file detector without holding a stale frame.
+            hint = await Promise.race([scanner(sample.pixels, sample.width, sample.height,
+              { signal: controller.signal, deadline: Date.now() + 3000, maxMilliseconds: 3000,
+                ...(entry.guideKind === "edge" ? { minimumCoverage: .5 } : {}) }), cancellation]);
         } finally { controller.signal.removeEventListener("abort", aborted); }
         if (this.session !== session || controller.signal.aborted || generation !== session.guideGeneration) return;
         entry.guideChecked = true;
@@ -1038,7 +1057,7 @@
       }
     }
 
-    async accept(session, image, inspection, markerScan) {
+    async accept(session, image, inspection, markerScan, continuousCapture = true) {
       if (this.session !== session || session.handingOff) return;
       session.handingOff = true;
       session.paused = true;
@@ -1058,7 +1077,7 @@
         const name = "camera-capture-" + new Date().toISOString().replace(/[:.]/g, "-") + ".png";
         const file = new File([blob], name, { type: "image/png" });
         this.close();
-        await this.importImage(file, "camera", { image, inspection, markerScan, continuousCapture: true, sourceOnly: session.purpose === "source" });
+        await this.importImage(file, "camera", { image, inspection, markerScan, continuousCapture, sourceOnly: session.purpose === "source" });
       } catch (error) {
         if (this.session !== session) return;
         this.close();
