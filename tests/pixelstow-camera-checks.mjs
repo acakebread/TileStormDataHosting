@@ -409,7 +409,17 @@ try {
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   assert(await phone.evaluate(() => camera.active && !window.phoneSourceCapture));
   await phone.waitForFunction(()=>!camera.pinch&&Date.now()-(camera.pinchGuard||0)>=400);
+  await phone.evaluate(()=>{
+    const write=PixelStow.writePng;
+    PixelStow.writePng=(...args)=>new Promise((resolve,reject)=>{
+      window.finishCapturePng=()=>{PixelStow.writePng=write;return write(...args).then(resolve,reject);};
+    });
+  });
   await phone.touchscreen.tap(tapX, tapY);
+  await phone.waitForFunction(()=>Boolean(window.finishCapturePng));
+  assert(await phone.evaluate(()=>camera.panel.open&&camera.session.handingOff&&!camera.frozenFrame.hidden&&camera.frozenFrame.width>0&&camera.frozenFrame.height>0),
+    'successful capture stays visible while its PNG is prepared');
+  await phone.evaluate(()=>finishCapturePng());
   await phone.waitForFunction(() => Boolean(window.phoneSourceCapture) && !busy && !camera.active);
   assert(await phone.evaluate(() => phoneTracks.every(track => track.readyState === 'ended') &&
     phoneSourceCapture.sourceOnly && current.pixels === phoneSourceCapture.image.pixels));

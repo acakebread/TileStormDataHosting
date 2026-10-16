@@ -722,7 +722,7 @@
               <span class="compare-tag right" id="tag-source">Source</span>
               <div class="split-line" id="split-line"><button class="split-handle" id="split-handle" type="button" tabindex="-1" aria-label="Drag comparison divider">↔</button></div>
             </div>
-            <p class="hint preview-note" id="preview-note" hidden>(Scroll to zoom; right-drag to pan)</p>
+            <p class="hint preview-note" id="preview-note" hidden>(Maximise for mouse-wheel zoom; right-drag to pan)</p>
           </div>
           <div class="preview-bottom-row" id="preview-bottom-row">
             <button class="preview-audio" id="preview-audio" type="button" aria-label="Play audio" title="Play audio" disabled hidden><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7m3-10a9 9 0 0 1 0 13"/></svg><span class="preview-audio-label">Play audio</span></button>
@@ -1703,7 +1703,7 @@
       if (window.matchMedia("(pointer: coarse)").matches) {
         return "(Pinch to zoom; two fingers to pan" + (comparing ? "; drag the divider or slider to compare" : "") + ")";
       }
-      return "(Scroll to zoom; right-drag to pan" + (comparing ? "; drag the divider to compare" : "") + ")";
+      return "(Maximise for mouse-wheel zoom; right-drag to pan" + (comparing ? "; drag the divider to compare" : "") + ")";
     }
 
     function dismissPreviewHelp() {

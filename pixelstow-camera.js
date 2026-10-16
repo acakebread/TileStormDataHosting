@@ -47,6 +47,10 @@
       this.nearSummary = document.querySelector("#camera-near-summary");
       this.still = document.querySelector("#camera-still");
       this.guides = document.querySelector("#camera-guides");
+      this.frozenFrame = document.createElement("canvas");
+      this.frozenFrame.hidden = true;
+      this.frozenFrame.style.cssText = "position:absolute;inset:0;width:100%;height:100%;object-fit:contain;pointer-events:none";
+      this.video.after(this.frozenFrame);
       this.useNearButton = document.querySelector("#use-camera-near-miss");
       // file:// can show a camera preview where permitted, but cannot run this
       // worker. Keep that route manual rather than continuously loading the UI.
@@ -454,6 +458,7 @@
 
     layoutPreview() {
       const session = this.session;
+      if (session?.handingOff && this.frozenFrame && !this.frozenFrame.hidden) return;
       if (!session) { this.frame.hidden = true; this.video.style.visibility = "hidden"; this.resetPortraitPreview(); this.placeCalibration(); return; }
       // Permission and device startup must not collapse the preview row. Use
       // the requested orientation until actual video dimensions are available.
@@ -754,6 +759,7 @@
         paused: purpose === "source" || Boolean(options.manualCapture || options.paused) || !this.backgroundAvailable, frames: 0, lastTime: -1,
         rotation: 0, portrait: this.isPortrait(), history: [], appraised: 0 };
       this.session = session;
+      this.frozenFrame.hidden = true;
       this.updateCalibrationLight(session);
       this.clearFeedback?.();
       this.signature.textContent = "";
@@ -819,6 +825,10 @@
 
     close(preserveSwitch = false) {
       if (this.session) this.clearPreview?.();
+      if (this.frozenFrame) {
+        this.frozenFrame.hidden = true;
+        this.frozenFrame.width = this.frozenFrame.height = 0;
+      }
       if (!preserveSwitch && this.switchOperation) {
         this.switchOperation.cancelled = true;
         this.switchOperation = null;
@@ -1285,6 +1295,12 @@
     async accept(session, image, inspection, markerScan, continuousCapture = true) {
       if (this.session !== session || session.handingOff) return;
       session.handingOff = true;
+      if (this.frozenFrame) {
+        this.frozenFrame.width = image.width;
+        this.frozenFrame.height = image.height;
+        this.frozenFrame.getContext("2d").putImageData(new ImageData(new Uint8ClampedArray(image.pixels),image.width,image.height),0,0);
+        this.frozenFrame.hidden = false;
+      }
       session.paused = true;
       clearTimeout(session.timer);
       this.cancelSearches(session);
