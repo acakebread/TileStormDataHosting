@@ -139,25 +139,103 @@ try {
         if (mobile) {
           const cdp = await page.context().newCDPSession(page), box = await page.locator('#viewport').boundingBox();
           const x = box.x + box.width * .2, y = box.y + box.height * .4;
+          const send = (type, points = []) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: points });
+          const point = (id, px, py) => ({ id, x: px, y: py });
+          const view = () => page.evaluate(() => ({ x: originX, y: originY, scale: viewScale, source: fullPreview.panel.classList.contains('show-source') }));
+          const centreZoom = () => page.evaluate(() => {
+            const image = imagePixels(), box = viewBox();
+            fitMode = false; viewScale = fittedScale(image, box) * 3;
+            originX = (box.w - image.w * viewScale) / 2;
+            originY = (box.h - image.h * viewScale) / 2;
+            applyView();
+          });
+          // Only moving past the gesture threshold turns a single touch into
+          // a pan. It must stay a pan even after the long-press timer expires.
+          await centreZoom();
+          const dragBefore = await view();
           await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ id: 1, x, y }] });
-          await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ id: 1, x: x + 40, y }] });
+          assert.deepEqual(await view(), dragBefore, 'touch down alone must not move or switch the image');
+          await send('touchMove', [point(1, x + 40, y + 30)]);
+          const dragFirst = await view();
+          assert(dragFirst.x > dragBefore.x + 20 && dragFirst.y > dragBefore.y + 15, 'a one-finger drag must pan both axes: ' + JSON.stringify({ before: dragBefore, after: dragFirst }));
           await page.waitForTimeout(550);
-          await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+          await send('touchMove', [point(1, x + 75, y + 60)]);
+          const dragSecond = await view();
+          assert(dragSecond.x > dragFirst.x + 20 && dragSecond.y > dragFirst.y + 15, 'one-finger panning must track continuously');
+          assert.equal(dragSecond.scale, dragBefore.scale, 'a one-finger pan must preserve zoom');
+          assert.equal(dragSecond.source, dragBefore.source, 'a moving touch must cancel the source-toggle hold');
+          await send('touchEnd');
           assert.equal(await page.locator('#split').inputValue(), dividerBefore, 'clean-view holds cannot grab the comparison');
           assert(!(await page.locator('#preview-screen-footer').isVisible()));
           await checkCleanLayers();
-          await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ id: 1, x, y }] });
-          await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ id: 1, x, y }, { id: 2, x: x + 60, y }] });
+          // Keep the two-finger zoom/pan gesture and suppress tap/hold when it
+          // finishes with one finger still touching the picture.
+          await centreZoom();
+          const pinchBefore = await view();
+          await send('touchStart', [point(1, x, y)]);
+          await send('touchStart', [point(1, x, y), point(2, x + 120, y)]);
+          await send('touchMove', [point(1, x - 15, y + 25), point(2, x + 155, y + 25)]);
+          assert((await view()).scale > pinchBefore.scale, 'two-finger pinch must still zoom the clean viewer');
+          await send('touchEnd', [point(1, x - 15, y + 25)]);
+          await send('touchMove', [point(1, x + 10, y + 45)]);
           await page.waitForTimeout(550);
-          await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+          await send('touchEnd');
           await checkCleanLayers();
           assert(!(await page.locator('#preview-screen-footer').isVisible()));
+          assert.equal(await page.locator('#split').inputValue(), dividerBefore);
+          // A stationary hold remains available after pan/pinch and shares
+          // precisely the same transform with the source-image mode.
+          await holdImage();
+          await checkCleanLayers(true);
+          const sourceBefore = await view();
+          await send('touchStart', [point(1, x, y)]);
+          await send('touchMove', [point(1, x + 35, y + 25)]);
+          await page.waitForTimeout(550);
+          await send('touchEnd');
+          const sourceAfter = await view();
+          assert(sourceAfter.x > sourceBefore.x + 20 && sourceAfter.y > sourceBefore.y + 15, 'source mode also supports single-touch panning');
+          assert.equal(sourceAfter.scale, sourceBefore.scale);
+          await checkCleanLayers(true);
+          assert(!(await page.locator('#preview-screen-footer').isVisible()));
+          await holdImage();
+          await checkCleanLayers();
+          await tapImage();
+          assert(await page.locator('#preview-screen-footer').isVisible(), 'a later short tap must still reveal controls');
+          const visibleBefore = await view();
+          await send('touchStart', [point(1, x, y)]);
+          await send('touchMove', [point(1, x - 30, y - 25)]);
+          await send('touchEnd');
+          const visibleAfter = await view();
+          assert(visibleAfter.x < visibleBefore.x - 15 && visibleAfter.y < visibleBefore.y - 15, 'single-touch panning works while controls are visible');
+          assert(await page.locator('#preview-screen-footer').isVisible(), 'a drag must not hide visible controls');
+          await send('touchStart', [point(1, x, y)]);
+          await send('touchCancel');
+          await page.waitForTimeout(550);
+          await checkCleanLayers();
+          assert(await page.locator('#preview-screen-footer').isVisible(), 'cancelled touches must not leave a tap or hold queued');
+          await page.getByRole('button', { name: 'Hide controls', exact: true }).click();
           await cdp.detach();
+          console.log(`PASS: ${width}px clean preview one-finger continuous pan; tap/hold arbitration, pinch continuation, source mode and cancellation`);
         }
         await page.screenshot({ path: path.join(snapshots, `clean-capture-${width}.png`) });
       }
       await tapImage();
       await page.getByRole('button', { name: 'Close preview', exact: true }).click();
+    }
+    if (mobile) {
+      // The new gesture belongs only to the bottom full-screen viewer. A
+      // single finger on the ordinary page must retain native page scrolling.
+      await page.locator('#viewport').scrollIntoViewIfNeeded();
+      const cdp = await page.context().newCDPSession(page), box = await page.locator('#viewport').boundingBox();
+      const x = box.x + box.width * .25, y = Math.min(box.y + box.height * .7, 650);
+      const before = await page.evaluate(() => ({ scroll: scrollY, x: originX, y: originY, scale: viewScale, split: split.value }));
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ id: 1, x, y }] });
+      for (let step = 1; step <= 6; step++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ id: 1, x, y: y - step * 22 }] });
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      await page.waitForFunction(previous => scrollY > previous + 30, before.scroll);
+      assert.deepEqual(await page.evaluate(() => ({ x: originX, y: originY, scale: viewScale, split: split.value })),
+        { x: before.x, y: before.y, scale: before.scale, split: before.split }, 'an inline swipe scrolls the page without panning or scrubbing');
+      await cdp.detach();
     }
     await page.waitForFunction(() => document.querySelector('#preview-audio').parentElement.id === 'preview-bottom-row');
     const mainAudio = await page.locator('#preview-audio').boundingBox(), mainSlider = await page.locator('#comparison-control').boundingBox();

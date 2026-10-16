@@ -1993,11 +1993,18 @@
       endSplit();
       previewTouches.clear();
       touchView = null;
+      fullPreview.cancelTap();
     }
 
-    function startTouchView() {
+    function startTouchView(continuePan = false) {
       const [a, b] = [...previewTouches.values()];
-      if (!b) { touchView = null; return; }
+      if (!b) {
+        // The clean viewer has no divider or page to scroll. Let a single
+        // moving finger pan, while a stationary finger keeps tap/hold actions.
+        touchView = a && fullPreview.clean ? { single: true, x: a.x, y: a.y,
+          originX, originY, dragging: continuePan } : null;
+        return;
+      }
       const rect = viewport.getBoundingClientRect();
       const x = (a.x + b.x) / 2 - rect.left, y = (a.y + b.y) / 2 - rect.top;
       touchView = { distance: Math.max(1, Math.hypot(b.x - a.x, b.y - a.y)), scale: viewScale,
@@ -2011,10 +2018,8 @@
       }
     }
 
-    // Leave a single finger to native page scrolling (and button taps). Touch
-    // events keep the two-finger view usable when pan-y cancels pointer events.
-    // The divider captures immediately. A full-screen hold can grab it from
-    // anywhere; ordinary page touches stay available for scrolling and pinch.
+    // Single-finger page scrolling stays native outside the clean full-screen
+    // viewer. Touch events also keep pinch/pan usable when pan-y cancels pointers.
     viewport.addEventListener("touchstart", (event) => {
       if (!imagePixels().w) return;
       trackPreviewTouches(event);
@@ -2022,11 +2027,26 @@
         if (event.cancelable) event.preventDefault();
         endSplit();
         startTouchView();
-      }
+      } else if (fullPreview.clean) startTouchView();
     }, { passive: false });
     viewport.addEventListener("touchmove", (event) => {
       trackPreviewTouches(event);
       if (!touchView) return;
+      if (touchView.single && previewTouches.size === 1 && fullPreview.clean) {
+        const [finger] = previewTouches.values();
+        if (!touchView.dragging) {
+          if (fullPreview.tap?.held || Math.hypot(finger.x - touchView.x, finger.y - touchView.y) <= 8) return;
+          touchView.dragging = true;
+          fullPreview.cancelTap();
+        }
+        dismissPreviewHelp();
+        if (event.cancelable) event.preventDefault();
+        fitMode = false;
+        originX = touchView.originX + finger.x - touchView.x;
+        originY = touchView.originY + finger.y - touchView.y;
+        applyView();
+        return;
+      }
       if (previewTouches.size < 2) { touchView = null; return; }
       dismissPreviewHelp();
       if (event.cancelable) event.preventDefault();
@@ -2039,11 +2059,12 @@
       applyView();
     }, { passive: false });
     function endPreviewTouch(event) {
+      const continuePan = Boolean(touchView && !touchView.single);
       trackPreviewTouches(event);
-      startTouchView();
+      startTouchView(continuePan);
     }
     viewport.addEventListener("touchend", endPreviewTouch);
-    viewport.addEventListener("touchcancel", endPreviewTouch);
+    viewport.addEventListener("touchcancel", clearPreviewTouches);
     window.addEventListener("blur", clearPreviewTouches);
     window.addEventListener("pagehide", clearPreviewTouches);
     // Also suppress Safari's native gesture events within this viewer only.
