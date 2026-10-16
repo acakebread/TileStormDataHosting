@@ -940,7 +940,8 @@
     }
 
     close(preserveSwitch = false) {
-      if (this.session) this.clearPreview?.();
+      // Leaving the camera is not a new capture. The page preview and its
+      // attachments stay until a replacement image has actually been accepted.
       if (this.frozenFrame) {
         this.frozenFrame.hidden = true;
         this.frozenFrame.width = this.frozenFrame.height = 0;
