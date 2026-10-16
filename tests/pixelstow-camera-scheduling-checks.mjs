@@ -220,7 +220,7 @@ console.log('PASS: calibration-first full-raster appraisal, delayed/periodic fal
   assert.equal(session.paused,false);
   assert.equal(session.pending,null);
   assert.equal(session.guidePending,null);
-  assert.deepEqual(session.history,[]);
+  assert.equal(session.history.length,0);
   assert.equal(session.best,null);
   assert.equal(session.tracking,null);
   assert.equal(session.fallbackAfter,undefined);

@@ -335,18 +335,18 @@
     .camera-frame-note { position: absolute; left: 8px; right: 8px; bottom: 5px; margin: 0; text-align: center; color: white; font-size: 0.75rem; line-height: 1.4; text-shadow: 0 1px 3px #000; }
     .camera-footer { display: grid; grid-template-rows: auto auto minmax(0, 1fr); gap: 8px; min-height: 0; }
     .camera-feedback { box-sizing: border-box; height: clamp(104px, 18dvh, 164px); overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
-    .camera-controls { display: grid; grid-template-columns: minmax(0, 1fr) 44px 44px; align-items: stretch; gap: 8px; margin: 0; }
+    .camera-controls { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: stretch; gap: 8px; margin: 0; }
     .camera-controls button { margin: 0; padding: 9px 6px; min-width: 0; line-height: 1.15; }
     .camera-controls .camera-shutter { color: #081016; background: var(--tile-azure); font-weight: 700; }
-    #capture-frame { grid-column: 1; grid-row: 1; }
-    #pause-camera { grid-column: 2; grid-row: 1; width: 44px; padding: 0; }
+    #capture-frame { grid-column: 1 / -1; grid-row: 1; margin-right: 104px; }
+    #pause-camera { grid-column: 2; grid-row: 1; justify-self: end; width: 44px; margin-right: 52px; padding: 0; z-index: 1; }
     #pause-camera svg { display: block; }
     #pause-camera svg[hidden] { display: none; }
-    #switch-camera { grid-column: 3; grid-row: 1; width: 44px; padding: 0; }
+    #switch-camera { grid-column: 2; grid-row: 1; justify-self: end; width: 44px; padding: 0; z-index: 1; }
     #switch-camera svg { display: block; }
     #rotate-camera { grid-column: 1; grid-row: 2; }
-    .camera-native-photo { grid-column: 2 / -1; grid-row: 2; }
-    .camera-controls:not(:has(#pause-camera:not([hidden]))) #capture-frame { grid-column: 1 / 3; }
+    .camera-native-photo { grid-column: 2; grid-row: 2; }
+    .camera-controls:not(:has(#pause-camera:not([hidden]))) #capture-frame { margin-right: 52px; }
     .camera-controls:not(:has(#camera-take-photo:not([hidden]))) #rotate-camera { grid-column: 1 / -1; }
     .camera-feedback > .hint { margin: 0 0 8px; font-size: 0.82rem; overflow-wrap: anywhere; }
     @media (orientation: landscape) and (max-height: 600px) {
