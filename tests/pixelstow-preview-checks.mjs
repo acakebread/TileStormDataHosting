@@ -306,7 +306,29 @@ try {
         { x: before.x, y: before.y, scale: before.scale, split: before.split }, 'an inline swipe scrolls the page without panning or scrubbing');
       await cdp.detach();
     }
+    if (mobile) {
+      const resize=await page.evaluate(()=>{
+        const snapshot=()=>[viewport.clientHeight,viewScale,originX,originY];
+        const before=snapshot(),descriptor=Object.getOwnPropertyDescriptor(window,'innerHeight');
+        Object.defineProperty(window,'innerHeight',{configurable:true,value:innerHeight-120});
+        window.dispatchEvent(new Event('resize'));
+        const after=snapshot();
+        Object.defineProperty(window,'innerHeight',descriptor);
+        window.dispatchEvent(new Event('resize'));
+        return{before,after};
+      });
+      assert.deepEqual(resize.after,resize.before,'browser toolbar height changes during scroll must not resize or zoom the inline preview');
+    }
     await page.waitForFunction(() => document.querySelector('#preview-audio').parentElement.id === 'preview-bottom-row');
+    if (!mobile) {
+      await page.locator('#viewport').scrollIntoViewIfNeeded();
+      const box=await page.locator('#viewport').boundingBox();
+      const before=await page.evaluate(()=>({scroll:scrollY,view:[viewScale,originX,originY]}));
+      await page.mouse.move(box.x+box.width/2,box.y+box.height/2);
+      await page.mouse.wheel(0,160);
+      await page.waitForFunction(y=>scrollY>y,before.scroll);
+      assert.deepEqual(await page.evaluate(()=>[viewScale,originX,originY]),before.view,'wheel over the inline preview scrolls the page without zooming or panning');
+    }
     // Measure in one frame: an inline mobile swipe can still be coasting,
     // which changes viewport-relative Y between separate browser calls.
     const [mainAudio, mainSlider] = await page.evaluate(() => ['#preview-audio', '#comparison-control'].map(selector => {

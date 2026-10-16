@@ -1649,11 +1649,10 @@
       const img = imagePixels();
       const width = viewport.clientWidth;
       if (!img.w || !img.h || !width) return;
-      const frame = frameOf(img);
-      const maxHeight = window.matchMedia("(max-width: 620px)").matches ? Math.min(360, window.innerHeight * 0.42) : 420;
-      const height = fullPreview.openNow ? document.querySelector("#preview-screen").clientHeight :
-        maxHeight;
-      const next = height + "px";
+      // svh stays stable while mobile browser chrome expands during scrolling.
+      // Fullscreen still follows the space actually available to its viewer.
+      const next = fullPreview.openNow ? document.querySelector("#preview-screen").clientHeight + "px" :
+        window.matchMedia("(max-width: 620px)").matches ? "min(360px, 42svh)" : "420px";
       if (viewport.style.height !== next) viewport.style.height = next;
       applyView();
     }
@@ -2339,6 +2338,7 @@
     window.addEventListener("resize", () => { if (!preview.hidden) sizeViewport(); });
 
     viewport.addEventListener("wheel", (event) => {
+      if (!fullPreview.openNow) return;
       if (!event.deltaY || !imagePixels().w) return;
       event.preventDefault();
       const delta = event.deltaMode === 1 ? event.deltaY * 16 : event.deltaY;
