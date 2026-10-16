@@ -210,7 +210,8 @@ marker discovery. It still requires the full payload checksum before displaying
 contents. Equal-rated captures prefer the newer frame.
 
 **Pause scanning** cancels both workers and clears the pending slot, leaving the preview running for
-reframing. After camera permission, **Switch camera** enumerates video inputs and
+reframing. Resume then drops the retained capture queue, tracking seed and guide timing, and the next
+scan starts from a new frame. After camera permission, **Switch camera** enumerates video inputs and
 cycles through their exact device IDs, stopping the previous stream/search first.
 This selects distinct desktop webcams even when they ignore front/rear preferences.
 The current camera name is shown in the preview help; the selected device is

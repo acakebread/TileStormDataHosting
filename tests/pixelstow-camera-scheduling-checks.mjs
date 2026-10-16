@@ -207,6 +207,30 @@ console.log('PASS: independent latest-frame Fourier lookahead, pilot-first prior
 delete codec.scanEdgeGuide;
 console.log('PASS: calibration-first full-raster appraisal, delayed/periodic fallback, positive preemption, one guided grid, green indicator, latest-slot replacement and cancellation');
 
+{
+  const {camera,session}=setup();
+  session.ready=true;session.paused=true;session.pending=entry(2);session.guidePending=entry(3);
+  session.history=[entry(1)];session.best=session.history[0];session.tracking={scan:scan()};
+  session.fallbackAfter=now+8000;session.scanAfter=now+5000;session.lastTime=4;session.appraised=3;
+  const abort=new AbortController();session.abort=abort;
+  let scheduled=null;
+  Object.assign(camera,{backgroundAvailable:true,working:()=>false,nearMiss:{hidden:false},
+    still:{width:8,height:8},guides:{width:8,height:8},schedule:(active,delay)=>{scheduled={active,delay};}});
+  camera.togglePause();
+  assert.equal(session.paused,false);
+  assert.equal(session.pending,null);
+  assert.equal(session.guidePending,null);
+  assert.deepEqual(session.history,[]);
+  assert.equal(session.best,null);
+  assert.equal(session.tracking,null);
+  assert.equal(session.fallbackAfter,undefined);
+  assert.equal(session.scanAfter,0);
+  assert.equal(session.lastTime,-1);
+  assert.equal(session.appraised,0);
+  assert(abort.signal.aborted,'resume must cancel work that was still finishing');
+  assert.equal(scheduled.active,session);assert.equal(scheduled.delay,400);
+  console.log('PASS: resume drops the pending capture, retained queue and tracking seed before the next scan');
+}
 // Real codec regression: inaccurate higher-ranked transforms may precede the
 // correct one. The camera must not silently discard the third valid candidate.
 globalThis.window={};

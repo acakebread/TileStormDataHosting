@@ -448,18 +448,31 @@
     layoutPreview() {
       const session = this.session, width = this.video.videoWidth, height = this.video.videoHeight;
       this.frame.hidden = !session?.ready || !width || !height;
-      if (this.frame.hidden) return;
+      if (this.frame.hidden) { this.placeCalibration(); return; }
       const sideways = session.rotation % 180 !== 0;
       const frameWidth = sideways ? height : width, frameHeight = sideways ? width : height;
       const scale = Math.min(this.view.clientWidth / frameWidth, this.view.clientHeight / frameHeight);
       const w = frameWidth * scale, h = frameHeight * scale;
+      const left = (this.view.clientWidth - w) / 2, top = (this.view.clientHeight - h) / 2;
       // Fit the entire frame. The border follows actual video pixels, including
       // right-angle rotation, rather than an arbitrary CSS crop or screen shape.
       this.video.style.width = width * scale + "px";
       this.video.style.height = height * scale + "px";
       this.video.style.transform = "translate(-50%, -50%) rotate(" + session.rotation + "deg)";
-      Object.assign(this.frame.style, { left: (this.view.clientWidth - w) / 2 + "px",
-        top: (this.view.clientHeight - h) / 2 + "px", width: w + "px", height: h + "px" });
+      Object.assign(this.frame.style, { left: left + "px", top: top + "px", width: w + "px", height: h + "px" });
+      this.placeCalibration(left, top, w);
+    }
+
+    placeCalibration(frameLeft, frameTop, frameWidth) {
+      const light = this.calibrationLight;
+      if (!light) return;
+      if (!frameWidth) {
+        light.style.left = light.style.top = light.style.maxWidth = "";
+        return;
+      }
+      light.style.left = (frameLeft + frameWidth / 2) + "px";
+      light.style.top = (frameTop + 10) + "px";
+      light.style.maxWidth = Math.max(48, frameWidth - 24) + "px";
     }
 
     async refreshOrientation(session) {
@@ -526,7 +539,11 @@
       this.signature.hidden = source;
       this.pauseButton.hidden = source || Boolean(session?.manualCapture) || !this.backgroundAvailable;
       this.pauseButton.disabled = locked || !session?.ready || !this.backgroundAvailable || Boolean(this.switchOperation || session?.handingOff);
-      this.pauseButton.textContent = session?.paused ? "Resume scanning" : "Pause scanning";
+      const pauseLabel = session?.paused ? "Resume scanning" : "Pause scanning";
+      this.pauseButton.setAttribute("aria-label", pauseLabel);
+      this.pauseButton.title = pauseLabel;
+      this.pauseButton.querySelector(".pause-icon").hidden = Boolean(session?.paused);
+      this.pauseButton.querySelector(".play-icon").hidden = !session?.paused;
       this.rotateButton.disabled = locked || !ready || Boolean(this.switchOperation || session?.handingOff);
       const next = this.nextDevices(session?.deviceId)[0];
       this.switchButton.disabled = this.rotateButton.disabled || (!this.nativePhotoCapture && this.devicesKnown && !next);
@@ -644,16 +661,27 @@
     togglePause() {
       const session = this.session;
       if (!session?.ready || session.purpose === "source" || session.handingOff || !this.backgroundAvailable || this.working()) return;
-      session.paused = !session.paused;
       clearTimeout(session.timer);
-      if (session.paused) {
+      if (!session.paused) {
+        session.paused = true;
         this.cancelSearches(session);
         this.progress.textContent = "Scanning paused. Reframe the live view, then resume or capture and read.";
       } else {
+        // Drop every queued or retained capture before the clock restarts.
+        // A reframe made while paused must not resume the previous search.
+        this.scrubScanQueue(session);
+        session.paused = false;
         this.progress.textContent = "Scanning resumed. Hold the picture steady…";
         this.schedule(session, 400);
       }
       this.sync();
+    }
+
+    scrubScanQueue(session) {
+      this.cancelSearches(session, true);
+      session.fallbackAfter = undefined;
+      session.scanAfter = 0;
+      session.lastTime = -1;
     }
 
     schedule(session, delay = 700) {

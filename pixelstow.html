@@ -257,7 +257,7 @@
     #preview-screen-toggle[aria-pressed="true"] { border-color: var(--tile-azure); color: var(--tile-azure); }
     .preview-context-menu { position: fixed; z-index: 4; max-width: calc(100% - 16px); padding: 5px; border: 1px solid var(--border); border-radius: 8px; background: #121923; box-shadow: 0 6px 24px #0009; }
     .preview-context-menu button { display: block; width: 100%; white-space: nowrap; text-align: left; }
-    .camera-calibration { position: absolute; top: 10px; left: 10px; z-index: 2; padding: 5px 8px; border-radius: 6px; background: #081016df; color: #bdc8cf; font-size: .8rem; line-height: 1.3; pointer-events: none; }
+    .camera-calibration { position: absolute; top: 12px; left: 50%; z-index: 2; box-sizing: border-box; max-width: calc(100% - 24px); transform: translateX(-50%); padding: 5px 10px; border-radius: 6px; background: #081016df; color: #bdc8cf; font-size: .8rem; line-height: 1.3; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
     .camera-calibration::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 50%; background: #86939b; }
     .camera-calibration[data-state="detected"] { color: #b8f3c7; }
     .camera-calibration[data-state="detected"]::before { background: #61e28b; box-shadow: 0 0 7px #61e28b99; }
@@ -335,11 +335,13 @@
     .camera-frame-note { position: absolute; left: 8px; right: 8px; bottom: 5px; margin: 0; text-align: center; color: white; font-size: 0.75rem; line-height: 1.4; text-shadow: 0 1px 3px #000; }
     .camera-footer { display: grid; grid-template-rows: auto auto minmax(0, 1fr); gap: 8px; min-height: 0; }
     .camera-feedback { box-sizing: border-box; height: clamp(104px, 18dvh, 164px); overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
-    .camera-controls { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 44px; gap: 8px; margin: 0; }
+    .camera-controls { display: grid; grid-template-columns: minmax(0, 1fr) 44px 44px; align-items: stretch; gap: 8px; margin: 0; }
     .camera-controls button { margin: 0; padding: 9px 6px; min-width: 0; line-height: 1.15; }
     .camera-controls .camera-shutter { color: #081016; background: var(--tile-azure); font-weight: 700; }
     #capture-frame { grid-column: 1; grid-row: 1; }
-    #pause-camera { grid-column: 2; grid-row: 1; }
+    #pause-camera { grid-column: 2; grid-row: 1; width: 44px; padding: 0; }
+    #pause-camera svg { display: block; }
+    #pause-camera svg[hidden] { display: none; }
     #switch-camera { grid-column: 3; grid-row: 1; width: 44px; padding: 0; }
     #switch-camera svg { display: block; }
     #rotate-camera { grid-column: 1; grid-row: 2; }
@@ -660,7 +662,7 @@
             <p class="read-live-status" id="camera-read-status" role="status" aria-live="polite" aria-atomic="true"></p>
             <div class="file-row camera-controls">
               <button class="camera-shutter" id="capture-frame" type="button">Capture and read</button>
-              <button id="pause-camera" type="button">Pause scanning</button>
+              <button id="pause-camera" type="button" aria-label="Pause scanning" title="Pause scanning"><svg class="pause-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="14" y="3" width="5" height="18" rx="1"/><rect x="5" y="3" width="5" height="18" rx="1"/></svg><svg class="play-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" hidden><path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"/></svg></button>
               <button id="switch-camera" type="button" aria-label="Switch camera" title="Switch camera"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M11 19H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/><path d="M13 5h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-5"/><circle cx="12" cy="12" r="3"/><path d="m18 22-3-3 3-3"/><path d="m6 2 3 3-3 3"/></svg></button>
               <button id="rotate-camera" type="button">Rotate view</button>
               <button class="camera-native-photo" id="camera-take-photo" type="button">Take photo with phone camera</button>
@@ -960,7 +962,7 @@
   <script src="./pixelstow-media.js?v=20261015-preview-icons1"></script>
   <script src="./pixelstow-sharing.js?v=20261016-preview-copy1"></script>
   <script src="./pixelstow-read-progress.js?v=20261015-read-stages1"></script>
-  <script src="./pixelstow-camera.js?v=20261016-camera-rows"></script>
+  <script src="./pixelstow-camera.js?v=20261016-pause-reset"></script>
   <script src="./pixelstow-preview.js?v=20261016-scale-toggle1"></script>
   <script>
     const fileInput = document.querySelector("#file");
