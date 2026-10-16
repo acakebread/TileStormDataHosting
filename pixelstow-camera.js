@@ -40,7 +40,7 @@
       this.rotateButton = document.querySelector("#rotate-camera");
       this.nativePhotoButton = document.querySelector("#camera-take-photo");
       this.progress = document.querySelector("#camera-progress");
-      this.readProgress = new PixelStowReadProgress(document.querySelector("#camera-read-status"));
+      this.readProgress = new PixelStowReadProgress(document.querySelector("#camera-read-status"), this.frame);
       this.signature = document.querySelector("#camera-signature");
       this.calibrationLight = document.querySelector("#camera-calibration");
       this.nearMiss = document.querySelector("#camera-near-miss");
@@ -760,9 +760,12 @@
     }
 
     updateCalibrationLight(session, entry) {
-      if (!this.calibrationLight || this.session !== session) return;
+      if (this.session !== session) return;
+      const detected = session.purpose !== "source" && Boolean(entry?.scaleGuide?.detected);
+      if (this.frame) this.frame.dataset.calibration = detected ? "detected" : "searching";
+      this.readProgress?.syncFrame();
+      if (!this.calibrationLight) return;
       this.calibrationLight.hidden = session.purpose === "source";
-      const detected = Boolean(entry?.scaleGuide?.detected);
       this.calibrationLight.setAttribute?.("data-state", detected ? "detected" : "searching");
       this.calibrationLight.textContent = detected
         ? "Calibration found · ~" + entry.scaleGuide.scale.toFixed(2) + "×" : "Looking for calibration";

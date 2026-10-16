@@ -3,18 +3,28 @@
 (function (root) {
   "use strict";
   class PixelStowReadProgress {
-    constructor(element) { this.element = element; this.clear(); }
+    constructor(element, frame = null) { this.element = element; this.frame = frame; this.clear(); }
     clear() { this.show("", "idle", 0); }
     begin(text = "Reading the image…") { this.show(text, "search", .05); }
     show(text, stage, value) {
       this.value = value;
+      this.stage = stage;
       this.element.textContent = text;
       this.element.dataset.stage = stage;
       const colours = [[237, 119, 119], [239, 198, 106], [99, 215, 156]];
       const half = value < .5 ? 0 : 1, mix = value < .5 ? value * 2 : (value - .5) * 2;
       const rgb = colours[half].map((start, i) => Math.round(start + (colours[half + 1][i] - start) * mix));
-      this.element.style.color = ["idle", "source", "cancelled"].includes(stage) ? "var(--muted)" : "rgb(" + rgb.join(",") + ")";
+      this.colour = "rgb(" + rgb.join(",") + ")";
+      this.element.style.color = ["idle", "source", "cancelled"].includes(stage) ? "var(--muted)" : this.colour;
       this.element.title = text ? text + " — colour indicates recovery stage, not a success probability." : "";
+      this.syncFrame();
+    }
+    syncFrame() {
+      const frame = this.frame;
+      if (!frame) return;
+      if (frame.dataset.calibration === "detected") frame.style.setProperty("--frame-outline", "#61e28b");
+      else if (["idle", "source", "cancelled"].includes(this.stage)) frame.style.removeProperty("--frame-outline");
+      else frame.style.setProperty("--frame-outline", this.colour);
     }
     signature(signature) {
       this.show(signature.message, "signature", signature.likely ? .28 : .08);

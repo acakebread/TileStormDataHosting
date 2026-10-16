@@ -325,9 +325,9 @@
     .camera-view[aria-disabled="true"] { cursor: default; }
     .camera-view:focus-visible { outline: 2px solid var(--tile-azure); outline-offset: -2px; }
     .camera-view video { position: absolute; display: block; left: 50%; top: 50%; max-width: none; max-height: none; object-fit: contain; transform: translate(-50%, -50%); }
-    .camera-frame { position: absolute; box-sizing: border-box; border: 1px solid rgba(140, 235, 237, 0.65); pointer-events: none; }
+    .camera-frame { position: absolute; box-sizing: border-box; border: 3px solid var(--frame-outline, rgba(140, 235, 237, 0.65)); pointer-events: none; }
     .camera-target { position: absolute; inset: 6%; }
-    .camera-target span { position: absolute; width: 24px; height: 24px; border: 3px solid #8cebed; border-radius: 2px; }
+    .camera-target span { position: absolute; width: 24px; height: 24px; border: 3px solid var(--frame-outline, #8cebed); border-radius: 2px; }
     .camera-target span:nth-child(1) { left: 0; top: 0; border-right: 0; border-bottom: 0; }
     .camera-target span:nth-child(2) { right: 0; top: 0; border-left: 0; border-bottom: 0; }
     .camera-target span:nth-child(3) { right: 0; bottom: 0; border-left: 0; border-top: 0; }
@@ -961,8 +961,8 @@
   <script src="./pixelstow-voice.js?v=20261013-voice-clock2"></script>
   <script src="./pixelstow-media.js?v=20261015-preview-icons1"></script>
   <script src="./pixelstow-sharing.js?v=20261016-preview-copy1"></script>
-  <script src="./pixelstow-read-progress.js?v=20261015-read-stages1"></script>
-  <script src="./pixelstow-camera.js?v=20261016-pause-reset"></script>
+  <script src="./pixelstow-read-progress.js?v=20261016-frame-outline"></script>
+  <script src="./pixelstow-camera.js?v=20261016-frame-outline"></script>
   <script src="./pixelstow-preview.js?v=20261016-scale-toggle1"></script>
   <script>
     const fileInput = document.querySelector("#file");
