@@ -211,6 +211,7 @@
     .preview-bottom-row { display: flex; align-items: center; gap: 8px; }
     .preview-bottom-row .comparison-control { flex: 1; min-width: 0; }
     .preview-bottom-row .preview-audio { flex: 0 0 44px; width: 44px; padding: 0; }
+    .preview-bottom-row:has(#comparison-control[hidden]) #preview-audio { display: none !important; }
     #preview-markers { position: relative; display: inline-flex; flex: 0 0 44px; width: 44px; height: 48px; margin: 0; }
     #show-transform { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
     .analysis-icon { display: flex; align-items: center; justify-content: center; box-sizing: border-box; width: 100%; height: 100%; border: 1px solid rgba(140, 235, 237, .55); border-radius: 8px; background: rgba(7, 16, 24, .78); color: var(--text); }
@@ -989,7 +990,7 @@
   <script src="./pixelstow-media.js?v=20261015-preview-icons1"></script>
   <script src="./pixelstow-sharing.js?v=20261016-preview-copy1"></script>
   <script src="./pixelstow-read-progress.js?v=20261016-frame-outline"></script>
-  <script src="./pixelstow-camera.js?v=20261016-opt-in-analysis"></script>
+  <script src="./pixelstow-camera.js?v=20261016-startup-layout"></script>
   <script src="./pixelstow-preview.js?v=20261016-source-default"></script>
   <script>
     const fileInput = document.querySelector("#file");

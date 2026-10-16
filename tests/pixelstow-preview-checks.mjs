@@ -433,7 +433,7 @@ try {
     await page.locator('#message').fill('Public newly generated preview.');
     await page.locator('#encode').click();
     await page.waitForFunction(() => !busy && encodedPng && window.finishExtraction);
-    assert(await page.locator('#preview-audio').isVisible(), 'available audio shows before the source comparison');
+    assert(!(await page.locator('#preview-audio').isVisible()), 'main-page audio waits until the scrubber is ready');
     assert(!(await page.locator('#comparison-control').isVisible()));
     await page.getByRole('button', { name: 'Preview', exact: true }).click();
     assert(await page.evaluate(() => {
@@ -445,6 +445,7 @@ try {
     await tapImage();
     await checkCleanLayers();
     assert(await page.getByRole('button', { name: 'Show source image', exact: true }).isDisabled(), 'the source button waits for pending extraction');
+    assert(await page.locator('#preview-audio').isVisible(), 'maximised preview audio does not wait for the scrubber');
     await page.evaluate(()=>{
       const rect=viewport.getBoundingClientRect();
       zoomAt(rect.left+rect.width*.4,rect.top+rect.height*.4,2);
