@@ -5,7 +5,9 @@ import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 const root = fileURLToPath(new URL('../', import.meta.url));
-const inputs = process.argv.slice(2);
+const live = process.argv.includes('--live');
+const cpu = Number(process.argv.find(value => value.startsWith('--cpu='))?.slice(6) || 1);
+const inputs = process.argv.slice(2).filter(value => value !== '--live' && !value.startsWith('--cpu='));
 assert(inputs.length, 'Supply local capture images.');
 const { chromium } = await import(process.env.PIXELSTOW_PLAYWRIGHT ? pathToFileURL(process.env.PIXELSTOW_PLAYWRIGHT).href : 'playwright');
 const server = http.createServer(async (req, res) => {
@@ -22,31 +24,43 @@ const report = [];
 try {
   browser = await chromium.launch({ headless: true, ...(process.env.PIXELSTOW_CHROME ? { executablePath: process.env.PIXELSTOW_CHROME } : {}) });
   const page = await browser.newPage();
+  if (cpu > 1) {
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: cpu });
+  }
   await page.goto('http://127.0.0.1:' + server.address().port + '/pixelstow.html');
   for (let index = 0; index < inputs.length; index++) {
     const bytes = (await fs.readFile(inputs[index])).toString('base64');
-    const rows = await page.evaluate(async bytes => {
+    const rows = await page.evaluate(async ({bytes, live}) => {
       const image = await PixelStow.readImageFile(new File([Uint8Array.from(atob(bytes), c => c.charCodeAt(0))], 'capture.png'));
       const rows = [];
-      for (const earlyPayload of [false, true]) {
+      for (const variant of live ? ['live', 'unguided-24s', 'full'] : [false, true]) {
+        const earlyPayload = live ? false : variant;
         const pixels = image.pixels.slice(), started = performance.now();
+        const guide = live && variant === 'live' ? await PixelStow.scanEdgeGuide(pixels, image.width, image.height,
+          { maxMilliseconds: 3000, minimumCoverage: .5 }) : false;
+        const budget = !live || variant === 'full' ? 60000 : variant === 'live' ? 8000 : 24000;
         const scan = await PixelStow.scanMarkers(pixels, image.width, image.height,
-          { earlyPayload, deadline: Date.now() + 60000 });
+          { earlyPayload, scaleGuide: live && variant !== 'full' ? guide || false : undefined,
+            calibratedOnly: Boolean(guide), deadline: Date.now() + budget });
         const scanned = performance.now();
-        const result = await PixelStow.readMarkerCandidates(pixels, image.width, image.height, scan, { earlyPayload, resumeDiscovery: true });
-        rows.push({ enabled: earlyPayload, success: Boolean(result.found && !result.unreadable),
+        const result = await PixelStow.readMarkerCandidates(pixels, image.width, image.height, scan,
+          { earlyPayload, resumeDiscovery: !guide, calibratedOnly: Boolean(guide) });
+        rows.push({ ...(live ? { variant, guide: Boolean(guide), candidates: scan.candidates.length } : { enabled: earlyPayload }), success: Boolean(result.found && !result.unreadable),
           scanMs: Math.round(scanned - started), totalMs: Math.round(performance.now() - started),
           early: Boolean(result.earlyPayload), fallback: Boolean(result.earlyPayloadFallback),
-          headers: result.geometry?.headerCount, markers: result.markers?.length });
+          headers: result.geometry?.headerCount, markers: result.markers?.length,
+          highConfidence: Boolean(scan.highConfidence), reason: scan.reason });
       }
       return rows;
-    }, bytes);
-    assert(!rows[0].success || rows[1].success, 'Experiment must preserve baseline recovery');
-    report.push({ input: index + 1, rows });
+    }, { bytes, live });
+    if (!live) assert(!rows[0].success || rows[1].success, 'Experiment must preserve baseline recovery');
+    if (live && rows[2].success) assert(rows[1].success, 'extended live fallback must recover this readable capture');
+    report.push({ input: index + 1, cpu, rows });
     console.log(JSON.stringify(report.at(-1)));
   }
   await fs.mkdir(path.join(root, 'artifacts/early-payload-baseline-20261016'), { recursive: true });
-  await fs.writeFile(path.join(root, 'artifacts/early-payload-baseline-20261016/photo-comparison.json'), JSON.stringify(report, null, 2));
+  await fs.writeFile(path.join(root, 'artifacts/early-payload-baseline-20261016/' + (live ? 'live-comparison-cpu' + cpu + '.json' : 'photo-comparison.json')), JSON.stringify(report, null, 2));
 } finally {
   await browser?.close();
   await new Promise(resolve => server.close(resolve));

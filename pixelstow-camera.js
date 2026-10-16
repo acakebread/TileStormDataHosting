@@ -1172,7 +1172,10 @@
         const header = previous?.markers?.find((m) => m.verification === "header");
         const scan = await PixelStow.scanMarkers(image.pixels, image.width, image.height, {
           mode: "perspective", camera: true, calibratedOnly: entry.calibratedOnly,
-          deadline: Date.now() + (entry.calibratedOnly || entry.fallback ? 8000 : header ? 12000 : 24000), signal: controller.signal,
+          // A missed calibration does not make the raster unreadable. Give
+          // occasional ordinary samples the full acquisition allowance; eight
+          // seconds repeatedly failed to establish a usable marker fit.
+          deadline: Date.now() + (entry.calibratedOnly ? 8000 : header && !entry.fallback ? 12000 : 24000), signal: controller.signal,
           scaleGuide, calibration: { status: entry.guideChecked ? entry.scaleGuide?.detected ? "detected" : "not-detected" : "not-checked" },
           seed: !entry.calibratedOnly && previous?.width === image.width && previous?.height === image.height && header
             ? { ...header, initialMatrix: previous.geometry?.matrix } : undefined,

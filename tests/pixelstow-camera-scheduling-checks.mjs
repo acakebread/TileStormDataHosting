@@ -95,6 +95,23 @@ function workerQueue(){
   assert.equal(options.deadline-now,12000);assert(options.seed);
 }
 {
+  const {camera,session}=setup(),reads=workerQueue();let finishScan,accepted;
+  session.appraised=0;
+  session.pending={...entry(9),guideKind:'edge',fallback:true};
+  codec.scanMarkers=(p,w,h,options)=>new Promise(resolve=>{finishScan={resolve,options};});
+  camera.accept=async(s,img)=>{s.handingOff=true;accepted=img;};
+  const work=camera.scanMarkers(session);
+  assert.equal(finishScan.options.deadline-now,24000,'uncalibrated fallback retains the full acquisition budget');
+  assert.equal(finishScan.options.scaleGuide,false);
+  await advance(9000);
+  assert(!finishScan.options.signal.aborted,'a cluttered frame must be allowed to search beyond the old eight-second limit');
+  assert.equal(reads.length,0,'payload reading still requires marker geometry');
+  finishScan.resolve({...scan(),highConfidence:true});await work;await flush();
+  assert.equal(reads.length,1,'one strong fallback capture can proceed directly to payload verification');
+  reads[0].resolve({found:true,unreadable:false});await flush();
+  assert.equal(accepted.pixels[0],9);assert.equal(timers.size,0);
+}
+{
   const {camera,session}=setup();let finish,accepted=0;
   codec.readMarkerCandidates=()=>new Promise(resolve=>{finish=resolve;});camera.accept=async()=>accepted++;
   session.history=[entry(1)];camera.readBestFrame(session);await flush();
@@ -157,7 +174,7 @@ const pilot={detected:true,confirmed:false,scale:1,fx:1/128,fy:0,width:16,height
   assert.equal(enqueued[0].frameNumber,2);assert(!enqueued[0].scaleGuide,'guide errors retain ordinary discovery');
   session.guidePending={...entry(3),guideImage:image(3)};
   codec.scanScaleGuide=(p,w,h,{signal})=>new Promise((resolve,reject)=>signal.addEventListener('abort',()=>reject(new DOMException('Cancelled','AbortError')),{once:true}));
-  camera.checkScaleGuide(session);await advance(1200);
+  camera.checkScaleGuide(session);await advance(3500);
   assert.equal(enqueued[1].frameNumber,3);assert(!enqueued[1].scaleGuide);assert.equal(timers.size,0);
   session.purpose='source';camera.captureFrame=()=>{throw Error('Source mode must not sample for analysis');};camera.scan(session);
 }
@@ -176,13 +193,13 @@ console.log('PASS: independent latest-frame Fourier lookahead, pilot-first prior
   });
   codec.readMarkerCandidates=async()=>{reads++;return {found:false};};
   camera.scan(session);assert.equal(guides.length,1);assert.equal(markers.length,0,'uncalibrated frames only start cheap appraisal');
-  assert.equal(guides[0].pixels,captured[0].pixels);assert.equal(guides[0].options.deadline-now,1000);
-  assert.equal(guides[0].options.minimumCoverage,.75,'camera-only fast calibration assumes the carrier fills three quarters of the view');
+  assert.equal(guides[0].pixels,captured[0].pixels);assert.equal(guides[0].options.deadline-now,3000);
+  assert.equal(guides[0].options.minimumCoverage,.5,'live calibration retains the existing half-frame coverage floor');
   guides[0].resolve(null);await flush();assert.equal(markers.length,0);assert.equal(camera.calibrationLight['data-state'],'none');
   assert.equal(camera.calibrationLight.textContent,'No signal');
   await advance(4900);camera.video.currentTime=2;camera.scan(session);guides[1].resolve(null);await flush();assert.equal(markers.length,0);
   await advance(100);camera.video.currentTime=3;camera.scan(session);guides[2].resolve(null);await flush();
-  assert.equal(markers.length,1);assert.equal(markers[0].id,3);assert.equal(markers[0].options.deadline-now,8000);assert.equal(markers[0].options.calibratedOnly,false);
+  assert.equal(markers.length,1);assert.equal(markers[0].id,3);assert.equal(markers[0].options.deadline-now,24000);assert.equal(markers[0].options.calibratedOnly,false);
   camera.video.currentTime=4;camera.scan(session);camera.video.currentTime=5;camera.scan(session);
   assert.equal(session.guidePending.frameNumber,5);guides[3].resolve(null);await flush();assert.equal(guides[4].id,5);
   guides[4].resolve(pilot);await flush();assert(markers[0].options.signal.aborted,'positive calibration preempts unconfirmed ordinary work');
@@ -217,7 +234,7 @@ console.log('PASS: independent latest-frame Fourier lookahead, pilot-first prior
 {
   const {camera,session}=setup();let finish;const enqueued=[];
   camera.enqueueFrame=(s,e)=>enqueued.push(e);session.guidePending={...entry(1),guideKind:'edge'};
-  codec.scanEdgeGuide=()=>new Promise(resolve=>{finish=resolve;});camera.checkScaleGuide(session);await advance(1200);
+  codec.scanEdgeGuide=()=>new Promise(resolve=>{finish=resolve;});camera.checkScaleGuide(session);await advance(3500);
   assert.equal(enqueued.length,1,'unresponsive appraisal releases frame to throttled fallback gate');assert(!enqueued[0].scaleGuide);assert(!session.guideBusy);assert.equal(timers.size,0);
   finish(pilot);await flush();assert.equal(enqueued.length,1,'timed-out late hint cannot enqueue twice');
   session.guidePending={...entry(2),guideKind:'edge'};camera.checkScaleGuide(session);camera.cancelSearches(session);finish(pilot);await flush();assert.equal(enqueued.length,1);
