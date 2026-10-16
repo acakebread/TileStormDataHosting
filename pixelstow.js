@@ -45,6 +45,9 @@
   function recoveryOptions(options) {
     const selected = recoveryVersions(options);
     return { ...options, includeLegacy: options.includeLegacy ?? legacyRecovery,
+      // Opt-in only: the strong-fit shortcut can cost more when its first
+      // payload grid fails. Ordinary capture keeps the proven refinement path.
+      earlyPayload: options.earlyPayload ?? (new URLSearchParams(root.location?.search || "").get("earlyPayload") === "1"),
       seed: selected.includes(options.seed?.carrierVersion) ? options.seed : undefined,
       searchState: !options.searchState?.seed || selected.includes(options.searchState.seed.carrierVersion) ? options.searchState : undefined };
   }
@@ -1403,7 +1406,7 @@
 
   function searchInWorker(pixels, width, height, options, operation = "geometry") {
     return new Promise((resolve, reject) => {
-      const url = new URL("pixelstow-transform-worker.js?v=20261016-calibration5", codecScriptUrl);
+      const url = new URL("pixelstow-transform-worker.js?v=20261016-early-payload1", codecScriptUrl);
       const worker = new Worker(url);
       let finished = false;
       const abort = () => { if (finished) return; cleanup(); reject(new DOMException("Search cancelled.", "AbortError")); };
@@ -1432,6 +1435,7 @@
           seedDeadline: options.seedDeadline, camera: options.camera, scan: options.scan,
           searchState: options.searchState, stopOnHighConfidence: options.stopOnHighConfidence,
           resumeDiscovery: options.resumeDiscovery, calibratedOnly: options.calibratedOnly,
+          earlyPayload: options.earlyPayload, refinementState: options.refinementState,
           strength: options.strength, visual: options.visual }, [copy.buffer]);
       } catch (error) { cleanup(); reject(error); }
     });
@@ -1743,6 +1747,7 @@
     // whole damaged compressed payload at every strength and nearby phase.
     const fast = { offsets: [0], strengths: [16] };
     let recovered = await readVisualMapping(image.pixels, image.width, image.height, nativeGeometry, signal, fast);
+    if (options.earlyPayloadProbe) return photoReadResult(recovered, image, geometry);
     if (recovered.locatorOnly) {
       let working = image, previous, tracked = false;
       // Residual phase can be measured again after the first correction. Every
@@ -1882,7 +1887,7 @@
         worker: false, geometryOnly: true });
       calibration = { ...calibration, used: false, method: "native" };
       const candidates = rankMarkerCandidates((result.candidates || []).map((geometry) => ({ geometry, markers: result.markers,
-        markerSearch: result.markerSearch, scaleGuide, calibration })));
+        markerSearch: result.markerSearch, refinementState: result.refinementState, scaleGuide, calibration })));
       return { ...result, scaleGuide, calibration, candidates, geometry: candidates[0]?.geometry, highConfidence: Boolean(candidates[0]?.geometry.highConfidence), width, height };
     }
     if (options.nativeOnly) return { found: false, geometry: null, candidates: [], markers: [], width, height,
@@ -1905,7 +1910,7 @@
       const result = await findVisualTransform(pixels, width, height, { ...options, worker: false, geometryOnly: true });
       calibration = { ...calibration, used: false, method: "fallback" };
       const candidates = rankMarkerCandidates((result.candidates || []).map((geometry) => ({ geometry, markers: result.markers,
-        markerSearch: result.markerSearch, scaleGuide, calibration })));
+        markerSearch: result.markerSearch, refinementState: result.refinementState, scaleGuide, calibration })));
       return { ...result, scaleGuide, calibration, candidates, geometry: candidates[0]?.geometry, highConfidence: Boolean(candidates[0]?.geometry.highConfidence), width, height };
     }
     const deadline = Math.min(options.searchState?.deadline || Infinity, options.deadline || Infinity, Date.now() + 60000);
@@ -1981,6 +1986,7 @@
       if (header) { known = { ...header, initialMatrix: lifted.geometry?.matrix || header.initialMatrix }; verifiedCurrent = true;
         seedFromGuide = Boolean(guided || seedFromGuide); }
       for (const geometry of lifted.candidates || []) candidates.push({ geometry, markers: lifted.markers, markerSearch: lifted.markerSearch,
+        refinementState: result.refinementState,
         scaleGuide, calibration: { ...calibration, used: Boolean(guided || seedFromGuide), method: guided || seedFromGuide ? "guide" : "fallback",
           localizationResolution: { width: rw, height: rh } }, localizationResolution: { width: rw, height: rh }, photo: true });
       const markerScore = lifted.geometry?.rank ?? (lifted.markers?.length ? 30 + lifted.markers.length * 3 :
@@ -2051,9 +2057,11 @@
       options.onProgress?.("Reading ranked candidate " + (i + 1) + "/" + candidates.length +
         " (" + geometry.inlierCount + "/" + geometry.markerTotal + " aligned markers)…");
       let recovered = candidate.photo
-        ? await readPhotoMapping(pixels, width, height, geometry, options.signal, options.onProgress, candidate.markers, options)
-        : await readVisualMapping(pixels, width, height, geometry, options.signal);
-      if (!candidate.photo && recovered.locatorOnly && geometry.model !== "translation")
+        ? await readPhotoMapping(pixels, width, height, geometry, options.signal, options.onProgress, candidate.markers,
+          { ...options, earlyPayloadProbe: Boolean(candidate.refinementState) })
+        : await readVisualMapping(pixels, width, height, geometry, options.signal,
+          candidate.refinementState ? { offsets: [0], strengths: [16] } : {});
+      if (!candidate.photo && !candidate.refinementState && recovered.locatorOnly && geometry.model !== "translation")
         recovered = await readPhotoMapping(pixels, width, height, geometry, options.signal, options.onProgress, candidate.markers, options);
       checkCancelled(options.signal);
       const inspection = describeRecovery(recovered);
@@ -2065,8 +2073,26 @@
         markers: candidate.markers, markerSearch: candidate.markerSearch || scan.markerSearch, signature: scan.signature, scaleGuide, calibration,
         reason: inspection.found && !recovered.locatorOnly ? undefined : "Recovery markers were found, but the payload did not pass its checks." };
       if (!result.unreadable) {
+        if (candidate.refinementState) result.earlyPayload = true;
         retainVisualResult(pixels, width, height, result, recovered.readImage);
         return result;
+      }
+      if (candidate.refinementState) {
+        options.onProgress?.("Early payload check did not pass. Continuing the original alignment refinement…");
+        const size = candidate.localizationResolution || { width, height };
+        const image = size.width === width && size.height === height ? { pixels, width, height }
+          : await reducePhoto(pixels, width, height, size.width, size.height, options.signal);
+        const refined = await findVisualTransform(image.pixels, image.width, image.height, { ...options,
+          mode: candidate.refinementState.mode, earlyPayload: false, refinementState: candidate.refinementState,
+          worker: false, geometryOnly: true });
+        const lifted = image.width === width && image.height === height ? refined
+          : liftPhotoResult(refined, width, height, image.width, image.height);
+        const resumed = await readMarkerCandidates(pixels, width, height, { ...scan,
+          geometry: lifted.geometry, markers: lifted.markers, markerSearch: lifted.markerSearch,
+          candidates: (lifted.candidates || []).map(geometry => ({ ...candidate, geometry,
+            markers: lifted.markers, markerSearch: lifted.markerSearch, refinementState: undefined })) },
+          { ...options, worker: false, earlyPayload: false, resumeDiscovery: false });
+        if (!resumed.unreadable && resumed.found) return { ...resumed, earlyPayloadFallback: true };
       }
       if (i === 0) best = result;
     }

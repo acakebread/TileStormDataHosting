@@ -7,7 +7,9 @@ globalThis.window = {};
 for (const name of ['pixelstow-spectrum.js', 'pixelstow-transform.js', 'pixelstow.js']) {
   let source = await fs.readFile(name, 'utf8');
   if (name === 'pixelstow.js') source = source.replace('root.PixelStow = {',
-    'root.photoChecks = { locatorLayout, readVisualLocator, liftPhotoResult }; root.PixelStow = {');
+    'root.photoChecks = { locatorLayout, readVisualLocator, liftPhotoResult }; root.PixelStow = {')
+    .replace('const inspection = describeRecovery(recovered);',
+      'if (root.rejectEarlyOnce && candidate.refinementState) { root.rejectEarlyOnce = false; recovered = { locatorOnly: true, geometry }; } const inspection = describeRecovery(recovered);');
   (0, eval)(source);
 }
 const c = window.PixelStow, I = window.photoChecks;
@@ -45,15 +47,40 @@ const bottom = point(seed.initialMatrix, 600, 450);
 assert(Math.hypot(bottom.x - (left + 600 * scale), bottom.y - (top + 450 * scale)) > 30,
   'the outline must extrapolate beyond the ordinary corner search radius');
 const before = photo.slice();
-const scan = await c.scanMarkers(photo, photoWidth, photoHeight, { mode: 'perspective', singleResolution: true,
-  worker: false, seed, deadline: Date.now() + 8000 });
+const runs = [];
+for (const earlyPayload of [false, true]) {
+  const started = performance.now();
+  const scan = await c.scanMarkers(photo, photoWidth, photoHeight, { mode: 'perspective', singleResolution: true,
+    earlyPayload, worker: false, seed, deadline: Date.now() + 8000 });
+  const inspected = await c.readMarkerCandidates(photo, photoWidth, photoHeight, scan, { worker: false });
+  assert.equal(inspected.unreadable, false);
+  runs.push({ scan, inspected, milliseconds: Math.round(performance.now() - started) });
+}
+const { scan, inspected } = runs[1];
+assert(scan.candidates[0].refinementState, 'the strong fit must exercise the experimental early path');
+assert(inspected.earlyPayload, 'the early attempt must verify the real payload');
+console.log('Early payload A/B:', JSON.stringify(runs.map((run, index) => ({ enabled: Boolean(index),
+  milliseconds: run.milliseconds, early: Boolean(run.inspected.earlyPayload),
+  quality: run.scan.geometry.patternQuality, fitError: run.scan.geometry.fitError }))));
 assert.equal(scan.markers.length, 4);
 assert.equal(scan.geometry.inlierCount, 4);
-const inspected = await c.readMarkerCandidates(photo, photoWidth, photoHeight, scan, { worker: false });
 assert.equal(inspected.unreadable, false);
 assert(c.payloadsEqual(await c.decode(photo, photoWidth, photoHeight, ''), content));
 assert.deepEqual(photo, before);
 console.log('PASS: a real V5 header with misleading outline curvature recovers all four corners and the payload');
+
+// Force one failed early body check, then run the real saved refinement and
+// real payload reader. No mocked geometry or successful result is supplied.
+window.rejectEarlyOnce = true;
+const fallbackStart = performance.now();
+const fallback = await c.readMarkerCandidates(photo, photoWidth, photoHeight, structuredClone(scan), { worker: false });
+assert.equal(window.rejectEarlyOnce, false);
+assert.equal(fallback.unreadable, false);
+assert.equal(fallback.earlyPayloadFallback, true);
+assert.deepEqual(fallback.markers, runs[0].inspected.markers, 'fallback must retain exactly the baseline marker measurements');
+assert.deepEqual(fallback.geometry, runs[0].inspected.geometry, 'saved-state refinement must produce the baseline successful geometry');
+assert.deepEqual(photo, before);
+console.log('PASS: failed early read resumes the exact baseline refinement and verifies the payload (' + Math.round(performance.now() - fallbackStart) + ' ms)');
 
 const lifted = I.liftPhotoResult({ geometry: scan.geometry, markers: [seed], candidates: [] },
   photoWidth * 4, photoHeight * 4, photoWidth, photoHeight);

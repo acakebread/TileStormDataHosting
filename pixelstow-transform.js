@@ -776,7 +776,7 @@
 
   async function find(pixels, width, height, requested, adapter) {
     const adapters = Array.isArray(adapter) ? adapter : [adapter];
-    adapter = adapters.find((a) => a.carrierVersion === requested.seed?.carrierVersion) || adapters[0];
+    adapter = adapters.find((a) => a.carrierVersion === (requested.refinementState?.seed || requested.seed)?.carrierVersion) || adapters[0];
     const deadline = Math.min(Date.now() + 60000, requested.deadline || Infinity);
     const options = { ...requested, deadline: Math.min(deadline, requested.seedDeadline || Infinity),
       markerRatios: [...new Set(adapters.map((a) => 1 / (a.sampleStep || 1.5)))],
@@ -788,6 +788,17 @@
     let seed = null, predictions = [];
     const evidence = () => ({ pilotQuality: options.pilotQuality || 0 });
     try {
+      let candidates;
+      if (requested.refinementState) {
+        const state = requested.refinementState;
+        seed = state.seed;
+        markers.push(...state.markers);
+        for (const [id, attempt] of state.attempts) attempts.set(id, attempt);
+        predictions = state.predictions;
+        signature = state.signature;
+        candidates = state.candidates;
+        options.deadline = deadline;
+      } else {
       // A previous pyramid level may already have read a checksum-valid header.
       // Confirm it against these pixels before reusing its dimensions/position;
       // this avoids rediscovering the same patch from scratch at every scale.
@@ -876,7 +887,17 @@
           }
         }
       }
-      let candidates = geometryCandidates(markers, seed, predictions, adapter, width, height, options.mode);
+      candidates = geometryCandidates(markers, seed, predictions, adapter, width, height, options.mode);
+      // Experiment: only a complete, strong V5 header fit can bypass global
+      // refinement. Save the exact state so a failed body read resumes here.
+      const early = candidates[0];
+      if (requested.earlyPayload && options.mode !== "padding" && adapter.carrierVersion === 5 && early?.highConfidence &&
+        early.headerCount === adapter.ids.length && early.patternQuality >= 0.95 && early.fitError <= 0.3) {
+        return { geometry: early, candidates: [early], markers, signature, evidence: evidence(),
+          markerSearch: adapter.ids.map(id => ({ id, found: true, ...attempts.get(id) })),
+          refinementState: { seed, markers, attempts: [...attempts], predictions, signature, candidates, mode: options.mode } };
+      }
+      }
       const refinementDeadline = markers.length < adapter.ids.length ? deadline - 1500 : deadline;
       for (const candidate of candidates.slice()) {
         if (candidate.model === "translation") continue;
