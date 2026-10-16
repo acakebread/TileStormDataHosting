@@ -2,8 +2,8 @@
 (function (root) {
   "use strict";
   class PixelStowPreview {
-    constructor({ preview, viewport, canToggleSource, canCopyImage, copyImage, captureView, restoreView, toggleScale, resize }) {
-      Object.assign(this, { preview, viewport, canToggleSource, canCopyImage, copyImage, captureView, restoreView, toggleScale, resize });
+    constructor({ preview, viewport, canToggleSource, canCopyImage, copyImage, captureView, restoreView, toggleScale, resize, onFrame }) {
+      Object.assign(this, { preview, viewport, canToggleSource, canCopyImage, copyImage, captureView, restoreView, toggleScale, resize, onFrame });
       this.panel = document.querySelector("#preview-panel");
       this.slot = document.querySelector("#preview-screen");
       this.toolbar = document.querySelector("#preview-screen-toolbar");
@@ -152,6 +152,7 @@
       // put a focus ring over the encoded picture on entry.
       this.panel.focus({ preventScroll: true });
       this.fit();
+      this.onFrame?.(true);
       // The viewport dialog also works on iPhones without element fullscreen.
       // Where available, presentation mode can remove browser chrome as well.
       if (clean && this.panel.requestFullscreen) {
@@ -176,6 +177,7 @@
       document.documentElement.classList.remove("preview-modal-open");
       document.body.classList.remove("preview-modal-open");
       this.restoreView(this.savedView);
+      this.onFrame?.(false);
       this.returnFocus?.focus({ preventScroll: true });
     }
   }

@@ -75,8 +75,14 @@
       this.view.addEventListener("pointerup", (event) => {
         const tap = this.viewTap;
         this.viewTap = null;
+        if (this.pinch || Date.now() - (this.pinchGuard || 0) < 400) return;
         if (tap?.id === event.pointerId && tap.session === this.session && Date.now() - tap.at < 500) this.captureCurrent();
       });
+      this.view.addEventListener("touchstart", (event) => this.onCameraTouch(event), { passive: false });
+      this.view.addEventListener("touchmove", (event) => this.onCameraTouch(event), { passive: false });
+      this.view.addEventListener("touchend", (event) => this.onCameraTouch(event));
+      this.view.addEventListener("touchcancel", (event) => this.onCameraTouch(event));
+      this.view.addEventListener("wheel", (event) => this.onCameraWheel(event), { passive: false });
       for (const type of ["pointercancel", "pointerleave"]) this.view.addEventListener(type, () => { this.viewTap = null; });
       this.view.addEventListener("keydown", (event) => {
         if (event.key !== "Enter" && event.key !== " ") return;
@@ -271,6 +277,7 @@
       if (session.deviceId) this.deviceHistory.set(session.deviceId, { failed: false, facing: settings.facingMode,
         width: this.video.videoWidth || settings.width, height: this.video.videoHeight || settings.height });
       await this.preferSharpFrame(track);
+      this.configureZoom(session, track);
     }
 
     async preferSharpFrame(track) {
@@ -453,16 +460,139 @@
       const frameWidth = sideways ? height : width, frameHeight = sideways ? width : height;
       const viewW = this.view.clientWidth || 1;
       const viewH = this.fitPortraitPreview(frameWidth, frameHeight) || this.view.clientHeight;
-      const scale = Math.min(viewW / frameWidth, viewH / frameHeight);
+      // Hardware zoom is already in the video frames. Simulated zoom enlarges
+      // the same centred preview and the capture crops to the visible part.
+      const zoom = session.zoomMode === "simulated" ? (session.zoom || 1) : 1;
+      const scale = Math.min(viewW / frameWidth, viewH / frameHeight) * zoom;
       const w = frameWidth * scale, h = frameHeight * scale;
-      const left = (viewW - w) / 2, top = (viewH - h) / 2;
-      // Fit the entire frame. The border follows actual video pixels, including
-      // right-angle rotation, rather than an arbitrary CSS crop or screen shape.
+      const videoLeft = (viewW - w) / 2, videoTop = (viewH - h) / 2;
+      const left = Math.max(0, videoLeft), top = Math.max(0, videoTop);
+      const right = Math.min(viewW, videoLeft + w), bottom = Math.min(viewH, videoTop + h);
       this.video.style.width = width * scale + "px";
       this.video.style.height = height * scale + "px";
       this.video.style.transform = "translate(-50%, -50%) rotate(" + session.rotation + "deg)";
-      Object.assign(this.frame.style, { left: left + "px", top: top + "px", width: w + "px", height: h + "px" });
-      this.placeCalibration(left, top, w);
+      Object.assign(this.frame.style, {
+        left: left + "px", top: top + "px",
+        width: Math.max(0, right - left) + "px", height: Math.max(0, bottom - top) + "px"
+      });
+      this.placeCalibration(left, top, Math.max(0, right - left));
+    }
+
+    snapZoom(factor, range) {
+      const clamped = Math.min(range.max, Math.max(range.min, factor));
+      if (!range.step) return clamped;
+      const steps = Math.round((clamped - range.min) / range.step);
+      return Math.min(range.max, Math.max(range.min, range.min + steps * range.step));
+    }
+
+    configureZoom(session, track) {
+      let caps = {};
+      try { caps = track?.getCapabilities?.() || {}; } catch { caps = {}; }
+      const spec = caps.zoom;
+      const min = Number(spec?.min), max = Number(spec?.max);
+      const hardware = Number.isFinite(min) && Number.isFinite(max) && max > min + 0.01;
+      const range = hardware
+        ? { min, max, step: Number(spec.step) > 0 ? Number(spec.step) : 0 }
+        : { min: 1, max: 4, step: 0 };
+      const held = session.zoom;
+      session.zoomMode = hardware ? "hardware" : "simulated";
+      session.zoomRange = range;
+      if (held == null) {
+        const current = Number(track?.getSettings?.().zoom);
+        session.zoom = hardware && Number.isFinite(current) ? this.snapZoom(current, range) : 1;
+      } else session.zoom = this.snapZoom(held, range);
+    }
+
+    setZoom(session, factor) {
+      if (this.session !== session || !session?.zoomRange || session.adjusting || session.handingOff) return;
+      const zoom = this.snapZoom(factor, session.zoomRange);
+      if (Math.abs(zoom - (session.zoom || 1)) < 0.0001) return;
+      session.zoom = zoom;
+      session.zoomDirty = true;
+      if (session.zoomMode === "hardware") this.applyHardwareZoom(session);
+      else this.layoutPreview();
+    }
+
+    async applyHardwareZoom(session) {
+      if (session.zoomPending) { session.zoomQueued = true; return; }
+      session.zoomPending = true;
+      try {
+        do {
+          session.zoomQueued = false;
+          const track = session.stream?.getVideoTracks?.()[0];
+          if (!track || this.session !== session) return;
+          await track.applyConstraints({ advanced: [{ zoom: session.zoom }] });
+          const applied = Number(track.getSettings?.().zoom);
+          if (this.session === session && Number.isFinite(applied)) session.zoom = applied;
+        } while (session.zoomQueued && this.session === session);
+      } catch {
+        if (this.session !== session) return;
+        session.zoomMode = "simulated";
+        session.zoomRange = { min: 1, max: 4, step: 0 };
+        session.zoom = Math.min(4, Math.max(1, session.zoom || 1));
+      } finally {
+        session.zoomPending = false;
+        if (this.session === session) this.layoutPreview();
+      }
+    }
+
+    onCameraTouch(event) {
+      const session = this.session;
+      if (!session?.ready || session.adjusting) return;
+      if (event.touches.length >= 2) {
+        event.preventDefault();
+        this.viewTap = null;
+        const [a, b] = event.touches;
+        const distance = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+        if (!this.pinch || event.type === "touchstart") this.pinch = { distance: Math.max(1, distance), zoom: session.zoom || 1 };
+        else if (event.type === "touchmove") this.setZoom(session, this.pinch.zoom * distance / this.pinch.distance);
+        return;
+      }
+      if ((event.type === "touchend" || event.type === "touchcancel") && this.pinch) this.endPinch(session);
+    }
+
+    onCameraWheel(event) {
+      const session = this.session;
+      if (!session?.ready || session.adjusting) return;
+      event.preventDefault();
+      this.viewTap = null;
+      const pixels = event.deltaMode === 1 ? event.deltaY * 16 : event.deltaMode === 2 ? event.deltaY * this.view.clientHeight : event.deltaY;
+      this.setZoom(session, (session.zoom || 1) * Math.exp(-pixels * 0.0015));
+      clearTimeout(session.zoomTimer);
+      session.zoomTimer = setTimeout(() => this.releaseZoom(session), 180);
+    }
+
+    endPinch(session) {
+      this.pinch = null;
+      this.pinchGuard = Date.now();
+      this.releaseZoom(session);
+    }
+
+    releaseZoom(session) {
+      if (!session?.zoomDirty || this.session !== session || session.purpose === "source" || session.paused || session.handingOff) {
+        if (session) session.zoomDirty = false;
+        return;
+      }
+      session.zoomDirty = false;
+      const wait = Math.max(0, (session.scanAfter || 0) - Date.now());
+      this.cancelSearches(session, true);
+      session.fallbackAfter = Date.now() + 5000;
+      session.lastTime = -1;
+      this.schedule(session, Math.max(400, wait));
+    }
+
+    visibleVideoRect(rawWidth, rawHeight, zoom) {
+      if (!(zoom > 1.001)) return { sx: 0, sy: 0, sw: rawWidth, sh: rawHeight };
+      const rotation = this.session?.rotation || 0, sideways = rotation % 180 !== 0;
+      const frameWidth = sideways ? rawHeight : rawWidth, frameHeight = sideways ? rawWidth : rawHeight;
+      const viewW = this.view?.clientWidth || frameWidth, viewH = this.view?.clientHeight || frameHeight;
+      const fit = Math.min(viewW / frameWidth, viewH / frameHeight) * zoom;
+      const shownW = Math.min(frameWidth, viewW / fit), shownH = Math.min(frameHeight, viewH / fit);
+      const sw = Math.max(1, Math.min(rawWidth, Math.round(sideways ? shownH : shownW)));
+      const sh = Math.max(1, Math.min(rawHeight, Math.round(sideways ? shownW : shownH)));
+      const sx = Math.max(0, Math.min(rawWidth - sw, Math.floor((rawWidth - sw) / 2)));
+      const sy = Math.max(0, Math.min(rawHeight - sh, Math.floor((rawHeight - sh) / 2)));
+      return { sx, sy, sw, sh };
     }
 
     portraitStacked() {
@@ -529,7 +659,13 @@
       this.sync();
       try {
         const track = session.stream?.getVideoTracks()[0];
+        const desired = session.zoom;
         await track?.applyConstraints(this.videoConstraints(session.facing, portrait, session.deviceId, session.captureProfile));
+        if (track && this.session === session) {
+          session.zoom = desired;
+          this.configureZoom(session, track);
+          if (session.zoomMode === "hardware") await this.applyHardwareZoom(session);
+        }
       } catch {
         // Ideals are advisory. Retain a usable feed if the camera cannot change
         // its format; guides still reflect it and Rotate view remains available.
@@ -561,8 +697,8 @@
       this.view.setAttribute("aria-disabled", String(this.captureButton.disabled));
       const source = session?.purpose === "source";
       this.title.textContent = source ? "Camera source photo" : session?.manualCapture ? "Camera photo" : "Camera scanner";
-      this.help.textContent = source ? "Frame a new photo to put your message and files inside. The whole outlined view is captured."
-        : "Keep all four picture corners inside the guides. Move closer and hold steady.";
+      this.help.textContent = source ? "Frame a new photo to put your message and files inside. Pinch to zoom. The outlined view is captured."
+        : "Keep all four picture corners inside the guides. Pinch to zoom. Move closer and hold steady.";
       if (session?.deviceLabel) this.help.textContent += " Camera: " + session.deviceLabel + ".";
       // Camera names are a warning cue, not proof that a feed is unusable.
       // In particular, ordinary "Back Wide Camera" is the standard rear lens.
@@ -573,7 +709,8 @@
         this.help.append(warning);
       }
       this.captureButton.textContent = source ? "Take source photo" : "Capture and read";
-      this.view.setAttribute("aria-label", source ? "Take a source photo from the live camera preview" : "Capture and read the live camera preview");
+      this.view.setAttribute("aria-label", source ? "Take a source photo from the live camera preview. Pinch to zoom."
+        : "Capture and read the live camera preview. Pinch to zoom.");
       this.nativePhotoButton.textContent = "Take photo with phone camera";
       this.nativePhotoButton.hidden = source || !this.nativePhotoCapture;
       this.target.hidden = source;
@@ -684,6 +821,8 @@
       this.session = null;
       clearTimeout(session.timer);
       clearTimeout(session.orientationTimer);
+      clearTimeout(session.zoomTimer);
+      this.pinch = null;
       this.cancelSearches(session, true);
       session.stream?.getTracks().forEach((track) => track.stop());
       this.video.pause();
@@ -735,7 +874,9 @@
       const rawWidth = this.video.videoWidth, rawHeight = this.video.videoHeight;
       if (this.session?.adjusting || this.video.readyState < 2 || !rawWidth || !rawHeight) throw new Error("Wait for the live camera picture, then try again.");
       const rotation = this.session?.rotation || 0, sideways = rotation % 180 !== 0;
-      const width = sideways ? rawHeight : rawWidth, height = sideways ? rawWidth : rawHeight;
+      const zoom = this.session?.zoomMode === "simulated" ? (this.session.zoom || 1) : 1;
+      const source = this.visibleVideoRect(rawWidth, rawHeight, zoom);
+      const width = sideways ? source.sh : source.sw, height = sideways ? source.sw : source.sh;
       if (width * height > PixelStow.getLimits().inputPixels) throw new Error("This camera frame exceeds the 32 megapixel photo input limit.");
       const canvas = this.captureCanvas;
       if (canvas.width !== width) canvas.width = width;
@@ -745,7 +886,7 @@
       context.imageSmoothingEnabled = false;
       context.translate(width / 2, height / 2);
       context.rotate(rotation * Math.PI / 180);
-      context.drawImage(this.video, -rawWidth / 2, -rawHeight / 2, rawWidth, rawHeight);
+      context.drawImage(this.video, source.sx, source.sy, source.sw, source.sh, -source.sw / 2, -source.sh / 2, source.sw, source.sh);
       context.restore();
       return { pixels: new Uint8Array(context.getImageData(0, 0, width, height).data.buffer), width, height, exact: true };
     }
@@ -1089,7 +1230,6 @@
       // scans continue independently; their best result is next in rank order.
       const deadline = Date.now() + 30000;
       const timer = setTimeout(() => controller.abort(), Math.max(0, deadline - Date.now()));
-      this.showBestFrame(session);
       try {
         const { image, scan, frameNumber } = entry;
         const inspection = await PixelStow.readMarkerCandidates(image.pixels, image.width, image.height, scan, {

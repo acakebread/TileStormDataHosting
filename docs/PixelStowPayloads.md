@@ -161,8 +161,9 @@ pans the picture, as in the lower preview. A second finger cancels the hold for
 pinch or two-finger pan. Releasing a held divider does not reveal controls.
 Immediate handle/line dragging and desktop mouse scrubbing remain available.
 Escape closes the viewer.
-Successful reads start with marker overlays hidden. Failed photographs show
-diagnostic markers; continuous captures start clean. Fullscreen preview has a
+Successful reads and failed photographs both leave Analysis off. Marker outlines
+are drawn only after Analysis is switched on in the full-screen preview, and
+every new decode turns that option off again. Fullscreen preview has a
 button-style **Analysis** toggle just before Close in the action row, including
 the lower Preview. It is absent from the main page. Its computer/binary icon has a full 44 × 48 pixel touch
 target, a highlighted checked state and a keyboard focus outline. Native reads,

@@ -682,7 +682,7 @@
             <span class="camera-calibration" id="camera-calibration" data-state="searching" role="status" hidden>Searching</span>
             <div class="camera-frame" id="camera-frame" hidden aria-hidden="true">
               <div class="camera-target"><span></span><span></span><span></span><span></span></div>
-              <p class="camera-frame-note">Tap the preview to capture</p>
+              <p class="camera-frame-note">Pinch to zoom · tap to capture</p>
             </div>
           </div>
           <div class="camera-footer">
@@ -918,7 +918,7 @@
         </button>
         <button id="preview-screen-toggle" type="button" aria-label="Show source image" title="Show source image" aria-pressed="false" disabled hidden><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 7h18m-4-4 4 4-4 4M21 17H3m4-4-4 4 4 4"/></svg></button>
         <button id="preview-screen-hide" type="button" aria-label="Hide controls" title="Hide controls"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" focusable="false"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg></button>
-        <label id="preview-markers" title="Show recovery diagnostics for this image"><input id="show-transform" type="checkbox" aria-label="Analysis" checked><span class="analysis-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" focusable="false"><rect x="3" y="3" width="18" height="14" rx="2"/><path d="M8 21h8m-4-4v4"/><rect x="7" y="7" width="3" height="6" rx=".5"/><path d="m14 8 1-1v6m-1 0h3"/></svg></span></label>
+        <label id="preview-markers" title="Show recovery diagnostics for this image"><input id="show-transform" type="checkbox" aria-label="Analysis"><span class="analysis-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" focusable="false"><rect x="3" y="3" width="18" height="14" rx="2"/><path d="M8 21h8m-4-4v4"/><rect x="7" y="7" width="3" height="6" rx=".5"/><path d="m14 8 1-1v6m-1 0h3"/></svg></span></label>
         <button id="preview-screen-close" type="button" aria-label="Close preview" title="Close preview"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
       </div>
     </div>
@@ -989,8 +989,8 @@
   <script src="./pixelstow-media.js?v=20261015-preview-icons1"></script>
   <script src="./pixelstow-sharing.js?v=20261016-preview-copy1"></script>
   <script src="./pixelstow-read-progress.js?v=20261016-frame-outline"></script>
-  <script src="./pixelstow-camera.js?v=20261016-status-copy"></script>
-  <script src="./pixelstow-preview.js?v=20261016-comparison-pan"></script>
+  <script src="./pixelstow-camera.js?v=20261016-camera-zoom"></script>
+  <script src="./pixelstow-preview.js?v=20261016-analysis-off"></script>
   <script>
     const fileInput = document.querySelector("#file");
     const chooseImageButton = document.querySelector("#choose-image");
@@ -1113,7 +1113,8 @@
         return sharing.copyImage(fullPreview.panel.classList.contains("show-source")
           ? async () => PixelStow.writePng(await carrierFor(job), size.width, size.height) : undefined);
       },
-      resize: sizeViewport
+      resize: sizeViewport,
+      onFrame: (open) => syncAnalysisOverlay(open)
     });
     const exports = new PixelStowExportDialog();
     const media = new PixelStowMediaPanel({
@@ -1763,13 +1764,34 @@
           : "Calibration was not checked"+(trace?.method==="native"?"; the native pixel grid was sufficient.":".");
     }
 
+    function disarmAnalysis() {
+      if (current) current.markerGuideOverride = false;
+      showTransform.checked = false;
+      transformOutline.hidden = true;
+      calibrationAnalysis.hidden = true;
+    }
+
+    function syncAnalysisOverlay(open = fullPreview.openNow) {
+      if (!open || !showTransform.checked || !current?.transformResult) {
+        transformOutline.hidden = true;
+        calibrationAnalysis.hidden = true;
+        return;
+      }
+      drawTransform(current.transformResult);
+    }
+
     function drawTransform(result) {
-      if (!current) return;
+      // The outline is a fullscreen request. Decoding stores the geometry and
+      // does not paint it onto the page preview.
+      if (!current || !result || !fullPreview.openNow || !showTransform.checked) {
+        transformOutline.hidden = true;
+        calibrationAnalysis.hidden = true;
+        return;
+      }
       const size = resultDimensions(current);
       paintTransform(transformOutline, result, size.width, size.height);
       showCalibrationAnalysis(result);
-      transformOutline.hidden = !showTransform.checked || !(result.geometry || result.markers?.length || result.scaleGuide?.detected) ||
-        (current.markerGuideOverride !== true && (current.suppressMarkerOverlay || !result.unreadable));
+      transformOutline.hidden = !(result.geometry || result.markers?.length || result.scaleGuide?.detected);
     }
 
     showTransform.addEventListener("change", async () => {
@@ -1780,7 +1802,7 @@
         const size = resultDimensions(job), pixels = job.recoverPixels || job.decodePixels || job.pixels;
         try {
           const analysis = await PixelStow.analyzeNativeMarkers(pixels, size.width, size.height, job.carrierVersion);
-          if (current !== job) return;
+          if (current !== job || !showTransform.checked) return;
           result = job.transformResult = { ...result, geometry: analysis.geometry, markers: analysis.markers };
           showTransform.parentElement.title = analysis.found ? "Recovery markers on the native grid" : "No marker headers were confirmed on this image";
         } catch (_) {
@@ -1794,7 +1816,7 @@
         const size=resultDimensions(job),pixels=job.decodePixels||job.pixels;
         try {
           const hint=await PixelStow.scanEdgeGuide(pixels,size.width,size.height);
-          if(current!==job)return;
+          if(current!==job||!showTransform.checked)return;
           result=job.transformResult={...result,scaleGuide:hint||result?.scaleGuide,calibration:{...result?.calibration,
             status:hint?"detected":"not-detected",analysisOnly:true}};
         }catch(_){if(current!==job)return;}
@@ -1834,11 +1856,11 @@
       } else imageReadProgress.finish(result.unreadable ? "Markers found · contents could not be verified." : "No readable fingerprint found.", "failed");
       const nearMiss = Boolean(result.unreadable && job.transformResult.markers.length);
       recoveryFraming.hidden = !nearMiss;
-      // Failed photos show diagnostics. Successful reads and continuous-camera
-      // captures stay clean unless the preview checkbox is explicitly enabled.
-      showTransform.checked = job.markerGuideOverride ?? (nearMiss && !job.suppressMarkerOverlay);
-      if (showTransform.checked) drawTransform(job.transformResult);
-      else {transformOutline.hidden = true;calibrationAnalysis.hidden=true;}
+      // Decoding never paints markers and never keeps Analysis on from an earlier image.
+      job.markerGuideOverride = false;
+      showTransform.checked = false;
+      transformOutline.hidden = true;
+      calibrationAnalysis.hidden = true;
       job.hasFingerprint = job.hasFingerprint || result.found;
       if (result.geometry && result.found && !result.unreadable) {
         const geometry = result.geometry;
@@ -1865,6 +1887,7 @@
     });
     async function retryImageRecovery(mode = transformMode.value) {
       if (!current || busy || media.active || camera?.active) return;
+      disarmAnalysis();
       const job = current;
       clearReadFeedback();
       clearImageAppraisal();
@@ -1994,7 +2017,7 @@
       calibrationAnalysis.textContent="";
       recoveryVisible = false;
       recoveryFraming.hidden = true;
-      showTransform.checked = true;
+      disarmAnalysis();
       transformStatus.textContent = "";
       transformSignature.textContent = "";
       capacity.textContent = "";
@@ -2537,6 +2560,7 @@
         await retryImageRecovery("auto");
         return;
       }
+      disarmAnalysis();
       clearReadFeedback();
       setBusy(true);
       setStatus("Decoding…");

@@ -41,7 +41,13 @@ may need to release the device before retrying. These retries do not guarantee
 that an incompatible driver can be opened by the browser.
 The preview uses `muted`, `autoplay` and `playsinline` for Safari, displays the
 whole video frame without cropping, and stays live while a captured raster is
-read. In portrait the frame uses the full width of the camera column; the scan
+read. Pinch, or the wheel over the preview, zooms that live picture. When the
+camera track reports a zoom range, the gesture sets that camera zoom and the
+captured frames already include it. Otherwise the preview enlarges around the
+centre, up to 4×, and the captured raster is the visible centre crop at the
+video's own pixels, not a resampled enlargement. Opening or switching cameras
+starts again at the full frame. A zoom change drops queued scan frames without
+shortening the initial framing wait. In portrait the frame uses the full width of the camera column; the scan
 notes take the height that remains. Captures use the video's actual pixel dimensions, without resizing or JPEG
 conversion. The browser may already scale/process the sensor feed; video detail
 can therefore be worse than a full-resolution still photograph.

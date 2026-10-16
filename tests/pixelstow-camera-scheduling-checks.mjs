@@ -15,7 +15,27 @@ const scan=(score=100)=>({width:16,height:16,markers:[{id:0,verification:'header
   candidates:[0,1,2].map(n=>({geometry:{rank:score-n,matrix:[1,0,0,0,1,0,0,0,1]}})),
   geometry:{rank:score,matrix:[1,0,0,0,1,0,0,0,1]}});
 const entry=(id,score=100)=>({image:image(id),scan:scan(score),score,frameNumber:id,capturedAt:now});
-const ui={readProgress:{begin(){},update(){},signature(){},finish(){}},showBestFrame(){},clearFeedback(){},sync(){},schedule(){}};
+{
+  const camera=Object.create(window.PixelStowCamera.prototype);
+  camera.view={clientWidth:200,clientHeight:100};
+  camera.session={rotation:0};
+  const full=camera.visibleVideoRect(400,200,1);
+  assert.equal(full.sx,0);assert.equal(full.sy,0);assert.equal(full.sw,400);assert.equal(full.sh,200);
+  const zoomed=camera.visibleVideoRect(400,200,2);
+  assert.equal(zoomed.sx,100);assert.equal(zoomed.sy,50);assert.equal(zoomed.sw,200);assert.equal(zoomed.sh,100);
+  camera.session.rotation=90;
+  const turned=camera.visibleVideoRect(400,200,2);
+  assert.equal(turned.sw,200);assert.equal(turned.sh,200);assert.equal(turned.sx,100);assert.equal(turned.sy,0);
+  assert.equal(camera.snapZoom(2.24,{min:1,max:8,step:0.5}),2);
+  assert.equal(camera.snapZoom(9,{min:1,max:4,step:0}),4);
+  const hardware={zoom:1},track={getCapabilities:()=>({zoom:{min:1,max:6,step:0.5}}),getSettings:()=>({zoom:1})};
+  camera.configureZoom(hardware,track);
+  assert.equal(hardware.zoomMode,'hardware');assert.equal(hardware.zoom,1);assert.equal(hardware.zoomRange.max,6);
+  const held={zoom:3.2};camera.configureZoom(held,track);assert.equal(held.zoom,3);assert.equal(held.zoomMode,'hardware');
+  const plain={};camera.configureZoom(plain,{getCapabilities:()=>({})});
+  assert.equal(plain.zoomMode,'simulated');assert.equal(plain.zoom,1);assert.equal(plain.zoomRange.max,4);
+}
+const ui={readProgress:{begin(){},update(){},signature(){},finish(){},syncFrame(){}},showBestFrame(){},clearFeedback(){},sync(){},schedule(){}};
 function setup(){
   timers.clear();
   const camera=Object.create(window.PixelStowCamera.prototype),session={purpose:'read',history:[],frames:0,appraised:2};
