@@ -1403,7 +1403,7 @@
 
   function searchInWorker(pixels, width, height, options, operation = "geometry") {
     return new Promise((resolve, reject) => {
-      const url = new URL("pixelstow-transform-worker.js?v=20261015-restore-markers1", codecScriptUrl);
+      const url = new URL("pixelstow-transform-worker.js?v=20261016-edge-guide2", codecScriptUrl);
       const worker = new Worker(url);
       let finished = false;
       const abort = () => { if (finished) return; cleanup(); reject(new DOMException("Search cancelled.", "AbortError")); };
@@ -1428,6 +1428,7 @@
         worker.postMessage({ pixels: copy, width, height, operation, mode: options.mode, forceSearch: options.forceSearch,
           includeLegacy: options.includeLegacy ?? legacyRecovery, carrierVersion: options.carrierVersion, nativeOnly: options.nativeOnly,
           corners: options.corners, seed: options.seed, deadline: options.deadline, scaleGuide: options.scaleGuide,
+          reduction: options.reduction, maxMilliseconds: options.maxMilliseconds,
           seedDeadline: options.seedDeadline, camera: options.camera, scan: options.scan,
           searchState: options.searchState, stopOnHighConfidence: options.stopOnHighConfidence,
           resumeDiscovery: options.resumeDiscovery,
@@ -1839,6 +1840,15 @@
     return root.PixelStowSpectrum.scaleGuide(pixels, width, height, SCALE_PILOT, options);
   }
 
+  async function scanEdgeGuide(pixels, width, height, options = {}) {
+    assertImage(pixels, width, height); checkCancelled(options.signal);
+    if (!recoveryVersions(options).includes(CARRIER_V5)) return null;
+    if (canUseReaderWorker(options)) return searchInWorker(pixels, width, height, options, "edge-guide");
+    if (!root.PixelStowEdgeGuide?.detect) return null;
+    const hint = await root.PixelStowEdgeGuide.detect(pixels, width, height, options);
+    return hint?.detected ? { ...hint, kind: "edge", confirmed: false, width, height } : null;
+  }
+
   // Pure discovery: only locator symbols are read. No carrier preamble, body,
   // decompression or payload verification is performed by this operation.
   async function scanMarkers(pixels, width, height, options = {}) {
@@ -1862,6 +1872,11 @@
       options.scaleGuide.height === height && Number.isFinite(options.scaleGuide.scale) && options.scaleGuide.scale >= .25 &&
       options.scaleGuide.scale <= 8 && Number.isFinite(options.scaleGuide.fx) && Number.isFinite(options.scaleGuide.fy) &&
       Math.hypot(options.scaleGuide.fx, options.scaleGuide.fy) > 0 ? options.scaleGuide : null);
+    if (!scaleGuide && options.scaleGuide !== false && options.scaleGuide !== true && !options.searchState && !options.seed &&
+      !options.singleResolution && options.mode !== "padding" && recoveryVersions(options).includes(CARRIER_V5)) {
+      try { scaleGuide = await scanEdgeGuide(pixels, width, height, { worker: false, signal: options.signal, deadline: options.deadline }); }
+      catch (error) { if (error?.name === "AbortError") throw error; }
+    }
     if (!scaleGuide && !options.searchState && !options.seed && !options.singleResolution && options.mode !== "padding" &&
       options.scaleGuide === true && recoveryVersions(options).includes(CARRIER_V5)) {
       try { scaleGuide = await scanScaleGuide(pixels, width, height, { worker: false, signal: options.signal, deadline: options.deadline }); }
@@ -1907,7 +1922,7 @@
       const index = nextMarkerScale(pending, samples, start, sizes, known);
       pending.splice(pending.indexOf(index), 1);
       const { width: rw, height: rh, divisor, guided } = sizes[index], full = divisor === 1;
-      const label = (guided ? "Pilot-guided size" : full ? "Full size" : "1/" + divisor + " size") + " (" + rw + " × " + rh + ")";
+      const label = (guided ? scaleGuide?.kind === "edge" ? "Edge-guide size" : "Pilot-guided size" : full ? "Full size" : "1/" + divisor + " size") + " (" + rw + " × " + rh + ")";
       options.onProgress?.("Locating photo markers: " + label + "…");
       const corners = options.corners?.map((p) => ({ x: (p.x + 0.5) * rw / width - 0.5, y: (p.y + 0.5) * rh / height - 0.5 }));
       const scaleMatrix = (h) => [(rw / width) * h[0] + (rw / width - 1) / 2 * h[6],
@@ -1927,12 +1942,16 @@
       const seedBudget = Math.max(1500, remaining / Math.min(3, pending.length + 1));
       // A false pilot gets only a short extra attempt. Every original pyramid
       // level remains pending, with the original reader budgets and checks.
-      const levelDeadline = guided ? Math.min(deadline, Date.now() + 1200) : deadline;
-      const workingGuide = guided && scaleGuide ? { ...scaleGuide, fx: scaleGuide.fx * width / rw, fy: scaleGuide.fy * height / rh } : null;
+      // Edge evidence gets a short seed attempt. Once a header verifies, the
+      // transform reader restores the full deadline for the remaining markers.
+      const levelDeadline = guided && scaleGuide?.kind !== "edge" ? Math.min(deadline, Date.now() + 1200) : deadline;
+      const workingGuide = guided && scaleGuide ? { ...scaleGuide, fx: scaleGuide.fx * width / rw, fy: scaleGuide.fy * height / rh,
+        corners: scaleGuide.corners?.length === 4 ? scaleGuide.corners.map(point => ({
+          x: (point.x + .5) * rw / width - .5, y: (point.y + .5) * rh / height - .5 })) : undefined } : null;
       const result = await findVisualTransform(image.pixels, rw, rh, { ...options, corners, seed, singleResolution: true,
         scaleGuide: workingGuide, pilotFirst: Boolean(workingGuide),
         worker: false, geometryOnly: true, deadline: levelDeadline,
-        seedDeadline: Math.min(levelDeadline, Date.now() + seedBudget),
+        seedDeadline: Math.min(levelDeadline, Date.now() + (guided ? 1200 : seedBudget)),
         onProgress: (text) => options.onProgress?.(label + ": " + text) });
       const lifted = full ? result : liftPhotoResult(result, width, height, rw, rh);
       const header = lifted.markers?.filter((m) => m.verification === "header").sort((a, b) => b.quality - a.quality)[0];
@@ -2128,11 +2147,12 @@
       throw new Error("This image is too small for that message. Use a larger picture or a shorter message.");
     }
     const parityBits = bitsPerByte === 12 ? 4 : 1;
-    // V5's CRC-protected carrier header stores uniform headroom in two-level
-    // increments. With pilot bit 7 set, cleared bit 0 identifies the stronger
-    // pilot; old three-level pilots have bit 0 set. Payload frames are unchanged.
+    // V5's CRC-protected header stores headroom in two-level increments.
+    // Bits (7,0): (0,1) original; (0,0) subtle edge guide;
+    // (1,1) historical 3-level FFT pilot; (1,0) historical 16-level FFT pilot.
+    // Payload frames, parity and capacity are unchanged.
     const pilot = version === CARRIER_V5 && signalPolicy?.scalePilot;
-    const flags = (pilot ? 0 : FLAGS) | (parityBits === 1 ? ONE_PARITY : 0) |
+    const flags = (pilot || version === CARRIER_V5 && signalPolicy?.edgeGuide ? 0 : FLAGS) | (parityBits === 1 ? ONE_PARITY : 0) |
       (version === CARRIER_V5 ? (((signalPolicy?.linearHeadroom || 0) / 2) << 2) |
         (signalPolicy?.scalePilot ? SCALE_PILOT_FLAG : 0) : 0);
     const bytes = new Uint8Array(9);
@@ -2294,7 +2314,8 @@
     const allowed = preamble.version === CARRIER_V5 ? (ONE_PARITY | 0xfc) : ONE_PARITY;
     const scalePilot = preamble.version === CARRIER_V5 && Boolean(preamble.flags & SCALE_PILOT_FLAG);
     const strongPilot = scalePilot && !(preamble.flags & FLAGS);
-    if ((preamble.flags & ~allowed) !== (strongPilot ? 0 : FLAGS)) throw frameError("The carrier flags do not match this profile.");
+    const edgeGuide = preamble.version === CARRIER_V5 && !scalePilot && !(preamble.flags & FLAGS);
+    if ((preamble.flags & ~allowed) !== (strongPilot || edgeGuide ? 0 : FLAGS)) throw frameError("The carrier flags do not match this profile.");
     const rangeHeadroom = preamble.version === CARRIER_V5 ? ((preamble.flags >>> 2) & 31) * 2 : 0;
     const scalePilotAmplitude = scalePilot ? (strongPilot ? SCALE_PILOT.amplitude : LEGACY_SCALE_PILOT_AMPLITUDE) : 0;
     if (rangeHeadroom > 62) throw frameError("Unsupported carrier range adjustment.");
@@ -2313,7 +2334,7 @@
       corrections: decoded.corrections,
       ...repetitionBudget(payloadBlocks, preamble.framedLength, bitsPerByte),
       carrierVersion: preamble.version,
-      rangeHeadroom, scalePilot, scalePilotAmplitude
+      rangeHeadroom, scalePilot, scalePilotAmplitude, edgeGuide
     };
   }
 
@@ -2391,7 +2412,8 @@
         carrierVersion: framed.carrierVersion,
         rangeHeadroom: framed.rangeHeadroom,
         scalePilot: framed.scalePilot,
-        scalePilotAmplitude: framed.scalePilotAmplitude
+        scalePilotAmplitude: framed.scalePilotAmplitude,
+        edgeGuide: framed.edgeGuide
       };
     } catch (error) {
       if (error && error.code === "frame") return null;
@@ -2505,6 +2527,7 @@
       strength: recovery.strength,
       scalePilot: recovery.scalePilot,
       scalePilotAmplitude: recovery.scalePilotAmplitude,
+      edgeGuide: recovery.edgeGuide,
       repetitionRatio: recovery.repetitionRatio,
       copies: recovery.copies,
       parityBits: recovery.parityBits,
@@ -2569,6 +2592,7 @@
           rangeHeadroom: recovery.rangeHeadroom,
           scalePilot: recovery.scalePilot,
           scalePilotAmplitude: recovery.scalePilotAmplitude,
+          edgeGuide: recovery.edgeGuide,
           repetitionRatio: recovery.repetitionRatio,
           copies: recovery.copies,
           parityBits: recovery.parityBits,
@@ -2582,7 +2606,7 @@
     }
   }
 
-  async function encodeAt(reference, width, height, payload, passwordProtected, strength, adaptive, bundle, carrierVersion, quality = DEFAULT_QUALITY, scalePilot = false) {
+  async function encodeAt(reference, width, height, payload, passwordProtected, strength, adaptive, bundle, carrierVersion, quality = DEFAULT_QUALITY, scalePilot = false, edgeGuide = false) {
     strength = Math.max(1, Math.min(32, strength));
     const version = locatorProfile(carrierVersion) ? carrierVersion : CARRIER_V1;
     const map = locatorProfile(version) ? locatorBlockMap(width, height, Infinity, version) : null;
@@ -2616,9 +2640,12 @@
         (scalePilot ? SCALE_PILOT.amplitude : 0)) / 2));
       signalSource = linearRange(reference, headroom);
       if (scalePilot) signalSource = applyScalePilot(signalSource, width);
-      signalPolicy = { ...signalPolicy, linearHeadroom: headroom, textureSource: reference, scalePilot };
+      // Fit payload amplitudes against the guided source, so painting can still
+      // avoid clipping the subtle colour signal at dark/bright extrema.
+      if (edgeGuide) signalSource = root.PixelStowEdgeGuide.apply(signalSource, width, height);
+      signalPolicy = { ...signalPolicy, linearHeadroom: headroom, textureSource: reference, scalePilot, edgeGuide };
     }
-    const output = signalSource.slice();
+    let output = signalSource.slice();
     const written = await writeSignal(signalSource, output, width, height, framed, strength, version, map, signalPolicy);
     if (map) paintLocators(signalSource, output, width, height, strength, version, signalPolicy);
     return {
@@ -2633,6 +2660,7 @@
       rangeHeadroom: signalPolicy?.linearHeadroom || 0,
       scalePilot: Boolean(signalPolicy?.scalePilot),
       scalePilotAmplitude: signalPolicy?.scalePilot ? SCALE_PILOT.amplitude : 0,
+      edgeGuide: Boolean(signalPolicy?.edgeGuide),
       map
     };
   }
@@ -2643,6 +2671,9 @@
 
   async function encodePayload(pixels, width, height, content, password, options = {}) {
     const quality = encodingQuality(options.quality);
+    if (options.edgeGuide === true && !root.PixelStowEdgeGuide?.apply)
+      throw new Error("The edge guide script is missing. Reload the page before encoding.");
+    const edgeGuide = options.scalePilot !== true && options.edgeGuide !== false && Boolean(root.PixelStowEdgeGuide?.apply);
     const { text = "", attachments = [] } = content;
     const bundle = attachments.length > 0;
     const plain = bundle ? packBundle(text, attachments) : strictUtf8(text);
@@ -2665,7 +2696,7 @@
       const usedVersion = wantLocators && locatorFits(width, height, preferredCarrier) ? preferredCarrier : CARRIER_V1;
       const payload = locked ? await encryptEnvelope(plain, password, bundle) : plain.slice();
       try {
-        let encoded = await encodeAt(pixels, width, height, payload, locked, STRENGTHS[0], true, bundle, usedVersion, quality, options.scalePilot === true);
+        let encoded = await encodeAt(pixels, width, height, payload, locked, STRENGTHS[0], true, bundle, usedVersion, quality, options.scalePilot === true, edgeGuide);
         for (;;) {
           const recovery = await readNative(encoded.pixels, width, height, usedVersion, encoded.strength, undefined, encoded.map);
           if (recovery && !recovery.locatorOnly && recovery.carrierVersion === usedVersion &&
@@ -2684,6 +2715,7 @@
               rangeHeadroom: encoded.rangeHeadroom,
               scalePilot: encoded.scalePilot,
               scalePilotAmplitude: encoded.scalePilotAmplitude,
+              edgeGuide: encoded.edgeGuide,
               quality,
               locatorFallback: wantLocators && usedVersion === CARRIER_V1
             };
@@ -2698,7 +2730,7 @@
           if (next === 0) {
             throw new Error("The message could not be verified in this image. Try another picture or a shorter message.");
           }
-          encoded = await encodeAt(pixels, width, height, payload, locked, next, false, bundle, usedVersion, quality, options.scalePilot === true);
+          encoded = await encodeAt(pixels, width, height, payload, locked, next, false, bundle, usedVersion, quality, options.scalePilot === true, edgeGuide);
         }
       } finally { payload.fill(0); }
     } finally { plain.fill(0); }
@@ -3052,6 +3084,10 @@
     let cleaned = await extractBlind(restored, origW, origH, fit.strength, locatorBlockMap(origW, origH, Infinity, fit.carrierVersion),
       fit.carrierVersion === CARRIER_V4 || fit.carrierVersion === CARRIER_V5 ? V4_PAYLOAD_PEAK : fit.strength);
     cleanLocators(restored, origW, origH, cleaned, fit.carrierVersion);
+    if (fit.edgeGuide) {
+      if (!root.PixelStowEdgeGuide?.apply) throw new Error("The edge guide script is missing. Reload the page before extracting the source.");
+      cleaned = root.PixelStowEdgeGuide.apply(cleaned, origW, origH, { inverse: true });
+    }
     if (fit.scalePilot) cleaned = applyScalePilot(cleaned, origW, true, fit.scalePilotAmplitude || LEGACY_SCALE_PILOT_AMPLITUDE);
     if (fit.rangeHeadroom) cleaned = linearRange(cleaned, fit.rangeHeadroom, true);
     if (identity) return cleaned;
@@ -3140,6 +3176,7 @@
     findVisualTransform,
     scanMarkers,
     scanScaleGuide,
+    scanEdgeGuide,
     analyzeNativeMarkers,
     readMarkerCandidates,
     clearVisualTransform(pixels) { visualMappings.delete(pixels); },

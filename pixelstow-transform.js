@@ -217,6 +217,8 @@
     // Fast proposal for visible padding, including the white/orange examples.
     // It only proposes geometry: it cannot establish that the picture is encoded.
     const colours = [], quads = [];
+    let lastYield=Date.now();
+    const cooperate=async()=>{check(options);if(Date.now()-lastYield>=16){await pause();lastYield=Date.now();}};
     const rgb = (x, y) => { const i = (Math.round(x) + Math.round(y) * width) * 4; return [pixels[i], pixels[i + 1], pixels[i + 2]]; };
     const distance = (a, b) => Math.max(...a.map((v, i) => Math.abs(v - b[i])));
     const edge = [];
@@ -233,17 +235,17 @@
       options.onProgress?.("Checking visible padding for an image outline…");
       const mask = new Uint8Array(w * h), visited = new Uint8Array(mask.length), queue = new Int32Array(mask.length);
       for (let y = 0; y < h; y++) {
-        if ((y & 31) === 0) { check(options); await pause(); }
+        if ((y & 31) === 0) await cooperate();
         for (let x = 0; x < w; x++) mask[x + y * w] = distance(rgb(Math.min(width - 1, x * step), Math.min(height - 1, y * step)), colour) > tolerance ? 1 : 0;
       }
       let largest = 0, boundary = [];
       for (let start = 0; start < mask.length; start++) {
-        if ((start & 8191) === 0) { check(options); await pause(); }
+        if ((start & 8191) === 0) await cooperate();
         if (!mask[start] || visited[start]) continue;
         let head = 0, tail = 1; queue[0] = start; visited[start] = 1;
         const outline = [];
         while (head < tail) {
-          if ((head & 8191) === 8191) { check(options); await pause(); }
+          if ((head & 8191) === 8191) await cooperate();
           const i = queue[head++], x = i % w, y = Math.floor(i / w);
           let onEdge = false;
           for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
@@ -265,6 +267,48 @@
   function quadFit(corners, width, height) {
     return fitPoints([[0, 0], [width - 1, 0], [width - 1, height - 1], [0, height - 1]]
       .map(([x, y], i) => ({ source: { x, y }, target: corners[i] })), true);
+  }
+
+  async function proposeOutlines(pixels, width, height, requested = {}) {
+    // Geometry proposals only. A visible rectangle cannot confirm a carrier.
+    const options = { ...requested, deadline: Math.min(requested.deadline || Infinity, Date.now() + 350) };
+    const quads = await paddingQuads(pixels, width, height, options);
+    const sample = (x, y, channel) => pixels[(Math.max(0, Math.min(width - 1, Math.round(x))) +
+      Math.max(0, Math.min(height - 1, Math.round(y))) * width) * 4 + channel];
+    const radius = Math.max(3, 2 * Math.ceil(Math.max(width, height) / 640));
+    const fit = (points) => {
+      if (points.length < 8) return null;
+      const cx = points.reduce((s,p) => s+p.x,0)/points.length, cy = points.reduce((s,p) => s+p.y,0)/points.length;
+      let xx=0,xy=0,yy=0;
+      for (const p of points) { const x=p.x-cx,y=p.y-cy;xx+=x*x;xy+=x*y;yy+=y*y; }
+      const angle=.5*Math.atan2(2*xy,xx-yy),nx=-Math.sin(angle),ny=Math.cos(angle);
+      return {nx,ny,d:nx*cx+ny*cy};
+    };
+    return quads.map((quad) => {
+      const lines=quad.map((a,index) => {
+        const b=quad[(index+1)%4],length=Math.hypot(b.x-a.x,b.y-a.y),nx=-(b.y-a.y)/length,ny=(b.x-a.x)/length,points=[];
+        for(let i=0;i<40;i++) {
+          const t=.08+.84*i/39,x=a.x+(b.x-a.x)*t,y=a.y+(b.y-a.y)*t;
+          let best=null;
+          for(let offset=-radius;offset<=radius;offset+=.5) {
+            const px=x+nx*offset,py=y+ny*offset;
+            let energy=0;
+            for(let channel=0;channel<3;channel++)energy+=Math.abs(sample(px+nx,py+ny,channel)-sample(px-nx,py-ny,channel));
+            if(!best||energy>best.energy)best={x:px,y:py,energy};
+          }
+          if(best.energy>24)points.push(best);
+        }
+        let line=fit(points);
+        for(let pass=0;pass<2&&line;pass++)line=fit(points.filter(p=>Math.abs(line.nx*p.x+line.ny*p.y-line.d)<1.75));
+        return line;
+      });
+      if(lines.some(line=>!line))return quad;
+      const refined=lines.map((b,index) => {
+        const a=lines[(index+3)%4],d=a.nx*b.ny-a.ny*b.nx;
+        return Math.abs(d)<.1?null:{x:(a.d*b.ny-a.ny*b.d)/d,y:(a.nx*b.d-a.d*b.nx)/d};
+      });
+      return refined.some((point,i)=>!point||Math.hypot(point.x-quad[i].x,point.y-quad[i].y)>radius*4)?quad:refined;
+    });
   }
 
   async function seedFromQuads(quads, signature, adapters, options) {
@@ -317,7 +361,10 @@
 
   async function seedSearch(pixels, luma, width, height, adapters, options, signature) {
     if (options.pilotFirst) {
-      const seed = await seedFromQuads([[{x:0,y:0},{x:width-1,y:0},{x:width-1,y:height-1},{x:0,y:height-1}]],signature,adapters,options);
+      const guideCorners=options.scaleGuide?.corners;
+      const quads=guideCorners?.length===4&&guideCorners.every(point=>Number.isFinite(point.x)&&Number.isFinite(point.y))?[guideCorners]:[];
+      quads.push([{x:0,y:0},{x:width-1,y:0},{x:width-1,y:height-1},{x:0,y:height-1}]);
+      const seed = await seedFromQuads(quads,signature,adapters,options);
       if (seed) return seed;
     }
     if (options.mode !== "padding") {
@@ -753,9 +800,10 @@
         if (requested.pilotFirst && requested.scaleGuide?.detected) {
           const {fx,fy} = requested.scaleGuide, squared = fx*fx+fy*fy;
           const scale = 1/(128*Math.sqrt(squared)), ux=fx/Math.sqrt(squared)*scale, uy=fy/Math.sqrt(squared)*scale;
-          signature = { likely:true, confirmed:false, scalePilot:true,
+          const edgeGuide = requested.scaleGuide.kind === "edge";
+          signature = { likely:true, confirmed:false, scalePilot:!edgeGuide, edgeGuide,
             bases:[[ux,uy,-uy,ux],[-uy,ux,-ux,-uy],[-ux,-uy,uy,-ux],[uy,-ux,ux,uy]],
-            message:"Scale pilot suggests a marker pitch. Checking marker headers…" };
+            message:(edgeGuide ? "Edge guide" : "Scale pilot") + " suggests a marker pitch. Checking marker headers…" };
           options.onSignature?.(signature);
           seed = await seedSearch(pixels,luma,width,height,adapters,options,signature);
         } else {
@@ -882,5 +930,5 @@
     }
   }
 
-  root.PixelStowTransform = { find, invert, point };
+  root.PixelStowTransform = { find, invert, point, proposeOutlines };
 })(typeof window !== "undefined" ? window : self);

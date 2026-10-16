@@ -88,15 +88,16 @@ This compresses contrast in the encoded image to avoid localized brightness
 and colour artefacts. Boosted payload and marker signals are limited to fit
 the compressed reference with no further block brightness shift.
 
-Carrier preamble byte 2 retains bit 1 (one-parity mode). Bit 0 is required
-unless bit 7 identifies the stronger scale-pilot profile described below.
-Bits 2..6 store `h / 2`; bit 7 records the scale pilot described below. The existing carrier-header CRC
-protects it. The preamble length, marker headers and PCF1 payload/password
+Carrier preamble byte 2 retains bit 1 (one-parity mode). Bits 2..6 store `h / 2`.
+Bits (7,0) identify the guide profile: (0,1) is original V5 with no guide,
+(0,0) is the subtle edge guide, (1,1) is the historical three-level full-image
+pilot and (1,0) is its sixteen-level successor. The existing carrier-header CRC
+protects these flags. The preamble length, marker headers and PCF1 payload/password
 frames remain unchanged. A zero headroom denotes earlier V5 output; no separate
 discovery profile is required.
 
-Source extraction first removes payload and marker wavelets, removes the pilot
-when its presence bit is set, then reverses
+Source extraction first removes payload and marker wavelets, removes the recorded
+guide or pilot when present, then reverses
 the recorded map: `source = (cleaned - h) * 255 / (255 - 2h)`. It restores
 black/white range without estimating new endpoints from image content.
 Quantization and wavelet removal remain lossy, and optical captures introduce
@@ -203,8 +204,8 @@ source reconstruction on black/white/saturated RGB, and source/alpha preservatio
 ## Scale-pilot experiment: disabled
 
 Normal V5 encoding no longer writes the full-image pilot or reserves its extra
-headroom. Ordinary file recovery does not run its FFT precheck. Continuous
-capture does not make a guide thumbnail or start a guide worker. Marker search
+headroom. Ordinary file recovery does not run that pilot's FFT precheck. The
+new subtle edge guide described below has a separate precheck. Marker search
 and payload recovery retain their original budgets, candidates and fallbacks.
 Existing three- and sixteen-level pilot images remain readable, including source
 extraction with their recorded amplitudes.
@@ -251,7 +252,57 @@ native pitches must remain known, or their choice must be identifiable from the
 pair. Existing four-pixel payload and five-pixel marker frequencies already give
 the current reader known references. This is appraisal, not another writer change.
 
-### Known-interval guide appraisal (15 October 2026)
+### Subtle known-interval edge guide (16 October 2026)
+
+Normal browser V5 writing now includes a fixed, low-contrast opponent-colour
+guide before payload and marker painting. Its RGB offset is `[d,-d,d]`, with
+`d` clamped to two levels. The detector uses `(R+B)/2-G`, suppressing the
+ordinary equal-RGB wavelet signal. This avoids the visible geometric boxes and
+large full-image brightness changes from the rejected experiments.
+
+The guide occupies 48px bands inset 8px from all four edges. Fixed tangential
+wavelengths are 64 and 96 native pixels, modulated across each band at 24px with
+a tapered envelope. Corner marker reservations (52x52) and all side-reference
+patches are untouched. The guide adds no global headroom or capacity cost.
+Its exact integer profile is removed after wavelet cleaning and before reversing
+the recorded RGB range map. The existing source extraction remains lossy.
+
+`pixelstow-edge-guide.js` makes one explicit 4x box reduction, then measures the
+two known frequencies locally using complex DFTs across candidate edge strips.
+The transverse envelope, opposite edges and phases relative to all four inferred
+bounds must agree. This suppresses unrelated photograph texture that defeated
+the earlier whole-image magnitude search. A visible image outline may propose a
+rectification of this same coarse raster for tilted captures. The outline itself
+cannot establish encoding. The measured scale and coarse corners suggest a
+marker working grid and nearby header checks before the existing scale search. A
+1.2-second seed allowance protects ordinary search from false hints, while a
+verified marker retains the normal full search budget. An absent guide keeps
+all ordinary recovery paths; no guide alone can confirm an image or payload.
+
+The reserved V5 flag combination (7,0)=(0,0) records this fixed guide profile.
+New guided images need this updated V5 reader. All older V5 profiles and PCF1
+v1 remain readable; payload framing, encryption and marker geometry are unchanged.
+Explicit `edgeGuide:false` writes the previous profile. Core-only integrations
+without the helper continue writing the previous profile; the browser and worker
+load the helper with matching cache versions. Explicit historical `scalePilot:true`
+uses only the historical pilot, never both guides.
+
+Tests in `tests/pixelstow-edge-guide-checks.mjs`,
+`tests/pixelstow-edge-codec-checks.mjs` and
+`tests/pixelstow-edge-worker-checks.mjs` cover faint signal bounds/reservations,
+modeled scale/rotation, actual default V5 PNG/payload round-trips, password
+protection, source/alpha preservation, real browser workers and older fixtures.
+The production default is 4x reduction; these checks do not establish reliable
+8x/12x detection or an improvement with optical phone captures. Test a freshly
+encoded V5 image and watch for the **Edge guide** scan status.
+
+Natural-photo tests include independently re-encoded local images, their clean
+sources and equivalent carriers with the guide disabled. Guide misses retain
+ordinary marker recovery. A real phone-camera speed improvement still needs
+optical testing; modeled resizing, rotation, blur or colour changes cannot
+establish it.
+
+#### Earlier sampling proof
 
 The intended fast path is a positive recognizer: weak guides at known native
 pixel intervals, potentially on perpendicular edge bands, promote promising
@@ -267,8 +318,8 @@ maximum signal of two grey levels and 8-bit input quantization. It recovers
 0.5x, 1x and 2x magnification after each of 4x, 8x and 12x box averaging (nine
 cases), despite a stronger unrelated source frequency. This is an ideal 1D
 sampling proof, not a camera detector or a codec/visibility test. Reports go
-to ignored `artifacts/research/coarse-guide/sampling-proof.json`. Production
-writing and scanning are unchanged.
+to ignored `artifacts/research/coarse-guide/sampling-proof.json`. This proof
+predates the actual two-dimensional colour guide above.
 
 The earlier camera path resized to a maximum edge of 512, then the Fourier
 appraisal reduced again to 128. That can make a 4K capture approximately 32x
@@ -297,7 +348,8 @@ wavelets. Headroom includes the extra sixteen levels. Local texture appraisal st
 uses the original source. Extraction subtracts the same integer offsets before
 undoing the recorded range map. In the CRC-protected preamble, bit 7 marks pilot
 presence: bit 0 set means the original three-level pilot, while bit 0 cleared
-means the sixteen-level pilot. No-pilot images still require bit 0 set.
+means the sixteen-level pilot. Original no-pilot images have bit 0 set;
+the new edge-guide profile uses the previously reserved zero combination.
 Extraction uses that recorded amplitude, so older three-level images do not
 receive an excessive inverse adjustment. Payload layout, capacity, passwords and PCF1 frames
 remain unchanged. Older V5 images remain readable by this reader; readers from

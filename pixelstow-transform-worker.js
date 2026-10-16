@@ -1,5 +1,5 @@
 // Dedicated disposable worker; its input is a copy, never the UI's pixel buffer.
-importScripts("./pixelstow-spectrum.js?v=20261015-no-pilot1", "./pixelstow-transform.js?v=20261015-restore-markers1", "./pixelstow.js?v=20261015-restore-markers1");
+importScripts("./pixelstow-spectrum.js?v=20261015-no-pilot1", "./pixelstow-edge-guide.js?v=20261016-edge-guide2", "./pixelstow-transform.js?v=20261016-edge-guide2", "./pixelstow.js?v=20261016-edge-guide2");
 importScripts("./pixelstow-lattice.js?v=20261013-marker-follow2");
 self.onmessage = async ({ data }) => {
   try {
@@ -7,6 +7,7 @@ self.onmessage = async ({ data }) => {
       mode: data.mode, worker: false, geometryOnly: true, forceSearch: data.forceSearch,
       includeLegacy: data.includeLegacy, carrierVersion: data.carrierVersion, nativeOnly: data.nativeOnly,
       corners: data.corners, deadline: data.deadline,
+      reduction: data.reduction, maxMilliseconds: data.maxMilliseconds,
       seed: data.seed, scaleGuide: data.scaleGuide,
       seedDeadline: data.seedDeadline,
       camera: data.camera,
@@ -22,7 +23,8 @@ self.onmessage = async ({ data }) => {
       self.postMessage({ result }, [result.buffer]);
       return;
     }
-    if (data.operation === "scale-guide") result = await self.PixelStow.scanScaleGuide(data.pixels, data.width, data.height, options);
+    if (data.operation === "edge-guide") result = await self.PixelStow.scanEdgeGuide(data.pixels, data.width, data.height, options);
+    else if (data.operation === "scale-guide") result = await self.PixelStow.scanScaleGuide(data.pixels, data.width, data.height, options);
     else if (data.operation === "inspect") result = await self.PixelStow.inspect(data.pixels, data.width, data.height, { ...options, geometryOnly: false, automatic: true });
     else if (data.operation === "markers") result = await self.PixelStow.scanMarkers(data.pixels, data.width, data.height, options);
     else if (data.operation === "read-candidates") result = await self.PixelStow.readMarkerCandidates(data.pixels, data.width, data.height, data.scan, options);

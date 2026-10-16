@@ -57,3 +57,13 @@ upload/hosting service. `node tests/pixelstow-media-sharing-checks.mjs` uses
 Playwright/Chrome to check real voice conversion/first-tap preview and capture
 the image-only sharing payload without posting; runtime environment overrides
 match the [camera checks](docs/CameraCapture.md).
+
+The experimental V5 edge guide is described in [CarrierV5.md](docs/CarrierV5.md#subtle-known-interval-edge-guide-16-october-2026).
+Run `node tests/pixelstow-edge-guide-checks.mjs` and
+`node tests/pixelstow-edge-codec-checks.mjs` for signal/codec checks, and
+`node tests/pixelstow-edge-worker-checks.mjs` with the same Playwright setup for
+real browser workers. Optional local-photo checks are
+`node tests/pixelstow-edge-photo-checks.mjs <encoded-photo.png> [...]` and
+`node tests/pixelstow-jpeg-photo-checks.mjs <source.jpg> [...]`.
+Personal input images stay unchanged; generated copies/reports go under ignored
+`artifacts/research/edge-guide`. Fresh phone captures must establish optical benefit.

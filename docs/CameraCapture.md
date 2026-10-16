@@ -116,18 +116,44 @@ exports/sharing. Later decoding/unlocking still verifies the complete frame.
 Workers return inspection metadata/geometry only, not decrypted text, attachment
 bytes or passwords. Payload formats do not change.
 
-### Abandoned V5 Fourier guide
+### Subtle V5 edge guide
 
-The added pilot and its automatic precheck are disabled. Normal capture creates
-no guide thumbnail, starts no guide worker and does not wait for an FFT appraisal
-before marker discovery. Fresh frames go directly to the original latest-frame
-slot. The 24/12-second marker and 30-second payload allowances, complete ranked
-candidate list and remaining-scale fallback remain intact. Existing pilot images
-still decode and reconstruct; new V5 encodes do not contain the added signal.
+New V5 encodes include a low-contrast colour guide in perpendicular edge bands.
+Normal capture checks it in a separate disposable worker, directly from the
+frozen full-resolution frame with one explicit 4x box reduction. There is no
+512px thumbnail followed by another reduction. One active guide check and one
+latest pending frame are retained, while ordinary marker/payload work continues.
+Marker fallback starts immediately rather than waiting for the guide. A late
+same-frame result does not restart its own scan. The next positive frame can
+replace an older worker that actually started without a guide, even if that
+older frame subsequently received a late hint.
+A positive result shows **Edge guide · ~1.25× scale** beside the scan status and
+proposes a marker-search scale. Its size estimate is not a payload confirmation.
+The two local frequencies, envelope and spatial phases must agree. Visible
+padding can propose a rectangle for a tilted guide check; uncertain geometry
+or a missed signal uses the existing reader.
+
+A guide-positive frame can interrupt older unhinted marker work until a real
+marker header is verified. Verified marker work is protected; a payload read is
+interrupted only after the newer frame has produced better verified geometry.
+An unclear/missing guide, an error or the 1.2-second cancellation uses ordinary
+discovery. Guide appraisal has a one-second budget; the original 24/12-second
+marker and 30-second payload allowances, complete ranked candidates and
+remaining-scale fallback are retained. Source-photo mode does not appraise guides.
+
+`tests/pixelstow-edge-guide-checks.mjs` covers bounded faint encoding and modeled
+resized/rotated captures. `tests/pixelstow-edge-codec-checks.mjs` covers actual
+V5 flags, payloads, source removal and older images. The real browser guide,
+marker, payload and extraction workers are exercised by
+`tests/pixelstow-edge-worker-checks.mjs`; queue/preemption behavior is covered by
+`tests/pixelstow-camera-scheduling-checks.mjs`. Fresh V5 optical captures must
+establish how often the faint guide survives phone cameras and screens.
+
+### Abandoned full-image Fourier guide
 
 The following describes the retained research-only opt-in (`scaleGuideEnabled =
 true` on the camera instance), not normal application behaviour. The old fixed-pitch scale pilot is described in
-[CarrierV5.md](CarrierV5.md#low-frequency-scale-pilot). Each sampled capture has
+[CarrierV5.md](CarrierV5.md#historical-full-image-pilot). Each sampled capture has
 a separate guide copy with maximum edge 512, taken from the same frozen raster,
 including its rotation. A disposable worker runs the bounded low-frequency FFT
 while marker or payload work continues. Only one guide worker and one latest

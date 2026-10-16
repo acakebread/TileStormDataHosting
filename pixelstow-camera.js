@@ -20,7 +20,8 @@
         (/Macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1));
       this.captureCanvas = document.createElement("canvas");
       this.guideCanvas = document.createElement("canvas");
-      // Research-only opt-in. No extra guide raster/worker in normal capture.
+      // The old full-image pilot remains research-only. Normal capture uses the
+      // subtle edge guide directly from the frozen full-resolution raster.
       this.scaleGuideEnabled = false;
       this.openButton = document.querySelector("#open-camera");
       this.sourceButton = document.querySelector("#camera-source");
@@ -680,7 +681,7 @@
     retainFrame(session, entry) {
       // Only marker-bearing frames enter history. Keep at most three, and at
       // most 48 MiB of retained RGBA (one oversized frame may be retained alone).
-      const history = session.history.filter((frame) => Date.now() - frame.capturedAt < 45000);
+      const history = session.history.filter((frame) => frame !== entry && Date.now() - frame.capturedAt < 45000);
       if (entry.scan.markers?.length) history.push(entry);
       // Keep an attempted frame for feedback, but don't let old failed captures
       // occupy every history slot and starve newer candidates of a payload read.
@@ -702,6 +703,12 @@
       return (entry.scaleGuide?.detected ? 1000 : 0) + entry.score;
     }
 
+    edgeGuideSummary(entry) {
+      const hint = entry.scaleGuide;
+      return hint?.detected && (entry.guideKind === "edge" || hint.kind === "edge") && Number.isFinite(hint.scale)
+        ? "Edge guide · ~" + hint.scale.toFixed(2) + "× scale." : "";
+    }
+
     captureGuideImage(image) {
       const factor = Math.min(1, 512 / Math.max(image.width, image.height));
       const canvas = this.guideCanvas;
@@ -715,37 +722,66 @@
 
     enqueueFrame(session, entry) {
       if (this.session !== session || session.paused || session.adjusting || session.handingOff) return;
+      if (session.scanningEntry === entry) {
+        // A guide can finish while this same raster is already being searched.
+        // Keep that work running; use the hint for ranking and visible feedback.
+        if (!session.reading && entry.scaleGuide?.detected) this.signature.textContent = this.edgeGuideSummary(entry);
+        return;
+      }
+      if (entry.markerFinished) {
+        // Late hints may promote verified geometry in history, but cannot queue
+        // the exact same completed frame for another marker search.
+        if (entry.scaleGuide?.detected && entry.scan?.markers?.length) {
+          this.retainFrame(session, entry);
+          this.readBestFrame(session);
+        }
+        return;
+      }
       if (session.pending?.scaleGuide?.detected && !entry.scaleGuide?.detected && Date.now() - session.pending.capturedAt < 45000) return;
       session.pending = entry;
+      entry.markerDispatched = true;
       const active = session.scanningEntry;
-      if (entry.scaleGuide?.detected && active && !active.scaleGuide?.detected && !active.markerConfirmed) {
+      if (entry.scaleGuide?.detected && active && !active.markerGuideUsed && !active.markerConfirmed) {
         session.abort?.abort();
-        if (!session.reading) this.progress.textContent = "Scale pilot found. Prioritising frame " + entry.frameNumber + " for marker checks…";
+        if (!session.reading) this.progress.textContent = (entry.guideKind === "edge" ? "Edge guide found. " : "Scale pilot found. ") +
+          "Prioritising frame " + entry.frameNumber + " for marker checks…";
       }
       this.scanMarkers(session);
     }
 
     async checkScaleGuide(session) {
-      if (this.session !== session || session.paused || session.adjusting || session.handingOff || session.guideBusy || !session.guidePending) return;
+      if (this.session !== session || session.purpose === "source" || session.paused || session.adjusting || session.handingOff || session.guideBusy || !session.guidePending) return;
       session.guideBusy = true;
       const entry = session.guidePending; session.guidePending = null;
       const generation = session.guideGeneration;
       const controller = new AbortController(); session.guideAbort = controller;
       const timer = setTimeout(() => controller.abort(), 1200);
       try {
-        const small = entry.guideImage;
-        const hint = await PixelStow.scanScaleGuide(small.pixels, small.width, small.height,
-          { signal: controller.signal, deadline: Date.now() + 1000 });
-        if (this.session !== session || controller.signal.aborted) return;
-        if (hint?.detected && Number.isFinite(hint.scale) && hint.scale > 0 && Math.hypot(hint.fx, hint.fy) > 0) {
-          const fx = hint.fx * small.width / entry.image.width, fy = hint.fy * small.height / entry.image.height;
+        const sample = entry.guideKind === "edge" ? entry.image : entry.guideImage;
+        const scanner = entry.guideKind === "edge" ? PixelStow.scanEdgeGuide : PixelStow.scanScaleGuide;
+        // The worker normally rejects on abort. Also release the latest-frame
+        // queue if a failed implementation ignores cancellation or settles late.
+        let aborted;
+        const cancellation = new Promise((_, reject) => {
+          aborted = () => reject(new DOMException("Cancelled", "AbortError"));
+          controller.signal.addEventListener("abort", aborted, { once: true });
+        });
+        let hint;
+        try {
+          hint = await Promise.race([scanner(sample.pixels, sample.width, sample.height,
+            { signal: controller.signal, deadline: Date.now() + 1000, maxMilliseconds: 1000 }), cancellation]);
+        } finally { controller.signal.removeEventListener("abort", aborted); }
+        if (this.session !== session || controller.signal.aborted || generation !== session.guideGeneration) return;
+        if (hint?.detected && Number.isFinite(hint.scale) && hint.scale > 0 && Number.isFinite(hint.fx) &&
+          Number.isFinite(hint.fy) && Math.hypot(hint.fx, hint.fy) > 0) {
+          const fx = hint.fx * sample.width / entry.image.width, fy = hint.fy * sample.height / entry.image.height;
           entry.scaleGuide = { ...hint, fx, fy, scale: hint.scale * Math.hypot(hint.fx, hint.fy) / Math.hypot(fx, fy),
             width: entry.image.width, height: entry.image.height };
         }
       } catch (_) { /* An unavailable/unclear guide always uses ordinary discovery. */ }
       finally {
         clearTimeout(timer); entry.guideImage = null;
-        if (generation === session.guideGeneration) this.enqueueFrame(session, entry);
+        if (generation === session.guideGeneration && (!entry.markerDispatched || entry.scaleGuide?.detected)) this.enqueueFrame(session, entry);
         session.guideBusy = false;
         if (session.guideAbort === controller) session.guideAbort = null;
         this.checkScaleGuide(session);
@@ -796,7 +832,16 @@
         // Refresh this one slot even during a long payload read. The next marker
         // scan starts from the current framing, rather than an old queued frame.
         const entry = { image: this.captureFrame(), frameNumber: ++session.frames, capturedAt: Date.now() };
-        if (this.scaleGuideEnabled && typeof PixelStow.scanScaleGuide === "function") {
+        if (!this.scaleGuideEnabled && typeof PixelStow.scanEdgeGuide === "function") {
+          // Downsampling happens once inside the guide worker. The original
+          // raster is also retained for marker checks and lossless hand-off.
+          entry.guideKind = "edge";
+          // Ordinary marker acquisition starts immediately; the independent
+          // latest-frame guide queue must never delay the established fallback.
+          this.enqueueFrame(session, entry);
+          session.guidePending = entry;
+          this.checkScaleGuide(session);
+        } else if (this.scaleGuideEnabled && typeof PixelStow.scanScaleGuide === "function") {
           entry.guideImage = this.captureGuideImage(entry.image);
           session.guidePending = entry;
           this.checkScaleGuide(session);
@@ -819,18 +864,23 @@
       const { image, frameNumber } = entry;
       const controller = new AbortController();
       session.abort = controller;
+      // A late same-frame hint is useful for ranking, but cannot retroactively
+      // change the options used by an already-running marker worker.
+      const scaleGuide = entry.scaleGuide || false;
+      entry.markerGuideUsed = Boolean(scaleGuide?.detected);
       try {
         const prefix = "Frame " + frameNumber + " · " + image.width + " × " + image.height + ": ";
         if (!session.reading) {
-          this.signature.textContent = "";
-          this.progress.textContent = prefix + "Checking markers…";
+          this.signature.textContent = this.edgeGuideSummary(entry);
+          this.progress.textContent = prefix + (entry.guideKind === "edge" && entry.scaleGuide?.detected
+            ? "Edge guide found. Checking markers…" : "Checking markers…");
           this.readProgress.begin(this.progress.textContent);
         }
         const previous = session.tracking?.scan;
         const header = previous?.markers?.find((m) => m.verification === "header");
         const scan = await PixelStow.scanMarkers(image.pixels, image.width, image.height, {
           mode: "perspective", camera: true, deadline: Date.now() + (header ? 12000 : 24000), signal: controller.signal,
-          scaleGuide: entry.scaleGuide || false,
+          scaleGuide,
           seed: previous?.width === image.width && previous?.height === image.height && header
             ? { ...header, initialMatrix: previous.geometry?.matrix } : undefined,
           onProgress: (text) => { if (this.session === session && !controller.signal.aborted && !session.reading) {
@@ -838,7 +888,7 @@
           } },
           onSignature: (signature) => { if (this.session === session && !controller.signal.aborted) {
             if (signature.confirmed) entry.markerConfirmed = true;
-            this.signature.textContent = signature.message;
+            this.signature.textContent = [this.edgeGuideSummary(entry), signature.message].filter(Boolean).join(" ");
             if (!session.reading) this.readProgress.signature(signature);
           } }
         });
@@ -854,13 +904,14 @@
           session.appraised = Math.max(2, session.appraised);
           session.readAbort.abort(); // Terminates the payload worker, not just its UI updates.
           this.progress.textContent = (entry.scaleGuide?.detected && !session.readEntry.scaleGuide?.detected
-            ? "A marker-bearing capture with a scale pilot was found. Switching to frame " : "A stronger marker fit was found. Switching to frame ") + frameNumber + "…";
+            ? "A marker-bearing capture with a scale guide was found. Switching to frame " : "A stronger marker fit was found. Switching to frame ") + frameNumber + "…";
         }
-        this.signature.textContent = scan.highConfidence
+        const signatureText = scan.highConfidence
           ? "All markers agree strongly. Reading the most promising capture."
           : scan.markers?.length ? "Recovery markers verified. Comparing captures before reading contents."
           : scan.signature?.likely ? "Frequency hints found; no verified markers in this capture."
             : "No encoding signature or checksum-valid markers found.";
+        this.signature.textContent = [this.edgeGuideSummary(entry), signatureText].filter(Boolean).join(" ");
         if (!session.reading) this.progress.textContent = prefix + (scan.candidates?.length
           ? "Marker scan complete. Ranking the recent captures…"
           : "No stable marker fit. Reframe and hold steady; checking a fresh capture…");
@@ -874,6 +925,7 @@
         this.readProgress.finish(this.progress.textContent, "failed");
         this.sync();
       } finally {
+        entry.markerFinished = true;
         session.scanning = false;
         if (session.scanningEntry === entry) session.scanningEntry = null;
         if (session.abort === controller) session.abort = null;
@@ -890,7 +942,7 @@
       session.reading = true;
       session.readEntry = entry;
       this.clearFeedback?.();
-      this.signature.textContent = "";
+      this.signature.textContent = this.edgeGuideSummary(entry);
       this.progress.textContent = "Reading best capture · frame " + entry.frameNumber + "…";
       this.readProgress.update(this.progress.textContent);
       entry.attempted = true;
