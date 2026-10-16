@@ -46,6 +46,23 @@ try {
       await useFile(new File([await PixelStow.writePng(pixels, width, height)], 'public-source.png', { type: 'image/png' }), 'file', { image, sourceOnly: true });
       window.sourceFixture = image;
     });
+    await page.locator('#viewport').scrollIntoViewIfNeeded();
+    const clipping = await page.evaluate(() => {
+      const saved=current.transformResult;
+      const matrix=[1,.1,20,.05,1,30,0,0,1];
+      const point=(x,y)=>({x:x+.1*y+20,y:.05*x+y+30});
+      current.transformResult={geometry:{originalWidth:320,originalHeight:400,matrix,
+        corners:[point(0,0),point(319,0),point(319,399),point(0,399)]}};
+      resetView();
+      const box=viewport.getBoundingClientRect();
+      const hitsImage=(x,y)=>compare.contains(document.elementFromPoint(box.left+originX+x*viewScale,box.top+originY+y*viewScale));
+      const result={clip:compare.style.clipPath,inside:hitsImage(200,238),outside:hitsImage(22,300)};
+      current.transformResult=saved;resetView();
+      result.cleared=compare.style.clipPath==='';
+      return result;
+    });
+    assert(clipping.clip.startsWith('polygon(')&&clipping.inside&&!clipping.outside&&clipping.cleared,
+      'a tilted carrier must hide camera pixels outside its quadrilateral and clear clipping for an unframed image: '+JSON.stringify(clipping));
     await page.locator('#preview-encoded-image').locator('..').screenshot({ path: path.join(snapshots, `image-actions-lower-${width}.png`) });
     const cleanLayers = ['#preview-source', '#transform-outline', '#compare-ui', '#comparison-control', '#tag-encoded', '#tag-source'];
     const checkCleanLayers = async (source = false) => {

@@ -196,6 +196,36 @@
     }
     return colours.some(seed=>colours.filter(value=>Math.max(...value.map((v,i)=>Math.abs(v-seed[i])))<20).length>=24);
   }
+  // Geometry proposals only: browser chrome and a bezel can hide the picture
+  // inside the outer screen outline. Frequency/phase verification is unchanged.
+  function contentQuads(pixels,w,h,check) {
+    const rgb=(x,y,k)=>pixels[(x+y*w)*4+k];
+    const peaks=(vertical,start,stop)=>{
+      const n=vertical?w:h,m=vertical?h:w,values=[];
+      for(let p=1;p<n;p++) {
+        if((p&31)===0)check();
+        let score=0;
+        for(let q=start;q<stop;q++)for(let k=0;k<3;k++)
+          score+=Math.abs(vertical?rgb(p,q,k)-rgb(p-1,q,k):rgb(q,p,k)-rgb(q,p-1,k));
+        values.push({p,score:score/Math.max(1,stop-start)});
+      }
+      values.sort((a,b)=>b.score-a.score);const found=[];
+      for(const value of values)if(!found.some(other=>Math.abs(other.p-value.p)<Math.max(3,n*.02))) {
+        found.push(value);if(found.length===8)break;
+      }
+      return found;
+    };
+    const rows=[{p:0,score:0},...peaks(false,0,w),{p:h-1,score:0}],pairs=[];
+    for(const a of rows)for(const b of rows)if(b.p-a.p>=h*.5)
+      pairs.push({top:a.p,bottom:b.p,score:a.score+b.score});
+    pairs.sort((a,b)=>b.score-a.score);
+    return pairs.slice(0,6).map(pair=>{
+      const columns=peaks(true,pair.top,pair.bottom);
+      const left=columns.find(value=>value.p<w*.25)?.p||0;
+      const right=columns.find(value=>value.p>w*.75)?.p||w-1;
+      return [{x:left,y:pair.top},{x:right,y:pair.top},{x:right,y:pair.bottom},{x:left,y:pair.bottom}];
+    });
+  }
   function quadMap(corners) {
     const [a,b,c,d]=corners,dx1=b.x-c.x,dx2=d.x-c.x,dx3=a.x-b.x+c.x-d.x;
     const dy1=b.y-c.y,dy2=d.y-c.y,dy3=a.y-b.y+c.y-d.y,denominator=dx1*dy2-dx2*dy1;
@@ -301,6 +331,15 @@
       }
       if(!best){original.knownBounds=true;best=await searchQuarter(original,searchOptions,check);original.knownBounds=false;}
       if(!best)best=await searchQuarter(original,searchOptions,check);
+      if(!best&&options.contentSearch!==false) {
+        for(const quad of contentQuads(coarse,w,h,check)) {
+          const full=quad.map(p=>({x:(p.x+.5)*reduction-.5,y:(p.y+.5)*reduction-.5}));
+          if(polygonArea(full)/(width*height)<(options.minimumCoverage??.5))continue;
+          const rectified=rectify(original,full,check);if(!rectified)continue;
+          const candidate=await searchQuarter(rectified,searchOptions,check);
+          if(candidate){best=candidate;selected=rectified;break;}
+        }
+      }
       if(!best)return null;
       const horizontal=best.pairs[0],vertical=best.pairs[1];
       const bounds={left:vertical.first.position*reduction-INSET*best.scale,

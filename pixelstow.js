@@ -1406,7 +1406,7 @@
 
   function searchInWorker(pixels, width, height, options, operation = "geometry") {
     return new Promise((resolve, reject) => {
-      const url = new URL("pixelstow-transform-worker.js?v=20261016-early-payload1", codecScriptUrl);
+      const url = new URL("pixelstow-transform-worker.js?v=20261016-content-region1", codecScriptUrl);
       const worker = new Worker(url);
       let finished = false;
       const abort = () => { if (finished) return; cleanup(); reject(new DOMException("Search cancelled.", "AbortError")); };
@@ -1435,7 +1435,7 @@
           seedDeadline: options.seedDeadline, camera: options.camera, scan: options.scan,
           searchState: options.searchState, stopOnHighConfidence: options.stopOnHighConfidence,
           resumeDiscovery: options.resumeDiscovery, calibratedOnly: options.calibratedOnly,
-          earlyPayload: options.earlyPayload, refinementState: options.refinementState,
+          earlyPayload: options.earlyPayload, refinementState: options.refinementState, contentSearch: options.contentSearch,
           strength: options.strength, visual: options.visual }, [copy.buffer]);
       } catch (error) { cleanup(); reject(error); }
     });
