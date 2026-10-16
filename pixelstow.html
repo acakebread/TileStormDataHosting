@@ -252,7 +252,6 @@
     .preview-screen-toolbar button { flex: 0 0 44px; width: 44px; min-height: 48px; padding: 0; font-size: 0.82rem; font-weight: 500; }
     #preview-audio svg { display: block; }
     .preview-audio-label { display: none; }
-    #preview-audio.waiting-comparison { display: none !important; }
     .preview-screen-toolbar #preview-screen-close { color: var(--tile-azure); font-weight: 700; }
     #preview-screen-toggle[aria-pressed="true"] { border-color: var(--tile-azure); color: var(--tile-azure); }
     .preview-context-menu { position: fixed; z-index: 4; max-width: calc(100% - 16px); padding: 5px; border: 1px solid var(--border); border-radius: 8px; background: #121923; box-shadow: 0 6px 24px #0009; }
@@ -697,7 +696,7 @@
             <p class="hint preview-note" id="preview-note" hidden>(Scroll to zoom; right-drag to pan)</p>
           </div>
           <div class="preview-bottom-row" id="preview-bottom-row">
-            <button class="preview-audio waiting-comparison" id="preview-audio" type="button" aria-label="Play audio" title="Play audio" disabled hidden><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7m3-10a9 9 0 0 1 0 13"/></svg><span class="preview-audio-label">Play audio</span></button>
+            <button class="preview-audio" id="preview-audio" type="button" aria-label="Play audio" title="Play audio" disabled hidden><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7m3-10a9 9 0 0 1 0 13"/></svg><span class="preview-audio-label">Play audio</span></button>
             <div class="comparison-control" id="comparison-control" hidden>
               <span>Encoded</span>
               <input id="split" type="range" min="0" max="1000" value="500" aria-label="Comparison divider. Encoded image on the left, recovered source on the right.">
@@ -1648,7 +1647,6 @@
       previewSource.hidden = true;
       compareUi.hidden = true;
       comparisonControl.hidden = true;
-      document.querySelector("#preview-audio").classList.add("waiting-comparison");
       previewNote.textContent = previewHelp(false);
     }
 
@@ -1929,7 +1927,6 @@
         fullPreview.syncToggleSource();
         compareUi.hidden = false;
         comparisonControl.hidden = false;
-        document.querySelector("#preview-audio").classList.remove("waiting-comparison");
         preview.hidden = false;
         previewNote.hidden = previewHelpDismissed;
         previewNote.textContent = previewHelp(true);
