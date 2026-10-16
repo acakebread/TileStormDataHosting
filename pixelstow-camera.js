@@ -448,12 +448,14 @@
     layoutPreview() {
       const session = this.session, width = this.video.videoWidth, height = this.video.videoHeight;
       this.frame.hidden = !session?.ready || !width || !height;
-      if (this.frame.hidden) { this.placeCalibration(); return; }
+      if (this.frame.hidden) { this.resetPortraitPreview(); this.placeCalibration(); return; }
       const sideways = session.rotation % 180 !== 0;
       const frameWidth = sideways ? height : width, frameHeight = sideways ? width : height;
-      const scale = Math.min(this.view.clientWidth / frameWidth, this.view.clientHeight / frameHeight);
+      const viewW = this.view.clientWidth || 1;
+      const viewH = this.fitPortraitPreview(frameWidth, frameHeight) || this.view.clientHeight;
+      const scale = Math.min(viewW / frameWidth, viewH / frameHeight);
       const w = frameWidth * scale, h = frameHeight * scale;
-      const left = (this.view.clientWidth - w) / 2, top = (this.view.clientHeight - h) / 2;
+      const left = (viewW - w) / 2, top = (viewH - h) / 2;
       // Fit the entire frame. The border follows actual video pixels, including
       // right-angle rotation, rather than an arbitrary CSS crop or screen shape.
       this.video.style.width = width * scale + "px";
@@ -461,6 +463,44 @@
       this.video.style.transform = "translate(-50%, -50%) rotate(" + session.rotation + "deg)";
       Object.assign(this.frame.style, { left: left + "px", top: top + "px", width: w + "px", height: h + "px" });
       this.placeCalibration(left, top, w);
+    }
+
+    portraitStacked() {
+      return window.matchMedia("(orientation: portrait)").matches && window.matchMedia("(min-height: 601px)").matches;
+    }
+
+    fitPortraitPreview(frameWidth, frameHeight) {
+      // A tall camera frame inside the short flexible row is scaled to the row
+      // height, which leaves empty columns on either side. Give it the full
+      // column width and let the notes use the space that remains.
+      if (!this.portraitStacked() || !frameWidth || !frameHeight) { this.resetPortraitPreview(); return 0; }
+      const header = this.panel.querySelector(".camera-header")?.offsetHeight || 0;
+      const controls = this.panel.querySelector(".camera-controls")?.offsetHeight || 0;
+      const status = this.panel.querySelector("#camera-read-status");
+      const statusOut = status && getComputedStyle(status).position === "absolute";
+      const footer = this.panel.querySelector(".camera-footer");
+      const footerStyle = footer ? getComputedStyle(footer) : null;
+      const footerGap = footerStyle ? parseFloat(footerStyle.rowGap || footerStyle.gap) || 0 : 0;
+      const footerPad = footerStyle ? (parseFloat(footerStyle.paddingTop) || 0) + (parseFloat(footerStyle.paddingBottom) || 0) : 0;
+      const style = getComputedStyle(this.panel);
+      const padY = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+      const gap = parseFloat(style.rowGap || style.gap) || 0;
+      const statusH = statusOut ? 0 : (status?.offsetHeight || 0);
+      const footerGaps = footerGap * (statusOut ? 1 : 2);
+      const available = this.panel.clientHeight - header - controls - statusH - padY - gap * 2 - footerPad - footerGaps;
+      const needed = this.view.clientWidth * frameHeight / frameWidth;
+      const next = Math.max(120, Math.floor(Math.min(needed, Math.max(120, available))));
+      if (this.view.style.height !== next + "px") {
+        this.view.style.minHeight = "0px";
+        this.view.style.height = next + "px";
+      }
+      return next;
+    }
+
+    resetPortraitPreview() {
+      if (!this.view?.style.height && !this.view?.style.minHeight) return;
+      this.view.style.height = "";
+      this.view.style.minHeight = "";
     }
 
     placeCalibration(frameLeft, frameTop, frameWidth) {

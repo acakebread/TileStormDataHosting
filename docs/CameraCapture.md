@@ -41,7 +41,8 @@ may need to release the device before retrying. These retries do not guarantee
 that an incompatible driver can be opened by the browser.
 The preview uses `muted`, `autoplay` and `playsinline` for Safari, displays the
 whole video frame without cropping, and stays live while a captured raster is
-read. Captures use the video's actual pixel dimensions, without resizing or JPEG
+read. In portrait the frame uses the full width of the camera column; the scan
+notes take the height that remains. Captures use the video's actual pixel dimensions, without resizing or JPEG
 conversion. The browser may already scale/process the sensor feed; video detail
 can therefore be worse than a full-resolution still photograph.
 

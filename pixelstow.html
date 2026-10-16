@@ -313,9 +313,10 @@
         max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
       background: #081016; color: var(--text); overflow: hidden;
     }
-    .camera-panel[open] { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 10px; }
+    .camera-panel[open] { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; gap: 10px; }
     .camera-panel::backdrop { background: #081016; }
-    .camera-header { display: flex; gap: 12px; align-items: center; justify-content: space-between; }
+    .camera-header { display: flex; gap: 12px; align-items: center; justify-content: space-between; min-width: 0; }
+    .camera-header > div { min-width: 0; }
     .camera-header h2 { margin: 0; font-size: 1.1rem; }
     .camera-header .hint { margin: 3px 0 0; font-size: 0.82rem; }
     .camera-mode-warning { color: #efc66a; }
@@ -348,6 +349,31 @@
     .camera-controls:not(:has(#pause-camera:not([hidden]))) #capture-frame { margin-right: 52px; }
     .camera-controls:not(:has(#camera-take-photo:not([hidden]))) #rotate-camera { grid-column: 1 / -1; }
     .camera-feedback > .hint { margin: 0 0 8px; font-size: 0.82rem; overflow-wrap: anywhere; }
+    @media (orientation: portrait) {
+      .camera-panel[open] {
+        grid-template-rows: auto auto minmax(0, 1fr);
+        gap: 4px;
+        padding: max(6px, env(safe-area-inset-top)) max(6px, env(safe-area-inset-right))
+          max(6px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left));
+      }
+      .camera-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0 8px; }
+      .camera-header > div { display: contents; }
+      .camera-header h2 { grid-column: 1; grid-row: 1; font-size: 1rem; }
+      .camera-header .hint { grid-column: 1 / -1; grid-row: 2; margin: 0; font-size: 0.75rem; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .camera-header button { grid-column: 2; grid-row: 1; padding: 4px 8px; }
+      .camera-view { width: 100%; min-height: 0; }
+      .camera-footer { min-height: 0; overflow: visible; gap: 4px; grid-template-rows: auto minmax(0, 1fr); }
+      .camera-footer .read-live-status {
+        position: absolute; left: 0; right: 0; bottom: calc(100% + 2px); z-index: 2;
+        margin: 0; height: auto; padding: 1px 6px; pointer-events: none;
+        background: #081016d0; text-shadow: 0 1px 2px #000;
+      }
+      .camera-footer .camera-controls { grid-row: 1; }
+      .camera-footer .camera-feedback { grid-row: 2; }
+      .camera-controls { gap: 6px; }
+      .camera-controls button { padding: 4px 4px; line-height: 1.1; }
+      .camera-feedback { height: 100%; max-height: none; min-height: 0; }
+    }
     @media (orientation: landscape) and (max-height: 600px) {
       .camera-panel[open] { grid-template-columns: minmax(0, 1fr) minmax(190px, 260px); grid-template-rows: auto minmax(0, 1fr); }
       .camera-header { grid-column: 1 / -1; }
@@ -961,7 +987,7 @@
   <script src="./pixelstow-media.js?v=20261015-preview-icons1"></script>
   <script src="./pixelstow-sharing.js?v=20261016-preview-copy1"></script>
   <script src="./pixelstow-read-progress.js?v=20261016-frame-outline"></script>
-  <script src="./pixelstow-camera.js?v=20261016-frame-outline"></script>
+  <script src="./pixelstow-camera.js?v=20261016-portrait-width"></script>
   <script src="./pixelstow-preview.js?v=20261016-scale-toggle1"></script>
   <script>
     const fileInput = document.querySelector("#file");
