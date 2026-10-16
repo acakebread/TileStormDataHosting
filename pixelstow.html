@@ -364,14 +364,14 @@
       .camera-header .hint { grid-column: 1 / -1; grid-row: 2; margin: 0; font-size: 0.75rem; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .camera-header button { grid-column: 2; grid-row: 1; padding: 4px 8px; }
       .camera-view { width: 100%; min-height: 0; }
-      .camera-footer { position: relative; min-height: 0; overflow: visible; gap: 4px; grid-template-rows: auto minmax(0, 1fr); }
+      .camera-footer { position: relative; min-height: 0; overflow: hidden; gap: 6px; grid-template-rows: auto auto minmax(0, 1fr); }
       .camera-footer .read-live-status {
-        position: absolute; left: 0; right: 0; bottom: calc(100% + 2px); z-index: 2;
+        position: static; grid-row: 1;
         margin: 0; height: auto; padding: 1px 6px; pointer-events: none;
         background: #081016d0; text-shadow: 0 1px 2px #000;
       }
-      .camera-footer .camera-controls { grid-row: 1; }
-      .camera-footer .camera-feedback { grid-row: 2; }
+      .camera-footer .camera-controls { grid-row: 2; }
+      .camera-footer .camera-feedback { grid-row: 3; }
       .camera-controls { gap: 6px; }
       .camera-controls button { padding: 4px 4px; line-height: 1.1; }
       .camera-feedback { height: 100%; max-height: none; min-height: 0; }
@@ -1551,7 +1551,7 @@
     }
 
     function grabbedFrame(job = current) {
-      const corners = job?.transformResult?.geometry?.corners;
+      const corners = job?.transformResult?.geometry?.corners || job?.repetition?.geometry?.corners;
       const w = job?.width, h = job?.height;
       const shown = imagePixels();
       if (!w || !h || shown.w !== w || shown.h !== h || !corners || corners.length < 4) return null;
@@ -1651,7 +1651,7 @@
       const frame = frameOf(img);
       const maxHeight = window.matchMedia("(max-width: 620px)").matches ? Math.min(360, window.innerHeight * 0.42) : 420;
       const height = fullPreview.openNow ? document.querySelector("#preview-screen").clientHeight :
-        Math.max(120, Math.min(maxHeight, width * frame.h / frame.w));
+        maxHeight;
       const next = height + "px";
       if (viewport.style.height !== next) viewport.style.height = next;
       applyView();

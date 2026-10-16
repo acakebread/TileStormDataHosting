@@ -463,7 +463,7 @@
       // Hardware zoom is already in the video frames. Simulated zoom enlarges
       // the same centred preview and the capture crops to the visible part.
       const zoom = session.zoomMode === "simulated" ? (session.zoom || 1) : 1;
-      const scale = Math.min(viewW / frameWidth, viewH / frameHeight) * zoom;
+      const scale = Math.min(Math.max(1, viewW - 8) / frameWidth, Math.max(1, viewH - 8) / frameHeight) * zoom;
       const w = frameWidth * scale, h = frameHeight * scale;
       const videoLeft = (viewW - w) / 2, videoTop = (viewH - h) / 2;
       const left = Math.max(0, videoLeft), top = Math.max(0, videoTop);
@@ -619,8 +619,8 @@
       const footerGaps = footerGap * (statusOut ? 1 : 2);
       const available = this.panel.clientHeight - header - controls - statusH - padY - gap * 2 - footerPad - footerGaps;
       const needed = this.view.clientWidth * frameHeight / frameWidth;
-      const room = Math.max(120, available);
-      const next = Math.floor(needed > room && needed - room <= 8 ? needed : Math.min(needed, room));
+      const room = Math.max(1, available - 32);
+      const next = Math.floor(Math.min(needed, room));
       if (this.view.style.height !== next + "px") {
         this.view.style.minHeight = "0px";
         this.view.style.height = next + "px";
