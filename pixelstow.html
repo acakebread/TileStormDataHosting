@@ -989,7 +989,7 @@
   <script src="./pixelstow-media.js?v=20261015-preview-icons1"></script>
   <script src="./pixelstow-sharing.js?v=20261016-preview-copy1"></script>
   <script src="./pixelstow-read-progress.js?v=20261016-frame-outline"></script>
-  <script src="./pixelstow-camera.js?v=20261016-clear-capture"></script>
+  <script src="./pixelstow-camera.js?v=20261016-opt-in-analysis"></script>
   <script src="./pixelstow-preview.js?v=20261016-source-default"></script>
   <script>
     const fileInput = document.querySelector("#file");
@@ -1746,7 +1746,7 @@
     }
 
     function paintTransform(canvas, result, width, height) {
-      if (canvas === transformOutline && (!fullPreview.openNow || !showTransform.checked)) {
+      if (canvas !== transformOutline || !fullPreview.openNow || !showTransform.checked || current?.markerGuideOverride !== true) {
         canvas.hidden = true;
         return;
       }
@@ -1830,6 +1830,7 @@
       if (current) current.markerGuideOverride = false;
       showTransform.checked = false;
       transformOutline.hidden = true;
+      transformOutline.width = transformOutline.height = 0;
       calibrationAnalysis.hidden = true;
     }
 
@@ -1846,7 +1847,7 @@
     function drawTransform(result) {
       // The outline is a fullscreen request. Decoding stores the geometry and
       // does not paint it onto the page preview.
-      if (!current || !result || !fullPreview.openNow || !showTransform.checked) {
+      if (!current || !result || !fullPreview.openNow || !showTransform.checked || current.markerGuideOverride !== true) {
         transformOutline.hidden = true;
         calibrationAnalysis.hidden = true;
         return;
@@ -1858,6 +1859,8 @@
     }
 
     showTransform.addEventListener("change", async () => {
+      if (!fullPreview.openNow) { disarmAnalysis(); return; }
+      if (!showTransform.checked) { disarmAnalysis(); if (current && !preview.hidden) resetView(); return; }
       if (current) current.markerGuideOverride = showTransform.checked;
       const job = current;
       const framed = Boolean(grabbedFrame(job));

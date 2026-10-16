@@ -100,6 +100,7 @@ try{
   assert(positive.overlay&&positive.purple&&positive.trace.used,'Analysis must draw the measured calibration bands');
   await page.locator('#show-transform').uncheck();
   assert(await page.evaluate(()=>document.querySelector('#calibration-analysis').hidden&&transformOutline.hidden));
+  assert(await page.evaluate(()=>transformOutline.width===0&&transformOutline.height===0),'Analysis off must erase diagnostic pixels');
   await page.locator('#show-transform').check();
   await page.waitForFunction(()=>!transformOutline.hidden);
   await page.locator('#preview-screen-close').click();
@@ -126,6 +127,11 @@ try{
   assert(/checked during analysis/i.test(nativeAnalysis.text)&&/original read.*native pixel grid/i.test(nativeAnalysis.text));
   await page.evaluate(()=>camera.clearFeedback());
   assert(await page.evaluate(()=>!showTransform.checked&&transformOutline.hidden&&calibrationAnalysis.hidden),'starting the next camera capture revokes Analysis immediately');
+  await page.evaluate(()=>{
+    camera.drawGuides=()=>{throw Error('Camera appraisal must never render analysis markers');};
+    camera.showBestFrame({best:{image:{width:1,height:1,pixels:new Uint8Array([0,0,0,255])},scan:{markers:[]},frameNumber:1}});
+  });
+  assert(await page.evaluate(()=>camera.guides.hidden&&!camera.guides.width&&!camera.guides.height),'automatic camera appraisals leave the diagnostic canvas empty');
   await page.evaluate(()=>clearPreviewFrame());
   assert(await page.evaluate(()=>preview.hidden&&[previewEncoded,previewSource,transformOutline].every(c=>!c.width&&!c.height&&!c.dataset.imageWidth&&!c.dataset.imageHeight)),
     'capture handoff must erase both old image rasters and diagnostics, not just hide the overlay');

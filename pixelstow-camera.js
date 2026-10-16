@@ -1073,7 +1073,10 @@
         this.still.width = image.width; this.still.height = image.height;
         this.still.getContext("2d").putImageData(new ImageData(new Uint8ClampedArray(image.pixels.buffer,
           image.pixels.byteOffset, image.pixels.byteLength), image.width, image.height), 0, 0);
-        this.drawGuides(this.guides, scan, image.width, image.height);
+        // Recovery metadata is retained, but diagnostics are painted only on
+        // an explicit Analysis request in the image preview.
+        this.guides.width = this.guides.height = 0;
+        this.guides.hidden = true;
         this.displayedFrame = entry;
       }
       const markerTotal = entry.scan?.geometry?.markerTotal || entry.inspection?.geometry?.markerTotal ||
