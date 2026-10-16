@@ -42,24 +42,34 @@
   const polygonArea=points=>Math.abs(points.reduce((sum,point,i)=>{
     const next=points[(i+1)%points.length];return sum+point.x*next.y-next.x*point.y;
   },0))/2;
+  function tangentSpans(N,start,stop) {
+    const spans=[],add=(a,b)=>{
+      a=Math.max(0,Math.min(N-24,Math.round(a)));b=Math.max(a+24,Math.min(N,Math.round(b)));
+      if(b-a<24||spans.some(([u,v])=>Math.abs(u-a)<2&&Math.abs(v-b)<2))return;
+      spans.push([a,b]);
+    };
+    add(start,stop);
+    for(const inset of [.12,.24])add(N*inset,N*(1-inset));
+    add(N*.16,N);add(0,N*.84);add(N*.14,N*.86);
+    return spans;
+  }
   function scanAxis(q,scale,vertical,check) {
     const {data,w,h,reduction}=q,N=vertical?h:w,M=vertical?w:h;
     const start=Math.round(64*scale/reduction),stop=N-start,L=Math.round(BAND*scale/reduction);
     if(stop<start+16||L<4||M<L)return [];
-    const state=q.axes[vertical?1:0],{rs,basis,prefix}=state,stride=(N+1)*4,normalization=2/(stop-start);
+    const state=q.axes[vertical?1:0],{rs,basis,prefix}=state,stride=(N+1)*4;
     for(let x=0;x<N;x++) {
       const a=TAU*(x+.5)*reduction/(64*scale),b=TAU*(x+.5)*reduction/(96*scale),i=x*4;
       basis[i]=Math.cos(a);basis[i+1]=Math.sin(a);basis[i+2]=Math.cos(b);basis[i+3]=Math.sin(b);
     }
     for(let y=0;y<M;y++) {
       if((y&63)===0)check();
-      const i=y*4,row=y*stride;let a=0,b=0,c=0,d=0;
+      const row=y*stride;let a=0,b=0,c=0,d=0;
       for(let x=0;x<N;x++) {
         const value=vertical?data[y+x*w]:data[x+y*w],j=x*4,to=row+(x+1)*4;
         a+=value*basis[j];b+=value*basis[j+1];c+=value*basis[j+2];d+=value*basis[j+3];
         prefix[to]=a;prefix[to+1]=b;prefix[to+2]=c;prefix[to+3]=d;
       }
-      for(let k=0;k<4;k++)rs[i+k]=(prefix[row+stop*4+k]-prefix[row+start*4+k])*normalization;
     }
     const kernel=new Float64Array(L);let mean=0,slope=0,energy=0;
     for(let j=0;j<L;j++) {
@@ -72,16 +82,27 @@
     for(let j=0;j<L;j++){kernel[j]-=mean+slope*(j-(L-1)/2);energy+=kernel[j]*kernel[j];}
     state.kernel=kernel;state.energy=energy;
     const found=[];
-    for(let y=0;y<=M-L;y++)for(let direction=0;direction<2;direction++) {
-      if(q.knownBounds&&Math.min(Math.abs(y-INSET*scale/reduction),Math.abs(y-(M-(INSET+BAND)*scale/reduction)))>2.5)continue;
-      let a=0,b=0,c=0,d=0;
-      for(let j=0;j<L;j++) {
-        const value=kernel[direction?L-1-j:j]/energy,i=(y+j)*4;
-        a+=rs[i]*value;b+=rs[i+1]*value;c+=rs[i+2]*value;d+=rs[i+3]*value;
+    // A toolbar, bezel or other surround must not be averaged into the guide.
+    // A known picture is one span. An unknown frame also tries the picture's
+    // own span, centred and with one side left out.
+    const spans=q.knownBounds?[[start,stop]]:tangentSpans(N,start,stop);
+    for(const [spanStart,spanStop] of spans) {
+      const spanNorm=2/(spanStop-spanStart);
+      for(let y=0;y<M;y++) {
+        const row=y*stride,i=y*4;
+        for(let k=0;k<4;k++)rs[i+k]=(prefix[row+spanStop*4+k]-prefix[row+spanStart*4+k])*spanNorm;
       }
-      const amplitude=[Math.hypot(a,b),Math.hypot(c,d)],phase=[Math.atan2(b,a),Math.atan2(d,c)];
-      const closure=angleDistance(2*phase[0]-3*phase[1]-(6*PHASES[1]-4*PHASES[0])/2),score=Math.min(...amplitude);
-      if(score>(q.knownBounds?.3:.5)&&closure<(q.knownBounds?Math.PI:1.1))found.push({position:y,direction,amplitude,phase,closure,score});
+      for(let y=0;y<=M-L;y++)for(let direction=0;direction<2;direction++) {
+        if(q.knownBounds&&Math.min(Math.abs(y-INSET*scale/reduction),Math.abs(y-(M-(INSET+BAND)*scale/reduction)))>2.5)continue;
+        let a=0,b=0,c=0,d=0;
+        for(let j=0;j<L;j++) {
+          const value=kernel[direction?L-1-j:j]/energy,i=(y+j)*4;
+          a+=rs[i]*value;b+=rs[i+1]*value;c+=rs[i+2]*value;d+=rs[i+3]*value;
+        }
+        const amplitude=[Math.hypot(a,b),Math.hypot(c,d)],phase=[Math.atan2(b,a),Math.atan2(d,c)];
+        const closure=angleDistance(2*phase[0]-3*phase[1]-(6*PHASES[1]-4*PHASES[0])/2),score=Math.min(...amplitude);
+        if(score>(q.knownBounds?.3:.5)&&closure<(q.knownBounds?Math.PI:1.1))found.push({position:y,direction,amplitude,phase,closure,score});
+      }
     }
     found.sort((a,b)=>b.score-a.score);const separated=[];
     for(const value of found)if(!separated.some(previous=>previous.direction===value.direction&&Math.abs(previous.position-value.position)<L*.3))separated.push(value);

@@ -112,6 +112,27 @@ assert(smallHint&&Math.abs(smallHint.scale/(3.18*773/3024)-1)<.02);assert.equal(
 const largeControl=framed(plain);
 assert.equal(await E.detect(largeControl.pixels,largeControl.width,largeControl.height,{minimumCoverage:.75,maxMilliseconds:1600}),null);
 console.log('PASS: framed captures use one 4x/8x/12x reduction according to size and find the native scale; guide-free large control rejected');
+// A toolbar and bezel are not a flat black field. The guide has to be measured
+// on the picture span, or the surround is averaged in and the match disappears.
+function busySurround(image) {
+  const top=Math.round(image.height*.16),bottom=Math.round(image.height*.14),side=Math.round(image.width*.08);
+  const width=image.width+side*2,height=image.height+top+bottom,pixels=new Uint8Array(width*height*4);
+  let state=99;
+  for(let y=0;y<height;y++)for(let x=0;x<width;x++) {
+    state=(Math.imul(state,1103515245)+12345)>>>0;const n=state%90,i=(x+y*width)*4;
+    if(y<top){pixels.set([30+n,80+(x%70),150,255],i);continue;}
+    if(y>=height-bottom){pixels.set([15+(x%110),25,40+n,255],i);continue;}
+    if(x<side||x>=width-side){pixels.set([190-(y%80),150,50+n,255],i);continue;}
+    pixels.set(image.pixels.subarray((x-side+(y-top)*image.width)*4,(x-side+(y-top)*image.width)*4+4),i);
+  }
+  return {pixels,width,height};
+}
+const surrounded=busySurround({pixels:marked,width:w,height:h});
+const surroundHint=await E.detect(surrounded.pixels,surrounded.width,surrounded.height,{outlineSearch:false,contentSearch:false,minimumCoverage:.5,maxMilliseconds:3000});
+assert(surroundHint&&Math.abs(surroundHint.scale-1)<.02,'a toolbar and bezel must not hide the guide');
+const plainSurround=busySurround({pixels:original,width:w,height:h});
+assert.equal(await E.detect(plainSurround.pixels,plainSurround.width,plainSurround.height,{outlineSearch:false,contentSearch:false,minimumCoverage:.5,maxMilliseconds:3000}),null,'surrounding chrome without a guide is not calibration');
+console.log('PASS: guide surrounded by a toolbar and bezel still calibrates; the same chrome without a guide does not');
 console.log(`PASS: cancellation/deadline; 15 positive appraisals ${Math.min(...measurements)}-${Math.max(...measurements)} ms (real camera performance still needs testing)`);
 
 

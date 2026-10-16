@@ -143,8 +143,11 @@ worker. The live-preview indicator reads **Searching** until a frame is checked,
 **No signal** when that check finds no guide, and **Calibration found** when it
 does. The scan notes still show **Edge guide · ~1.25× scale**. This
 indicates measured guide evidence, not a confirmed payload. The two local
-frequencies, transverse envelope and spatial phases must agree. Visible padding
-can propose a tilted rectangle, but its outline alone is never a detection.
+frequencies, transverse envelope and spatial phases must agree. A toolbar,
+bezel or other surround does not need to be black: the guide is also measured
+on the picture's own span, so those surrounding pixels are not averaged into
+the calibration. Visible padding can propose a tilted rectangle, but its
+outline alone is never a detection.
 
 A calibrated frame attempts one guided marker grid with an eight-second budget.
 Its payload worker uses only the resulting verified candidates, without
