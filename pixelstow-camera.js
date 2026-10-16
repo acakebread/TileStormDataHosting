@@ -532,6 +532,7 @@
       this.switchButton.disabled = this.rotateButton.disabled || (!this.nativePhotoCapture && this.devicesKnown && !next);
       this.switchButton.title = next?.label ? "Switch to " + next.label : this.switchButton.disabled && ready
         ? "No other camera is available to this browser" : "Switch camera";
+      this.switchButton.setAttribute("aria-label", this.switchButton.title);
       this.useNearButton.disabled = locked || !session?.best || Boolean(session?.handingOff);
       this.layoutPreview();
     }
