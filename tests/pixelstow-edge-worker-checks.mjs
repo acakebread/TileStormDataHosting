@@ -54,6 +54,7 @@ try{
     const hint=await PixelStow.scanEdgeGuide(photo.pixels,photo.width,photo.height,
       {reduction:4,maxMilliseconds:1000,deadline:Date.now()+1000});
     if(!hint)return {hint:false,encodedEdgeGuide:encoded.edgeGuide};
+    const fileHint=await PixelStow.scanEdgeGuide(photo.pixels,photo.width,photo.height);
     const scan=await PixelStow.scanMarkers(photo.pixels,photo.width,photo.height,
       {scaleGuide:hint,deadline:Date.now()+24000});
     const read=await PixelStow.readMarkerCandidates(photo.pixels,photo.width,photo.height,scan,
@@ -79,7 +80,7 @@ try{
       originalIntact:pixels.every((value,index)=>value===original[index]),
       oldExact:old.text==='Public V5 compatibility fixture before the scale pilot.',
       oldEdgeGuide:Boolean(old.edgeGuide),oldPilot:Boolean(old.scalePilot),aborted,
-      guideRequest:guideRequests[0]
+      guideRequest:guideRequests[0],fileGuideRequest:guideRequests[1],fileHint:Boolean(fileHint)
     };
   });
   assert(result.hint,'actual browser guide worker must detect the encoded calibration');
@@ -87,6 +88,7 @@ try{
   assert(Math.abs(result.scale/1.37-1)<.03,'measured capture scale must be within 3%');
   assert.equal(result.reduction,4);assert(result.hintDimensions&&result.guided);
   assert.deepEqual(result.guideRequest,{reduction:4,maxMilliseconds:1000},'the actual guide worker receives the selected sampling reduction and time budget');
+  assert(result.fileHint);assert.equal(result.fileGuideRequest.maxMilliseconds,6000,'file calibration gets a device-tolerant budget; explicit live budgets remain unchanged');
   assert.equal(result.markers,4);assert(result.read&&result.exact&&result.nativeExact);
   assert(result.nativeEdgeGuide&&!result.nativePilot&&result.sameRemoval);
   assert(result.oldExact&&!result.oldEdgeGuide&&!result.oldPilot);

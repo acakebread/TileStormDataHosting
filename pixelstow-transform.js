@@ -271,7 +271,7 @@
 
   async function proposeOutlines(pixels, width, height, requested = {}) {
     // Geometry proposals only. A visible rectangle cannot confirm a carrier.
-    const options = { ...requested, deadline: Math.min(requested.deadline || Infinity, Date.now() + 350) };
+    const options = { ...requested, deadline: Math.min(requested.deadline || Infinity, Date.now() + (requested.maxMilliseconds || 350)) };
     const quads = await paddingQuads(pixels, width, height, options);
     const sample = (x, y, channel) => pixels[(Math.max(0, Math.min(width - 1, Math.round(x))) +
       Math.max(0, Math.min(height - 1, Math.round(y))) * width) * 4 + channel];

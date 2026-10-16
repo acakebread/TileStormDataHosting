@@ -283,7 +283,8 @@
         let quads=[];
         // Propose the outline on the very same coarse raster. Re-scanning the
         // full camera image here could exhaust the deadline before calibration.
-        try {quads=(await root.PixelStowTransform.proposeOutlines(coarse,w,h,{signal:options.signal,deadline:Math.min(deadline,Date.now()+250)}))
+        const outlineBudget=Math.min(1500,(options.maxMilliseconds||1000)/4);
+        try {quads=(await root.PixelStowTransform.proposeOutlines(coarse,w,h,{signal:options.signal,maxMilliseconds:outlineBudget,deadline:Math.min(deadline,Date.now()+outlineBudget)}))
           .map(quad=>quad.map(p=>({x:(p.x+.5)*reduction-.5,y:(p.y+.5)*reduction-.5})));}
         catch(error){if(error.name==='AbortError')throw error;}
         // Keep shared rectangular edges first: small independent line-fit

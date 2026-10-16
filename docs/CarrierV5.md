@@ -311,6 +311,15 @@ establish it.
 
 #### Captured-guide recovery and diagnostics (16 October 2026)
 
+File calibration now allows six seconds for identical work on slower devices;
+live camera appraisals retain their explicit one-second limit. Padding proposals
+share that budget instead of imposing a separate desktop-sized 250ms cap.
+Analysis can retry a previously missed guide once, reporting a later detection
+separately from the path used for the original decode. A four-times accelerated
+worker clock reproduces a miss with the old limit on the supplied IMG_2379 PNG
+and detection at 3.18x with the file budget. This models device speed; it is not
+a direct measurement of an iPhone browser.
+
 A supplied photographed screen exposed a detector error: one source-photo tone
 could veto a match despite the intended six-of-eight component agreement. The
 reader now tolerates one such outlier only when at least six correctly phased

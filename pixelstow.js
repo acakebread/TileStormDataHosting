@@ -1403,7 +1403,7 @@
 
   function searchInWorker(pixels, width, height, options, operation = "geometry") {
     return new Promise((resolve, reject) => {
-      const url = new URL("pixelstow-transform-worker.js?v=20261016-calibration4", codecScriptUrl);
+      const url = new URL("pixelstow-transform-worker.js?v=20261016-calibration5", codecScriptUrl);
       const worker = new Worker(url);
       let finished = false;
       const abort = () => { if (finished) return; cleanup(); reject(new DOMException("Search cancelled.", "AbortError")); };
@@ -1853,6 +1853,9 @@
   }
 
   async function scanEdgeGuide(pixels, width, height, options = {}) {
+    // File imports can wait for the same work on slower devices. Live capture
+    // supplies its own short budget so stale frames can still be replaced.
+    options = { maxMilliseconds: 6000, ...options };
     assertImage(pixels, width, height); checkCancelled(options.signal);
     if (!recoveryVersions(options).includes(CARRIER_V5)) return null;
     if (canUseReaderWorker(options)) return searchInWorker(pixels, width, height, options, "edge-guide");
