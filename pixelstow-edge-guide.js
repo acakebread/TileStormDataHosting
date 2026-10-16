@@ -257,38 +257,46 @@
       if(Date.now()>=deadline){const error=new Error('Edge-guide appraisal time limit.');error.name='EdgeGuideLimit';throw error;}
     };
     try {
-      const reduction=options.reduction||4;
+      const longest=Math.max(width,height);
+      const reduction=options.reduction||(longest>3600?12:longest>2400?8:4);
       if(!Number.isInteger(reduction)||reduction<1||reduction>12)return null;
+      const searchOptions={...options,minimumScale:options.minimumScale??.5*reduction/4,
+        maximumScale:options.maximumScale??2.5*reduction/4,scaleStep:options.scaleStep??.01*reduction/4};
       // This is the only image reduction. Full-resolution pixel positions map
       // directly to this explicitly chosen sampling grid.
-      const w=Math.floor(width/reduction),h=Math.floor(height/reduction),data=new Float64Array(w*h);
+      const w=Math.floor(width/reduction),h=Math.floor(height/reduction),data=new Float64Array(w*h),coarse=new Uint8Array(w*h*4);
       for(let y=0;y<h;y++) {
         if((y&63)===0){check();if(y===0)await pause();}
         for(let x=0;x<w;x++) {
-          let value=0;
+          let red=0,green=0,blue=0;
           for(let dy=0;dy<reduction;dy++)for(let dx=0;dx<reduction;dx++) {
             const i=(x*reduction+dx+(y*reduction+dy)*width)*4;
-            value+=(pixels[i]+pixels[i+2])*.5-pixels[i+1];
+            red+=pixels[i];green+=pixels[i+1];blue+=pixels[i+2];
           }
-          data[x+y*w]=value/(reduction*reduction);
+          const area=reduction*reduction,i=(x+y*w)*4;
+          data[x+y*w]=((red+blue)*.5-green)/area;
+          coarse[i]=Math.round(red/area);coarse[i+1]=Math.round(green/area);coarse[i+2]=Math.round(blue/area);coarse[i+3]=255;
         }
       }
       const original=axisStorage({data,w,h,reduction});let selected=original,best=null;
-      original.knownBounds=true;
-      best=await searchQuarter(original,options,check);
-      original.knownBounds=false;
-      if(!best&&options.outlineSearch!==false&&root.PixelStowTransform?.proposeOutlines&&hasFlatBorder(pixels,width,height)) {
+      if(options.outlineSearch!==false&&root.PixelStowTransform?.proposeOutlines&&hasFlatBorder(pixels,width,height)) {
         let quads=[];
-        try {quads=await root.PixelStowTransform.proposeOutlines(pixels,width,height,{signal:options.signal,deadline:Math.min(deadline,Date.now()+250)});}
+        // Propose the outline on the very same coarse raster. Re-scanning the
+        // full camera image here could exhaust the deadline before calibration.
+        try {quads=(await root.PixelStowTransform.proposeOutlines(coarse,w,h,{signal:options.signal,deadline:Math.min(deadline,Date.now()+250)}))
+          .map(quad=>quad.map(p=>({x:(p.x+.5)*reduction-.5,y:(p.y+.5)*reduction-.5})));}
         catch(error){if(error.name==='AbortError')throw error;}
-        for(const quad of orthogonalQuads(quads).concat(quads.slice(0,1))) {
+        // Keep shared rectangular edges first: small independent line-fit
+        // errors can bias the scale enough to spoil the single marker grid.
+        for(const quad of orthogonalQuads(quads).concat(quads)) {
           if(polygonArea(quad)/(width*height)<(options.minimumCoverage??.5))continue;
           const rectified=rectify(original,quad,check);if(!rectified)continue;
-          const candidate=await searchQuarter(rectified,options,check);
+          const candidate=await searchQuarter(rectified,searchOptions,check);
           if(candidate){best=candidate;selected=rectified;break;}
         }
       }
-      if(!best)best=await searchQuarter(original,options,check);
+      if(!best){original.knownBounds=true;best=await searchQuarter(original,searchOptions,check);original.knownBounds=false;}
+      if(!best)best=await searchQuarter(original,searchOptions,check);
       if(!best)return null;
       const horizontal=best.pairs[0],vertical=best.pairs[1];
       const bounds={left:vertical.first.position*reduction-INSET*best.scale,

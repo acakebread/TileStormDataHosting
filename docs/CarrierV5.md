@@ -267,12 +267,19 @@ patches are untouched. The guide adds no global headroom or capacity cost.
 Its exact integer profile is removed after wavelet cleaning and before reversing
 the recorded RGB range map. The existing source extraction remains lossy.
 
-`pixelstow-edge-guide.js` makes one explicit 4x box reduction, then measures the
+`pixelstow-edge-guide.js` makes one explicit box reduction, then measures the
 two known frequencies locally using complex DFTs across candidate edge strips.
+It uses 4x reduction for images up to 2400 pixels on their longest side, 8x up
+to 3600, and 12x above that. The physical scale range and search step account
+for that sampling rate; a highly magnified 4K capture can exceed the previous
+2.5x search ceiling. An explicitly requested reduction still takes precedence.
 The transverse envelope, opposite edges and phases relative to all four inferred
 bounds must agree. This suppresses unrelated photograph texture that defeated
 the earlier whole-image magnitude search. A visible image outline may propose a
-rectification of this same coarse raster for tilted captures. The outline itself
+rectification of this same coarse raster for tilted captures. Padding proposals
+also use the RGB means from that one reduction, avoiding a second, expensive
+full-resolution outline scan. When padding is present these proposals run first.
+The outline itself
 cannot establish encoding. The measured scale and coarse corners suggest a
 marker working grid and nearby header checks before the existing scale search. A
 1.2-second seed allowance protects ordinary search from false hints, while a
@@ -292,8 +299,8 @@ Tests in `tests/pixelstow-edge-guide-checks.mjs`,
 `tests/pixelstow-edge-worker-checks.mjs` cover faint signal bounds/reservations,
 modeled scale/rotation, actual default V5 PNG/payload round-trips, password
 protection, source/alpha preservation, real browser workers and older fixtures.
-The production default is 4x reduction; these checks do not establish reliable
-8x/12x detection or an improvement with optical phone captures. Test a freshly
+Checks cover modeled 4x/8x/12x sampling and supplied optical examples at 4x/12x
+reductions; this does not establish general reliability across cameras. Test a freshly
 encoded V5 image and watch for the **Edge guide** scan status.
 
 Natural-photo tests include independently re-encoded local images, their clean
@@ -327,6 +334,17 @@ the measured guide locations and reports the scale and recovery route. A native
 read has not needed calibration; enabling Analysis can run a later guide check,
 which is explicitly labeled as a subsequent check rather than the original read.
 Image bounds or the V5 profile flag alone never count as guide detection.
+
+Two additional supplied captures of the same carrier exposed a scale-range and
+outline-budget failure. Both contained measurable calibration; projecting them
+onto independently recovered native geometry confirmed all eight component
+phases. The 3024x4032 capture magnified the carrier about 3.18x, beyond the old
+2.5x limit. On both files, proposing padding on the full raster could exhaust
+the outline deadline before returning bounds. The coarse RGB outline pass and
+sampling-aware scale range now detect their guides within one second on this machine.
+Each then recovers the complete payload from a single guided marker grid,
+matching ordinary fallback exactly, in about ten seconds on this machine.
+No writer amplitude, guide profile or payload format changed.
 
 Continuous capture uses the single calibrated marker grid for positive frames,
 then moves to a fresh frame on failure. It retains occasional ordinary fallback

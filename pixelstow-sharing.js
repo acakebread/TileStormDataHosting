@@ -144,7 +144,7 @@
       } finally { this.setBusy(false); }
     }
 
-    async copyImage() {
+    async copyImage(imageForClipboard = this.imageForClipboard) {
       if (this.working() || !this.hasImage()) return;
       if (!navigator.clipboard?.write || !window.ClipboardItem) {
         this.report("This browser cannot copy an image directly. Use Download encoded PNG, or save the original image from Files.", true);
@@ -154,7 +154,7 @@
         // Safari needs write() inside the tap. Pass a promise for image creation
         // instead of awaiting it and losing the user activation.
         // Always copy the lossless PNG so clipboard posting adds no JPEG step.
-        const image = Promise.resolve(this.imageForClipboard());
+        const image = Promise.resolve(imageForClipboard());
         const copying = navigator.clipboard.write([new ClipboardItem({ "image/png": image })]);
         this.setBusy(true);
         await copying;

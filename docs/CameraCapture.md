@@ -121,7 +121,8 @@ bytes or passwords. Payload formats do not change.
 
 New V5 encodes include a low-contrast colour guide in perpendicular edge bands.
 Normal capture checks it in a separate disposable worker, directly from the
-frozen full-resolution frame with one explicit 4x box reduction. There is no
+frozen full-resolution frame with one explicit 4x, 8x or 12x box reduction,
+selected from capture dimensions. There is no
 512px thumbnail followed by another reduction. One active guide check and one
 latest pending frame are retained, while marker/payload work continues. The
 calibration outline must cover at least 75% of the frame; this is a reasonably
@@ -161,8 +162,10 @@ marker, payload and extraction workers are exercised by
 `tests/pixelstow-edge-worker-checks.mjs`; queue/preemption behavior is covered by
 `tests/pixelstow-camera-scheduling-checks.mjs`. Calibration provenance and the
 single-grid restriction are checked by `tests/pixelstow-calibration-data-checks.mjs`.
-A supplied photographed screen now detects its existing guide in about 0.6
-seconds and recovers through its guided grid; further optical captures must
+Supplied photographed screens now detect existing guides at both 0.82x and
+3.18x magnification, including a 4K capture, and recover through a single guided
+grid. Padding proposals use the RGB means from the same coarse raster so that
+a full-resolution outline pass cannot consume the calibration budget. Further optical captures must
 establish how often the faint guide survives phone cameras and screens.
 
 ### Abandoned full-image Fourier guide

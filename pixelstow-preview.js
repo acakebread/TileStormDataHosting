@@ -2,14 +2,25 @@
 (function (root) {
   "use strict";
   class PixelStowPreview {
-    constructor({ preview, viewport, canToggleSource, captureView, restoreView, fit, actualSize, resize }) {
-      Object.assign(this, { preview, viewport, canToggleSource, captureView, restoreView, fit, actualSize, resize });
+    constructor({ preview, viewport, canToggleSource, canCopyImage, copyImage, captureView, restoreView, fit, actualSize, resize }) {
+      Object.assign(this, { preview, viewport, canToggleSource, canCopyImage, copyImage, captureView, restoreView, fit, actualSize, resize });
       this.panel = document.querySelector("#preview-panel");
       this.slot = document.querySelector("#preview-screen");
       this.toolbar = document.querySelector("#preview-screen-toolbar");
       this.footer = document.querySelector("#preview-screen-footer");
       this.actions = document.querySelector("#preview-screen-actions");
       this.toggleButton = document.querySelector("#preview-screen-toggle");
+      this.contextMenu = document.querySelector("#preview-context-menu");
+      this.copyItem = document.querySelector("#preview-context-copy");
+      this.copyItem.addEventListener("click", () => { this.hideContextMenu(true); this.copyImage?.(); });
+      this.contextMenu.addEventListener("keydown", event => {
+        if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); this.hideContextMenu(true); }
+        else if (event.key === "Tab") this.hideContextMenu();
+      });
+      document.addEventListener("pointerdown", event => {
+        if (!this.contextMenu.contains(event.target)) this.hideContextMenu();
+      }, true);
+      viewport.addEventListener("wheel", () => this.hideContextMenu(), { passive: true });
       this.audioButton = document.querySelector("#preview-audio");
       this.audioPlaceholder = document.createComment("Image audio control returns here");
       this.comparison = document.querySelector("#comparison-control");
@@ -26,6 +37,9 @@
       this.panel.addEventListener("cancel", (event) => { event.preventDefault(); this.close(); });
       this.panel.addEventListener("close", () => this.restore());
       this.panel.addEventListener("keydown", (event) => {
+        if (this.clean && (event.key === "ContextMenu" || event.key === "F10" && event.shiftKey)) {
+          event.preventDefault(); this.showContextMenu({ clientX: 0, clientY: 0 }); return;
+        }
         if (event.key === "Tab") this.controls(true);
         if (event.key === "Escape") { event.preventDefault(); this.close(); }
       });
@@ -64,7 +78,7 @@
         this.pointers.delete(event.pointerId);
         if (!this.pointers.size) this.multitouch = false;
       }, true);
-      root.addEventListener("blur", () => { this.cancelTap(); this.pointers.clear(); this.multitouch = false; });
+      root.addEventListener("blur", () => { this.hideContextMenu(); this.cancelTap(); this.pointers.clear(); this.multitouch = false; });
       document.addEventListener("fullscreenchange", () => {
         if (document.fullscreenElement === this.panel) this.nativeFullscreen = true;
         else if (this.nativeFullscreen && this.panel.open) this.close();
@@ -74,6 +88,21 @@
     }
     get openNow() { return this.panel.open; }
     get clean() { return this.panel.open && this.panel.classList.contains("clean"); }
+    showContextMenu(event) {
+      if (!this.clean) return;
+      this.cancelTap();
+      this.copyItem.disabled = !this.copyImage || this.canCopyImage?.() === false;
+      this.contextMenu.hidden = false;
+      const box = this.viewport.getBoundingClientRect();
+      const x = event.clientX || box.left + box.width / 2, y = event.clientY || box.top + box.height / 2;
+      this.contextMenu.style.left = Math.max(8, Math.min(x, innerWidth - this.contextMenu.offsetWidth - 8)) + "px";
+      this.contextMenu.style.top = Math.max(8, Math.min(y, innerHeight - this.contextMenu.offsetHeight - 8)) + "px";
+      this.copyItem.focus({ preventScroll: true });
+    }
+    hideContextMenu(restoreFocus = false) {
+      this.contextMenu.hidden = true;
+      if (restoreFocus && this.panel.open) this.panel.focus({ preventScroll: true });
+    }
     syncToggleSource() {
       const available = Boolean(this.canToggleSource?.());
       if (!available) this.panel.classList.remove("show-source");
@@ -93,6 +122,7 @@
     }
     cancelTap() { this.tap = null; clearTimeout(this.holdTimer); this.holdTimer = null; }
     controls(show) {
+      this.hideContextMenu();
       const focusInFooter = this.footer.contains(document.activeElement);
       this.toolbar.hidden = this.footer.hidden = !show;
       if (!show && focusInFooter && this.panel.open) this.panel.focus({ preventScroll: true });
@@ -130,11 +160,13 @@
       }
     }
     close() {
+      this.hideContextMenu();
       if (this.panel.open) this.panel.close();
       if (document.fullscreenElement === this.panel) document.exitFullscreen().catch(() => {});
     }
     restore() {
       this.nativeFullscreen = false;
+      this.hideContextMenu();
       this.cancelTap(); this.multitouch = false;
       this.panel.classList.remove("show-source");
       this.syncToggleSource();

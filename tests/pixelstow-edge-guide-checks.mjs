@@ -91,6 +91,27 @@ assert.equal(await E.detect(marked,w,h,{deadline:Date.now()-1,diagnostic:true}),
 assert.deepEqual(E.apply(new Uint8Array(128*96*4),128,96),new Uint8Array(128*96*4),'small legacy images are left alone');
 assert.throws(()=>E.apply(new Uint8Array(4),w,h),/Invalid/);
 assert(Math.max(...measurements)<1700,'a modeled precheck must remain bounded');
+// A 4K camera can magnify a small carrier beyond the original 2.5x range.
+// Padding proposals must use the same coarse raster, within the guide budget.
+const pw=896,ph=1116,plain=source(pw,ph),guided=E.apply(plain,pw,ph);
+function framed(input) {
+  const large=capture(input,pw,ph,3.18),width=3024,height=4032,pixels=new Uint8Array(width*height*4).fill(18);
+  for(let i=3;i<pixels.length;i+=4)pixels[i]=255;
+  for(let y=0;y<large.height;y++)pixels.set(large.pixels.subarray(y*large.width*4,(y+1)*large.width*4),((y+40)*width+86)*4);
+  return {pixels,width,height};
+}
+const largeFrame=framed(guided),largeHint=await E.detect(largeFrame.pixels,largeFrame.width,largeFrame.height,{minimumCoverage:.75,maxMilliseconds:1600});
+assert(largeHint&&Math.abs(largeHint.scale/3.18-1)<.02,'large framed capture needs the correct native scale beyond 2.5x');
+assert.equal(largeHint.reduction,12);assert.equal(largeHint.workingWidth,252);assert.equal(largeHint.workingHeight,336);
+const mediumFrame=capture(largeFrame.pixels,largeFrame.width,largeFrame.height,.7);
+const mediumHint=await E.detect(mediumFrame.pixels,mediumFrame.width,mediumFrame.height,{minimumCoverage:.75,maxMilliseconds:1600});
+assert(mediumHint&&Math.abs(mediumHint.scale/(3.18*.7)-1)<.02);assert.equal(mediumHint.reduction,8);
+const smallFrame=capture(largeFrame.pixels,largeFrame.width,largeFrame.height,773/3024);
+const smallHint=await E.detect(smallFrame.pixels,smallFrame.width,smallFrame.height,{minimumCoverage:.75,maxMilliseconds:1600});
+assert(smallHint&&Math.abs(smallHint.scale/(3.18*773/3024)-1)<.02);assert.equal(smallHint.reduction,4);
+const largeControl=framed(plain);
+assert.equal(await E.detect(largeControl.pixels,largeControl.width,largeControl.height,{minimumCoverage:.75,maxMilliseconds:1600}),null);
+console.log('PASS: framed captures use one 4x/8x/12x reduction according to size and find the native scale; guide-free large control rejected');
 console.log(`PASS: cancellation/deadline; 15 positive appraisals ${Math.min(...measurements)}-${Math.max(...measurements)} ms (real camera performance still needs testing)`);
 
 

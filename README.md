@@ -50,6 +50,10 @@ tap, single-finger pan, pinch and cancellation behaviour on mobile, plus desktop
 left-drag panning and mouse/keyboard use. The yellow Preview action comes first
 in the lower action row. Its clean viewer supports a source/image toggle after
 100%, without adding a divider to the transmitted picture.
+Right-click in this lower preview offers **Copy image to clipboard**, copying
+the full PNG of its current image/source mode. Right-drag still pans. The real
+browser check `node tests/pixelstow-preview-clipboard-checks.mjs` verifies exact
+pixels and menu gestures with a stubbed clipboard.
 `node tests/pixelstow-recovery-ui-checks.mjs` checks cancellation followed by the
 bottom Decode action, actual worker recovery and the Analysis calibration overlay.
 
@@ -71,9 +75,11 @@ real browser workers. Optional local-photo checks are
 `node tests/pixelstow-edge-photo-checks.mjs <encoded-photo.png> [...]` and
 `node tests/pixelstow-jpeg-photo-checks.mjs <source.jpg> [...]`.
 `node tests/pixelstow-edge-capture-regression.mjs <camera-capture.png> <expected-scale>`
-checks a supplied optical capture without marker/header reads. Calibration
-provenance and the camera's single guided grid are checked with
+checks a supplied optical capture without marker/header reads. Add `--recover`
+to verify that calibration leads to a successful read on its single guided grid.
+Calibration provenance and the camera's single guided grid are checked with
 `node tests/pixelstow-calibration-data-checks.mjs`.
 Personal input images stay unchanged; generated copies/reports go under ignored
-`artifacts/research/edge-guide`. One supplied photographed screen now detects its
-existing guide in about 0.6 seconds; broader optical reliability still needs testing.
+`artifacts/research/edge-guide`. Supplied photographed screens now detect their
+existing guides at both 0.82x and 3.18x magnification, including a 4K capture;
+broader optical reliability still needs testing.

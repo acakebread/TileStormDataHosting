@@ -252,6 +252,8 @@
     #preview-audio.waiting-comparison { display: none !important; }
     .preview-screen-toolbar #preview-screen-close { color: var(--tile-azure); font-weight: 700; }
     #preview-screen-toggle[aria-pressed="true"] { border-color: var(--tile-azure); color: var(--tile-azure); }
+    .preview-context-menu { position: fixed; z-index: 4; max-width: calc(100% - 16px); padding: 5px; border: 1px solid var(--border); border-radius: 8px; background: #121923; box-shadow: 0 6px 24px #0009; }
+    .preview-context-menu button { display: block; width: 100%; white-space: nowrap; text-align: left; }
     .camera-calibration { position: absolute; top: 10px; left: 10px; z-index: 2; padding: 5px 8px; border-radius: 6px; background: #081016df; color: #bdc8cf; font-size: .8rem; line-height: 1.3; pointer-events: none; }
     .camera-calibration::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 50%; background: #86939b; }
     .camera-calibration[data-state="detected"] { color: #b8f3c7; }
@@ -882,6 +884,9 @@
         <button id="preview-screen-close" type="button" aria-label="Close preview" title="Close preview"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
       </div>
     </div>
+    <div class="preview-context-menu" id="preview-context-menu" role="menu" aria-label="Preview actions" hidden>
+      <button id="preview-context-copy" type="button" role="menuitem">Copy image to clipboard</button>
+    </div>
   </dialog>
   <dialog class="export-dialog" id="paste-dialog" aria-labelledby="paste-title">
     <h2 id="paste-title">Paste a photo</h2>
@@ -936,18 +941,18 @@
     </form>
   </dialog>
   <script src="./pixelstow-spectrum.js?v=20261015-no-pilot1"></script>
-  <script src="./pixelstow-edge-guide.js?v=20261016-calibration3"></script>
-  <script src="./pixelstow-transform.js?v=20261016-calibration3"></script>
+  <script src="./pixelstow-edge-guide.js?v=20261016-calibration4"></script>
+  <script src="./pixelstow-transform.js?v=20261016-calibration4"></script>
   <script src="./pixelstow-lattice.js?v=20261013-marker-follow2"></script>
-  <script src="./pixelstow.js?v=20261016-calibration3"></script>
+  <script src="./pixelstow.js?v=20261016-calibration4"></script>
   <script src="./pixelstow-sizing.js?v=20261015-payload-range1"></script>
   <script src="./pixelstow-export.js?v=20261011-exports"></script>
   <script src="./pixelstow-voice.js?v=20261013-voice-clock2"></script>
   <script src="./pixelstow-media.js?v=20261015-preview-icons1"></script>
-  <script src="./pixelstow-sharing.js?v=20261014-compact-actions1"></script>
+  <script src="./pixelstow-sharing.js?v=20261016-preview-copy1"></script>
   <script src="./pixelstow-read-progress.js?v=20261015-read-stages1"></script>
-  <script src="./pixelstow-camera.js?v=20261016-calibration3"></script>
-  <script src="./pixelstow-preview.js?v=20261016-preview-pan1"></script>
+  <script src="./pixelstow-camera.js?v=20261016-calibration4"></script>
+  <script src="./pixelstow-preview.js?v=20261016-preview-copy1"></script>
   <script>
     const fileInput = document.querySelector("#file");
     const chooseImageButton = document.querySelector("#choose-image");
@@ -1070,6 +1075,12 @@
         const img = imagePixels(), box = viewBox();
         originX = (box.w - img.w * viewScale) / 2; originY = (box.h - img.h * viewScale) / 2;
         applyView();
+      },
+      canCopyImage: () => !busy && !media.active && !camera?.active,
+      copyImage: () => {
+        const job = current, size = resultDimensions(job);
+        return sharing.copyImage(fullPreview.panel.classList.contains("show-source")
+          ? async () => PixelStow.writePng(await carrierFor(job), size.width, size.height) : undefined);
       },
       resize: sizeViewport
     });
@@ -2189,15 +2200,15 @@
     // A new gesture clears the previous pan's menu suppression. Keep it through
     // release: browsers can send contextmenu before or after pointerup.
     document.addEventListener("pointerdown", (event) => {
-      if (!panning) blockPanMenu = event.button === 2 && viewport.contains(event.target) && Boolean(imagePixels().w);
+      if (!panning) blockPanMenu = event.button === 2 && !fullPreview.clean && viewport.contains(event.target) && Boolean(imagePixels().w);
     }, true);
     document.addEventListener("keydown", () => { if (!panning) blockPanMenu = false; }, true);
 
     viewport.addEventListener("pointerdown", (event) => {
       if (!imagePixels().w || panning) return;
-      if (event.button === 0 && event.pointerType !== "touch" && fullPreview.clean) {
+      if ([0, 2].includes(event.button) && event.pointerType !== "touch" && fullPreview.clean) {
         // Wait for a drag before consuming the clean viewer's click or hold.
-        panStart = { id: event.pointerId, x: event.clientX, y: event.clientY };
+        panStart = { id: event.pointerId, x: event.clientX, y: event.clientY, button: event.button };
         viewport.setPointerCapture(event.pointerId);
         return;
       }
@@ -2219,8 +2230,10 @@
         panPointer = event.pointerId;
         panX = panStart.x;
         panY = panStart.y;
+        blockPanMenu = panStart.button === 2;
         panStart = null;
         fullPreview.cancelTap();
+        fullPreview.hideContextMenu();
         viewport.classList.add("panning");
       }
       if (!panning || event.pointerId !== panPointer) return;
@@ -2254,6 +2267,8 @@
     document.addEventListener("contextmenu", (event) => {
       if (!viewport.contains(event.target) && !blockPanMenu) return;
       event.preventDefault();
+      if (fullPreview.clean && !blockPanMenu && event.pointerType !== "touch" &&
+        (event.pointerType || matchMedia("(any-pointer: fine)").matches)) fullPreview.showContextMenu(event);
     }, true);
     new ResizeObserver(() => {
       if (!preview.hidden) sizeViewport();
