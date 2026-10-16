@@ -722,7 +722,7 @@
               <span class="compare-tag right" id="tag-source">Source</span>
               <div class="split-line" id="split-line"><button class="split-handle" id="split-handle" type="button" tabindex="-1" aria-label="Drag comparison divider">↔</button></div>
             </div>
-            <p class="hint preview-note" id="preview-note" hidden>(Maximise for mouse-wheel zoom; right-drag to pan)</p>
+            <p class="hint preview-note" id="preview-note" hidden>(Scroll to zoom; right-drag to pan)</p>
           </div>
           <div class="preview-bottom-row" id="preview-bottom-row">
             <button class="preview-audio" id="preview-audio" type="button" aria-label="Play audio" title="Play audio" disabled hidden><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7m3-10a9 9 0 0 1 0 13"/></svg><span class="preview-audio-label">Play audio</span></button>
@@ -1704,7 +1704,7 @@
       if (window.matchMedia("(pointer: coarse)").matches) {
         return "(Pinch to zoom; two fingers to pan" + (comparing ? "; drag the divider or slider to compare" : "") + ")";
       }
-      return "(Maximise for mouse-wheel zoom; right-drag to pan" + (comparing ? "; drag the divider to compare" : "") + ")";
+      return "(Scroll to zoom; right-drag to pan" + (comparing ? "; drag the divider to compare" : "") + ")";
     }
 
     function dismissPreviewHelp() {
@@ -2256,6 +2256,11 @@
     }, { passive: false });
     viewport.addEventListener("touchmove", (event) => {
       trackPreviewTouches(event);
+      if (splitPointer !== null && previewTouches.size === 1) {
+        if (event.cancelable) event.preventDefault();
+        dragSplit({ clientX: [...previewTouches.values()][0].x });
+        return;
+      }
       if (!touchView) return;
       if (touchView.single && previewTouches.size === 1 && fullPreview.openNow && splitPointer === null) {
         const [finger] = previewTouches.values();
@@ -2315,12 +2320,12 @@
       const onDivider = splitLine.contains(event.target);
       if (event.pointerType === "touch" && !event.isPrimary) { cancelSplitHold(); return; }
       if (event.button !== 0 || fullPreview.clean || compareUi.hidden || panning || splitPointer !== null || previewTouches.size > 1) return;
-      if (!onDivider && event.pointerType === "touch" && event.isPrimary && fullPreview.openNow) {
+      if (!onDivider && event.pointerType === "touch" && event.isPrimary) {
         cancelSplitHold();
         const hold = { id: event.pointerId, x: event.clientX, y: event.clientY };
         splitHold = hold;
         hold.timer = setTimeout(() => {
-          if (splitHold !== hold || previewTouches.size > 1 || !fullPreview.openNow || fullPreview.clean || compareUi.hidden) return cancelSplitHold();
+          if (splitHold !== hold || previewTouches.size > 1 || fullPreview.clean || compareUi.hidden) return cancelSplitHold();
           splitHold = null;
           fullPreview.cancelTap();
           beginSplit({ pointerId: hold.id, clientX: hold.x, clientY: hold.y }, viewport);
@@ -2339,7 +2344,6 @@
     window.addEventListener("resize", () => { if (!preview.hidden) sizeViewport(); });
 
     viewport.addEventListener("wheel", (event) => {
-      if (!fullPreview.openNow) return;
       if (!event.deltaY || !imagePixels().w) return;
       event.preventDefault();
       const delta = event.deltaMode === 1 ? event.deltaY * 16 : event.deltaY;

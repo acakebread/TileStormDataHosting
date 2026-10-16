@@ -292,8 +292,7 @@ try {
       await page.getByRole('button', { name: 'Close preview', exact: true }).click();
     }
     if (mobile) {
-      // The new gesture belongs only to the bottom full-screen viewer. A
-      // single finger on the ordinary page must retain native page scrolling.
+      // An immediate swipe scrolls the page; holding first grabs the divider.
       await page.locator('#viewport').scrollIntoViewIfNeeded();
       const cdp = await page.context().newCDPSession(page), box = await page.locator('#viewport').boundingBox();
       const x = box.x + box.width * .25, y = Math.min(box.y + box.height * .7, 650);
@@ -304,6 +303,21 @@ try {
       await page.waitForFunction(previous => scrollY > previous + 30, before.scroll);
       assert.deepEqual(await page.evaluate(() => ({ x: originX, y: originY, scale: viewScale, split: split.value })),
         { x: before.x, y: before.y, scale: before.scale, split: before.split }, 'an inline swipe scrolls the page without panning or scrubbing');
+      await page.locator('#viewport').scrollIntoViewIfNeeded();
+      const heldBox = await page.locator('#viewport').boundingBox();
+      const hx = heldBox.x + heldBox.width * .25, hy = heldBox.y + heldBox.height * .4;
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ id: 1, x: hx, y: hy }] });
+      await page.waitForFunction(() => splitPointer !== null, {}, { timeout: 1500 });
+      const heldView = await page.evaluate(() => [viewScale, originX, originY, scrollY]);
+      let lastSplit = Number(await page.locator('#split').inputValue());
+      for (let step = 1; step <= 3; step++) {
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ id: 1, x: hx + step * 25, y: hy + step * 12 }] });
+        await page.waitForFunction(previous => Number(split.value) > previous, lastSplit);
+        lastSplit = Number(await page.locator('#split').inputValue());
+      }
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      assert.deepEqual(await page.evaluate(() => [viewScale, originX, originY, scrollY]), heldView, 'holding then dragging the inline divider must not zoom, pan or scroll');
+      assert(await page.evaluate(() => splitPointer === null && splitHold === null));
       await cdp.detach();
     }
     if (mobile) {
@@ -325,9 +339,9 @@ try {
       const box=await page.locator('#viewport').boundingBox();
       const before=await page.evaluate(()=>({scroll:scrollY,view:[viewScale,originX,originY]}));
       await page.mouse.move(box.x+box.width/2,box.y+box.height/2);
-      await page.mouse.wheel(0,160);
-      await page.waitForFunction(y=>scrollY>y,before.scroll);
-      assert.deepEqual(await page.evaluate(()=>[viewScale,originX,originY]),before.view,'wheel over the inline preview scrolls the page without zooming or panning');
+      await page.mouse.wheel(0,-160);
+      await page.waitForFunction(scale=>viewScale>scale,before.view[0]);
+      assert.equal(await page.evaluate(()=>scrollY),before.scroll,'wheel over the inline preview zooms the image without scrolling the page');
     }
     // Measure in one frame: an inline mobile swipe can still be coasting,
     // which changes viewport-relative Y between separate browser calls.
