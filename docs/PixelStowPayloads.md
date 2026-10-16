@@ -141,8 +141,9 @@ canvases in a viewport-filling dialog. Fit and 100% controls are available; clos
 restores the previous page view. **Preview** at the end of the export actions
 opens a clean transmission view of the current generated, imported, pasted or
 captured image, with every control initially hidden. It never displays the
-comparison divider, Encoded/Source labels, analysis overlay or audio button,
-including when a tap reveals its Fit, 100%, maximise and close controls. The
+comparison divider, Encoded/Source labels or analysis overlay. When a recording
+is available, the same audio button used beside the main preview appears at the
+left of the icon row once the controls are shown. The
 maximise icon hides those controls completely for phone-to-phone capture.
 Holding still for 450 milliseconds toggles the entire view between encoded
 pixels and recovered source when that comparison is ready. It preserves zoom,

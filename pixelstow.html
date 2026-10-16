@@ -243,9 +243,12 @@
     .preview-screen-actions { display: contents; }
     .preview-screen-toolbar {
       display: flex; flex-wrap: nowrap; align-items: center; justify-content: center; max-width: 480px; margin: 0 auto;
-      /* Keep six 44px targets on narrow screens, with gaps capped below half a button. */
-      gap: clamp(8px, calc((100% - 264px) / 5), 20px);
+      /* Keep five 44px targets on narrow screens, with gaps capped below half a button. */
+      gap: clamp(8px, calc((100% - 220px) / 4), 20px);
     }
+    #preview-screen-scale { display: grid; place-items: center; }
+    #preview-screen-scale svg { display: block; }
+    #preview-screen-scale svg[hidden] { display: none; }
     .preview-screen-toolbar button { flex: 0 0 44px; width: 44px; min-height: 48px; padding: 0; font-size: 0.82rem; font-weight: 500; }
     #preview-audio svg { display: block; }
     .preview-audio-label { display: none; }
@@ -262,7 +265,6 @@
     .preview-panel.clean #transform-outline,
     .preview-panel.clean #compare-ui,
     .preview-panel.clean #comparison-control,
-    .preview-panel.clean #preview-audio,
     .preview-panel.clean #preview-markers { display: none !important; }
     .preview-panel.clean.show-source #preview-source { display: block !important; clip-path: none !important; }
     .preview-panel.clean.show-source #preview-encoded { visibility: hidden; }
@@ -876,8 +878,10 @@
     <div class="preview-screen-footer" id="preview-screen-footer">
       <div class="preview-screen-toolbar" id="preview-screen-toolbar">
         <div class="preview-screen-actions" id="preview-screen-actions"></div>
-        <button id="preview-screen-fit" type="button">Fit</button>
-        <button id="preview-screen-actual" type="button">100%</button>
+        <button id="preview-screen-scale" type="button" aria-label="100%" title="100%">
+          <svg class="scale-actual" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m21 21-6-6m6 6v-4.8m0 4.8h-4.8"/><path d="M3 16.2V21m0 0h4.8M3 21l6-6"/><path d="M21 7.8V3m0 0h-4.8M21 3l-6 6"/><path d="m3 7.8V3m0 0h4.8M3 3l6 6"/></svg>
+          <svg class="scale-fit" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" hidden><path d="m15 15 6 6m-6-6v4.8m0-4.8h4.8"/><path d="M9 19.8V15m0 0H4.2M9 15l-6 6"/><path d="M15 4.2V9m0 0h4.8M15 9l6-6"/><path d="M9 4.2V9m0 0H4.2M9 9 3 3"/></svg>
+        </button>
         <button id="preview-screen-toggle" type="button" aria-label="Show source image" title="Show source image" aria-pressed="false" disabled hidden><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 7h18m-4-4 4 4-4 4M21 17H3m4-4-4 4 4 4"/></svg></button>
         <button id="preview-screen-hide" type="button" aria-label="Hide controls" title="Hide controls"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" focusable="false"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg></button>
         <label id="preview-markers" title="Show recovery diagnostics for this image"><input id="show-transform" type="checkbox" aria-label="Analysis" checked><span class="analysis-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" focusable="false"><rect x="3" y="3" width="18" height="14" rx="2"/><path d="M8 21h8m-4-4v4"/><rect x="7" y="7" width="3" height="6" rx=".5"/><path d="m14 8 1-1v6m-1 0h3"/></svg></span></label>
@@ -952,7 +956,7 @@
   <script src="./pixelstow-sharing.js?v=20261016-preview-copy1"></script>
   <script src="./pixelstow-read-progress.js?v=20261015-read-stages1"></script>
   <script src="./pixelstow-camera.js?v=20261016-calibration5"></script>
-  <script src="./pixelstow-preview.js?v=20261016-preview-copy1"></script>
+  <script src="./pixelstow-preview.js?v=20261016-scale-toggle1"></script>
   <script>
     const fileInput = document.querySelector("#file");
     const chooseImageButton = document.querySelector("#choose-image");
@@ -1068,14 +1072,7 @@
         if (view) ({ fitMode, viewScale, originX, originY } = view);
         sizeViewport();
       },
-      fit: resetView,
-      actualSize: () => {
-        dismissPreviewHelp();
-        clearPreviewTouches(); fitMode = false; viewScale = 1 / (window.devicePixelRatio || 1);
-        const img = imagePixels(), box = viewBox();
-        originX = (box.w - img.w * viewScale) / 2; originY = (box.h - img.h * viewScale) / 2;
-        applyView();
-      },
+      toggleScale: () => { if (fitMode) setActualSize(); else resetView(); },
       canCopyImage: () => !busy && !media.active && !camera?.active,
       copyImage: () => {
         const job = current, size = resultDimensions(job);
@@ -1556,6 +1553,7 @@
       compare.style.width = img.w + "px";
       compare.style.height = img.h + "px";
       compare.style.transform = "translate(" + originX + "px," + originY + "px) scale(" + viewScale + ")";
+      syncScaleButton();
       if (!compareUi.hidden) {
         compareUi.style.left = originX + "px";
         compareUi.style.top = originY + "px";
@@ -1574,6 +1572,24 @@
         Math.max(120, Math.min(maxHeight, width * img.h / img.w));
       const next = height + "px";
       if (viewport.style.height !== next) viewport.style.height = next;
+      applyView();
+    }
+
+    function syncScaleButton() {
+      const button = document.querySelector("#preview-screen-scale");
+      if (!button) return;
+      const label = fitMode ? "100%" : "Fit";
+      button.setAttribute("aria-label", label);
+      button.title = label;
+      button.querySelector(".scale-actual").hidden = !fitMode;
+      button.querySelector(".scale-fit").hidden = fitMode;
+    }
+
+    function setActualSize() {
+      dismissPreviewHelp();
+      clearPreviewTouches(); fitMode = false; viewScale = 1 / (window.devicePixelRatio || 1);
+      const img = imagePixels(), box = viewBox();
+      originX = (box.w - img.w * viewScale) / 2; originY = (box.h - img.h * viewScale) / 2;
       applyView();
     }
 

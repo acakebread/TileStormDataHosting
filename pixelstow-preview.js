@@ -2,8 +2,8 @@
 (function (root) {
   "use strict";
   class PixelStowPreview {
-    constructor({ preview, viewport, canToggleSource, canCopyImage, copyImage, captureView, restoreView, fit, actualSize, resize }) {
-      Object.assign(this, { preview, viewport, canToggleSource, canCopyImage, copyImage, captureView, restoreView, fit, actualSize, resize });
+    constructor({ preview, viewport, canToggleSource, canCopyImage, copyImage, captureView, restoreView, toggleScale, resize }) {
+      Object.assign(this, { preview, viewport, canToggleSource, canCopyImage, copyImage, captureView, restoreView, toggleScale, resize });
       this.panel = document.querySelector("#preview-panel");
       this.slot = document.querySelector("#preview-screen");
       this.toolbar = document.querySelector("#preview-screen-toolbar");
@@ -30,8 +30,7 @@
       document.querySelector("#full-preview").addEventListener("click", () => this.open(false));
       document.querySelector("#preview-encoded-image").addEventListener("click", () => this.open(true));
       document.querySelector("#preview-screen-close").addEventListener("click", () => this.close());
-      document.querySelector("#preview-screen-fit").addEventListener("click", fit);
-      document.querySelector("#preview-screen-actual").addEventListener("click", actualSize);
+      document.querySelector("#preview-screen-scale").addEventListener("click", () => this.toggleScale());
       this.toggleButton.addEventListener("click", () => this.toggleSource());
       document.querySelector("#preview-screen-hide").addEventListener("click", () => this.controls(false));
       this.panel.addEventListener("cancel", (event) => { event.preventDefault(); this.close(); });
