@@ -321,11 +321,13 @@ try {
     const pending=await compatibility.evaluate(()=>{
       const rect=node=>{const {top,bottom,width,height}=node.getBoundingClientRect();return{top,bottom,width,height};};
       return {frame:rect(camera.frame),header:rect(camera.panel.querySelector('.camera-header')),
+        help:rect(camera.panel.querySelector('#camera-help')),close:rect(camera.closeButton),
         footer:rect(camera.panel.querySelector('.camera-footer')),visible:!camera.frame.hidden,video:getComputedStyle(camera.video).visibility};
     });
     assert(pending.visible&&pending.frame.width>100&&pending.frame.height>100,'camera startup must reserve a visible rectangle: '+JSON.stringify({size,pending}));
     assert(pending.frame.top>=pending.header.bottom&&(size.width>size.height||pending.frame.bottom<=pending.footer.top+1),'startup frame must fit between header and controls: '+JSON.stringify({size,pending}));
     assert.equal(pending.video,'hidden','a previous camera feed cannot appear during startup');
+    if(size.width<size.height) assert(pending.help.top>=pending.close.bottom+3,'camera guidance must sit clear of the Close button');
   }
   await compatibility.locator('#close-camera').click();
   await compatibility.evaluate(async () => {

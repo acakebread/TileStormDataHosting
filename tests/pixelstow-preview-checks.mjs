@@ -71,6 +71,15 @@ try {
         await page.mouse.move(x, y); await page.mouse.down(); await page.waitForTimeout(550); await page.mouse.up();
       }
     };
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const launch = page.getByRole('button', { name: 'Preview', exact: true });
+      if (mobile) await launch.tap(); else await launch.click();
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      assert(await page.evaluate(() => fullPreview.openNow && fullPreview.clean), 'one press must open Preview on every launch');
+      await tapImage();
+      await page.getByRole('button', { name: 'Close preview', exact: true }).click();
+      await page.waitForFunction(() => !fullPreview.openNow && preview.parentElement.id !== 'preview-screen');
+    }
     await page.getByRole('button', { name: 'Preview', exact: true }).click();
     assert(await page.evaluate(() => fullPreview.openNow && fullPreview.clean));
     assert(await page.locator('#preview-audio').isDisabled());
