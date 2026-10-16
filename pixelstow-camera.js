@@ -2,8 +2,8 @@
 // decides whether a frame contains a complete, checksum-valid payload.
 (function () {
   class PixelStowCamera {
-    constructor({ importImage, report, working, changed, drawGuides, clearFeedback, prepareCapture }) {
-      Object.assign(this, { importImage, report, working, changed, drawGuides, clearFeedback, prepareCapture });
+    constructor({ importImage, report, working, changed, drawGuides, clearFeedback, prepareCapture, clearPreview }) {
+      Object.assign(this, { importImage, report, working, changed, drawGuides, clearFeedback, prepareCapture, clearPreview });
       this.session = null;
       this.devices = [];
       this.devicesKnown = false;
@@ -810,6 +810,7 @@
     }
 
     close(preserveSwitch = false) {
+      if (this.session) this.clearPreview?.();
       if (!preserveSwitch && this.switchOperation) {
         this.switchOperation.cancelled = true;
         this.switchOperation = null;

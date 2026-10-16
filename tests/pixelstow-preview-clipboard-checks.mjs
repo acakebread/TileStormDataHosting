@@ -36,6 +36,8 @@ try{
     await current.carrierPromise;
   });
   await page.getByRole('button',{name:'Preview',exact:true}).click();
+  assert(await page.evaluate(()=>fullPreview.panel.classList.contains('show-source')),'lower preview opens on corrected source');
+  await page.evaluate(()=>fullPreview.toggleSource());
   await page.evaluate(()=>{
     const img=imagePixels(),box=viewBox();fitMode=false;viewScale=fittedScale(img,box)*3;
     originX=(box.w-img.w*viewScale)/2;originY=(box.h-img.h*viewScale)/2;applyView();

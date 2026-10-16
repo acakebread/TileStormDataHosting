@@ -104,6 +104,7 @@
     }
     syncToggleSource() {
       const available = Boolean(this.canToggleSource?.());
+      if (available && this.preferSource && this.clean) this.panel.classList.add("show-source");
       if (!available) this.panel.classList.remove("show-source");
       const source = this.panel.classList.contains("show-source");
       this.toggleButton.hidden = !this.clean;
@@ -115,6 +116,7 @@
     }
     toggleSource() {
       if (!this.clean || !this.canToggleSource?.()) { this.syncToggleSource(); return false; }
+      this.preferSource = false;
       this.panel.classList.toggle("show-source");
       this.syncToggleSource();
       return true;
@@ -140,6 +142,7 @@
       this.comparison.before(this.comparisonPlaceholder);
       this.footer.prepend(this.comparison);
       this.panel.classList.toggle("clean", clean);
+      this.preferSource = clean;
       this.panel.classList.remove("show-source");
       this.panel.setAttribute("aria-label", clean ? "Full screen image preview. Tap for controls; hold to switch encoded image and source when available; drag with the left mouse button or one or two fingers to pan; pinch to zoom; Escape to close."
         : "Full screen image comparison. Tap for controls; drag with one finger to pan; hold still to drag the divider; pinch to zoom; Escape to close.");

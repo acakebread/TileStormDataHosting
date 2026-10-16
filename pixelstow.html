@@ -989,8 +989,8 @@
   <script src="./pixelstow-media.js?v=20261015-preview-icons1"></script>
   <script src="./pixelstow-sharing.js?v=20261016-preview-copy1"></script>
   <script src="./pixelstow-read-progress.js?v=20261016-frame-outline"></script>
-  <script src="./pixelstow-camera.js?v=20261016-camera-zoom"></script>
-  <script src="./pixelstow-preview.js?v=20261016-analysis-reset2"></script>
+  <script src="./pixelstow-camera.js?v=20261016-clear-capture"></script>
+  <script src="./pixelstow-preview.js?v=20261016-source-default"></script>
   <script>
     const fileInput = document.querySelector("#file");
     const chooseImageButton = document.querySelector("#choose-image");
@@ -1151,7 +1151,8 @@
       importImage: useFile, report: setStatus, working: () => busy || media.active,
       changed: () => setBusy(busy), drawGuides: paintTransform,
       clearFeedback: () => { disarmAnalysis(); clearReadFeedback(); clearImageAppraisal(); },
-      prepareCapture: () => { disarmAnalysis(); media.preparePlayback(); }
+      prepareCapture: () => { disarmAnalysis(); media.preparePlayback(); },
+      clearPreview: clearPreviewFrame
     });
 
     const carrierSelect = document.querySelector("#carrier-version");
@@ -1733,6 +1734,17 @@
       resetView();
     }
 
+    function clearPreviewFrame() {
+      hideComparison();
+      disarmAnalysis();
+      preview.hidden = true;
+      for (const canvas of [previewEncoded, previewSource, transformOutline]) {
+        canvas.width = canvas.height = 0;
+        delete canvas.dataset.imageWidth;
+        delete canvas.dataset.imageHeight;
+      }
+    }
+
     function paintTransform(canvas, result, width, height) {
       if (canvas === transformOutline && (!fullPreview.openNow || !showTransform.checked)) {
         canvas.hidden = true;
@@ -2047,6 +2059,7 @@
 
     async function useFile(file, origin = "file", captured = null) {
       if (!file || busy || media.active) return;
+      clearPreviewFrame();
       clearReadFeedback();
       camera?.close();
       hideComparison();
