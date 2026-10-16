@@ -396,6 +396,7 @@ try {
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ id: 1, x: tapX - 20, y: tapY }, { id: 2, x: tapX + 20, y: tapY }] });
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   assert(await phone.evaluate(() => camera.active && !window.phoneSourceCapture));
+  await phone.waitForFunction(()=>!camera.pinch&&Date.now()-(camera.pinchGuard||0)>=400);
   await phone.touchscreen.tap(tapX, tapY);
   await phone.waitForFunction(() => Boolean(window.phoneSourceCapture) && !busy && !camera.active);
   assert(await phone.evaluate(() => phoneTracks.every(track => track.readyState === 'ended') &&

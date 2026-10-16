@@ -126,6 +126,9 @@ try{
   assert(/checked during analysis/i.test(nativeAnalysis.text)&&/original read.*native pixel grid/i.test(nativeAnalysis.text));
   await page.evaluate(()=>camera.clearFeedback());
   assert(await page.evaluate(()=>!showTransform.checked&&transformOutline.hidden&&calibrationAnalysis.hidden),'starting the next camera capture revokes Analysis immediately');
+  await page.evaluate(()=>clearPreviewFrame());
+  assert(await page.evaluate(()=>preview.hidden&&[previewEncoded,previewSource,transformOutline].every(c=>!c.width&&!c.height&&!c.dataset.imageWidth&&!c.dataset.imageHeight)),
+    'capture handoff must erase both old image rasters and diagnostics, not just hide the overlay');
   assert.deepEqual(errors,[]);assert.deepEqual(failed,[]);
   console.log('PASS: native imports distinguish an encoded guide from an actually detected/used calibration; no page errors or failed requests');
 }finally{
