@@ -106,8 +106,8 @@ function workerQueue(){
   await advance(9000);
   assert(!finishScan.options.signal.aborted,'a cluttered frame must be allowed to search beyond the old eight-second limit');
   assert.equal(reads.length,0,'payload reading still requires marker geometry');
-  finishScan.resolve({...scan(),highConfidence:true});await work;await flush();
-  assert.equal(reads.length,1,'one strong fallback capture can proceed directly to payload verification');
+  finishScan.resolve({...scan(),highConfidence:false});await work;await flush();
+  assert.equal(reads.length,1,'the first usable uncalibrated fit proceeds to payload verification without a second appraisal');
   reads[0].resolve({found:true,unreadable:false});await flush();
   assert.equal(accepted.pixels[0],9);assert.equal(timers.size,0);
 }
@@ -202,7 +202,10 @@ console.log('PASS: independent latest-frame Fourier lookahead, pilot-first prior
   assert.equal(markers.length,1);assert.equal(markers[0].id,3);assert.equal(markers[0].options.deadline-now,24000);assert.equal(markers[0].options.calibratedOnly,false);
   camera.video.currentTime=4;camera.scan(session);camera.video.currentTime=5;camera.scan(session);
   assert.equal(session.guidePending.frameNumber,5);guides[3].resolve(null);await flush();assert.equal(guides[4].id,5);
-  guides[4].resolve(pilot);await flush();assert(markers[0].options.signal.aborted,'positive calibration preempts unconfirmed ordinary work');
+  guides[4].resolve(pilot);await flush();
+  assert(!markers[0].options.signal.aborted,'an ordinary fallback must finish despite later calibration hints');
+  assert.equal(session.pending.frameNumber,5);
+  markers[0].resolve({markers:[],candidates:[]});await flush();
   assert.equal(markers[1].id,5);assert.equal(markers[1].options.calibratedOnly,true);assert.equal(markers[1].options.deadline-now,8000);
   assert.equal(markers[1].options.seed,undefined);assert.equal(markers[1].options.scaleGuide.scale,pilot.scale);assert.equal(markers[1].options.scaleGuide.fx,pilot.fx);
   assert.equal(camera.calibrationLight['data-state'],'detected');assert.match(camera.calibrationLight.textContent,/Calibration found/);
@@ -244,6 +247,35 @@ console.log('PASS: independent latest-frame Fourier lookahead, pilot-first prior
 }
 delete codec.scanEdgeGuide;
 console.log('PASS: calibration-first full-raster appraisal, delayed/periodic fallback, positive preemption, one guided grid, green indicator, latest-slot replacement and cancellation');
+
+{
+  const {camera,session}=setup(),reads=workerQueue(),markers=[];let accepted;
+  session.appraised=0;
+  camera.accept=async(s,img)=>{s.handingOff=true;accepted=img;};
+  codec.scanMarkers=(p,w,h,options)=>new Promise((resolve,reject)=>{
+    markers.push({id:p[0],options,resolve});
+    options.signal.addEventListener('abort',()=>reject(new DOMException('Cancelled','AbortError')),{once:true});
+  });
+  camera.enqueueFrame(session,{...entry(1),guideKind:'edge',scaleGuide:pilot});await flush();
+  assert.equal(markers[0].options.calibratedOnly,true);
+  await advance(5000);
+  camera.enqueueFrame(session,{...entry(2),guideKind:'edge',scaleGuide:pilot});await flush();
+  camera.enqueueFrame(session,{...entry(3),guideKind:'edge',scaleGuide:pilot});await flush();
+  assert.equal(session.pending.frameNumber,3);
+  assert(session.pending.fallback,'newer green frames cannot erase a queued full-search turn');
+  markers[0].resolve({markers:[],candidates:[]});await flush();
+  assert.equal(markers[1].options.calibratedOnly,false,'repeated green hints must still allow ordinary-scale fallback');
+  assert.equal(markers[1].options.deadline-now,24000);
+  markers[1].resolve(scan(100));await flush();
+  assert.equal(reads.length,1,'the first usable fit starts decoding without waiting for a second appraisal');
+  assert.equal(reads[0].options.resumeDiscovery,true);
+  camera.enqueueFrame(session,{...entry(4),guideKind:'edge',scaleGuide:pilot});await flush();
+  markers[2].resolve(scan(101));await flush();
+  assert(!reads[0].options.signal.aborted,'minor score jitter must not cancel a valid payload read');
+  reads[0].resolve({found:true,unreadable:false});await flush();
+  assert.equal(accepted.pixels[0],3);assert.equal(timers.size,0);
+}
+console.log('PASS: repeated calibration positives retain full fallback, first-fit payload handoff and score-jitter protection');
 
 {
   const {camera,session}=setup();

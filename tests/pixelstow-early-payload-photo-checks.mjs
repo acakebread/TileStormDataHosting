@@ -52,6 +52,29 @@ try {
           headers: result.geometry?.headerCount, markers: result.markers?.length,
           highConfidence: Boolean(scan.highConfidence), reason: scan.reason });
       }
+      if (live) {
+        // Exercise the actual camera queue and automatic payload handoff with
+        // real codec workers; only the video/DOM presentation is substituted.
+        const started = performance.now();
+        const row = await new Promise((resolve, reject) => {
+          const session = { purpose: 'read', history: [], appraised: 0, fallbackAfter: 0 };
+          const camera = Object.create(PixelStowCamera.prototype);
+          const timer = setTimeout(() => { session.paused = true; camera.cancelSearches(session); reject(Error('Camera did not hand off the readable capture')); }, 65000);
+          Object.assign(camera, { session, progress: { textContent: '' }, signature: { textContent: '' },
+            readProgress: { begin() {}, update() {}, signature() {}, finish() {} },
+            showBestFrame() {}, updateCalibrationLight() {},
+            sync() { if (session.paused) { clearTimeout(timer); reject(Error(camera.progress.textContent)); } },
+            accept: async (s, accepted, inspection) => {
+              s.handingOff = true; clearTimeout(timer);
+              resolve({ variant: 'camera-handoff', success: inspection.found && !inspection.unreadable,
+                totalMs: Math.round(performance.now() - started), headers: inspection.geometry?.headerCount,
+                markers: inspection.markers?.length });
+            } });
+          camera.enqueueFrame(session, { image: { ...image, pixels: image.pixels.slice() }, guideKind: 'edge',
+            guideChecked: true, frameNumber: 1, capturedAt: Date.now() });
+        });
+        rows.push(row);
+      }
       return rows;
     }, { bytes, live });
     if (!live) assert(!rows[0].success || rows[1].success, 'Experiment must preserve baseline recovery');

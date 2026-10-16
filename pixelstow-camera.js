@@ -1011,19 +1011,26 @@
         }
         return;
       }
-      if (entry.guideKind === "edge" && !entry.scaleGuide?.detected) {
+      if (entry.guideKind === "edge") {
         // Sample ordinary recovery occasionally; do not fill a marker queue
         // with every uncalibrated video frame while the cheap guide is running.
         session.fallbackAfter ??= Date.now() + 5000;
-        if (Date.now() < session.fallbackAfter || session.scanning || session.reading || session.pending) return;
-        entry.fallback = true;
-        session.fallbackAfter = Date.now() + 8000;
+        if (!entry.scaleGuide?.detected &&
+          (Date.now() < session.fallbackAfter || session.scanning || session.reading || session.pending)) return;
+        // A positive guide can still have an inaccurate scale. Periodically
+        // retain the ordinary search even when every appraisal reports green.
+        if (Date.now() >= session.fallbackAfter) {
+          entry.fallback = true;
+          session.fallbackAfter = Date.now() + 8000;
+        }
       }
+      // Refresh the queued raster without losing its promised full-search turn.
+      if (session.pending?.fallback) entry.fallback = true;
       if (session.pending?.scaleGuide?.detected && !entry.scaleGuide?.detected && Date.now() - session.pending.capturedAt < 45000) return;
       session.pending = entry;
       entry.markerDispatched = true;
       const active = session.scanningEntry;
-      if (entry.scaleGuide?.detected && active && !active.markerGuideUsed && !active.markerConfirmed) {
+      if (entry.scaleGuide?.detected && active && !active.fallback && !active.markerGuideUsed && !active.markerConfirmed) {
         session.abort?.abort();
         if (!session.reading) this.progress.textContent = (entry.guideKind === "edge" ? "Edge guide found. " : "Scale pilot found. ") +
           "Prioritising frame " + entry.frameNumber + " for marker checks…";
@@ -1159,7 +1166,7 @@
       // change the options used by an already-running marker worker.
       const scaleGuide = entry.scaleGuide || false;
       entry.markerGuideUsed = Boolean(scaleGuide?.detected);
-      entry.calibratedOnly = entry.guideKind === "edge" && Boolean(scaleGuide?.detected);
+      entry.calibratedOnly = entry.guideKind === "edge" && Boolean(scaleGuide?.detected) && !entry.fallback;
       try {
         const prefix = "Frame " + frameNumber + " · " + image.width + " × " + image.height + ": ";
         if (!session.reading) {
@@ -1196,7 +1203,11 @@
         entry.score = scan.candidates?.[0]?.geometry.rank ?? (scan.markers?.length || 0);
         this.retainFrame(session, entry);
         session.appraised++;
-        if (scan.candidates?.length && session.readEntry && !session.readAbort?.signal.aborted && this.framePriority(entry) > this.framePriority(session.readEntry)) {
+        // Small score fluctuations between live frames must not repeatedly
+        // cancel a useful payload read before its checksum can complete.
+        const promotionMargin = Math.max(5, Math.abs(session.readEntry?.score || 0) * 0.08);
+        if (scan.candidates?.length && session.readEntry && !session.readAbort?.signal.aborted &&
+          this.framePriority(entry) >= this.framePriority(session.readEntry) + promotionMargin) {
           session.readEntry.state = "replaced by a stronger capture";
           session.appraised = Math.max(2, session.appraised);
           session.readAbort.abort(); // Terminates the payload worker, not just its UI updates.
@@ -1239,7 +1250,8 @@
       if (this.session !== session || session.purpose === "source" || session.paused || session.adjusting || session.reading || session.handingOff) return;
       const entry = session.history.find((frame) => !frame.attempted && frame.scan.candidates?.length && Date.now() - frame.capturedAt < 45000);
       if (!entry) return; // Never spend a payload read on a marker-free capture.
-      if (session.appraised < 2 && !entry.scan.highConfidence && !entry.scaleGuide?.detected) return;
+      // A usable geometric fit is enough to attempt the checksummed body.
+      // Waiting for another appraisal could age out this readable capture.
       session.appraised = 0;
       session.reading = true;
       session.readEntry = entry;
