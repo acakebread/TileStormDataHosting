@@ -49,6 +49,24 @@ const entry=(id,score=100)=>({image:image(id),scan:scan(score),score,frameNumber
   assert.equal(await camera.zoomLeavesPreviewRunning({applyConstraints(){video.readyState=1;return Promise.resolve();}},1.2),false);
   video.readyState=2;
   assert.equal(await camera.zoomLeavesPreviewRunning({applyConstraints(){now+=400;return Promise.resolve();}},1.2),false);
+  // Probing, restoring, applying and abandoning hardware zoom must not discard
+  // the landscape format negotiated before the live preview becomes ready.
+  const format={width:{ideal:2560},height:{ideal:1920},aspectRatio:{ideal:4/3}},adjustments=[];
+  let appliedZoom=1;
+  const zoomTrack={getConstraints:()=>format,getSettings:()=>({zoom:appliedZoom}),
+    addEventListener(){},removeEventListener(){},
+    applyConstraints(constraints){adjustments.push(constraints);appliedZoom=constraints.advanced[0].zoom;return Promise.resolve();}};
+  const zoomSession=camera.session={deviceId:'landscape',zoomMode:'hardware',zoom:1,zoomApplied:1,zoomRange:{min:1,max:4,step:0},
+    stream:{getVideoTracks:()=>[zoomTrack]}};
+  camera.liveZoomDevices=new Set();camera.layoutPreview=()=>{};
+  const classification=camera.classifyHardwareZoom(zoomSession,zoomTrack);
+  await flush();await advance(250);await classification;
+  assert(zoomSession.zoomLive);
+  zoomSession.zoom=2;await camera.applyHardwareZoom(zoomSession);
+  appliedZoom=3;await camera.abandonHardwareZoom(zoomSession,zoomTrack);
+  assert.equal(adjustments.length,4);
+  for(const constraints of adjustments) for(const key of ['width','height','aspectRatio']) assert.deepEqual(constraints[key],format[key]);
+  console.log('PASS: hardware zoom probing, restoration, changes and fallback preserve the landscape capture format');
   let hardwareCalls=0;
   camera.applyHardwareZoom=()=>{hardwareCalls+=1;};
   camera.layoutPreview=()=>{};

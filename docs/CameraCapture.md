@@ -26,8 +26,11 @@ on phones and is hidden on desktop. Without live camera access, desktop users
 are directed to Browse for saved photos. The picker purpose is cleared after
 selection or cancellation. Captured image pixels are preserved.
 
-**Capture** requests video only, preferring the rear camera and a 1920 × 2560
-portrait or 2560 × 1920 landscape feed, according to the device's orientation.
+**Capture** and **Photo** request video only, preferring the rear camera and a
+2560 × 1920 landscape feed, including when the phone is held upright. The initial
+preview reserves a landscape rectangle while permission/device startup completes;
+no physical rotation is needed to select the landscape preference. Sharpness and
+hardware-zoom adjustments retain the stream's resolution/aspect-ratio constraints.
 Constraints are ideals: actual resolution depends on the browser/device.
 If camera startup reports a format/read error, acquisition retries the same
 selected device with no resolution/aspect-ratio preferences, then a 640 × 480,
@@ -75,13 +78,12 @@ the controls. Updates do not move the preview or buttons; on short landscape
 screens, feedback scrolls within the existing controls column. Viewport changes
 refit the feed without stretching or cropping it.
 
-Device rotation updates the preferred camera dimensions on the current video
-track and cancels the old frame's search. If the browser cannot change the feed,
-the existing camera remains available. **Rotate view** applies a manual 90-degree
-rotation to both the displayed video and captured pixel raster; it does not
-merely turn the CSS preview while leaving captures sideways. Scanning resumes
-with a fresh frame after the adjustment. These controls do not modify the native
-**Take photo** path.
+Device rotation refits the controls, reapplies the landscape capture preference
+on the current video track and cancels the old frame's search. If the browser
+cannot change the feed, the existing camera remains available. **Rotate view**
+applies a manual 90-degree display rotation; captured pixels retain the camera's
+original orientation and dimensions. Scanning resumes with a fresh frame after
+the adjustment. These controls do not modify the native **Take photo** path.
 
 On HTTP/HTTPS, a disposable marker worker checks frequency evidence and locates
 the selected format's patches, retaining translation/affine/perspective fits without reading any
@@ -301,7 +303,9 @@ and scheduler appraisal/preemption/pause behavior with controlled worker results
 camera devices to check exact switching, stream cleanup, remembering devices,
 unavailable-device skipping, restoring the previous working camera, cancellation,
 manual/source capture, the phone picker route and prognosis touch gestures. It
-never accesses hardware.
+also checks landscape acquisition before any rotation on an upright phone,
+source-camera switching, retained constraints during sharpening/zoom and a
+landscape/portrait round trip. It never accesses hardware.
 Set `PIXELSTOW_PLAYWRIGHT` to a Playwright module file and `PIXELSTOW_CHROME` to a
 Chrome executable to use an existing runtime instead of the package defaults.
 Actual decoding

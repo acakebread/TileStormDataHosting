@@ -312,7 +312,9 @@
       if (caps.height?.max > (current.height || 0)) constraints.height = { ideal: caps.height.max };
       const advanced = Array.isArray(caps.focusMode) && caps.focusMode.includes("continuous") ? [{ focusMode: "continuous" }] : [];
       if (!advanced.length && !constraints.width && !constraints.height) return;
-      try { await track.applyConstraints({ ...constraints, advanced }); } catch { /* Keep the stream that already started. */ }
+      // applyConstraints replaces earlier preferences. Keep the capture aspect
+      // ratio when sharpening the feed, just as the zoom updates below do.
+      try { await track.applyConstraints({ ...track.getConstraints?.(), ...constraints, advanced }); } catch { /* Keep the stream that already started. */ }
     }
 
     async startBestDevice(session, facing) {
@@ -442,13 +444,13 @@
       return window.matchMedia("(orientation: portrait)").matches;
     }
 
-    videoConstraints(facing, portrait = this.isPortrait(), deviceId = null, profile = "preferred") {
+    videoConstraints(facing, deviceId = null, profile = "preferred") {
       const selection = deviceId ? { deviceId: { exact: deviceId } } : { facingMode: { ideal: facing } };
       if (profile === "default") return selection;
       if (profile === "basic") return { ...selection, width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15 } };
-      return { ...selection,
-        width: { ideal: portrait ? 1920 : 2560 },
-        height: { ideal: portrait ? 2560 : 1920 }, aspectRatio: { ideal: portrait ? 3 / 4 : 4 / 3 } };
+      // Capture stays landscape even with the handset upright. Physical device
+      // orientation controls the surrounding layout, not the requested raster.
+      return { ...selection, width: { ideal: 2560 }, height: { ideal: 1920 }, aspectRatio: { ideal: 4 / 3 } };
     }
 
     async acquireStream(session, facing, deviceId) {
@@ -460,7 +462,7 @@
           ? "Trying the camera's default capture settings…" : "Trying 640 × 480 camera compatibility settings…";
         try {
           const stream = await navigator.mediaDevices.getUserMedia({ audio: false,
-            video: this.videoConstraints(facing, session.portrait, deviceId, profile) });
+            video: this.videoConstraints(facing, deviceId, profile) });
           session.captureProfile = profile;
           return stream;
         } catch (error) {
@@ -481,11 +483,10 @@
       }
       if (!session) { this.frame.hidden = true; this.video.style.visibility = "hidden"; this.resetPortraitPreview(); this.placeCalibration(); return; }
       // Permission and device startup must not collapse the preview row. Use
-      // the requested orientation until actual video dimensions are available.
+      // the landscape capture preference until actual video dimensions are available.
       const ready = session.ready && this.video.videoWidth && this.video.videoHeight;
-      const portrait = this.isPortrait();
-      const width = ready ? this.video.videoWidth : portrait ? 1920 : 2560;
-      const height = ready ? this.video.videoHeight : portrait ? 2560 : 1920;
+      const width = ready ? this.video.videoWidth : 2560;
+      const height = ready ? this.video.videoHeight : 1920;
       this.frame.hidden = false;
       this.video.style.visibility = ready ? "visible" : "hidden";
       const sideways = session.rotation % 180 !== 0;
@@ -565,7 +566,7 @@
       try { live = await this.zoomLeavesPreviewRunning(track, probe); }
       catch { live = false; }
       if (this.session !== session) return;
-      try { await track.applyConstraints({ advanced: [{ zoom: current }] }); }
+      try { await track.applyConstraints({ ...track.getConstraints?.(), advanced: [{ zoom: current }] }); }
       catch { live = false; }
       if (this.session !== session) return;
       if (live) {
@@ -588,7 +589,7 @@
       const started = Date.now();
       let rejected = false;
       try {
-        try { await track.applyConstraints({ advanced: [{ zoom }] }); }
+        try { await track.applyConstraints({ ...track.getConstraints?.(), advanced: [{ zoom }] }); }
         catch { rejected = true; }
         const elapsed = Date.now() - started;
         if (rejected || interrupted || video.readyState < 2 || !video.videoWidth || elapsed > 350) return false;
@@ -619,7 +620,7 @@
       session.zoom = Math.min(4, Math.max(1, wanted / basis));
       const current = Number(track?.getSettings?.().zoom);
       if (track && typeof track.applyConstraints === "function" && Number.isFinite(current) && Math.abs(current - basis) > 0.01) {
-        try { await track.applyConstraints({ advanced: [{ zoom: basis }] }); } catch { /* The preview scale still enlarges the current frames. */ }
+        try { await track.applyConstraints({ ...track.getConstraints?.(), advanced: [{ zoom: basis }] }); } catch { /* The preview scale still enlarges the current frames. */ }
       }
       if (this.session === session) this.layoutPreview();
     }
@@ -653,7 +654,7 @@
           const started = Date.now();
           const timeStarted = Number(video?.currentTime) || 0;
           try {
-            await track.applyConstraints({ advanced: [{ zoom: session.zoom }] });
+            await track.applyConstraints({ ...track.getConstraints?.(), advanced: [{ zoom: session.zoom }] });
           } finally {
             video?.removeEventListener("emptied", interrupt);
             track.removeEventListener("mute", interrupt);
@@ -800,13 +801,13 @@
       session.rotation = 0;
       clearTimeout(session.timer);
       this.cancelSearches(session, true);
-      this.progress.textContent = "Adjusting camera to the phone's orientation…";
+      this.progress.textContent = "Adjusting camera after device rotation…";
       this.signature.textContent = "";
       this.sync();
       try {
         const track = session.stream?.getVideoTracks()[0];
         const desired = session.zoom;
-        await track?.applyConstraints(this.videoConstraints(session.facing, portrait, session.deviceId, session.captureProfile));
+        await track?.applyConstraints(this.videoConstraints(session.facing, session.deviceId, session.captureProfile));
         if (track && this.session === session) {
           session.zoom = desired;
           this.configureZoom(session, track);

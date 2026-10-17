@@ -360,6 +360,7 @@ try {
     assert(pending.visible&&pending.frame.width>100&&pending.frame.height>100,'camera startup must reserve a visible rectangle: '+JSON.stringify({size,pending}));
     assert(pending.frame.top>=pending.header.bottom&&(size.width>size.height||pending.frame.bottom<=pending.footer.top+1),'startup frame must fit between header and controls: '+JSON.stringify({size,pending}));
     assert.equal(pending.video,'hidden','a previous camera feed cannot appear during startup');
+    assert(pending.frame.width>pending.frame.height,'startup must reserve a landscape frame even while the phone is upright');
     if(size.width<size.height) assert(pending.help.top>=pending.close.bottom+3,'camera guidance must sit clear of the Close button');
   }
   await compatibility.locator('#close-camera').click();
@@ -376,9 +377,37 @@ try {
   let phoneFilePickers = 0;
   phone.on('filechooser', () => phoneFilePickers++);
   await phone.goto(url);
-  await phone.evaluate(() => { PixelStow.inspect = async () => ({ found: false }); });
+  await phone.evaluate(() => {
+    PixelStow.inspect = async () => ({ found: false });
+    window.phoneCameraRequests = []; window.phoneCameraAdjustments = [];
+    const acquire = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+    navigator.mediaDevices.getUserMedia = async constraints => {
+      phoneCameraRequests.push(constraints);
+      const stream = await acquire(constraints);
+      const track = stream.getVideoTracks()[0], apply = track.applyConstraints.bind(track);
+      track.applyConstraints = constraints => { phoneCameraAdjustments.push(constraints); return apply(constraints); };
+      return stream;
+    };
+  });
+  const landscapeFeed = async () => {
+    const state = await phone.evaluate(() => {
+      const frame = camera.frame.getBoundingClientRect();
+      return { width: camera.video.videoWidth, height: camera.video.videoHeight, frameWidth: frame.width, frameHeight: frame.height,
+        requests: phoneCameraRequests, adjustments: phoneCameraAdjustments };
+    });
+    assert(state.width>state.height && state.frameWidth>state.frameHeight,'phone capture must be landscape before any physical rotation: '+JSON.stringify(state));
+    assert(state.requests.length>0);
+    for (const {video} of state.requests) {
+      assert(video.width.ideal>video.height.ideal);
+      assert.equal(video.aspectRatio.ideal,4/3,'upright startup and switching must request a landscape feed');
+    }
+    for (const constraints of state.adjustments) assert.equal(constraints.aspectRatio?.ideal ?? constraints.aspectRatio,4/3,
+      'sharpness, zoom and orientation updates must retain landscape capture: '+JSON.stringify(constraints));
+  };
   await phone.locator('#open-camera').click();
   await phone.waitForFunction(() => camera.session?.ready && !document.querySelector('#capture-frame').disabled);
+  await landscapeFeed();
+  await phone.screenshot({ path: path.join(screenshots, 'phone-portrait-startup.png') });
   await stableFeedback(phone);
   const [picker] = await Promise.all([phone.waitForEvent('filechooser'), phone.locator('#camera-take-photo').click()]);
   assert(!await phone.evaluate(() => camera.active));
@@ -418,13 +447,20 @@ try {
   await phone.waitForFunction(() => camera.session?.ready && !document.querySelector('#capture-frame').disabled);
   assert(!(await phone.locator('#camera-take-photo').isVisible()));
   assert.equal(await phone.locator('#capture-frame').textContent(), 'Take source photo');
+  await landscapeFeed();
+  await phone.locator('#switch-camera').click();
+  await phone.waitForFunction(() => camera.session?.ready && !camera.switchOperation && !document.querySelector('#capture-frame').disabled);
+  await landscapeFeed();
   await stableFeedback(phone);
   await phone.setViewportSize({ width: 844, height: 390 });
   await phone.waitForFunction(() => camera.session?.ready && !camera.session.portrait && !camera.session.adjusting && !document.querySelector('#capture-frame').disabled);
+  await landscapeFeed();
   await stableFeedback(phone);
   await phone.screenshot({ path: path.join(screenshots, 'phone-landscape.png') });
   await phone.setViewportSize({ width: 390, height: 844 });
   await phone.waitForFunction(() => camera.session?.ready && camera.session.portrait && !camera.session.adjusting && !document.querySelector('#capture-frame').disabled);
+  await landscapeFeed();
+  console.log('PASS: upright phone startup, source capture, camera switching and portrait/landscape/portrait changes all retain a landscape feed');
   await phone.screenshot({ path: path.join(screenshots, 'phone-portrait.png') });
   await phone.evaluate(() => {
     window.phoneTracks = camera.session.stream.getTracks();
