@@ -448,8 +448,8 @@
       const selection = deviceId ? { deviceId: { exact: deviceId } } : { facingMode: { ideal: facing } };
       if (profile === "default") return selection;
       if (profile === "basic") return { ...selection, width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15 } };
-      // Capture stays landscape even with the handset upright. Physical device
-      // orientation controls the surrounding layout, not the requested raster.
+      // This is only a preference: phones can still deliver a portrait raster.
+      // Landscape framing is applied to the actual video in videoFrameRect.
       return { ...selection, width: { ideal: 2560 }, height: { ideal: 1920 }, aspectRatio: { ideal: 4 / 3 } };
     }
 
@@ -487,16 +487,17 @@
       const ready = session.ready && this.video.videoWidth && this.video.videoHeight;
       const width = ready ? this.video.videoWidth : 2560;
       const height = ready ? this.video.videoHeight : 1920;
+      const source = this.videoFrameRect(width, height);
       this.frame.hidden = false;
       this.video.style.visibility = ready ? "visible" : "hidden";
       const sideways = session.rotation % 180 !== 0;
-      const frameWidth = sideways ? height : width, frameHeight = sideways ? width : height;
+      const frameWidth = sideways ? source.sh : source.sw, frameHeight = sideways ? source.sw : source.sh;
       const viewW = this.view.clientWidth || 1;
       const viewH = this.fitPortraitPreview(frameWidth, frameHeight) || this.view.clientHeight;
       // Hardware zoom is already in the video frames. A preview zoom enlarges
       // that same centred frame. Keep the layout size still and scale the
       // transform: resizing the video on every pinch restarts older cameras.
-      const fit = Math.min(Math.max(1, viewW - 8) / frameWidth, Math.max(1, viewH - 8) / frameHeight);
+      const fit = Math.min(viewW / frameWidth, viewH / frameHeight);
       const zoom = session.zoomMode === "simulated" ? (session.zoom || 1) : 1;
       const scale = fit * zoom;
       const w = frameWidth * scale, h = frameHeight * scale;
@@ -505,6 +506,11 @@
       const right = Math.min(viewW, videoLeft + w), bottom = Math.min(viewH, videoTop + h);
       this.video.style.width = width * fit + "px";
       this.video.style.height = height * fit + "px";
+      // Clip the native portrait feed to the same central region captureFrame
+      // reads. Keep the scene upright rather than rotating it to make it wide.
+      this.video.style.clipPath = "inset(" + (source.sy / height * 100) + "% " +
+        ((width - source.sx - source.sw) / width * 100) + "% " +
+        ((height - source.sy - source.sh) / height * 100) + "% " + (source.sx / width * 100) + "%)";
       this.video.style.transform = "translate(-50%, -50%) rotate(" + session.rotation + "deg)" +
         (zoom > 1.001 ? " scale(" + zoom + ")" : "");
       Object.assign(this.frame.style, {
@@ -728,15 +734,23 @@
       this.schedule(session, Math.max(400, wait));
     }
 
+    videoFrameRect(rawWidth, rawHeight) {
+      // A phone's raster can remain portrait regardless of requested dimensions.
+      // Use a native-pixel landscape centre, shared by preview and capture.
+      const sw = rawWidth, sh = this.nativePhotoCapture && rawHeight > rawWidth ? Math.max(1, Math.round(rawWidth * 3 / 4)) : rawHeight;
+      return { sx: 0, sy: Math.floor((rawHeight - sh) / 2), sw, sh };
+    }
+
     visibleVideoRect(rawWidth, rawHeight, zoom) {
-      if (!(zoom > 1.001)) return { sx: 0, sy: 0, sw: rawWidth, sh: rawHeight };
+      const source = this.videoFrameRect(rawWidth, rawHeight);
+      if (!(zoom > 1.001)) return source;
       const rotation = this.session?.rotation || 0, sideways = rotation % 180 !== 0;
-      const frameWidth = sideways ? rawHeight : rawWidth, frameHeight = sideways ? rawWidth : rawHeight;
+      const frameWidth = sideways ? source.sh : source.sw, frameHeight = sideways ? source.sw : source.sh;
       const viewW = this.view?.clientWidth || frameWidth, viewH = this.view?.clientHeight || frameHeight;
       const fit = Math.min(viewW / frameWidth, viewH / frameHeight) * zoom;
       const shownW = Math.min(frameWidth, viewW / fit), shownH = Math.min(frameHeight, viewH / fit);
-      const sw = Math.max(1, Math.min(rawWidth, Math.round(sideways ? shownH : shownW)));
-      const sh = Math.max(1, Math.min(rawHeight, Math.round(sideways ? shownW : shownH)));
+      const sw = Math.max(1, Math.min(source.sw, Math.round(sideways ? shownH : shownW)));
+      const sh = Math.max(1, Math.min(source.sh, Math.round(sideways ? shownW : shownH)));
       const sx = Math.max(0, Math.min(rawWidth - sw, Math.floor((rawWidth - sw) / 2)));
       const sy = Math.max(0, Math.min(rawHeight - sh, Math.floor((rawHeight - sh) / 2)));
       return { sx, sy, sw, sh };
@@ -793,43 +807,17 @@
       light.style.maxWidth = Math.max(48, frameWidth - 24) + "px";
     }
 
-    async refreshOrientation(session) {
+    refreshOrientation(session) {
       if (this.session !== session || !session.ready || session.handingOff || session.adjusting) return;
       const portrait = this.isPortrait();
       if (portrait === session.portrait) return;
-      session.adjusting = true;
-      session.rotation = 0;
+      session.portrait = portrait;
       clearTimeout(session.timer);
-      this.cancelSearches(session, true);
-      this.progress.textContent = "Adjusting camera after device rotation…";
-      this.signature.textContent = "";
+      // The browser rotates its video independently. Do not renegotiate a
+      // working stream or erase Rotate view when only the handset turns.
+      if (!session.calibrationHold && !session.signalHold) this.cancelSearches(session, true);
       this.sync();
-      try {
-        const track = session.stream?.getVideoTracks()[0];
-        const desired = session.zoom;
-        await track?.applyConstraints(this.videoConstraints(session.facing, session.deviceId, session.captureProfile));
-        if (track && this.session === session) {
-          session.zoom = desired;
-          this.configureZoom(session, track);
-          if (session.zoomMode === "hardware") await this.applyHardwareZoom(session);
-        }
-      } catch {
-        // Ideals are advisory. Retain a usable feed if the camera cannot change
-        // its format; guides still reflect it and Rotate view remains available.
-      } finally {
-        session.adjusting = false;
-        if (this.session === session && !session.handingOff) {
-          session.portrait = portrait;
-          this.progress.textContent = session.purpose === "source" ? "Camera ready. Frame your source photo, then tap Take source photo."
-            : session.manualCapture ? "Camera ready. Frame your picture, then tap Capture and read."
-            : session.paused ? "Scanning paused. Reframe, then resume or capture and read."
-            : "Camera ready. Keep all four picture corners inside the guides and hold steady…";
-          this.sync();
-          // A second rotation during applyConstraints is handled in order.
-          this.refreshOrientation(session);
-          this.schedule(session, 900);
-        }
-      }
+      this.schedule(session, 900);
     }
 
     sync() {
@@ -909,7 +897,7 @@
         document.body.classList.add("camera-modal-open");
         this.sync();
         // Ideals allow a lower-resolution webcam to work too. Never request the
-        // microphone, crop to the CSS preview, or rescale captured video pixels.
+        // microphone or rescale captured pixels; phone framing uses a native crop.
         if (options.deviceId === undefined) await this.startBestDevice(session, facing);
         else await this.startDevice(session, facing, deviceId);
         if (this.session !== session) return { cancelled: true };

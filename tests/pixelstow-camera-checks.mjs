@@ -395,7 +395,7 @@ try {
       return { width: camera.video.videoWidth, height: camera.video.videoHeight, frameWidth: frame.width, frameHeight: frame.height,
         requests: phoneCameraRequests, adjustments: phoneCameraAdjustments };
     });
-    assert(state.width>state.height && state.frameWidth>state.frameHeight,'phone capture must be landscape before any physical rotation: '+JSON.stringify(state));
+    assert(state.frameWidth>state.frameHeight,'phone preview must be landscape before any physical rotation: '+JSON.stringify(state));
     assert(state.requests.length>0);
     for (const {video} of state.requests) {
       assert(video.width.ideal>video.height.ideal);

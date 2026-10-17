@@ -8,7 +8,7 @@ and spaces between buttons are inert. Keyboard image paste remains available.
 
 **Photo** opens the same camera preview for taking a new source
 image on phones or desktops with a camera. **Take source photo** imports the
-complete video raster into the message/file composer; no marker worker or
+outlined native-pixel region into the message/file composer; no marker worker or
 photographic recovery search runs in this mode. Only the inexpensive native
 fingerprint check runs on import, so existing native locked/encoded images are
 still rejected for re-encoding. The normal writer also retains its fingerprint
@@ -31,7 +31,12 @@ selection or cancellation. Captured image pixels are preserved.
 preview reserves a landscape rectangle while permission/device startup completes;
 no physical rotation is needed to select the landscape preference. Sharpness and
 hardware-zoom adjustments retain the stream's resolution/aspect-ratio constraints.
-Constraints are ideals: actual resolution depends on the browser/device.
+Constraints are ideals: actual resolution and orientation depend on the browser/device.
+When a phone supplies a portrait raster, preview and capture share its central
+4:3 landscape region. The scene stays upright and captured pixels are cropped
+at native resolution, without rotating or stretching them. Landscape feeds retain
+their full frame. This framing uses actual video dimensions rather than depending
+on the camera honoring a landscape request.
 If camera startup reports a format/read error, acquisition retries the same
 selected device with no resolution/aspect-ratio preferences, then a 640 × 480,
 15 fps preference. Exact device selection and video-only access remain in place.
@@ -43,16 +48,16 @@ app holds the camera. Other preview tabs and the Windows Settings camera preview
 may need to release the device before retrying. These retries do not guarantee
 that an incompatible driver can be opened by the browser.
 The preview uses `muted`, `autoplay` and `playsinline` for Safari, displays the
-whole video frame without cropping, and stays live while a captured raster is
+outlined capture region, and stays live while a captured raster is
 read. Pinch, or the wheel over the preview, zooms that live picture. When the
 camera can change zoom without interrupting the preview, the gesture sets that
 camera zoom and the captured frames already include it. A camera that freezes
 and restarts to apply zoom keeps the existing picture moving instead: the
 preview enlarges around the centre, up to 4×, and the captured raster is the
 visible centre at the video's own pixels, not a resampled enlargement. Opening
-or switching cameras starts again at the full frame. A zoom change drops queued scan frames without
+or switching cameras starts again at the unzoomed landscape frame. A zoom change drops queued scan frames without
 shortening the initial framing wait. In portrait the frame uses the full width of the camera column; the scan
-notes take the height that remains. Captures use the video's actual pixel dimensions, without resizing or JPEG
+notes take the height that remains. Captures use the outlined region's native pixels, without resizing or JPEG
 conversion. The browser may already scale/process the sensor feed; video detail
 can therefore be worse than a full-resolution still photograph.
 
@@ -76,11 +81,11 @@ Guides and controls are never included in captured pixels.
 Status text and retained near misses occupy a fixed-height, scrollable area below
 the controls. Updates do not move the preview or buttons; on short landscape
 screens, feedback scrolls within the existing controls column. Viewport changes
-refit the feed without stretching or cropping it.
+refit the outlined region without stretching it.
 
-Device rotation refits the controls, reapplies the landscape capture preference
-on the current video track and cancels the old frame's search. If the browser
-cannot change the feed, the existing camera remains available. **Rotate view**
+Device rotation refits the controls without renegotiating the working video
+track. It preserves an explicitly chosen view rotation and any frozen frame;
+unheld searches restart with fresh pixels. **Rotate view**
 applies a manual 90-degree display rotation; captured pixels retain the camera's
 original orientation and dimensions. Scanning resumes with a fresh frame after
 the adjustment. These controls do not modify the native **Take photo** path.
@@ -305,7 +310,12 @@ unavailable-device skipping, restoring the previous working camera, cancellation
 manual/source capture, the phone picker route and prognosis touch gestures. It
 also checks landscape acquisition before any rotation on an upright phone,
 source-camera switching, retained constraints during sharpening/zoom and a
-landscape/portrait round trip. It never accesses hardware.
+landscape/portrait round trip. `node tests/pixelstow-camera-framing-checks.mjs`
+adds a real portrait video from a synthetic canvas camera, including a camera
+that ignores landscape preferences. It verifies a wide preview before any
+rotation, exact native centre-crop pixels with and without zoom, source/manual
+capture and preserved manual view rotation after a physical-orientation round
+trip. These checks never access hardware.
 Set `PIXELSTOW_PLAYWRIGHT` to a Playwright module file and `PIXELSTOW_CHROME` to a
 Chrome executable to use an existing runtime instead of the package defaults.
 Actual decoding
