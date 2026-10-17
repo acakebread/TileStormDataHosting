@@ -20,6 +20,15 @@ try{
   const page=await browser.newPage({viewport:{width:480,height:900},hasTouch:true,isMobile:true}),errors=[];
   page.on('pageerror',error=>errors.push(error.message));
   await page.goto('http://127.0.0.1:'+server.address().port+'/pixelstow.html');
+  assert(await page.evaluate(()=>{
+    const session={purpose:'read'};camera.session=session;
+    camera.showSignal(session,{},null);camera.renderSignal(session);
+    const hidden=!camera.debugEnabled&&!session.signalDebug&&camera.signalCanvas.hidden&&camera.signalReadout.hidden;
+    camera.session=null;return hidden;
+  }),'diagnostics must start disabled and skip the overlay');
+  assert.equal(await page.locator('#debug-mode').getAttribute('aria-pressed'),'false');
+  await page.locator('#debug-mode').tap();
+  assert.equal(await page.locator('#debug-mode').getAttribute('aria-pressed'),'true');
   const result=await page.evaluate(async()=>{
     const w=512,h=384,source=new Uint8Array(w*h*4);
     for(let i=0;i<source.length;i+=4)source.set([128,128,128,255],i);
@@ -95,11 +104,20 @@ try{
   assert(await page.evaluate(()=>!camera.session.paused&&!camera.session.signalHold&&camera.frozenFrame.hidden));
   await page.evaluate(()=>camera.showSignal(camera.session,heldTestEntry,null));
   await page.locator('#camera-signal-readout').tap();
+  assert(await page.evaluate(()=>{
+    camera.setDebugEnabled(false);
+    camera.showSignal(camera.session,heldTestEntry,null);
+    return !camera.session.paused&&!camera.session.signalHold&&camera.frozenFrame.hidden&&
+      camera.signalCanvas.hidden&&camera.signalReadout.hidden&&!camera.session.signalDebug;
+  }),'turning debug off releases only the manual debug hold and blocks late overlay updates');
+  await page.evaluate(()=>camera.setDebugEnabled(true));
+  await page.evaluate(()=>camera.showSignal(camera.session,heldTestEntry,null));
+  await page.locator('#camera-signal-readout').tap();
   await page.locator('#capture-frame').tap();
   assert.deepEqual(await page.evaluate(()=>heldAccepts),[{sameRaster:true,hasScan:false}],'manual read after a debug hold uses its sampled frame');
   await page.evaluate(async()=>{
-    camera.close();const session=openHeldTest();window.heldMarkerCalls=[];
-    PixelStow.scanEdgeGuide=async()=>heldPositive;
+    camera.close();camera.setDebugEnabled(false);const session=openHeldTest();window.heldMarkerCalls=[];
+    PixelStow.scanEdgeGuide=async(p,w,h,options)=>{window.heldGuideDiagnostic=options.diagnostic;return heldPositive;};
     PixelStow.scanMarkers=(p,w,h,options)=>new Promise((resolve,reject)=>{
       heldMarkerCalls.push({pixels:p,options,resolve});
       options.signal.addEventListener('abort',()=>reject(new DOMException('Cancelled','AbortError')),{once:true});
@@ -108,6 +126,8 @@ try{
     await camera.checkScaleGuide(session);
   });
   assert(await page.evaluate(()=>camera.session.calibrationHold?.entry===heldTestEntry&&!camera.frozenFrame.hidden));
+  assert(await page.evaluate(()=>heldGuideDiagnostic===false&&camera.signalCanvas.hidden&&camera.signalReadout.hidden),
+    'normal calibration still freezes its frame with debug collection and overlay disabled');
   await page.waitForTimeout(3200);
   assert(await page.evaluate(()=>camera.session.calibrationHold?.entry===heldTestEntry&&heldMarkerCalls.length===1),
     'a real display hold must remain frozen beyond three seconds while marker recovery is active');
@@ -120,7 +140,12 @@ try{
   await page.waitForFunction(()=>heldAccepts.length===2);
   assert.deepEqual(await page.evaluate(()=>heldAccepts[1]),{sameRaster:true,hasScan:true});
   await page.evaluate(()=>camera.close());
+  await page.locator('#debug-mode').tap();
+  assert.equal(await page.locator('#debug-mode').getAttribute('aria-pressed'),'true');
+  await page.locator('#debug-mode').tap();
+  assert.equal(await page.locator('#debug-mode').getAttribute('aria-pressed'),'false');
   assert.deepEqual(errors,[]);
   console.log('PASS: strongest rejected strip reaches the overlay through a real worker; one-edge rejection, complete-guide geometry, input preservation, cancellation and stale-overlay cleanup');
   console.log('PASS: touchscreen readout holds/resumes the sampled frame without triggering the shutter; manual capture and delayed green guided/full recovery hand off those same pixels');
+  console.log('PASS: Info debug toggle defaults off, hides and releases diagnostic holds, and leaves normal calibration freezing/recovery active');
 }finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve));}

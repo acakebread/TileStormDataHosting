@@ -450,6 +450,9 @@
     .intro-mobile { display: none; }
     .more-info { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border); }
     .more-info p:last-child { margin-bottom: 0; }
+    .debug-controls { text-align: right; }
+    #debug-mode { border: 0; padding: 0 4px; background: transparent; color: var(--muted); font-size: .8rem; font-weight: 400; text-decoration: underline; }
+    #debug-mode[aria-pressed="true"] { color: var(--tile-community); }
     .audio-action { margin: 0 0 14px; }
     .audio-action p { margin: 6px 0 0; }
     .preview-audio { background: #8cebed; color: #081016; }
@@ -902,6 +905,7 @@
         <h2 id="format-notes">Encoding formats</h2>
         <p>Version 5 is the default. It boosts contrast in textured areas while keeping smaller corner markers. Below 5× redundancy, stronger encoding spends more image quality on recovery. Version 4 uses adaptive contrast with balanced markers. Version 3 uses the original eight recovery markers.</p>
         <p>Older formats remain available; enable older-format recovery to read them. Photo and resize recovery remain experimental and currently need this browser reader. Choose version 1 for existing desktop and TileStorm readers until they are upgraded; attachments also need binary-payload support.</p>
+        <p class="debug-controls"><button id="debug-mode" type="button" aria-pressed="false">Debug mode</button></p>
       </section>
 
       <div class="links">
@@ -999,7 +1003,7 @@
   <script src="./pixelstow-media.js?v=20261015-preview-icons1"></script>
   <script src="./pixelstow-sharing.js?v=20261016-preview-copy1"></script>
   <script src="./pixelstow-read-progress.js?v=20261016-frame-outline"></script>
-  <script src="./pixelstow-camera.js?v=20261017-calibration-lock2"></script>
+  <script src="./pixelstow-camera.js?v=20261017-debug-toggle"></script>
   <script src="./pixelstow-preview.js?v=20261017-straight-preview"></script>
   <script>
     const fileInput = document.querySelector("#file");

@@ -48,6 +48,9 @@
       this.calibrationLight = document.querySelector("#camera-calibration");
       this.signalCanvas = document.querySelector("#camera-signal");
       this.signalReadout = document.querySelector("#camera-signal-readout");
+      this.debugEnabled = false;
+      this.debugToggle = document.querySelector("#debug-mode");
+      this.debugToggle.addEventListener("click", () => this.setDebugEnabled(!this.debugEnabled));
       for (const type of ["pointerdown", "pointerup", "touchstart", "touchend"])
         this.signalReadout.addEventListener(type, event => { this.viewTap = null; event.stopPropagation(); });
       this.signalReadout.addEventListener("keydown", event => {
@@ -1188,9 +1191,21 @@
         this.frozenFrame.hidden = true;
     }
 
+    setDebugEnabled(enabled) {
+      this.debugEnabled = enabled === true;
+      this.debugToggle.setAttribute("aria-pressed", String(this.debugEnabled));
+      const session = this.session;
+      if (!this.debugEnabled && session) {
+        // Only a manual diagnostic hold belongs to this display toggle.
+        // An accepted calibration frame must keep its normal recovery running.
+        if (session.signalHold) this.togglePause();
+        this.clearSignal(session);
+      }
+    }
+
     toggleSignalHold() {
       const session = this.session;
-      if (!session?.ready || session.adjusting || session.handingOff || session.calibrationHold || this.working()) return;
+      if (!this.debugEnabled || !session?.ready || session.adjusting || session.handingOff || session.calibrationHold || this.working()) return;
       if (session.signalHold) { this.togglePause(); return; }
       const debug = session.signalDebug;
       if (!debug) return;
@@ -1213,7 +1228,7 @@
     }
 
     showSignal(session, entry, measurement) {
-      if (this.session !== session || session.purpose !== "read" || !this.signalCanvas) return;
+      if (!this.debugEnabled || this.session !== session || session.purpose !== "read" || !this.signalCanvas) return;
       this.clearSignal(session);
       session.signalDebug = { entry, measurement };
       this.renderSignal(session);
@@ -1232,7 +1247,7 @@
 
     paintSignal(session) {
       const debug = session?.signalDebug;
-      if (this.session !== session || !debug || !this.signalCanvas || !this.signalReadout) return;
+      if (!this.debugEnabled || this.session !== session || !debug || !this.signalCanvas || !this.signalReadout) return;
       const { entry, measurement } = debug, peak = measurement?.diagnostic?.strongest;
       const canvas = this.signalCanvas, width = this.view.clientWidth, height = this.view.clientHeight;
       if (!width || !height) return;
@@ -1398,7 +1413,7 @@
             // matches a slow run of the file detector without holding a stale frame.
             hint = await Promise.race([scanner(sample.pixels, sample.width, sample.height,
               { signal: controller.signal, deadline: Date.now() + 3000, maxMilliseconds: 3000,
-                ...(entry.guideKind === "edge" ? { minimumCoverage: .5, diagnostic: true } : {}) }), cancellation]);
+                ...(entry.guideKind === "edge" ? { minimumCoverage: .5, diagnostic: this.debugEnabled } : {}) }), cancellation]);
         } finally { controller.signal.removeEventListener("abort", aborted); }
         if (this.session !== session || controller.signal.aborted || generation !== session.guideGeneration) return;
         entry.guideChecked = true;
