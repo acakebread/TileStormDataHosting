@@ -784,7 +784,9 @@
       const footerGaps = footerGap * (statusOut ? 1 : 2);
       const available = this.panel.clientHeight - header - controls - statusH - padY - gap * 2 - footerPad - footerGaps;
       const needed = this.view.clientWidth * frameHeight / frameWidth;
-      const room = Math.max(1, available - 32);
+      // Debug evidence has its own space below the image. Reserve a constant
+      // height so changing diagnostic text cannot move the preview or controls.
+      const room = Math.max(1, available - (this.debugEnabled ? 144 : 32));
       const next = Math.floor(Math.min(needed, room));
       if (this.view.style.height !== next + "px") {
         this.view.style.minHeight = "0px";
@@ -1214,6 +1216,7 @@
         if (session.signalHold) this.togglePause();
         this.clearSignal(session);
       }
+      if (session) this.layoutPreview();
     }
 
     toggleSignalHold() {
@@ -1262,6 +1265,8 @@
       const debug = session?.signalDebug;
       if (!this.debugEnabled || this.session !== session || !debug || !this.signalCanvas || !this.signalReadout) return;
       const { entry, measurement } = debug, peak = measurement?.diagnostic?.strongest;
+      const held = (session.calibrationHold?.entry === entry || session.signalHold?.entry === entry) &&
+        this.frozenFrame && !this.frozenFrame.hidden;
       const canvas = this.signalCanvas, width = this.view.clientWidth, height = this.view.clientHeight;
       if (!width || !height) return;
       const density = Math.min(2, window.devicePixelRatio || 1);
@@ -1286,26 +1291,27 @@
         ctx.closePath(); ctx.fillStyle = fill; ctx.fill();
         ctx.strokeStyle = colour; ctx.lineWidth = 2; ctx.setLineDash(dashed ? [6, 4] : []); ctx.stroke();
       };
-      if (measurement?.detected) {
+      // Geometry belongs to this sampled raster, which can be seconds older
+      // than live video. Only overlay it while that exact raster is on screen.
+      if (held && measurement?.detected) {
         draw(measurement.corners, "#61e28b", "#61e28b0a", false);
         for (const strip of measurement.diagnostic?.accepted || []) draw(strip.band, "#61e28b", "#61e28b26", false);
-      } else draw(peak?.band, "#ffca64", "#ffca6426", true);
-      canvas.hidden = !peak && !measurement?.detected;
-      const held = session.calibrationHold?.entry === entry || session.signalHold?.entry === entry;
+      } else if (held) draw(peak?.band, "#ffca64", "#ffca6426", true);
+      canvas.hidden = !held || !peak && !measurement?.detected;
       const age = Math.max(0, Date.now() - entry.capturedAt) / 1000;
       const frame = "Frame " + entry.frameNumber + (held ? " · held" : " · " + age.toFixed(1) + "s old");
       let text = measurement?.detected ? "Green: calibration matched · ~" + measurement.scale.toFixed(2) +
         "× scale · four matching edges." : "Calibration NOT acquired. ";
-      if (!measurement?.detected) text += peak ? "Amber: strongest guide response " + peak.score.toFixed(2) + " · ~" + peak.scale.toFixed(2) +
+      if (!measurement?.detected) text += peak ? "Amber: rejected search strip · response " + peak.score.toFixed(2) + " · ~" + peak.scale.toFixed(2) +
         "× candidate scale · wavelengths " + Math.round(64 * peak.scale) + "/" + Math.round(96 * peak.scale) + "px · phase error " +
         Math.round(peak.phaseError * 180 / Math.PI) + "°." : "No measurable guide response.";
       if (peak && !measurement?.detected) text += " Unverified: " + peak.reason +
         (measurement.diagnostic.status === "time-limit" ? "; search budget ended" : measurement.diagnostic.status === "coverage-too-small" ? "; picture too small in frame" : "") + ".";
-      const action = session.signalHold ? " · tap to resume" : session.calibrationHold ? " · checking frozen frame" : " · tap to freeze this response";
+      const action = session.signalHold ? " · tap to resume" : session.calibrationHold ? " · checking frozen frame" : " · tap to inspect sampled frame";
       this.signalReadout.textContent = frame + action + "\n" + text;
       this.signalReadout.dataset.state = measurement?.detected ? "detected" : "unverified";
       this.signalReadout.disabled = Boolean(session.calibrationHold || session.handingOff);
-      this.signalReadout.setAttribute("aria-label", session.signalHold ? "Resume scanning" : "Freeze diagnostic frame");
+      this.signalReadout.setAttribute("aria-label", session.signalHold ? "Resume scanning" : "Inspect sampled diagnostic frame");
       this.signalReadout.hidden = false;
     }
 

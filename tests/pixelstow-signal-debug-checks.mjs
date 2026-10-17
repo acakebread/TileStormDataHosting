@@ -47,6 +47,10 @@ try{
     const entry={image:{pixels:oneEdge,width:w,height:h},frameNumber:7,capturedAt:Date.now()-1200};
     camera.showSignal(session,entry,negative);camera.updateCalibrationLight(session,entry);
     const text=camera.signalReadout.textContent;
+    const liveHidden=camera.signalCanvas.hidden;
+    const viewRect=camera.view.getBoundingClientRect(),readoutRect=camera.signalReadout.getBoundingClientRect();
+    const readoutOutside=readoutRect.bottom<=viewRect.top||readoutRect.top>=viewRect.bottom||readoutRect.right<=viewRect.left||readoutRect.left>=viewRect.right;
+    camera.paintFrozenFrame(entry.image);session.signalHold={entry};camera.renderSignal(session);
     const drawn=Array.from(camera.signalCanvas.getContext('2d').getImageData(0,0,camera.signalCanvas.width,camera.signalCanvas.height).data).some((v,i)=>i%4===3&&v>0);
     const state=camera.frame.dataset.calibration;
     const hasCanvas=!camera.signalCanvas.hidden,hasText=!camera.signalReadout.hidden;
@@ -55,11 +59,20 @@ try{
     const greenOnly=Array.from(overlay).every((v,i)=>i%4!==0||!overlay[i+3]||overlay[i]<overlay[i+1]);
     const matched=camera.signalReadout.textContent.includes('Green: calibration matched')&&
       !camera.signalReadout.textContent.includes('Amber')&&camera.signalReadout.dataset.state==='detected'&&greenOnly;
+    // A slanted source polygon must remain slanted in the frozen-frame overlay.
+    const tilted=structuredClone(negative);
+    tilted.diagnostic.strongest.band=[{x:60,y:90},{x:380,y:210},{x:372,y:232},{x:52,y:112}];
+    const overlayContext=camera.signalCanvas.getContext('2d'),path=[];
+    const moveTo=overlayContext.moveTo,lineTo=overlayContext.lineTo;
+    overlayContext.moveTo=function(x,y){path.push({x,y});return moveTo.call(this,x,y);};
+    overlayContext.lineTo=function(x,y){path.push({x,y});return lineTo.call(this,x,y);};
+    try{camera.showSignal(session,entry,tilted);}finally{overlayContext.moveTo=moveTo;overlayContext.lineTo=lineTo;}
+    const preservesTilt=path.length===4&&Math.abs((path[1].y-path[0].y)/(path[1].x-path[0].x)-120/320)<1e-8;
     camera.cancelSearches(session);
     const cleared=camera.signalCanvas.hidden&&camera.signalReadout.hidden&&!session.signalDebug;
     camera.close();
     return {plainMiss:plain===null,negative,positive,normalScale:normal?.scale,normalCorners:normal?.corners,
-      unchanged:oneEdge.every((value,i)=>value===original[i]),aborted,text,drawn,state,hasCanvas,hasText,matched,cleared};
+      unchanged:oneEdge.every((value,i)=>value===original[i]),aborted,text,liveHidden,readoutOutside,preservesTilt,drawn,state,hasCanvas,hasText,matched,cleared};
   });
   assert(result.plainMiss,'one edge alone must not count as calibration');
   assert.equal(result.negative?.detected,false,'diagnostics must keep the response unverified');
@@ -70,10 +83,13 @@ try{
   assert.equal(result.positive.scale,result.normalScale);
   assert.deepEqual(result.positive.corners,result.normalCorners,'debug collection must not change accepted geometry');
   assert(result.unchanged&&result.aborted);
+  assert(result.liveHidden,'a sampled-frame box must not be drawn over a different moving live frame');
+  assert(result.readoutOutside,'debug writing must remain outside the camera preview');
+  assert(result.preservesTilt,'diagnostic rendering must preserve the angle of sampled-image geometry');
   assert(result.drawn&&result.hasCanvas&&result.hasText&&result.matched&&result.cleared);
   assert.equal(result.state,'searching','a strong rejected response cannot turn the frame green');
   assert.match(result.text,/Frame 7.*1\.2s old/);
-  assert.match(result.text,/Amber: strongest guide response/);
+  assert.match(result.text,/Amber: rejected search strip/);
   assert.match(result.text,/Unverified/);
   await page.evaluate(({negative,positive})=>{
     const width=512,height=384,pixels=new Uint8Array(width*height*4);
@@ -97,8 +113,28 @@ try{
     window.heldPositive=positive;
     openHeldTest();
   },result);
+  for(const size of [{width:390,height:700},{width:844,height:390},{width:1280,height:900}]){
+    await page.setViewportSize(size);
+    const layout=await page.evaluate(()=>{
+      camera.sync();camera.renderSignal(camera.session);
+      const rect=node=>{const {x,y,width,height}=node.getBoundingClientRect();return{x,y,width,height};};
+      const before=[rect(camera.view),rect(camera.captureButton)],text=camera.signalReadout.textContent;
+      camera.signalReadout.textContent+=' Long diagnostic search and rejection detail. '.repeat(40);
+      const after=[rect(camera.view),rect(camera.captureButton)];
+      camera.signalReadout.textContent=text;
+      const preview=rect(camera.view),readout=rect(camera.signalReadout);
+      return {before,after,outside:readout.y>=preview.y+preview.height||readout.x>=preview.x+preview.width||
+        readout.y+readout.height<=preview.y||readout.x+readout.width<=preview.x};
+    });
+    assert(layout.outside,'diagnostics must stay clear of the preview at '+JSON.stringify(size));
+    assert.deepEqual(layout.before,layout.after,'long debug writing must not move the preview or controls');
+  }
+  await page.setViewportSize({width:480,height:900});
+  await page.evaluate(()=>{camera.close();openHeldTest();});
+  assert(await page.evaluate(()=>camera.signalCanvas.hidden),'the moving live preview must have no sampled-frame geometry');
   await page.locator('#camera-signal-readout').tap();
   assert(await page.evaluate(()=>Boolean(camera.session.paused&&camera.session.signalHold&&!camera.frozenFrame.hidden)));
+  assert(await page.evaluate(()=>!camera.signalCanvas.hidden),'freezing the exact sampled raster makes its diagnostic geometry visible');
   assert.equal(await page.evaluate(()=>heldAccepts.length),0,'tapping the debug readout must not bubble into the camera shutter');
   assert(await page.evaluate(()=>{
     const shown=camera.frozenFrame.getContext('2d').getImageData(0,0,512,384).data;

@@ -85,6 +85,21 @@ the controls. Updates do not move the preview or buttons; on short landscape
 screens, feedback scrolls within the existing controls column. Viewport changes
 refit the outlined region without stretching it.
 
+With **Debug mode** enabled, the diagnostic readout lives in the scrollable
+feedback area below/beside the preview. Portrait layout reserves space for it;
+long results do not cover the image or move its controls. An amber result is a
+rejected search strip, not an acquired calibration or a fitted picture boundary.
+The axis scan can therefore report a horizontal/vertical strip even when the
+photographed picture is tilted. Only a matched set of edges supplies the green
+calibration geometry. Rendering retains the angle of the supplied polygons.
+
+Each result identifies its sampled frame and age. Tap the readout to freeze that
+exact raster and see its diagnostic geometry; tap again to resume. Sampled-frame
+boxes are hidden on moving live video, since a result can arrive seconds after
+its image was captured. This keeps the overlay and the visible picture in the
+same coordinates. Debug display does not change detection thresholds or payload
+validation.
+
 Device rotation refits the controls without renegotiating the working video
 track. It preserves the selected frame orientation and any frozen frame;
 unheld searches restart with fresh pixels. **Rotate view** switches the sampling

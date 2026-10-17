@@ -264,7 +264,7 @@
     .camera-calibration[data-state="detected"] { color: #b8f3c7; }
     .camera-calibration[data-state="detected"]::before { background: #61e28b; box-shadow: 0 0 7px #61e28b99; }
     .camera-signal { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
-    .camera-signal-readout { position: absolute; left: 10px; right: 10px; bottom: 30px; z-index: 2; width: fit-content; max-width: calc(100% - 20px); box-sizing: border-box; margin: 0; padding: 5px 8px; border: 1px solid #ffca6455; border-radius: 6px; background: #081016e8; color: #ffdc98; font-size: .7rem; font-weight: 400; line-height: 1.35; text-align: left; white-space: pre-line; }
+    .camera-signal-readout { display: block; width: 100%; box-sizing: border-box; margin: 0 0 8px; padding: 5px 8px; border: 1px solid #ffca6455; border-radius: 6px; background: #081016; color: #ffdc98; font-size: .72rem; font-weight: 400; line-height: 1.35; text-align: left; white-space: pre-line; overflow-wrap: anywhere; }
     .camera-signal-readout[data-state="detected"] { border-color: #61e28b55; color: #b8f3c7; }
     .preview-panel.clean #preview-source,
     .preview-panel.clean #compare-ui,
@@ -691,7 +691,6 @@
           <div class="camera-view" id="camera-view" role="button" tabindex="0" aria-label="Capture and read the live camera preview" aria-disabled="true">
             <video id="camera-video" autoplay muted playsinline aria-label="Live camera preview"></video>
             <canvas class="camera-signal" id="camera-signal" hidden aria-hidden="true"></canvas>
-            <button class="camera-signal-readout" id="camera-signal-readout" type="button" hidden aria-label="Freeze diagnostic frame"></button>
             <span class="camera-calibration" id="camera-calibration" data-state="searching" role="status" hidden>Searching</span>
             <div class="camera-frame" id="camera-frame" hidden aria-hidden="true">
               <div class="camera-target"><span></span><span></span><span></span><span></span></div>
@@ -708,6 +707,7 @@
               <button class="camera-native-photo" id="camera-take-photo" type="button">Take photo with phone camera</button>
             </div>
             <div class="camera-feedback" tabindex="0" role="region" aria-label="Camera scan status and capture details">
+              <button class="camera-signal-readout" id="camera-signal-readout" type="button" hidden aria-label="Inspect sampled diagnostic frame"></button>
               <p class="hint" id="camera-progress" role="status"></p>
               <p class="hint" id="camera-signature"></p>
               <details class="camera-near-miss" id="camera-near-miss" hidden open>
@@ -1004,7 +1004,7 @@
   <script src="./pixelstow-media.js?v=20261015-preview-icons1"></script>
   <script src="./pixelstow-sharing.js?v=20261016-preview-copy1"></script>
   <script src="./pixelstow-read-progress.js?v=20261016-frame-outline"></script>
-  <script src="./pixelstow-camera.js?v=20261017-decode-portrait5"></script>
+  <script src="./pixelstow-camera.js?v=20261017-sampled-debug6"></script>
   <script src="./pixelstow-preview.js?v=20261017-isolated-copy"></script>
   <script>
     const fileInput = document.querySelector("#file");

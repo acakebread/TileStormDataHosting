@@ -124,6 +124,18 @@ try{
   await page.locator('#open-camera').click();await ready();
   assert.equal(await page.evaluate(()=>camera.session.rotation),90,'reopening Decode must restore its portrait default after Create or a manual frame change');
   assert.deepEqual(await page.evaluate(()=>checkPortraitFrame()),{width:480,height:640,exact:true,samePixels:true});
+  await page.evaluate(()=>{
+    camera.setDebugEnabled(true);
+    const session=camera.session,image=camera.captureFrame();
+    window.debugSample={image,frameNumber:101,capturedAt:Date.now()-5100};
+    camera.showSignal(session,debugSample,{detected:false,diagnostic:{status:'time-limit',strongest:{score:3.88,scale:4.08,
+      phaseError:35*Math.PI/180,reason:'no matching set of edges',band:[{x:60,y:330},{x:410,y:445},{x:400,y:470},{x:50,y:355}]}}});
+  });
+  assert(await page.evaluate(()=>camera.signalCanvas.hidden&&!camera.view.contains(camera.signalReadout)));
+  await page.screenshot({path:path.join(output,'debug-phone-live.png')});
+  await page.locator('#camera-signal-readout').tap();
+  assert(await page.evaluate(()=>camera.session.signalHold?.entry===debugSample&&!camera.signalCanvas.hidden));
+  await page.screenshot({path:path.join(output,'debug-phone-sampled.png')});
   await page.locator('#close-camera').click();
   assert(await page.evaluate(()=>sensorTracks.every(track=>track.readyState==='ended')));
   assert.deepEqual(errors,[]);
