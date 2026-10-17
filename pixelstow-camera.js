@@ -48,6 +48,12 @@
       this.calibrationLight = document.querySelector("#camera-calibration");
       this.signalCanvas = document.querySelector("#camera-signal");
       this.signalReadout = document.querySelector("#camera-signal-readout");
+      for (const type of ["pointerdown", "pointerup", "touchstart", "touchend"])
+        this.signalReadout.addEventListener(type, event => { this.viewTap = null; event.stopPropagation(); });
+      this.signalReadout.addEventListener("keydown", event => {
+        if (event.key === "Enter" || event.key === " ") event.stopPropagation();
+      });
+      this.signalReadout.addEventListener("click", event => { event.stopPropagation(); this.toggleSignalHold(); });
       this.nearMiss = document.querySelector("#camera-near-miss");
       this.nearSummary = document.querySelector("#camera-near-summary");
       this.still = document.querySelector("#camera-still");
@@ -159,10 +165,11 @@
 
     captureCurrent() {
       const session = this.session;
-      if (!session?.ready || session.adjusting || session.handingOff || this.switchOperation || this.working() || this.video.readyState < 2) return;
+      const held = session?.calibrationHold?.entry || session?.signalHold?.entry;
+      if (!session?.ready || session.adjusting || session.handingOff || this.switchOperation || this.working() || (!held && this.video.readyState < 2)) return;
       // Keep audio permission preparation in the actual shutter/tap gesture.
       this.prepareCapture?.();
-      try { this.accept(session, session.calibrationHold?.entry.image || this.captureFrame(), undefined, undefined, false); }
+      try { this.accept(session, held?.image || this.captureFrame(), undefined, undefined, false); }
       catch (error) { this.progress.textContent = error.message; }
     }
 
@@ -464,7 +471,7 @@
 
     layoutPreview() {
       const session = this.session;
-      if ((session?.handingOff || session?.calibrationHold) && this.frozenFrame && !this.frozenFrame.hidden) {
+      if ((session?.handingOff || session?.calibrationHold || session?.signalHold) && this.frozenFrame && !this.frozenFrame.hidden) {
         this.renderSignal(session);
         return;
       }
@@ -822,7 +829,8 @@
 
     sync() {
       const session = this.session, locked = this.working();
-      const ready = Boolean(session?.ready && !session.adjusting && this.video.readyState >= 2 && this.video.videoWidth && this.video.videoHeight);
+      const held = session?.calibrationHold?.entry || session?.signalHold?.entry;
+      const ready = Boolean(session?.ready && !session.adjusting && (held || this.video.readyState >= 2 && this.video.videoWidth && this.video.videoHeight));
       this.panel.hidden = !session;
       this.openButton.disabled = locked || this.active;
       this.sourceButton.disabled = locked || this.active;
@@ -1036,6 +1044,7 @@
 
     cancelSearches(session, clearHistory = false) {
       this.clearSignal(session);
+      this.clearSignalHold(session);
       this.clearCalibrationHold(session);
       this.updateCalibrationLight(session);
       session.abort?.abort();
@@ -1086,17 +1095,21 @@
         ? "Edge guide · ~" + hint.scale.toFixed(2) + "× scale." : "";
     }
 
+    paintFrozenFrame(image) {
+      this.frozenFrame.width = image.width;
+      this.frozenFrame.height = image.height;
+      const pixels = new Uint8ClampedArray(image.pixels.buffer, image.pixels.byteOffset, image.pixels.byteLength);
+      this.frozenFrame.getContext("2d").putImageData(new ImageData(pixels, image.width, image.height), 0, 0);
+      this.frozenFrame.hidden = false;
+      this.video.style.visibility = "hidden";
+    }
+
     holdCalibrationFrame(session, entry) {
       if (this.session !== session || session.purpose === "source" || session.paused || session.adjusting ||
         session.handingOff || session.calibrationHold || !entry.scaleGuide?.detected || !this.frozenFrame) return;
-      const { image } = entry;
-      this.frozenFrame.width = image.width;
-      this.frozenFrame.height = image.height;
-      this.frozenFrame.getContext("2d").putImageData(new ImageData(new Uint8ClampedArray(image.pixels), image.width, image.height), 0, 0);
-      this.frozenFrame.hidden = false;
-      const hold = { entry };
+      this.paintFrozenFrame(entry.image);
+      const hold = { entry, deadline: Date.now() + 35000 };
       session.calibrationHold = hold;
-      this.renderSignal(session);
       // Stay on this raster. New frames and any other queued appraisal would
       // replace the picture the user is looking at.
       clearTimeout(session.timer);
@@ -1105,13 +1118,43 @@
       if (session.scanningEntry && session.scanningEntry !== entry) session.abort?.abort();
       if (session.readEntry && session.readEntry !== entry) session.readAbort?.abort();
       this.captureButton.toggleAttribute("data-calibration-hold", true);
-      hold.timer = setTimeout(() => {
-        if (this.session !== session || session.calibrationHold !== hold || session.handingOff) return;
-        this.clearCalibrationHold(session);
-        this.updateCalibrationLight(session, entry);
-        this.layoutPreview();
-        this.schedule(session, 0);
-      }, 3000);
+      hold.timer = setTimeout(() => this.finishCalibrationHold(session, hold), 3000);
+    }
+
+    finishCalibrationHold(session, hold) {
+      if (this.session !== session || session.calibrationHold !== hold || session.handingOff) return;
+      const entry = hold.entry;
+      const running = session.pending === entry || session.scanningEntry === entry || session.readEntry === entry;
+      // The old three-second expiry could resume capture in the middle of an
+      // eight-second marker check, then cancel it on the next green frame.
+      if (running && Date.now() < hold.deadline) {
+        hold.timer = setTimeout(() => this.finishCalibrationHold(session, hold), Math.min(500, hold.deadline - Date.now()));
+        return;
+      }
+      if (running) {
+        if (session.pending === entry) session.pending = null;
+        if (session.scanningEntry === entry) session.abort?.abort();
+        if (session.readEntry === entry) session.readAbort?.abort();
+      }
+      this.clearCalibrationHold(session);
+      this.clearSignal(session);
+      this.updateCalibrationLight(session);
+      this.layoutPreview();
+      this.progress.textContent = running ? "This calibrated frame reached its recovery time limit. Scanning resumed…"
+        : "This calibrated frame did not produce a readable fit. Scanning resumed…";
+      this.readProgress.update(this.progress.textContent);
+      this.schedule(session, 0);
+    }
+
+    retryFrozenFrame(session, entry) {
+      if (session.calibrationHold?.entry !== entry || !entry.calibratedOnly) return false;
+      // A scale hint can be approximate. Give this exact frozen raster the
+      // ordinary full recovery pass before discarding it for another capture.
+      entry.fallback = true;
+      session.pending = entry;
+      this.progress.textContent = "Calibration found. Checking the same frozen frame with full marker recovery…";
+      this.readProgress.update(this.progress.textContent);
+      return true;
     }
 
     frozenDecodeCandidate(scan) {
@@ -1138,6 +1181,29 @@
       }
     }
 
+    clearSignalHold(session) {
+      if (!session.signalHold) return;
+      session.signalHold = null;
+      if ((!this.session || this.session === session) && !session.handingOff && this.frozenFrame)
+        this.frozenFrame.hidden = true;
+    }
+
+    toggleSignalHold() {
+      const session = this.session;
+      if (!session?.ready || session.adjusting || session.handingOff || session.calibrationHold || this.working()) return;
+      if (session.signalHold) { this.togglePause(); return; }
+      const debug = session.signalDebug;
+      if (!debug) return;
+      session.paused = true;
+      this.cancelSearches(session, true);
+      this.paintFrozenFrame(debug.entry.image);
+      session.signalHold = debug;
+      this.showSignal(session, debug.entry, debug.measurement);
+      this.progress.textContent = "Signal frame frozen for inspection. Capture and read tests this exact frame. Tap the readout or Resume scanning to continue.";
+      this.readProgress.update(this.progress.textContent);
+      this.sync();
+    }
+
     clearSignal(session) {
       clearTimeout(session.signalTimer);
       session.signalDebug = null;
@@ -1152,11 +1218,19 @@
       session.signalDebug = { entry, measurement };
       this.renderSignal(session);
       session.signalTimer = setTimeout(() => {
-        if (this.session === session && session.signalDebug?.entry === entry) this.clearSignal(session);
+        if (this.session === session && session.signalDebug?.entry === entry && session.signalHold?.entry !== entry && session.calibrationHold?.entry !== entry)
+          this.clearSignal(session);
       }, 4000);
     }
 
     renderSignal(session) {
+      // A diagnostic drawing failure must never discard a detected guide or
+      // prevent its frozen frame from entering recovery.
+      try { this.paintSignal(session); }
+      catch (_) { if (session) this.clearSignal(session); }
+    }
+
+    paintSignal(session) {
       const debug = session?.signalDebug;
       if (this.session !== session || !debug || !this.signalCanvas || !this.signalReadout) return;
       const { entry, measurement } = debug, peak = measurement?.diagnostic?.strongest;
@@ -1186,16 +1260,19 @@
       draw(peak?.band, "#ffca64", "#ffca6426", true);
       if (measurement?.detected) draw(measurement.corners, "#61e28b", "#61e28b0a", false);
       canvas.hidden = !peak && !measurement?.detected;
-      const held = session.calibrationHold?.entry === entry;
+      const held = session.calibrationHold?.entry === entry || session.signalHold?.entry === entry;
       const age = Math.max(0, Date.now() - entry.capturedAt) / 1000;
       const frame = "Frame " + entry.frameNumber + (held ? " · held" : " · " + age.toFixed(1) + "s old");
-      let text = measurement?.detected ? "Green: calibration matched. " : "";
+      let text = measurement?.detected ? "Green: calibration matched. " : "Calibration NOT acquired. ";
       text += peak ? "Amber: strongest guide response " + peak.score.toFixed(2) + " · ~" + peak.scale.toFixed(2) +
-        "× · wavelengths " + Math.round(64 * peak.scale) + "/" + Math.round(96 * peak.scale) + "px · phase error " +
+        "× candidate scale · wavelengths " + Math.round(64 * peak.scale) + "/" + Math.round(96 * peak.scale) + "px · phase error " +
         Math.round(peak.phaseError * 180 / Math.PI) + "°." : "No measurable guide response.";
       if (peak && !measurement?.detected) text += " Unverified: " + peak.reason +
         (measurement.diagnostic.status === "time-limit" ? "; search budget ended" : measurement.diagnostic.status === "coverage-too-small" ? "; picture too small in frame" : "") + ".";
-      this.signalReadout.textContent = frame + "\n" + text;
+      const action = session.signalHold ? " · tap to resume" : session.calibrationHold ? " · checking frozen frame" : " · tap to freeze this response";
+      this.signalReadout.textContent = frame + action + "\n" + text;
+      this.signalReadout.disabled = Boolean(session.calibrationHold || session.handingOff);
+      this.signalReadout.setAttribute("aria-label", session.signalHold ? "Resume scanning" : "Freeze diagnostic frame");
       this.signalReadout.hidden = false;
     }
 
@@ -1235,20 +1312,31 @@
 
     enqueueFrame(session, entry) {
       if (this.session !== session || session.paused || session.adjusting || session.handingOff) return;
+      if (session.calibrationHold && session.calibrationHold.entry !== entry) return;
       if (session.scanningEntry === entry) {
+        if (session.calibrationHold?.entry === entry && entry.scaleGuide?.detected && !entry.markerGuideUsed) {
+          entry.fallback = false;
+          session.pending = entry;
+          session.abort?.abort();
+        }
         // A guide can finish while this same raster is already being searched.
         // Keep that work running; use the hint for ranking and visible feedback.
         if (!session.reading && entry.scaleGuide?.detected) this.signature.textContent = this.edgeGuideSummary(entry);
         return;
       }
       if (entry.markerFinished) {
-        // Late hints may promote verified geometry in history, but cannot queue
-        // the exact same completed frame for another marker search.
-        if (entry.scaleGuide?.detected && entry.scan?.markers?.length) {
-          this.retainFrame(session, entry);
-          this.readBestFrame(session);
+        if (session.calibrationHold?.entry === entry) {
+          if (this.frozenDecodeCandidate(entry.scan)) { this.settleCalibrationHold(session, entry); return; }
+          entry.markerFinished = false;
+        } else {
+          // Late hints may promote verified geometry in history, but cannot queue
+          // the exact same completed frame for another marker search.
+          if (entry.scaleGuide?.detected && entry.scan?.markers?.length) {
+            this.retainFrame(session, entry);
+            this.readBestFrame(session);
+          }
+          return;
         }
-        return;
       }
       if (entry.guideKind === "edge") {
         // Sample ordinary recovery occasionally; do not fill a marker queue
@@ -1314,7 +1402,6 @@
         } finally { controller.signal.removeEventListener("abort", aborted); }
         if (this.session !== session || controller.signal.aborted || generation !== session.guideGeneration) return;
         entry.guideChecked = true;
-        if (entry.guideKind === "edge") this.showSignal(session, entry, hint);
         if (hint?.detected && Number.isFinite(hint.scale) && hint.scale > 0 && Number.isFinite(hint.fx) &&
           Number.isFinite(hint.fy) && Math.hypot(hint.fx, hint.fy) > 0) {
           const fx = hint.fx * sample.width / entry.image.width, fy = hint.fy * sample.height / entry.image.height;
@@ -1325,7 +1412,14 @@
         this.preserveCalibration(entry, entry.inspection);
         this.holdCalibrationFrame(session, entry);
         this.updateCalibrationLight(session, entry);
-      } catch (_) { /* An unavailable/unclear guide always uses ordinary discovery. */ }
+        if (entry.guideKind === "edge") this.showSignal(session, entry, hint);
+      } catch (error) {
+        if (this.session === session && entry.scaleGuide?.detected) {
+          this.progress.textContent = "Calibration found, but the frame could not be frozen: " + (error?.message || "capture error");
+          this.readProgress.update(this.progress.textContent);
+        }
+        // An unavailable/unclear guide always uses ordinary discovery.
+      }
       finally {
         clearTimeout(timer); entry.guideImage = null;
         if (generation === session.guideGeneration && (!entry.markerDispatched || entry.scaleGuide?.detected) &&
@@ -1450,6 +1544,7 @@
         if (this.session !== session || controller.signal.aborted) return;
         this.preserveCalibration(entry, scan);
         entry.scan = scan;
+        if (!this.frozenDecodeCandidate(scan) && this.retryFrozenFrame(session, entry)) return;
         entry.scaleGuide ||= scan.scaleGuide;
         session.tracking = scan.markers?.some((m) => m.verification === "header") ? { scan } : null;
         entry.score = scan.candidates?.[0]?.geometry.rank ?? (scan.markers?.length || 0);
@@ -1488,9 +1583,15 @@
           return;
         }
         if (entry.calibratedOnly) {
+          if (this.retryFrozenFrame(session, entry)) return;
           entry.state = "calibrated marker check could not finish";
           if (!session.reading) this.progress.textContent = "This calibrated frame did not decode. Checking a fresh capture…";
           if (session.calibrationHold?.entry === entry) this.settleCalibrationHold(session, entry);
+          return;
+        }
+        if (session.calibrationHold?.entry === entry) {
+          entry.state = "frozen recovery could not finish";
+          this.progress.textContent = "This calibrated frame could not be recovered. Resuming scanning…";
           return;
         }
         session.paused = true;
@@ -1509,7 +1610,8 @@
 
     async readBestFrame(session) {
       if (this.session !== session || session.purpose === "source" || session.paused || session.adjusting || session.reading || session.handingOff) return;
-      const entry = session.history.find((frame) => !frame.attempted && frame.scan.candidates?.length && Date.now() - frame.capturedAt < 45000);
+      const entry = session.history.find((frame) => (!session.calibrationHold || session.calibrationHold.entry === frame) &&
+        !frame.attempted && frame.scan.candidates?.length && Date.now() - frame.capturedAt < 45000);
       if (!entry) return; // Never spend a payload read on a marker-free capture.
       // A usable geometric fit is enough to attempt the checksummed body.
       // Waiting for another appraisal could age out this readable capture.
@@ -1572,10 +1674,7 @@
       if (this.session !== session || session.handingOff) return;
       session.handingOff = true;
       if (this.frozenFrame) {
-        this.frozenFrame.width = image.width;
-        this.frozenFrame.height = image.height;
-        this.frozenFrame.getContext("2d").putImageData(new ImageData(new Uint8ClampedArray(image.pixels),image.width,image.height),0,0);
-        this.frozenFrame.hidden = false;
+        this.paintFrozenFrame(image);
       }
       session.paused = true;
       clearTimeout(session.timer);

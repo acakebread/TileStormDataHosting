@@ -17,7 +17,7 @@ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 let browser;
 try{
   browser=await chromium.launch({headless:true,...(process.env.PIXELSTOW_CHROME?{executablePath:process.env.PIXELSTOW_CHROME}:{})});
-  const page=await browser.newPage({viewport:{width:480,height:900}}),errors=[];
+  const page=await browser.newPage({viewport:{width:480,height:900},hasTouch:true,isMobile:true}),errors=[];
   page.on('pageerror',error=>errors.push(error.message));
   await page.goto('http://127.0.0.1:'+server.address().port+'/pixelstow.html');
   const result=await page.evaluate(async()=>{
@@ -62,6 +62,65 @@ try{
   assert.match(result.text,/Frame 7.*1\.2s old/);
   assert.match(result.text,/Amber: strongest guide response/);
   assert.match(result.text,/Unverified/);
+  await page.evaluate(({negative,positive})=>{
+    const width=512,height=384,pixels=new Uint8Array(width*height*4);
+    for(let i=0;i<pixels.length;i+=4)pixels.set([97,128,149,255],i);
+    window.heldTestImage={pixels,width,height};window.heldAccepts=[];
+    Object.defineProperties(camera.video,{readyState:{configurable:true,get:()=>2},
+      videoWidth:{configurable:true,get:()=>width},videoHeight:{configurable:true,get:()=>height}});
+    camera.schedule=()=>{}; // Frame sampling is covered separately with the fake clock.
+    window.openHeldTest=()=>{
+      const session={purpose:'read',ready:true,history:[],frames:1};camera.session=session;
+      camera.panel.hidden=false;camera.panel.showModal();camera.sync();
+      window.heldTestEntry={image:heldTestImage,frameNumber:1,capturedAt:Date.now(),guideKind:'edge'};
+      camera.showSignal(session,heldTestEntry,negative);
+      return session;
+    };
+    camera.accept=async(s,img,inspection,markerScan)=>{
+      heldAccepts.push({sameRaster:img===heldTestImage,hasScan:Boolean(markerScan?.candidates?.length)});
+      s.handingOff=true;camera.cancelSearches(s);
+    };
+    camera.captureFrame=()=>{throw Error('A frozen action must not recapture the live video');};
+    window.heldPositive=positive;
+    openHeldTest();
+  },result);
+  await page.locator('#camera-signal-readout').tap();
+  assert(await page.evaluate(()=>Boolean(camera.session.paused&&camera.session.signalHold&&!camera.frozenFrame.hidden)));
+  assert.equal(await page.evaluate(()=>heldAccepts.length),0,'tapping the debug readout must not bubble into the camera shutter');
+  assert(await page.evaluate(()=>{
+    const shown=camera.frozenFrame.getContext('2d').getImageData(0,0,512,384).data;
+    return shown.every((v,i)=>v===heldTestImage.pixels[i]);
+  }),'the debug hold displays the exact sampled raster');
+  await page.locator('#camera-signal-readout').tap();
+  assert(await page.evaluate(()=>!camera.session.paused&&!camera.session.signalHold&&camera.frozenFrame.hidden));
+  await page.evaluate(()=>camera.showSignal(camera.session,heldTestEntry,null));
+  await page.locator('#camera-signal-readout').tap();
+  await page.locator('#capture-frame').tap();
+  assert.deepEqual(await page.evaluate(()=>heldAccepts),[{sameRaster:true,hasScan:false}],'manual read after a debug hold uses its sampled frame');
+  await page.evaluate(async()=>{
+    camera.close();const session=openHeldTest();window.heldMarkerCalls=[];
+    PixelStow.scanEdgeGuide=async()=>heldPositive;
+    PixelStow.scanMarkers=(p,w,h,options)=>new Promise((resolve,reject)=>{
+      heldMarkerCalls.push({pixels:p,options,resolve});
+      options.signal.addEventListener('abort',()=>reject(new DOMException('Cancelled','AbortError')),{once:true});
+    });
+    session.guidePending=heldTestEntry;
+    await camera.checkScaleGuide(session);
+  });
+  assert(await page.evaluate(()=>camera.session.calibrationHold?.entry===heldTestEntry&&!camera.frozenFrame.hidden));
+  await page.waitForTimeout(3200);
+  assert(await page.evaluate(()=>camera.session.calibrationHold?.entry===heldTestEntry&&heldMarkerCalls.length===1),
+    'a real display hold must remain frozen beyond three seconds while marker recovery is active');
+  assert(await page.evaluate(()=>getComputedStyle(camera.video).visibility==='hidden'));
+  await page.evaluate(()=>heldMarkerCalls[0].resolve({markers:[],candidates:[]}));
+  await page.waitForFunction(()=>heldMarkerCalls.length===2);
+  assert(await page.evaluate(()=>heldMarkerCalls[1].pixels===heldTestImage.pixels&&!heldMarkerCalls[1].options.calibratedOnly),
+    'guided misses start full recovery on the same held pixels');
+  await page.evaluate(()=>heldMarkerCalls[1].resolve({markers:[],candidates:[{geometry:{rank:100}}]}));
+  await page.waitForFunction(()=>heldAccepts.length===2);
+  assert.deepEqual(await page.evaluate(()=>heldAccepts[1]),{sameRaster:true,hasScan:true});
+  await page.evaluate(()=>camera.close());
   assert.deepEqual(errors,[]);
   console.log('PASS: strongest rejected strip reaches the overlay through a real worker; one-edge rejection, complete-guide geometry, input preservation, cancellation and stale-overlay cleanup');
+  console.log('PASS: touchscreen readout holds/resumes the sampled frame without triggering the shutter; manual capture and delayed green guided/full recovery hand off those same pixels');
 }finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve));}

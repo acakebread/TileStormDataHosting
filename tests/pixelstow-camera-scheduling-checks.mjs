@@ -6,6 +6,7 @@ const root=new URL('../',import.meta.url);
 const source=await fs.readFile(new URL('pixelstow-camera.js',root),'utf8');
 let now=100000,sequence=0;const timers=new Map(),codec={},window={};
 vm.runInNewContext(source,{window,PixelStow:codec,AbortController,DOMException,
+  ImageData:class {constructor(data,width,height){Object.assign(this,{data,width,height});}},
   Date:{now:()=>now},setTimeout:(callback,delay)=>{const id=++sequence;timers.set(id,{at:now+delay,callback});return id;},
   clearTimeout:id=>timers.delete(id)});
 const flush=async()=>{for(let i=0;i<12;i++)await Promise.resolve();};
@@ -167,6 +168,50 @@ function workerQueue(){
 console.log('PASS: working search budgets, complete fit list/fallback, uninterrupted slower reads, stronger-frame promotion, latest-slot replacement and cancellation');
 
 const pilot={detected:true,confirmed:false,scale:1,fx:1/128,fy:0,width:16,height:16};
+{
+  const {camera,session}=setup(),markers=[];let painted,accepted,resumed=0,sampled=0;
+  camera.frozenFrame={hidden:true,getContext:()=>({putImageData:data=>{painted=data;}})};
+  camera.video={style:{},readyState:2};camera.captureButton={toggleAttribute(){}};
+  camera.layoutPreview=()=>{};camera.schedule=()=>{resumed++;};camera.captureFrame=()=>{sampled++;return image(99);};
+  codec.scanEdgeGuide=async()=>pilot;
+  codec.scanMarkers=(p,w,h,options)=>new Promise((resolve,reject)=>{
+    markers.push({id:p[0],options,resolve});
+    options.signal.addEventListener('abort',()=>reject(new DOMException('Cancelled','AbortError')),{once:true});
+  });
+  camera.accept=async(s,img)=>{s.handingOff=true;accepted=img;camera.cancelSearches(s);};
+  const fresh={image:image(41),frameNumber:41,capturedAt:now,guideKind:'edge'};
+  session.guidePending=fresh;
+  await camera.checkScaleGuide(session);await flush();
+  assert.equal(session.calibrationHold.entry,fresh);assert.equal(painted.data[0],41);
+  assert.equal(camera.video.style.visibility,'hidden');assert.equal(camera.frozenFrame.hidden,false);
+  assert.equal(markers[0].options.calibratedOnly,true);
+  await advance(3100);camera.scan(session);
+  assert.equal(session.calibrationHold.entry,fresh,'the three-second display timer cannot release an active marker check');
+  assert.equal(resumed,0);assert.equal(sampled,0);
+  camera.enqueueFrame(session,{...entry(42),scaleGuide:pilot});
+  assert(!session.pending,'a newer frame cannot replace the frozen raster');
+  markers[0].resolve({markers:[],candidates:[]});await flush();
+  assert.equal(markers.length,2);assert.equal(markers[1].id,41);
+  assert.equal(markers[1].options.calibratedOnly,false,'a missed guide fit retries full recovery on the same pixels');
+  await advance(5000);assert.equal(resumed,0);assert.equal(session.calibrationHold.entry,fresh);
+  markers[1].resolve(scan());await flush();
+  assert.equal(accepted,fresh.image);assert.equal(timers.size,0);
+  delete codec.scanEdgeGuide;
+}
+{
+  const {camera,session}=setup();let resumed=0;
+  camera.frozenFrame={hidden:true,getContext:()=>({putImageData(){}})};
+  camera.video={style:{}};camera.captureButton={toggleAttribute(){}};camera.frame={dataset:{}};
+  camera.layoutPreview=()=>{};camera.schedule=()=>resumed++;
+  const fresh={...entry(43),scaleGuide:pilot};
+  camera.holdCalibrationFrame(session,fresh);session.scanningEntry=fresh;session.abort=new AbortController();
+  await advance(35000);
+  assert(session.abort.signal.aborted,'a stuck frozen read retains a hard upper bound');
+  assert.equal(session.calibrationHold,null);assert(camera.frozenFrame.hidden);assert.equal(resumed,1);
+  assert.equal(camera.frame.dataset.calibration,'searching','an expired green result cannot remain over the resumed live feed');
+  assert.equal(timers.size,0);
+}
+console.log('PASS: green acquisition freezes the sampled raster throughout guided/full recovery, blocks newer captures, hands off that same image and bounds failed checks');
 {
   const {camera,session}=setup(),guides=[],markers=[];let id=0,reads=0;
   camera.scaleGuideEnabled=true;
