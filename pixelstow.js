@@ -1406,7 +1406,7 @@
 
   function searchInWorker(pixels, width, height, options, operation = "geometry") {
     return new Promise((resolve, reject) => {
-      const url = new URL("pixelstow-transform-worker.js?v=20261016-surround1", codecScriptUrl);
+      const url = new URL("pixelstow-transform-worker.js?v=20261017-signal-debug1", codecScriptUrl);
       const worker = new Worker(url);
       let finished = false;
       const abort = () => { if (finished) return; cleanup(); reject(new DOMException("Search cancelled.", "AbortError")); };
@@ -1436,7 +1436,7 @@
           searchState: options.searchState, stopOnHighConfidence: options.stopOnHighConfidence,
           resumeDiscovery: options.resumeDiscovery, calibratedOnly: options.calibratedOnly,
           earlyPayload: options.earlyPayload, refinementState: options.refinementState, contentSearch: options.contentSearch,
-          strength: options.strength, visual: options.visual }, [copy.buffer]);
+          strength: options.strength, visual: options.visual, diagnostic: options.diagnostic }, [copy.buffer]);
       } catch (error) { cleanup(); reject(error); }
     });
   }
@@ -1866,7 +1866,8 @@
     if (canUseReaderWorker(options)) return searchInWorker(pixels, width, height, options, "edge-guide");
     if (!root.PixelStowEdgeGuide?.detect) return null;
     const hint = await root.PixelStowEdgeGuide.detect(pixels, width, height, options);
-    return hint?.detected ? { ...hint, kind: "edge", confirmed: false, width, height } : null;
+    return hint && (hint.detected || options.diagnostic && hint.diagnostic)
+      ? { ...hint, kind: "edge", confirmed: false, width, height } : null;
   }
 
   // Pure discovery: only locator symbols are read. No carrier preamble, body,

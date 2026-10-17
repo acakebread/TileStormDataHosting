@@ -101,6 +101,13 @@
         }
         const amplitude=[Math.hypot(a,b),Math.hypot(c,d)],phase=[Math.atan2(b,a),Math.atan2(d,c)];
         const closure=angleDistance(2*phase[0]-3*phase[1]-(6*PHASES[1]-4*PHASES[0])/2),score=Math.min(...amplitude);
+        if(q.diagnostic&&score>0&&(!q.diagnostic.strongest||score>q.diagnostic.strongest.score)) {
+          const points=vertical?[[y,spanStart],[y+L,spanStart],[y+L,spanStop],[y,spanStop]]:
+            [[spanStart,y],[spanStop,y],[spanStop,y+L],[spanStart,y+L]];
+          q.diagnostic.strongest={score,scale,amplitude,phaseError:closure,axis:vertical?'vertical':'horizontal',
+            band:points.map(([x,y])=>q.map?q.map(x/q.w,y/q.h):{x:x*reduction-.5,y:y*reduction-.5}),
+            reason:score<=(q.knownBounds?.3:.5)?'weak response':closure>=(q.knownBounds?Math.PI:1.1)?'phase mismatch':'no matching set of edges'};
+        }
         if(score>(q.knownBounds?.3:.5)&&closure<(q.knownBounds?Math.PI:1.1))found.push({position:y,direction,amplitude,phase,closure,score});
       }
     }
@@ -272,7 +279,7 @@
         data[x+y*w]=(q.data[ix+iy*q.w]*(1-fx)+q.data[jx+iy*q.w]*fx)*(1-fy)+(q.data[ix+jy*q.w]*(1-fx)+q.data[jx+jy*q.w]*fx)*fy;
       }
     }
-    return axisStorage({data,w,h,reduction:r,map,quad,knownBounds:true});
+    return axisStorage({data,w,h,reduction:r,map,quad,knownBounds:true,diagnostic:q.diagnostic});
   }
   function orthogonalQuads(quads) {
     const groups=[];
@@ -295,6 +302,7 @@
     const low=options.minimumScale||.5,high=options.maximumScale||2.5,step=options.scaleStep||.01;
     try {
     for(let scale=low;scale<=high+step/2;scale+=step) {
+      if(q.diagnostic)q.diagnostic.scales++;
       check();const candidate=matchFrame(q,scale,check);
       if(candidate&&(!best||candidate.score>best.score))best=candidate;
       if(Date.now()-lastYield>40){await pause();lastYield=Date.now();}
@@ -309,6 +317,9 @@
   async function detect(pixels,width,height,options={}) {
     if(width<192||height<128||pixels.length!==width*height*4)return null;
     const started=Date.now(),deadline=Math.min(options.deadline||Infinity,started+(options.maxMilliseconds||1000));
+    const diagnostic=options.diagnostic?{strongest:null,scales:0}:null;
+    const snapshot=status=>diagnostic?{...diagnostic,status,width,height,milliseconds:Date.now()-started}:undefined;
+    const miss=status=>diagnostic?.strongest?{detected:false,diagnostic:snapshot(status)}:null;
     const check=()=> {
       if(options.signal?.aborted){const error=new Error('Search cancelled.');error.name='AbortError';throw error;}
       if(Date.now()>=deadline){const error=new Error('Edge-guide appraisal time limit.');error.name='EdgeGuideLimit';throw error;}
@@ -335,7 +346,7 @@
           coarse[i]=Math.round(red/area);coarse[i+1]=Math.round(green/area);coarse[i+2]=Math.round(blue/area);coarse[i+3]=255;
         }
       }
-      const original=axisStorage({data,w,h,reduction});let selected=original,best=null;
+      const original=axisStorage({data,w,h,reduction,diagnostic});let selected=original,best=null;
       if(options.outlineSearch!==false&&root.PixelStowTransform?.proposeOutlines&&hasFlatBorder(pixels,width,height)) {
         let quads=[];
         // Propose the outline on the very same coarse raster. Re-scanning the
@@ -371,7 +382,7 @@
         }}catch(error){if(error.name!=='EdgeGuideLimit'||Date.now()>=deadline)throw error;}
       }
       if(!best)best=await searchQuarter(original,searchOptions,check);
-      if(!best)return null;
+      if(!best)return miss('no-match');
       const horizontal=best.pairs[0],vertical=best.pairs[1];
       const bounds={left:vertical.first.position*reduction-INSET*best.scale,
         top:horizontal.first.position*reduction-INSET*best.scale,
@@ -384,14 +395,15 @@
         orientation=Math.atan2(corners[1].y-corners[0].y,corners[1].x-corners[0].x);
       }
       const coverage=polygonArea(corners)/(width*height);
-      if(coverage<(options.minimumCoverage??.5))return null;
+      if(coverage<(options.minimumCoverage??.5))return miss('coverage-too-small');
       return {detected:true,confirmed:false,experimental:true,kind:'opponent-edge-guide',width,height,reduction,
+        ...(diagnostic?{diagnostic:snapshot('matched')}:{}),
         scale:best.scale,fx:Math.cos(orientation)/(128*best.scale),fy:Math.sin(orientation)/(128*best.scale),orientation,score:best.score,agreement:true,
         contrast:best.score,support:4,coverage,localSpectralSupport:best.localSpectralSupport,phaseSupport:best.phaseSupport,outlierComponents:best.outlierComponents,
         ...(selected.map?{rectifiedBounds:bounds}:{bounds}),corners,outlined:Boolean(selected.map),workingWidth:w,workingHeight:h,milliseconds:Date.now()-started,
         evidence:best.pairs.map(pair=>({coherence:pair.coherence,closure:[pair.first.closure,pair.second.closure],
           positions:[pair.first.position*reduction,pair.second.position*reduction]}))};
-    } catch(error){if(error.name==='EdgeGuideLimit')return null;throw error;}
+    } catch(error){if(error.name==='EdgeGuideLimit')return miss('time-limit');throw error;}
   }
   root.PixelStowEdgeGuide={apply,detect,profile:Object.freeze({experimental:true,amplitude:LIMIT,band:BAND,inset:INSET,normalPitch:NORMAL,pitches:Object.freeze(PITCHES.slice())})};
 })(typeof window!=='undefined'?window:self);

@@ -263,6 +263,8 @@
     .camera-calibration[data-state="none"]::before { background: #6a767e; }
     .camera-calibration[data-state="detected"] { color: #b8f3c7; }
     .camera-calibration[data-state="detected"]::before { background: #61e28b; box-shadow: 0 0 7px #61e28b99; }
+    .camera-signal { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
+    .camera-signal-readout { position: absolute; left: 10px; right: 10px; bottom: 30px; z-index: 2; width: fit-content; max-width: calc(100% - 20px); box-sizing: border-box; padding: 5px 8px; border-radius: 6px; background: #081016e8; color: #ffdc98; font-size: .7rem; line-height: 1.35; white-space: pre-line; pointer-events: none; }
     .preview-panel.clean #preview-source,
     .preview-panel.clean #compare-ui,
     .preview-panel.clean #comparison-control { display: none !important; }
@@ -684,6 +686,8 @@
           </header>
           <div class="camera-view" id="camera-view" role="button" tabindex="0" aria-label="Capture and read the live camera preview" aria-disabled="true">
             <video id="camera-video" autoplay muted playsinline aria-label="Live camera preview"></video>
+            <canvas class="camera-signal" id="camera-signal" hidden aria-hidden="true"></canvas>
+            <div class="camera-signal-readout" id="camera-signal-readout" hidden></div>
             <span class="camera-calibration" id="camera-calibration" data-state="searching" role="status" hidden>Searching</span>
             <div class="camera-frame" id="camera-frame" hidden aria-hidden="true">
               <div class="camera-target"><span></span><span></span><span></span><span></span></div>
@@ -985,17 +989,17 @@
     </form>
   </dialog>
   <script src="./pixelstow-spectrum.js?v=20261015-no-pilot1"></script>
-  <script src="./pixelstow-edge-guide.js?v=20261016-surround1"></script>
+  <script src="./pixelstow-edge-guide.js?v=20261017-signal-debug1"></script>
   <script src="./pixelstow-transform.js?v=20261016-early-payload1"></script>
   <script src="./pixelstow-lattice.js?v=20261013-marker-follow2"></script>
-  <script src="./pixelstow.js?v=20261016-surround1"></script>
+  <script src="./pixelstow.js?v=20261017-signal-debug1"></script>
   <script src="./pixelstow-sizing.js?v=20261015-payload-range1"></script>
   <script src="./pixelstow-export.js?v=20261011-exports"></script>
   <script src="./pixelstow-voice.js?v=20261013-voice-clock2"></script>
   <script src="./pixelstow-media.js?v=20261015-preview-icons1"></script>
   <script src="./pixelstow-sharing.js?v=20261016-preview-copy1"></script>
   <script src="./pixelstow-read-progress.js?v=20261016-frame-outline"></script>
-  <script src="./pixelstow-camera.js?v=20261016-keep-preview"></script>
+  <script src="./pixelstow-camera.js?v=20261017-signal-debug1"></script>
   <script src="./pixelstow-preview.js?v=20261017-straight-preview"></script>
   <script>
     const fileInput = document.querySelector("#file");

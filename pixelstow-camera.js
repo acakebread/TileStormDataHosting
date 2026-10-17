@@ -46,6 +46,8 @@
       this.readProgress = new PixelStowReadProgress(document.querySelector("#camera-read-status"), this.frame);
       this.signature = document.querySelector("#camera-signature");
       this.calibrationLight = document.querySelector("#camera-calibration");
+      this.signalCanvas = document.querySelector("#camera-signal");
+      this.signalReadout = document.querySelector("#camera-signal-readout");
       this.nearMiss = document.querySelector("#camera-near-miss");
       this.nearSummary = document.querySelector("#camera-near-summary");
       this.still = document.querySelector("#camera-still");
@@ -462,7 +464,10 @@
 
     layoutPreview() {
       const session = this.session;
-      if ((session?.handingOff || session?.calibrationHold) && this.frozenFrame && !this.frozenFrame.hidden) return;
+      if ((session?.handingOff || session?.calibrationHold) && this.frozenFrame && !this.frozenFrame.hidden) {
+        this.renderSignal(session);
+        return;
+      }
       if (!session) { this.frame.hidden = true; this.video.style.visibility = "hidden"; this.resetPortraitPreview(); this.placeCalibration(); return; }
       // Permission and device startup must not collapse the preview row. Use
       // the requested orientation until actual video dimensions are available.
@@ -495,6 +500,7 @@
         width: Math.max(0, right - left) + "px", height: Math.max(0, bottom - top) + "px"
       });
       this.placeCalibration(left, top, Math.max(0, right - left));
+      this.renderSignal(session);
     }
 
     snapZoom(factor, range) {
@@ -611,6 +617,7 @@
       if (this.session !== session || !session?.zoomRange || session.adjusting || session.handingOff) return;
       const zoom = this.snapZoom(factor, session.zoomRange);
       if (Math.abs(zoom - (session.zoom || 1)) < 0.0001) return;
+      this.clearSignal(session);
       session.zoom = zoom;
       session.zoomDirty = true;
       if (session.zoomMode === "hardware") this.applyHardwareZoom(session);
@@ -1028,6 +1035,7 @@
     }
 
     cancelSearches(session, clearHistory = false) {
+      this.clearSignal(session);
       this.clearCalibrationHold(session);
       this.updateCalibrationLight(session);
       session.abort?.abort();
@@ -1088,6 +1096,7 @@
       this.frozenFrame.hidden = false;
       const hold = { entry };
       session.calibrationHold = hold;
+      this.renderSignal(session);
       // Stay on this raster. New frames and any other queued appraisal would
       // replace the picture the user is looking at.
       clearTimeout(session.timer);
@@ -1127,6 +1136,67 @@
         // A successful/manual handoff owns the frozen canvas from here on.
         if (!session.handingOff && this.frozenFrame) this.frozenFrame.hidden = true;
       }
+    }
+
+    clearSignal(session) {
+      clearTimeout(session.signalTimer);
+      session.signalDebug = null;
+      if (this.session && this.session !== session) return;
+      if (this.signalCanvas) this.signalCanvas.hidden = true;
+      if (this.signalReadout) this.signalReadout.hidden = true;
+    }
+
+    showSignal(session, entry, measurement) {
+      if (this.session !== session || session.purpose !== "read" || !this.signalCanvas) return;
+      this.clearSignal(session);
+      session.signalDebug = { entry, measurement };
+      this.renderSignal(session);
+      session.signalTimer = setTimeout(() => {
+        if (this.session === session && session.signalDebug?.entry === entry) this.clearSignal(session);
+      }, 4000);
+    }
+
+    renderSignal(session) {
+      const debug = session?.signalDebug;
+      if (this.session !== session || !debug || !this.signalCanvas || !this.signalReadout) return;
+      const { entry, measurement } = debug, peak = measurement?.diagnostic?.strongest;
+      const canvas = this.signalCanvas, width = this.view.clientWidth, height = this.view.clientHeight;
+      if (!width || !height) return;
+      const density = Math.min(2, window.devicePixelRatio || 1);
+      const w = Math.round(width * density), h = Math.round(height * density);
+      if (canvas.width !== w) canvas.width = w;
+      if (canvas.height !== h) canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      ctx.setTransform(density, 0, 0, density, 0, 0);
+      ctx.clearRect(0, 0, width, height);
+      const frozen = this.frozenFrame && !this.frozenFrame.hidden;
+      const rect = frozen ? { x: 0, y: 0, w: width, h: height } : {
+        x: parseFloat(this.frame.style.left) || 0, y: parseFloat(this.frame.style.top) || 0,
+        w: parseFloat(this.frame.style.width) || width, h: parseFloat(this.frame.style.height) || height };
+      const scale = Math.min(rect.w / entry.image.width, rect.h / entry.image.height);
+      const left = rect.x + (rect.w - entry.image.width * scale) / 2;
+      const top = rect.y + (rect.h - entry.image.height * scale) / 2;
+      const draw = (points, colour, fill, dashed) => {
+        if (!points?.length || points.some(p => !Number.isFinite(p.x + p.y))) return;
+        ctx.beginPath();
+        points.forEach((p, i) => i ? ctx.lineTo(left + p.x * scale, top + p.y * scale) : ctx.moveTo(left + p.x * scale, top + p.y * scale));
+        ctx.closePath(); ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = colour; ctx.lineWidth = 2; ctx.setLineDash(dashed ? [6, 4] : []); ctx.stroke();
+      };
+      draw(peak?.band, "#ffca64", "#ffca6426", true);
+      if (measurement?.detected) draw(measurement.corners, "#61e28b", "#61e28b0a", false);
+      canvas.hidden = !peak && !measurement?.detected;
+      const held = session.calibrationHold?.entry === entry;
+      const age = Math.max(0, Date.now() - entry.capturedAt) / 1000;
+      const frame = "Frame " + entry.frameNumber + (held ? " · held" : " · " + age.toFixed(1) + "s old");
+      let text = measurement?.detected ? "Green: calibration matched. " : "";
+      text += peak ? "Amber: strongest guide response " + peak.score.toFixed(2) + " · ~" + peak.scale.toFixed(2) +
+        "× · wavelengths " + Math.round(64 * peak.scale) + "/" + Math.round(96 * peak.scale) + "px · phase error " +
+        Math.round(peak.phaseError * 180 / Math.PI) + "°." : "No measurable guide response.";
+      if (peak && !measurement?.detected) text += " Unverified: " + peak.reason +
+        (measurement.diagnostic.status === "time-limit" ? "; search budget ended" : measurement.diagnostic.status === "coverage-too-small" ? "; picture too small in frame" : "") + ".";
+      this.signalReadout.textContent = frame + "\n" + text;
+      this.signalReadout.hidden = false;
     }
 
     updateCalibrationLight(session, entry) {
@@ -1240,10 +1310,11 @@
             // matches a slow run of the file detector without holding a stale frame.
             hint = await Promise.race([scanner(sample.pixels, sample.width, sample.height,
               { signal: controller.signal, deadline: Date.now() + 3000, maxMilliseconds: 3000,
-                ...(entry.guideKind === "edge" ? { minimumCoverage: .5 } : {}) }), cancellation]);
+                ...(entry.guideKind === "edge" ? { minimumCoverage: .5, diagnostic: true } : {}) }), cancellation]);
         } finally { controller.signal.removeEventListener("abort", aborted); }
         if (this.session !== session || controller.signal.aborted || generation !== session.guideGeneration) return;
         entry.guideChecked = true;
+        if (entry.guideKind === "edge") this.showSignal(session, entry, hint);
         if (hint?.detected && Number.isFinite(hint.scale) && hint.scale > 0 && Number.isFinite(hint.fx) &&
           Number.isFinite(hint.fy) && Math.hypot(hint.fx, hint.fy) > 0) {
           const fx = hint.fx * sample.width / entry.image.width, fy = hint.fy * sample.height / entry.image.height;
@@ -1302,6 +1373,7 @@
 
     scan(session) {
       if (this.session !== session || session.purpose === "source" || session.paused || session.adjusting || session.handingOff || session.calibrationHold) return;
+      this.renderSignal(session);
       if (Date.now() < (session.scanAfter || 0)) { this.schedule(session, 0); return; }
       if (this.video.readyState < 2 || this.video.currentTime === session.lastTime) {
         this.schedule(session);
