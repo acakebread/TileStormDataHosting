@@ -2,14 +2,15 @@
 (function (root) {
   "use strict";
   class PixelStowPreview {
-    constructor({ preview, viewport, canToggleSource, preferSourceOnOpen, canCopyImage, copyImage, captureView, restoreView, fit, toggleScale, resize, onFrame }) {
-      Object.assign(this, { preview, viewport, canToggleSource, preferSourceOnOpen, canCopyImage, copyImage, captureView, restoreView, fit, toggleScale, resize, onFrame });
+    constructor({ preview, viewport, canToggleSource, preferSourceOnOpen, imageLabel, canCopyImage, copyImage, captureView, restoreView, fit, toggleScale, resize, onFrame }) {
+      Object.assign(this, { preview, viewport, canToggleSource, preferSourceOnOpen, imageLabel, canCopyImage, copyImage, captureView, restoreView, fit, toggleScale, resize, onFrame });
       this.panel = document.querySelector("#preview-panel");
       this.slot = document.querySelector("#preview-screen");
       this.toolbar = document.querySelector("#preview-screen-toolbar");
       this.footer = document.querySelector("#preview-screen-footer");
       this.actions = document.querySelector("#preview-screen-actions");
       this.toggleButton = document.querySelector("#preview-screen-toggle");
+      this.modeLabel = document.querySelector("#preview-mode");
       this.contextMenu = document.querySelector("#preview-context-menu");
       this.copyItem = document.querySelector("#preview-context-copy");
       this.copyItem.addEventListener("click", () => { this.hideContextMenu(true); this.copyImage?.(); });
@@ -48,7 +49,7 @@
         if (!this.panel.open || event.button !== 0) return;
         this.pointers.add(event.pointerId);
         if (this.pointers.size > 1) { this.cancelTap(); this.multitouch = true; return; }
-        if (event.target.closest("button")) return;
+        if (event.target.closest("button, .split-line")) return;
         if (!this.multitouch) {
           this.tap = { id: event.pointerId, x: event.clientX, y: event.clientY, at: Date.now() };
           if (this.clean) this.holdTimer = setTimeout(() => {
@@ -113,6 +114,11 @@
       const label = source ? "Show encoded image" : "Show source image";
       this.toggleButton.setAttribute("aria-label", label);
       this.toggleButton.title = label;
+      this.syncModeLabel();
+    }
+    syncModeLabel() {
+      this.modeLabel.hidden = !this.clean || this.footer.hidden;
+      this.modeLabel.textContent = this.panel.classList.contains("show-source") ? "Source" : this.imageLabel?.() || "Encoded";
     }
     toggleSource() {
       if (!this.clean || !this.canToggleSource?.()) { this.syncToggleSource(); return false; }
@@ -126,6 +132,7 @@
       this.hideContextMenu();
       const focusInFooter = this.footer.contains(document.activeElement);
       this.toolbar.hidden = this.footer.hidden = !show;
+      this.syncModeLabel();
       if (!show && focusInFooter && this.panel.open) this.panel.focus({ preventScroll: true });
       if (this.panel.open) this.resize();
     }
@@ -145,7 +152,7 @@
       this.preferSource = clean && this.preferSourceOnOpen?.() !== false;
       this.panel.classList.remove("show-source");
       this.panel.setAttribute("aria-label", clean ? "Full screen image preview. Tap for controls; hold to switch encoded image and source when available; drag with the left mouse button or one or two fingers to pan; pinch to zoom; Escape to close."
-        : "Full screen image comparison. Tap for controls; drag with one finger to pan; hold still to drag the divider; pinch to zoom; Escape to close.");
+        : "Full screen image comparison. Tap for controls; left-drag or drag with one finger to pan; right-drag or hold still to drag the divider; pinch to zoom; Escape to close.");
       this.controls(!clean);
       document.documentElement.classList.add("preview-modal-open");
       document.body.classList.add("preview-modal-open");
