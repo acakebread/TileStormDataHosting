@@ -161,6 +161,51 @@ assert(surroundHint&&Math.abs(surroundHint.scale-1)<.02,'a toolbar and bezel mus
 const plainSurround=busySurround({pixels:original,width:w,height:h});
 assert.equal(await E.detect(plainSurround.pixels,plainSurround.width,plainSurround.height,{outlineSearch:false,contentSearch:false,minimumCoverage:.5,maxMilliseconds:3000}),null,'surrounding chrome without a guide is not calibration');
 console.log('PASS: guide surrounded by a toolbar and bezel still calibrates; the same chrome without a guide does not');
+// A phone pointed at a browser: the picture is resampled inside a toolbar and
+// taskbar, so its guide is not on the camera-frame inset and its amplitude is
+// diluted. The outline has to land on that picture, within the camera budget.
+function monitorPhoto(image, scale) {
+  const pictureW=Math.round(image.width*scale),pictureH=Math.round(image.height*scale);
+  const width=2560,height=1920,pixels=new Uint8Array(width*height*4);
+  const monX=90,monY=70,monW=width-180,monH=height-150;
+  const top=Math.round(monH*.07),bottom=Math.round(monH*.06),side=Math.round(monW*.012);
+  const viewW=monW-side*2,viewH=monH-top-bottom;
+  const fit=Math.min(viewW/pictureW,viewH/pictureH);
+  const drawW=Math.round(pictureW*fit),drawH=Math.round(pictureH*fit);
+  const ox=monX+side+Math.round((viewW-drawW)/2),oy=monY+top+Math.round((viewH-drawH)/2);
+  for(let y=0;y<height;y++)for(let x=0;x<width;x++) {
+    const i=(x+y*width)*4,inMonitor=x>=monX&&x<monX+monW&&y>=monY&&y<monY+monH;
+    if(!inMonitor){pixels.set([18,18,20,255],i);continue;}
+    const lx=x-monX,ly=y-monY;
+    if(ly<top){pixels.set([36+(lx%40),90,160,255],i);continue;}
+    if(ly>=monH-bottom){pixels.set([20+(lx%90),22,28,255],i);continue;}
+    if(lx<side||lx>=monW-side){pixels.set([12,12,14,255],i);continue;}
+    const sx=(x-ox)/scale/fit,sy=(y-oy)/scale/fit;
+    if(sx<0||sy<0||sx>image.width-1||sy>image.height-1){pixels.set([248,248,248,255],i);continue;}
+    let r=0,g=0,b=0;
+    for(const [dx,dy] of [[0,0],[.6,0],[-.6,0],[0,.6],[0,-.6]]) {
+      r+=sample(image.pixels,image.width,image.height,sx+dx,sy+dy,0);
+      g+=sample(image.pixels,image.width,image.height,sx+dx,sy+dy,1);
+      b+=sample(image.pixels,image.width,image.height,sx+dx,sy+dy,2);
+    }
+    pixels.set([clamp(r/5+((x*13+y)%5)-2),clamp(g/5+((x+y*9)%5)-2),clamp(b/5+((x*3+y*7)%5)-2),255],i);
+  }
+  return {pixels,width,height,picture:{x:ox,y:oy,w:drawW,h:drawH},expected:scale*fit};
+}
+const monitored=monitorPhoto({pixels:marked,width:w,height:h},1.6);
+const monitorHint=await E.detect(monitored.pixels,monitored.width,monitored.height,{minimumCoverage:.5,maxMilliseconds:3000,diagnostic:true});
+assert(monitorHint,'a monitor photo of an encoded picture must calibrate');
+assert(Math.abs(monitorHint.scale/monitored.expected-1)<.03,`scale ${monitorHint.scale} expected ${monitored.expected}`);
+const bounds={
+  left:Math.min(...monitorHint.corners.map(p=>p.x)),top:Math.min(...monitorHint.corners.map(p=>p.y)),
+  right:Math.max(...monitorHint.corners.map(p=>p.x)),bottom:Math.max(...monitorHint.corners.map(p=>p.y))};
+const picture=monitored.picture;
+assert(Math.max(Math.abs(bounds.left-picture.x),Math.abs(bounds.top-picture.y),Math.abs(bounds.right-(picture.x+picture.w)),Math.abs(bounds.bottom-(picture.y+picture.h)))<16,
+  'calibration outline follows the picture, not the camera frame');
+const monitorPlain=monitorPhoto({pixels:original,width:w,height:h},1.6);
+assert.equal(await E.detect(monitorPlain.pixels,monitorPlain.width,monitorPlain.height,{minimumCoverage:.5,maxMilliseconds:3000}),null,
+  'the same monitor chrome without a guide is not calibration');
+console.log('PASS: a resampled picture inside monitor chrome calibrates on the picture edges within the camera budget');
 console.log(`PASS: cancellation/deadline; 15 positive appraisals ${Math.min(...measurements)}-${Math.max(...measurements)} ms (real camera performance still needs testing)`);
 
 

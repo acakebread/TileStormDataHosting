@@ -192,27 +192,36 @@
           }
           coherences.push(...pair.first.phase.map((phase,k)=>angleDistance(phase-pair.second.phase[k])));
         }
-        const error=Math.max(...phaseErrors),score=Math.min(...amplitudes);
-        const strong=phaseErrors.filter((error,i)=>error<.75&&amplitudes[i]>.7).length;
+        const error=Math.max(...phaseErrors),score=Math.min(...amplitudes),coherence=Math.max(...coherences);
+        const strong=phaseErrors.filter((value,i)=>value<.75&&amplitudes[i]>.7).length;
         const robustScore=amplitudes.slice().sort((a,b)=>a-b)[2];
         let localSpectralSupport=null;
+        // A photographed colour channel can attenuate the guide, while a
+        // single source-photo frequency can obscure one of its eight tones.
+        // The remaining fixed-phase tones have to rise above neighbouring
+        // frequencies. An absolute RGB threshold alone is not safe.
+        const photographed=()=> {
+          if(phaseErrors.filter((value,i)=>value<.75&&amplitudes[i]>.3).length<6||robustScore<.4||
+            phaseErrors.filter((value,i)=>value>1.2&&amplitudes[i]>.3).length>1||coherences.filter(value=>value<.6).length<3)return 0;
+          const noise=[...stripNoise(q,scale,false,measured[0].first,sx,ex),...stripNoise(q,scale,false,measured[0].second,sx,ex),
+            ...stripNoise(q,scale,true,measured[1].first,sy,ey),...stripNoise(q,scale,true,measured[1].second,sy,ey)];
+          const supported=phaseErrors.filter((value,i)=>value<.75&&amplitudes[i]>.3&&amplitudes[i]/noise[i]>=1.3).length;
+          return supported>=6?supported:0;
+        };
         if(q.knownBounds) {
-          const original=strong>=6&&robustScore>=.8&&!phaseErrors.some((error,i)=>error>1.2&&amplitudes[i]>.3)&&
-            coherences.filter(error=>error<.6).length>=3&&Math.max(...coherences)<=1.2;
+          const original=strong>=6&&robustScore>=.8&&!phaseErrors.some((value,i)=>value>1.2&&amplitudes[i]>.3)&&
+            coherences.filter(value=>value<.6).length>=3&&coherence<=1.2;
           if(!original) {
-            // A photographed colour channel can attenuate the guide, while a
-            // single source-photo frequency can obscure one of its eight tones.
-            // Require the remaining fixed-phase tones to rise above neighbouring
-            // frequencies; lowering an absolute RGB threshold alone is unsafe.
-            if(phaseErrors.filter((error,i)=>error<.75&&amplitudes[i]>.3).length<6||robustScore<.4||
-              phaseErrors.filter((error,i)=>error>1.2&&amplitudes[i]>.3).length>1||coherences.filter(error=>error<.6).length<3)continue;
-            const noise=[...stripNoise(q,scale,false,measured[0].first,sx,ex),...stripNoise(q,scale,false,measured[0].second,sx,ex),
-              ...stripNoise(q,scale,true,measured[1].first,sy,ey),...stripNoise(q,scale,true,measured[1].second,sy,ey)];
-            const supported=phaseErrors.filter((error,i)=>error<.75&&amplitudes[i]>.3&&amplitudes[i]/noise[i]>=1.3).length;
-            if(supported<6)continue;
-            localSpectralSupport=supported;
+            localSpectralSupport=photographed();
+            if(!localSpectralSupport)continue;
           }
-        } else if(error>.75||Math.max(...coherences)>.4||score<1.05)continue;
+        } else if(error>.75||coherence>.4||score<1.05) {
+          // Chrome around a picture dilutes the amplitude below the full-bleed
+          // gate even when all eight tones still have the guide's phase.
+          if(error>.75||coherence>.4)continue;
+          localSpectralSupport=photographed();
+          if(!localSpectralSupport)continue;
+        }
         const confidence=q.knownBounds?robustScore:score;
         if(!best||confidence>best.score)best={scale,turn,score:confidence,pairs:measured,phaseError:error,localSpectralSupport,
           phaseSupport:phaseErrors.filter((error,i)=>error<.75&&amplitudes[i]>.3).length,
@@ -313,6 +322,9 @@
       if(q.diagnostic)q.diagnostic.scales++;
       check();const candidate=matchFrame(q,scale,check);
       if(candidate&&(!best||candidate.score>best.score))best=candidate;
+      // A phase-locked scale is already within one step of the guide. Check the
+      // neighbouring step, then stop, so later false peaks do not use the budget.
+      if(best?.phaseSupport>=6&&best.phaseError<=.75&&scale>best.scale+step)return best;
       if(Date.now()-lastYield>40){await pause();lastYield=Date.now();}
     }
     } catch(error) {
@@ -355,6 +367,16 @@
         }
       }
       const original=axisStorage({data,w,h,reduction,diagnostic});let selected=original,best=null;
+      // A picture inside a monitor does not sit on the camera-frame inset.
+      // Outline, full-bleed and content proposals must leave time for that search.
+      const reserve=Math.max(0,(deadline-started)*.4);
+      const preliminary=()=> {
+        check();
+        if(Date.now()+reserve>=deadline){const error=new Error('Keeping time for the framed guide search.');error.name='EdgeGuideLimit';throw error;}
+      };
+      const continueStage=error=> {
+        if(error.name==='AbortError'||error.name!=='EdgeGuideLimit'||Date.now()>=deadline)throw error;
+      };
       if(options.outlineSearch!==false&&root.PixelStowTransform?.proposeOutlines&&hasFlatBorder(pixels,width,height)) {
         let quads=[];
         // Propose the outline on the very same coarse raster. Re-scanning the
@@ -362,32 +384,37 @@
         // A quarter of the live one-second budget was 250ms, which expired
         // before a photographed screen's bezel could be returned. Share the
         // appraisal deadline instead, and keep the file cap at 1.5 seconds.
-        const outlineBudget=Math.min(1500,Math.max(0,deadline-Date.now()));
-        try {quads=(await root.PixelStowTransform.proposeOutlines(coarse,w,h,{signal:options.signal,maxMilliseconds:outlineBudget,deadline:Math.min(deadline,Date.now()+outlineBudget)}))
+        const outlineBudget=Math.min(1500,Math.max(0,deadline-reserve-Date.now()));
+        try {quads=(await root.PixelStowTransform.proposeOutlines(coarse,w,h,{signal:options.signal,maxMilliseconds:outlineBudget,deadline:Math.min(deadline-reserve,Date.now()+outlineBudget)}))
           .map(quad=>quad.map(p=>({x:(p.x+.5)*reduction-.5,y:(p.y+.5)*reduction-.5})));}
         catch(error){if(error.name==='AbortError')throw error;}
         // Keep shared rectangular edges first: small independent line-fit
         // errors can bias the scale enough to spoil the single marker grid.
-        for(const quad of orthogonalQuads(quads).concat(quads)) {
+        try {for(const quad of orthogonalQuads(quads).concat(quads)) {
           if(polygonArea(quad)/(width*height)<(options.minimumCoverage??.5))continue;
-          const rectified=rectify(original,quad,check);if(!rectified)continue;
-          const candidate=await searchQuarter(rectified,searchOptions,check);
+          const rectified=rectify(original,quad,preliminary);if(!rectified)continue;
+          const candidate=await searchQuarter(rectified,searchOptions,preliminary);
           if(candidate){best=candidate;selected=rectified;break;}
-        }
+        }}catch(error){continueStage(error);}
       }
-      if(!best){original.knownBounds=true;best=await searchQuarter(original,searchOptions,check);original.knownBounds=false;}
+      if(!best){
+        original.knownBounds=true;
+        try {best=await searchQuarter(original,searchOptions,preliminary);}
+        catch(error){continueStage(error);}
+        original.knownBounds=false;
+      }
       if(!best&&options.contentSearch!==false) {
         // Give inner-picture proposals a bounded turn before integrating over
         // all the surrounding clutter. Keep time for the original global search.
-        const contentDeadline=Math.min(deadline,Date.now()+Math.min(800,(deadline-Date.now())*.4));
-        const contentCheck=()=>{check();if(Date.now()>=contentDeadline){const error=new Error('Content proposal budget');error.name='EdgeGuideLimit';throw error;}};
+        const contentDeadline=Math.min(deadline-reserve,Date.now()+Math.min(800,(deadline-Date.now())*.4));
+        const contentCheck=()=>{preliminary();if(Date.now()>=contentDeadline){const error=new Error('Content proposal budget');error.name='EdgeGuideLimit';throw error;}};
         try {for(const quad of contentQuads(coarse,w,h,contentCheck)) {
           const full=quad.map(p=>({x:(p.x+.5)*reduction-.5,y:(p.y+.5)*reduction-.5}));
           if(polygonArea(full)/(width*height)<(options.minimumCoverage??.5))continue;
           const rectified=rectify(original,full,contentCheck);if(!rectified)continue;
           const candidate=await searchQuarter(rectified,searchOptions,contentCheck);
           if(candidate){best=candidate;selected=rectified;break;}
-        }}catch(error){if(error.name!=='EdgeGuideLimit'||Date.now()>=deadline)throw error;}
+        }}catch(error){continueStage(error);}
       }
       if(!best)best=await searchQuarter(original,searchOptions,check);
       if(!best)return miss('no-match');
