@@ -995,7 +995,7 @@
   <script src="./pixelstow-sharing.js?v=20261016-preview-copy1"></script>
   <script src="./pixelstow-read-progress.js?v=20261016-frame-outline"></script>
   <script src="./pixelstow-camera.js?v=20261016-keep-preview"></script>
-  <script src="./pixelstow-preview.js?v=20261017-unified-pan"></script>
+  <script src="./pixelstow-preview.js?v=20261017-cropped-labels"></script>
   <script>
     const fileInput = document.querySelector("#file");
     const chooseImageButton = document.querySelector("#choose-image");
@@ -1547,18 +1547,29 @@
       const ratio = Math.max(0, Math.min(1, Number(value) / 1000));
       previewSource.style.clipPath = "inset(0 0 0 " + (ratio * 100) + "%)";
       splitLine.style.left = (ratio * 100) + "%";
-      const width = compareUi.clientWidth;
-      // Keep the labels in the visible picture when zoom/pan moves its edges
-      // off screen. This changes only the overlay, never the recovered bounds.
-      const frame = frameOf(imagePixels());
-      const left = Math.max(0, frame.x * viewScale, -originX);
-      const right = Math.min(width, (frame.x + frame.w) * viewScale, viewport.clientWidth - originX);
-      const top = Math.max(0, frame.y * viewScale, -originY) + 10;
+      positionPreviewLabels();
+    }
+
+    function positionPreviewLabels() {
+      const img = imagePixels();
+      const geometry = current?.transformResult?.geometry || current?.repetition?.geometry;
+      // Anchor to the carrier corners, excluding the extra Analysis margin.
+      // Labels follow the image through zoom/pan, including off screen.
+      const corners = grabbedFrame() ? geometry?.corners : null;
+      const topLeft = corners?.[0] || { x: 0, y: 0 };
+      const topRight = corners?.[1] || { x: img.w, y: 0 };
+      const width = img.w * viewScale;
+      const left = topLeft.x * viewScale;
+      const right = topRight.x * viewScale;
       tagEncoded.style.left = (left + 10) + "px";
       tagSource.style.right = (width - right + 10) + "px";
-      tagEncoded.style.top = tagSource.style.top = top + "px";
-      tagEncoded.hidden = Math.min(width * ratio, right) - left < 78;
-      tagSource.hidden = right - Math.max(width * ratio, left) < 78;
+      tagEncoded.style.top = (topLeft.y * viewScale + 10) + "px";
+      tagSource.style.top = (topRight.y * viewScale + 10) + "px";
+      const divider = width * Number(split.value) / 1000;
+      tagEncoded.hidden = Math.min(divider, right) - left < 78;
+      tagSource.hidden = right - Math.max(divider, left) < 78;
+      fullPreview.modeLabel.style.right = (viewport.clientWidth - originX - right + 10) + "px";
+      fullPreview.modeLabel.style.top = (originY + topRight.y * viewScale + 10) + "px";
     }
 
     function imagePixels() {
@@ -1674,7 +1685,7 @@
         compareUi.style.width = (img.w * viewScale) + "px";
         compareUi.style.height = (img.h * viewScale) + "px";
         setSplit(split.value);
-      }
+      } else positionPreviewLabels();
     }
 
     function sizeViewport() {
