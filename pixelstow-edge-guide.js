@@ -175,41 +175,49 @@
       const measured=[{...horizontal,first:measureStrip(q,scale,false,horizontal.first,sx,ex),second:measureStrip(q,scale,false,horizontal.second,sx,ex)},
         {...vertical,first:measureStrip(q,scale,true,vertical.first,sy,ey),second:measureStrip(q,scale,true,vertical.second,sy,ey)}];
       if(measured.some(pair=>!pair.first||!pair.second))continue;
-      const phaseErrors=[],coherences=[],amplitudes=[];
-      for(let axis=0;axis<2;axis++) {
-        const perpendicular=axis===0?vertical:horizontal,origin=perpendicular.first.position-INSET*scale/q.reduction;
-        const expected=PITCHES.map((pitch,i)=>-PHASES[i]+TAU*(origin+.5*scale/q.reduction)/(pitch*scale/q.reduction));
-        const pair=measured[axis];
-        for(const strip of [pair.first,pair.second])for(let k=0;k<2;k++) {
-          phaseErrors.push(angleDistance(strip.phase[k]-expected[k]));amplitudes.push(strip.amplitude[k]);
+      // The captured image can have any quarter-turn. Reversing a tangent
+      // reverses its fixed phase as well; rotating a display box cannot fix
+      // that measurement. Verify each physical orientation on the same data.
+      for(let turn=0;turn<4;turn++) {
+        const phaseErrors=[],coherences=[],amplitudes=[];
+        for(let axis=0;axis<2;axis++) {
+          const perpendicular=axis===0?vertical:horizontal,unit=scale/q.reduction;
+          const reversed=axis===0?turn===1||turn===2:turn===2||turn===3;
+          const origin=reversed?perpendicular.second.position+(INSET+BAND-.5)*unit:
+            perpendicular.first.position-(INSET-.5)*unit;
+          const expected=PITCHES.map((pitch,i)=>(reversed?PHASES[i]:-PHASES[i])+TAU*origin/(pitch*unit));
+          const pair=measured[axis];
+          for(const strip of [pair.first,pair.second])for(let k=0;k<2;k++) {
+            phaseErrors.push(angleDistance(strip.phase[k]-expected[k]));amplitudes.push(strip.amplitude[k]);
+          }
+          coherences.push(...pair.first.phase.map((phase,k)=>angleDistance(phase-pair.second.phase[k])));
         }
-        coherences.push(...pair.first.phase.map((phase,k)=>angleDistance(phase-pair.second.phase[k])));
+        const error=Math.max(...phaseErrors),score=Math.min(...amplitudes);
+        const strong=phaseErrors.filter((error,i)=>error<.75&&amplitudes[i]>.7).length;
+        const robustScore=amplitudes.slice().sort((a,b)=>a-b)[2];
+        let localSpectralSupport=null;
+        if(q.knownBounds) {
+          const original=strong>=6&&robustScore>=.8&&!phaseErrors.some((error,i)=>error>1.2&&amplitudes[i]>.3)&&
+            coherences.filter(error=>error<.6).length>=3&&Math.max(...coherences)<=1.2;
+          if(!original) {
+            // A photographed colour channel can attenuate the guide, while a
+            // single source-photo frequency can obscure one of its eight tones.
+            // Require the remaining fixed-phase tones to rise above neighbouring
+            // frequencies; lowering an absolute RGB threshold alone is unsafe.
+            if(phaseErrors.filter((error,i)=>error<.75&&amplitudes[i]>.3).length<6||robustScore<.4||
+              phaseErrors.filter((error,i)=>error>1.2&&amplitudes[i]>.3).length>1||coherences.filter(error=>error<.6).length<3)continue;
+            const noise=[...stripNoise(q,scale,false,measured[0].first,sx,ex),...stripNoise(q,scale,false,measured[0].second,sx,ex),
+              ...stripNoise(q,scale,true,measured[1].first,sy,ey),...stripNoise(q,scale,true,measured[1].second,sy,ey)];
+            const supported=phaseErrors.filter((error,i)=>error<.75&&amplitudes[i]>.3&&amplitudes[i]/noise[i]>=1.3).length;
+            if(supported<6)continue;
+            localSpectralSupport=supported;
+          }
+        } else if(error>.75||Math.max(...coherences)>.4||score<1.05)continue;
+        const confidence=q.knownBounds?robustScore:score;
+        if(!best||confidence>best.score)best={scale,turn,score:confidence,pairs:measured,phaseError:error,localSpectralSupport,
+          phaseSupport:phaseErrors.filter((error,i)=>error<.75&&amplitudes[i]>.3).length,
+          outlierComponents:phaseErrors.filter((error,i)=>error>1.2&&amplitudes[i]>.3).length};
       }
-      const error=Math.max(...phaseErrors),score=Math.min(...amplitudes);
-      const strong=phaseErrors.filter((error,i)=>error<.75&&amplitudes[i]>.7).length;
-      const robustScore=amplitudes.slice().sort((a,b)=>a-b)[2];
-      let localSpectralSupport=null;
-      if(q.knownBounds) {
-        const original=strong>=6&&robustScore>=.8&&!phaseErrors.some((error,i)=>error>1.2&&amplitudes[i]>.3)&&
-          coherences.filter(error=>error<.6).length>=3&&Math.max(...coherences)<=1.2;
-        if(!original) {
-          // A photographed colour channel can attenuate the guide, while a
-          // single source-photo frequency can obscure one of its eight tones.
-          // Require the remaining fixed-phase tones to rise above neighbouring
-          // frequencies; lowering an absolute RGB threshold alone is unsafe.
-          if(phaseErrors.filter((error,i)=>error<.75&&amplitudes[i]>.3).length<6||robustScore<.4||
-            phaseErrors.filter((error,i)=>error>1.2&&amplitudes[i]>.3).length>1||coherences.filter(error=>error<.6).length<3)continue;
-          const noise=[...stripNoise(q,scale,false,measured[0].first,sx,ex),...stripNoise(q,scale,false,measured[0].second,sx,ex),
-            ...stripNoise(q,scale,true,measured[1].first,sy,ey),...stripNoise(q,scale,true,measured[1].second,sy,ey)];
-          const supported=phaseErrors.filter((error,i)=>error<.75&&amplitudes[i]>.3&&amplitudes[i]/noise[i]>=1.3).length;
-          if(supported<6)continue;
-          localSpectralSupport=supported;
-        }
-      } else if(error>.75||Math.max(...coherences)>.4||score<1.05)continue;
-      const confidence=q.knownBounds?robustScore:score;
-      if(!best||confidence>best.score)best={scale,score:confidence,pairs:measured,phaseError:error,localSpectralSupport,
-        phaseSupport:phaseErrors.filter((error,i)=>error<.75&&amplitudes[i]>.3).length,
-        outlierComponents:phaseErrors.filter((error,i)=>error>1.2&&amplitudes[i]>.3).length};
     }
     return best;
   }
@@ -389,11 +397,12 @@
         right:vertical.second.position*reduction+(INSET+BAND)*best.scale,
         bottom:horizontal.second.position*reduction+(INSET+BAND)*best.scale};
       let corners=[{x:bounds.left,y:bounds.top},{x:bounds.right-best.scale,y:bounds.top},
-        {x:bounds.right-best.scale,y:bounds.bottom-best.scale},{x:bounds.left,y:bounds.bottom-best.scale}],orientation=0;
+        {x:bounds.right-best.scale,y:bounds.bottom-best.scale},{x:bounds.left,y:bounds.bottom-best.scale}];
+      corners=corners.slice(best.turn).concat(corners.slice(0,best.turn));
       if(selected.map) {
         corners=corners.map(point=>selected.map((point.x+.5)/(selected.w*reduction),(point.y+.5)/(selected.h*reduction)));
-        orientation=Math.atan2(corners[1].y-corners[0].y,corners[1].x-corners[0].x);
       }
+      const orientation=Math.atan2(corners[1].y-corners[0].y,corners[1].x-corners[0].x);
       const coverage=polygonArea(corners)/(width*height);
       if(coverage<(options.minimumCoverage??.5))return miss('coverage-too-small');
       if(diagnostic) {

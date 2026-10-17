@@ -35,6 +35,50 @@ assert(c.payloadsEqual(decoded,content));assert.deepEqual(decoded.calibration,re
 assert.deepEqual(decoded.scaleGuide.corners,measured.corners);
 console.log('PASS: a winning guided grid preserves captured evidence through inspection and cached decode');
 
+for(let turns=1;turns<4;turns++) {
+  const W=turns%2?photo.height:photo.width,H=turns%2?photo.width:photo.height,pixels=new Uint8Array(photo.pixels.length);
+  for(let y=0;y<photo.height;y++)for(let x=0;x<photo.width;x++) {
+    const [u,v]=turns===1?[photo.height-1-y,x]:turns===2?[photo.width-1-x,photo.height-1-y]:[y,photo.width-1-x];
+    pixels.set(photo.pixels.subarray((x+y*photo.width)*4,(x+y*photo.width)*4+4),(u+v*W)*4);
+  }
+  const guide=await c.scanEdgeGuide(pixels,W,H,{worker:false,maxMilliseconds:2000});
+  assert(guide?.detected,`rotated calibration ${turns}`);
+  const scan=await c.scanMarkers(pixels,W,H,{worker:false,scaleGuide:guide,calibratedOnly:true,deadline:Date.now()+12000});
+  const read=await c.readMarkerCandidates(pixels,W,H,scan,{worker:false,calibratedOnly:true,resumeDiscovery:false,deadline:Date.now()+20000});
+  assert(read.found&&!read.unreadable,`rotated guide ${turns} must lead to verified contents`);
+  assert.equal(read.calibration.method,'guide');assert(read.calibration.used);
+  const expected=guide.corners.map(p=>({...p}));
+  assert.deepEqual(read.scaleGuide.corners,expected,'native capture coordinates survive working-grid recovery');
+  assert(c.payloadsEqual(await c.decode(pixels,W,H,''),content));
+}
+console.log('PASS: the rotated calibration vectors lead to real marker and payload reads on one guided grid in every orientation');
+
+// Trace a slanted guide into the actual marker sampler, rather than checking
+// only the angle of a diagnostic polygon. These are public generated pixels.
+for(const angle of [-7,7]) {
+  const scale=1.37,a=angle*Math.PI/180,cs=Math.cos(a),sn=Math.sin(a);
+  const W=Math.ceil(scale*(w*cs+h*Math.abs(sn)))+48,H=Math.ceil(scale*(h*cs+w*Math.abs(sn)))+48;
+  const pixels=new Uint8Array(W*H*4);
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++) {
+    const i=(x+y*W)*4,dx=(x-(W-1)/2)/scale,dy=(y-(H-1)/2)/scale;
+    const u=cs*dx+sn*dy+(w-1)/2,v=-sn*dx+cs*dy+(h-1)/2;
+    if(u<0||v<0||u>w-1||v>h-1){pixels.set([24,25,28,255],i);continue;}
+    const ix=Math.floor(u),iy=Math.floor(v),jx=Math.min(w-1,ix+1),jy=Math.min(h-1,iy+1),fx=u-ix,fy=v-iy;
+    for(let k=0;k<4;k++)pixels[i+k]=Math.round(
+      (encoded.pixels[(ix+iy*w)*4+k]*(1-fx)+encoded.pixels[(jx+iy*w)*4+k]*fx)*(1-fy)+
+      (encoded.pixels[(ix+jy*w)*4+k]*(1-fx)+encoded.pixels[(jx+jy*w)*4+k]*fx)*fy);
+  }
+  const guide=await c.scanEdgeGuide(pixels,W,H,{worker:false,maxMilliseconds:3000});
+  assert(guide?.detected,`slanted calibration ${angle}`);
+  assert(Math.abs(guide.orientation-a)<.025);
+  const scan=await c.scanMarkers(pixels,W,H,{worker:false,scaleGuide:guide,calibratedOnly:true,deadline:Date.now()+12000});
+  const read=await c.readMarkerCandidates(pixels,W,H,scan,{worker:false,calibratedOnly:true,resumeDiscovery:false,deadline:Date.now()+20000});
+  assert(read.found&&!read.unreadable,`slanted vector ${angle} must lead to verified contents`);
+  assert(read.calibration.used);assert.equal(read.calibration.method,'guide');
+  assert(c.payloadsEqual(await c.decode(pixels,W,H,''),content));
+}
+console.log('PASS: positive and negative guide angles survive working-grid conversion and lead to verified payloads');
+
 // Reuse real verified native geometry, with a weaker guide candidate ranked
 // behind it. The successful ordinary candidate must remain ordinary.
 const fallbackScan={...native,candidates:native.candidates.map(candidate=>({...candidate,

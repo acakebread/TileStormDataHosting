@@ -708,6 +708,7 @@
             </div>
             <div class="camera-feedback" tabindex="0" role="region" aria-label="Camera scan status and capture details">
               <button class="camera-signal-readout" id="camera-signal-readout" type="button" hidden aria-label="Inspect sampled diagnostic frame"></button>
+              <button id="camera-save-signal" type="button" hidden>Save sampled PNG</button>
               <p class="hint" id="camera-progress" role="status"></p>
               <p class="hint" id="camera-signature"></p>
               <details class="camera-near-miss" id="camera-near-miss" hidden open>
@@ -994,17 +995,17 @@
     </form>
   </dialog>
   <script src="./pixelstow-spectrum.js?v=20261015-no-pilot1"></script>
-  <script src="./pixelstow-edge-guide.js?v=20261017-accepted-debug"></script>
+  <script src="./pixelstow-edge-guide.js?v=20261017-guide-turns1"></script>
   <script src="./pixelstow-transform.js?v=20261016-early-payload1"></script>
   <script src="./pixelstow-lattice.js?v=20261013-marker-follow2"></script>
-  <script src="./pixelstow.js?v=20261017-accepted-debug"></script>
+  <script src="./pixelstow.js?v=20261017-guide-turns1"></script>
   <script src="./pixelstow-sizing.js?v=20261015-payload-range1"></script>
   <script src="./pixelstow-export.js?v=20261011-exports"></script>
   <script src="./pixelstow-voice.js?v=20261013-voice-clock2"></script>
   <script src="./pixelstow-media.js?v=20261015-preview-icons1"></script>
   <script src="./pixelstow-sharing.js?v=20261016-preview-copy1"></script>
   <script src="./pixelstow-read-progress.js?v=20261016-frame-outline"></script>
-  <script src="./pixelstow-camera.js?v=20261017-sampled-debug6"></script>
+  <script src="./pixelstow-camera.js?v=20261017-native-debug7"></script>
   <script src="./pixelstow-preview.js?v=20261017-isolated-copy"></script>
   <script>
     const fileInput = document.querySelector("#file");
@@ -1172,7 +1173,11 @@
       changed: () => setBusy(busy), drawGuides: paintTransform,
       clearFeedback: () => { disarmAnalysis(); clearReadFeedback(); clearImageAppraisal(); },
       prepareCapture: () => { disarmAnalysis(); media.preparePlayback(); },
-      clearPreview: clearPreviewFrame
+      clearPreview: clearPreviewFrame,
+      saveCapture: async (image, suggestedName) => {
+        const filename = await exports.chooseFilename(suggestedName);
+        if (filename) exports.download(await PixelStow.writePng(image.pixels, image.width, image.height), filename);
+      }
     });
 
     const carrierSelect = document.querySelector("#carrier-version");

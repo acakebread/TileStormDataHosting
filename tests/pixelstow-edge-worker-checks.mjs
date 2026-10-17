@@ -60,6 +60,15 @@ try{
     const read=await PixelStow.readMarkerCandidates(photo.pixels,photo.width,photo.height,scan,
       {resumeDiscovery:true,deadline:Date.now()+30000});
     const decoded=await PixelStow.decode(photo.pixels,photo.width,photo.height,'');
+    const rotated=new Uint8Array(photo.pixels.length);
+    for(let y=0;y<photo.height;y++)for(let x=0;x<photo.width;x++)
+      rotated.set(photo.pixels.subarray((x+y*photo.width)*4,(x+y*photo.width)*4+4),
+        (photo.height-1-y+x*photo.height)*4);
+    const turnedHint=await PixelStow.scanEdgeGuide(rotated,photo.height,photo.width,{maxMilliseconds:2000});
+    const turnedScan=await PixelStow.scanMarkers(rotated,photo.height,photo.width,
+      {scaleGuide:turnedHint,calibratedOnly:true,deadline:Date.now()+12000});
+    const turnedRead=await PixelStow.readMarkerCandidates(rotated,photo.height,photo.width,turnedScan,
+      {calibratedOnly:true,resumeDiscovery:false,deadline:Date.now()+20000});
     const frozen=await PixelStow.decodePng(new Uint8Array(await(await fetch('./tests/fixtures/public-v5-before-scale-pilot.png')).arrayBuffer()));
     const old=await PixelStow.decode(frozen.pixels,frozen.width,frozen.height,'',{nativeOnly:true});
     const controller=new AbortController();
@@ -80,6 +89,8 @@ try{
       originalIntact:pixels.every((value,index)=>value===original[index]),
       oldExact:old.text==='Public V5 compatibility fixture before the scale pilot.',
       oldEdgeGuide:Boolean(old.edgeGuide),oldPilot:Boolean(old.scalePilot),aborted,
+      turned:turnedHint?.detected&&Math.abs(turnedHint.orientation-Math.PI/2)<.02&&
+        turnedRead.found&&!turnedRead.unreadable&&turnedRead.calibration.used,
       guideRequest:guideRequests[0],fileGuideRequest:guideRequests[1],fileHint:Boolean(fileHint)
     };
   });
@@ -93,6 +104,7 @@ try{
   assert(result.nativeEdgeGuide&&!result.nativePilot&&result.sameRemoval);
   assert(result.oldExact&&!result.oldEdgeGuide&&!result.oldPilot);
   assert(result.originalIntact&&result.intact&&result.aborted);
+  assert(result.turned,'rotated guide vectors must reach real marker/payload workers on the single calibrated grid');
   assert(workers.length>=4,'guide, markers, payload and source inverse must exercise actual browser workers');
   assert.deepEqual(errors,[]);assert.deepEqual(failed,[]);
   console.log('PASS: page/module and actual edge-guide/marker/payload workers, one 4× reduction, 1.37× scale, exact default V5 PNG payload and identical main/worker source inverse');

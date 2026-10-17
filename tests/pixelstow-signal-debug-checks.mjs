@@ -89,6 +89,7 @@ try{
   assert(result.drawn&&result.hasCanvas&&result.hasText&&result.matched&&result.cleared);
   assert.equal(result.state,'searching','a strong rejected response cannot turn the frame green');
   assert.match(result.text,/Frame 7.*1\.2s old/);
+  assert.match(result.text,/512 × 384px/,'diagnostics report detector input dimensions, not displayed preview size');
   assert.match(result.text,/Amber: rejected search strip/);
   assert.match(result.text,/Unverified/);
   await page.evaluate(({negative,positive})=>{
@@ -99,7 +100,7 @@ try{
       videoWidth:{configurable:true,get:()=>width},videoHeight:{configurable:true,get:()=>height}});
     camera.schedule=()=>{}; // Frame sampling is covered separately with the fake clock.
     window.openHeldTest=()=>{
-      const session={purpose:'read',ready:true,rotation:0,history:[],frames:1};camera.session=session;
+      const session={purpose:'read',ready:true,rotation:0,portrait:camera.isPortrait(),history:[],frames:1};camera.session=session;
       camera.panel.hidden=false;camera.panel.showModal();camera.sync();
       window.heldTestEntry={image:heldTestImage,frameNumber:1,capturedAt:Date.now(),guideKind:'edge'};
       camera.showSignal(session,heldTestEntry,negative);
@@ -140,8 +141,27 @@ try{
     const shown=camera.frozenFrame.getContext('2d').getImageData(0,0,512,384).data;
     return shown.every((v,i)=>v===heldTestImage.pixels[i]);
   }),'the debug hold displays the exact sampled raster');
+  await page.evaluate(()=>{
+    window.savedRawFrame=null;
+    window.originalDownload=exports.download;
+    exports.download=async(blob,name)=>{
+      const decoded=await PixelStow.decodePng(new Uint8Array(await blob.arrayBuffer()));
+      savedRawFrame={name,width:decoded.width,height:decoded.height,
+        exact:decoded.pixels.every((v,i)=>v===heldTestImage.pixels[i])};
+    };
+  });
+  await page.locator('#camera-save-signal').tap();
+  await page.waitForFunction(()=>document.querySelector('#export-dialog').open);
+  await page.locator('#export-save').click();
+  await page.waitForFunction(()=>savedRawFrame);
+  assert.deepEqual(await page.evaluate(()=>savedRawFrame),{
+    name:'pixelstow-camera-frame-1-512x384.png',width:512,height:384,exact:true
+  },'saving a held frame must encode its native pixels without overlays, resizing or recapture');
+  await page.evaluate(()=>exports.download=originalDownload);
+  assert(await page.evaluate(()=>camera.session.signalHold?.entry===heldTestEntry),'export must preserve the inspected hold');
   await page.locator('#camera-signal-readout').tap();
   assert(await page.evaluate(()=>!camera.session.paused&&!camera.session.signalHold&&camera.frozenFrame.hidden));
+  assert(await page.locator('#camera-save-signal').isHidden(),'saving is only offered for an explicitly held sampled raster');
   await page.evaluate(()=>camera.showSignal(camera.session,heldTestEntry,null));
   await page.locator('#camera-signal-readout').tap();
   assert(await page.evaluate(()=>{
@@ -191,5 +211,6 @@ try{
   assert.deepEqual(errors,[]);
   console.log('PASS: strongest rejected strip reaches the overlay through a real worker; one-edge rejection, complete-guide geometry, input preservation, cancellation and stale-overlay cleanup');
   console.log('PASS: touchscreen readout holds/resumes the sampled frame without triggering the shutter; manual capture and delayed green guided/full recovery hand off those same pixels');
+  console.log('PASS: frozen diagnostic export uses the filename dialog and produces exactly the native sampled PNG without overlays or another camera capture');
   console.log('PASS: Info debug toggle defaults off, hides and releases diagnostic holds, and leaves normal calibration freezing/recovery active');
 }finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve));}

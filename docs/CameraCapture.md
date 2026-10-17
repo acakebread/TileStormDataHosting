@@ -93,12 +93,29 @@ The axis scan can therefore report a horizontal/vertical strip even when the
 photographed picture is tilted. Only a matched set of edges supplies the green
 calibration geometry. Rendering retains the angle of the supplied polygons.
 
-Each result identifies its sampled frame and age. Tap the readout to freeze that
+Each result identifies its sampled frame, native input dimensions and age. These
+dimensions belong to the detector input; the preview is a smaller display of it.
+Tap the readout to freeze that
 exact raster and see its diagnostic geometry; tap again to resume. Sampled-frame
 boxes are hidden on moving live video, since a result can arrive seconds after
 its image was captured. This keeps the overlay and the visible picture in the
 same coordinates. Debug display does not change detection thresholds or payload
 validation.
+
+While that diagnostic frame is held, **Save sampled PNG** exports its exact
+native pixels through the filename dialog. It excludes debug drawings and
+controls, does not resize the frame, and does not take another camera/photo
+capture. Saving retains the hold. This provides a reproducible detector input
+when a phone screenshot only shows a reduced preview.
+
+The edge-guide reader verifies both forward and reversed tangent phases for
+all four quarter-turns, retaining the original carrier's x-axis direction in
+its vector and ordered corners. This does not rotate the preview or relax
+phase, spectral-support, marker or payload checks. Public procedural checks
+cover tilted quarter-turns and guide-free controls; calibration-data checks
+follow each rotated vector through real marker and payload recovery on the
+single guided grid. These are controlled transforms, not proof of general
+photographic recovery.
 
 Device rotation refits the controls without renegotiating the working video
 track. It preserves the selected frame orientation and any frozen frame;

@@ -29,6 +29,14 @@ function capture(p,width,height,scale,angle=0,margin=0) {
   }
   return {pixels,width:W,height:H};
 }
+function turnImage(image,turns) {
+  const {width,height}=image,W=turns%2?height:width,H=turns%2?width:height,pixels=new Uint8Array(image.pixels.length);
+  for(let y=0;y<height;y++)for(let x=0;x<width;x++) {
+    const [u,v]=turns===0?[x,y]:turns===1?[height-1-y,x]:turns===2?[width-1-x,height-1-y]:[y,width-1-x];
+    pixels.set(image.pixels.subarray((x+y*width)*4,(x+y*width)*4+4),(u+v*W)*4);
+  }
+  return {pixels,width:W,height:H};
+}
 const original=source(w,h),before=original.slice(),marked=E.apply(original,w,h),restored=E.apply(marked,w,h,{inverse:true});
 assert.deepEqual(original,before,'input remains unchanged');
 assert.deepEqual(restored,original,'faint integer deltas reverse exactly inside normal encoder headroom');
@@ -85,6 +93,26 @@ for(const scale of[.75,1,1.5])for(const angle of[-7,3,9]) {
   measurements.push(hint.milliseconds);
 }
 console.log('PASS: all nine letterboxed/rotated captures calibrate within 2% scale and 1.5 degrees');
+// Both the guide's vector and its ordered corners must follow the original
+// carrier axes, including when the phone sees a quarter-turned picture.
+const tilted=capture(marked,w,h,1.25,6,24),tiltedControl=capture(original,w,h,1.25,6,24);
+for(let turns=0;turns<4;turns++) {
+  const image=turnImage(tilted,turns),before=image.pixels.slice();
+  const hint=await E.detect(image.pixels,image.width,image.height,{diagnostic:true,maxMilliseconds:2000});
+  assert(hint?.detected,`quarter-turn ${turns} must calibrate`);
+  assert(Math.abs(hint.scale/1.25-1)<.02);
+  const expected=6*Math.PI/180+turns*Math.PI/2;
+  assert(Math.abs(Math.atan2(Math.sin(hint.orientation-expected),Math.cos(hint.orientation-expected)))<.025,
+    'orientation must identify the source x axis, not just an unoriented screen edge');
+  const [a,b]=hint.corners,angle=Math.atan2(b.y-a.y,b.x-a.x);
+  assert(Math.abs(angle-hint.orientation)<1e-10);
+  assert(Math.abs(hint.fx*Math.sin(angle)-hint.fy*Math.cos(angle))<1e-10);
+  assert.equal(hint.diagnostic.accepted.length,4);
+  assert.deepEqual(image.pixels,before);
+  const negative=turnImage(tiltedControl,turns);
+  assert.equal(await E.detect(negative.pixels,negative.width,negative.height,{maxMilliseconds:2000}),null);
+}
+console.log('PASS: all four quarter-turns retain the physical guide vector and corners; rotated guide-free controls rejected');
 const controller=new AbortController();controller.abort();
 await assert.rejects(E.detect(marked,w,h,{signal:controller.signal,diagnostic:true}),error=>error.name==='AbortError');
 assert.equal(await E.detect(marked,w,h,{deadline:Date.now()-1,diagnostic:true}),null);

@@ -2,8 +2,8 @@
 // decides whether a frame contains a complete, checksum-valid payload.
 (function () {
   class PixelStowCamera {
-    constructor({ importImage, report, working, changed, drawGuides, clearFeedback, prepareCapture, clearPreview }) {
-      Object.assign(this, { importImage, report, working, changed, drawGuides, clearFeedback, prepareCapture, clearPreview });
+    constructor({ importImage, report, working, changed, drawGuides, clearFeedback, prepareCapture, clearPreview, saveCapture }) {
+      Object.assign(this, { importImage, report, working, changed, drawGuides, clearFeedback, prepareCapture, clearPreview, saveCapture });
       this.session = null;
       this.devices = [];
       this.devicesKnown = false;
@@ -48,6 +48,8 @@
       this.calibrationLight = document.querySelector("#camera-calibration");
       this.signalCanvas = document.querySelector("#camera-signal");
       this.signalReadout = document.querySelector("#camera-signal-readout");
+      this.signalSave = document.querySelector("#camera-save-signal");
+      this.signalSave.addEventListener("click", () => this.saveSignalFrame());
       this.debugEnabled = false;
       this.debugToggle = document.querySelector("#debug-mode");
       this.debugToggle.addEventListener("click", () => this.setDebugEnabled(!this.debugEnabled));
@@ -1241,6 +1243,25 @@
       if (this.session && this.session !== session) return;
       if (this.signalCanvas) this.signalCanvas.hidden = true;
       if (this.signalReadout) this.signalReadout.hidden = true;
+      if (this.signalSave) this.signalSave.hidden = true;
+    }
+
+    async saveSignalFrame() {
+      const session = this.session, entry = session?.signalHold?.entry;
+      if (!this.debugEnabled || !entry || session.handingOff || this.savingSignal || !this.saveCapture) return;
+      this.savingSignal = true;
+      this.signalSave.disabled = true;
+      try {
+        // Export the actual detector input, never the small preview, the
+        // diagnostic overlay, a new video frame or the phone's still camera.
+        await this.saveCapture(entry.image, "pixelstow-camera-frame-" + entry.frameNumber + "-" +
+          entry.image.width + "x" + entry.image.height + ".png");
+      } catch (error) {
+        if (this.session === session) this.progress.textContent = error?.message || "Could not save the sampled frame.";
+      } finally {
+        this.savingSignal = false;
+        if (this.session === session) this.renderSignal(session);
+      }
     }
 
     showSignal(session, entry, measurement) {
@@ -1299,7 +1320,8 @@
       } else if (held) draw(peak?.band, "#ffca64", "#ffca6426", true);
       canvas.hidden = !held || !peak && !measurement?.detected;
       const age = Math.max(0, Date.now() - entry.capturedAt) / 1000;
-      const frame = "Frame " + entry.frameNumber + (held ? " · held" : " · " + age.toFixed(1) + "s old");
+      const frame = "Frame " + entry.frameNumber + " · " + entry.image.width + " × " + entry.image.height + "px" +
+        (held ? " · held" : " · " + age.toFixed(1) + "s old");
       let text = measurement?.detected ? "Green: calibration matched · ~" + measurement.scale.toFixed(2) +
         "× scale · four matching edges." : "Calibration NOT acquired. ";
       if (!measurement?.detected) text += peak ? "Amber: rejected search strip · response " + peak.score.toFixed(2) + " · ~" + peak.scale.toFixed(2) +
@@ -1313,6 +1335,8 @@
       this.signalReadout.disabled = Boolean(session.calibrationHold || session.handingOff);
       this.signalReadout.setAttribute("aria-label", session.signalHold ? "Resume scanning" : "Inspect sampled diagnostic frame");
       this.signalReadout.hidden = false;
+      this.signalSave.hidden = !held || session.signalHold?.entry !== entry || !this.saveCapture;
+      this.signalSave.disabled = Boolean(this.savingSignal || session.handingOff);
     }
 
     updateCalibrationLight(session, entry) {
