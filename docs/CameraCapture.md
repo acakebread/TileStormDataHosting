@@ -315,7 +315,11 @@ adds a real portrait video from a synthetic canvas camera, including a camera
 that ignores landscape preferences. It verifies a wide preview before any
 rotation, exact native centre-crop pixels with and without zoom, source/manual
 capture and preserved manual view rotation after a physical-orientation round
-trip. These checks never access hardware.
+trip. It first caches the former camera-script URL and verifies that the current
+page loads the repaired script using its updated version URL. Keep this URL in
+`pixelstow.html` current when changing camera behavior: the public host caches
+scripts for ten minutes. Local commits also need to reach the published branch
+before they can affect the public phone page. These checks never access hardware.
 Set `PIXELSTOW_PLAYWRIGHT` to a Playwright module file and `PIXELSTOW_CHROME` to a
 Chrome executable to use an existing runtime instead of the package defaults.
 Actual decoding

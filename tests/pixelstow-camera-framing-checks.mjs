@@ -6,8 +6,17 @@ import path from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 const root=fileURLToPath(new URL('../',import.meta.url));
 const {chromium}=await import(process.env.PIXELSTOW_PLAYWRIGHT?pathToFileURL(process.env.PIXELSTOW_PLAYWRIGHT).href:'playwright');
+const oldCameraUrl='/pixelstow-camera.js?v=20261017-view-rotation',cameraRequests=[];
 const server=http.createServer(async(req,res)=>{
   try{
+    if(req.url==='/camera-cache-check.html'){
+      res.setHeader('Content-Type','text/html');res.end('<script src="'+oldCameraUrl+'"></script>');return;
+    }
+    if(req.url===oldCameraUrl){
+      cameraRequests.push(req.url);res.setHeader('Content-Type','text/javascript');res.setHeader('Cache-Control','public, max-age=600');
+      res.end('window.cachedOldCamera = true;');return;
+    }
+    if(req.url.startsWith('/pixelstow-camera.js'))cameraRequests.push(req.url);
     const file=path.resolve(root,'.'+new URL(req.url,'http://localhost').pathname);
     if(path.relative(root,file).startsWith('..'))throw Error('Outside test root');
     res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.html')?'text/html':'application/octet-stream');
@@ -22,7 +31,11 @@ try{
   const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true,
     userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 Version/26.0 Mobile/15E148 Safari/604.1'});
   const errors=[];page.on('pageerror',error=>errors.push(error.message));
+  await page.goto('http://127.0.0.1:'+server.address().port+'/camera-cache-check.html');
+  assert(await page.evaluate(()=>window.cachedOldCamera),'the old camera URL must be cached before testing the repaired page');
   await page.goto('http://127.0.0.1:'+server.address().port+'/pixelstow.html');
+  assert.equal(await page.evaluate(()=>typeof PixelStowCamera),'function','the repaired page must bypass the old cached camera script');
+  assert.equal(cameraRequests.length,2);assert.notEqual(cameraRequests[1],oldCameraUrl);
   await page.evaluate(()=>{
     window.portraitSensor=document.createElement('canvas');portraitSensor.width=480;portraitSensor.height=640;
     const ctx=portraitSensor.getContext('2d'),image=ctx.createImageData(480,640);
