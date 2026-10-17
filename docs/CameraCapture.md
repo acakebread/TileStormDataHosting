@@ -84,11 +84,15 @@ screens, feedback scrolls within the existing controls column. Viewport changes
 refit the outlined region without stretching it.
 
 Device rotation refits the controls without renegotiating the working video
-track. It preserves an explicitly chosen view rotation and any frozen frame;
-unheld searches restart with fresh pixels. **Rotate view**
-applies a manual 90-degree display rotation; captured pixels retain the camera's
-original orientation and dimensions. Scanning resumes with a fresh frame after
-the adjustment. These controls do not modify the native **Take photo** path.
+track. It preserves the selected frame orientation and any frozen frame;
+unheld searches restart with fresh pixels. **Rotate view** switches the sampling
+area between landscape and portrait. It changes the aperture's aspect ratio,
+without rotating the browser's already-upright video or the captured pixels.
+Every setting keeps vertical up while the phone is upright. Changing the frame
+discards old-crop searches and resumes with native pixels from the new region.
+The control is disabled while a calibration/debug frame is frozen, so its exact
+acquisition and active recovery stay unchanged. These controls do not modify the
+native **Take photo** path.
 
 On HTTP/HTTPS, a disposable marker worker checks frequency evidence and locates
 the selected format's patches, retaining translation/affine/perspective fits without reading any
@@ -314,7 +318,7 @@ landscape/portrait round trip. `node tests/pixelstow-camera-framing-checks.mjs`
 adds a real portrait video from a synthetic canvas camera, including a camera
 that ignores landscape preferences. It verifies a wide preview before any
 rotation, exact native centre-crop pixels with and without zoom, source/manual
-capture and preserved manual view rotation after a physical-orientation round
+capture and preserved frame selection after a physical-orientation round
 trip. It first caches the former camera-script URL and verifies that the current
 page loads the repaired script using its updated version URL. Keep this URL in
 `pixelstow.html` current when changing camera behavior: the public host caches

@@ -41,6 +41,7 @@ try{
     const ctx=portraitSensor.getContext('2d'),image=ctx.createImageData(480,640);
     for(let y=0;y<640;y++)for(let x=0;x<480;x++)image.data.set([x%251,y%251,(3*x+5*y)%251,255],(x+y*480)*4);
     ctx.putImageData(image,0,0);
+    ctx.fillStyle='white';ctx.font='bold 32px sans-serif';ctx.fillText('UP ↑',180,175);
     window.formatChanges=[];window.sensorTracks=[];
     navigator.mediaDevices.enumerateDevices=async()=>[{kind:'videoinput',deviceId:'upright',label:'Back Wide Camera'}];
     navigator.mediaDevices.getUserMedia=async()=>{
@@ -56,7 +57,9 @@ try{
     window.checkPortraitFrame=(zoom=1)=>{
       const raw=document.createElement('canvas');raw.width=camera.video.videoWidth;raw.height=camera.video.videoHeight;
       raw.getContext('2d').drawImage(camera.video,0,0);
-      const expected=raw.getContext('2d').getImageData(zoom===1?0:120,zoom===1?140:230,480/zoom,360/zoom).data,frame=camera.captureFrame();
+      const portrait=camera.session.rotation%180!==0,height=portrait?640:360;
+      const width=480/zoom,cropHeight=height/zoom;
+      const expected=raw.getContext('2d').getImageData((480-width)/2,(640-cropHeight)/2,width,cropHeight).data,frame=camera.captureFrame();
       return {width:frame.width,height:frame.height,exact:frame.exact,
         samePixels:frame.pixels.length===expected.length&&frame.pixels.every((value,i)=>value===expected[i])};
     };
@@ -82,7 +85,21 @@ try{
     'zoom must capture exactly the narrower visible centre without resampling');
   await page.evaluate(()=>camera.setZoom(camera.session,1));
   await page.locator('#rotate-camera').click();
-  assert.deepEqual(await page.evaluate(()=>checkPortraitFrame()),{width:480,height:360,exact:true,samePixels:true},'Rotate view must retain the same captured pixels');
+  assert.deepEqual(await page.evaluate(()=>checkPortraitFrame()),{width:480,height:640,exact:true,samePixels:true},
+    'Rotate view must select portrait sampling while leaving every camera pixel upright');
+  assert(await page.evaluate(()=>!camera.video.style.transform.includes('rotate(')),'changing the aperture must not add another rotation to the camera image');
+  assert(await page.evaluate(()=>{const frame=camera.frame.getBoundingClientRect();return frame.height>frame.width;}),'the selected portrait aperture must also appear portrait');
+  await page.evaluate(()=>camera.setZoom(camera.session,2));
+  assert.deepEqual(await page.evaluate(()=>checkPortraitFrame(2)),{width:240,height:320,exact:true,samePixels:true});
+  await page.evaluate(()=>camera.setZoom(camera.session,1));
+  await page.screenshot({path:path.join(output,'upright-portrait-aperture.png')});
+  for(const rotation of [180,270,0]){
+    await page.locator('#rotate-camera').click();
+    assert.equal(await page.evaluate(()=>camera.session.rotation),rotation);
+    assert.deepEqual(await page.evaluate(()=>checkPortraitFrame()),{width:480,height:rotation%180?640:360,exact:true,samePixels:true});
+    assert(await page.evaluate(()=>!camera.video.style.transform.includes('rotate(')),'all four frame settings must keep vertical up');
+  }
+  await page.locator('#rotate-camera').click();
   await page.setViewportSize({width:844,height:390});
   await page.waitForFunction(()=>!camera.session.portrait);
   await page.setViewportSize({width:390,height:844});
@@ -94,8 +111,11 @@ try{
   await page.locator('#capture-frame').click();await page.waitForFunction(()=>!camera.active&&captured.length===1);
   assert.deepEqual(await page.evaluate(()=>[captured[0].width,captured[0].height]),[480,360]);
   await page.locator('#camera-source').click();await ready();await wide();
+  await page.locator('#rotate-camera').click();
+  assert.deepEqual(await page.evaluate(()=>checkPortraitFrame()),{width:480,height:640,exact:true,samePixels:true});
   await page.locator('#capture-frame').click();await page.waitForFunction(()=>!camera.active&&captured.length===2);
+  assert.deepEqual(await page.evaluate(()=>[captured[1].width,captured[1].height]),[480,640]);
   assert(await page.evaluate(()=>sensorTracks.every(track=>track.readyState==='ended')));
   assert.deepEqual(errors,[]);
-  console.log('PASS: a real portrait video opens wide while the phone is upright; scan/source capture preserves exact visible native pixels, view rotation and physical round trips');
+  console.log('PASS: all four frame settings keep vertical up in real portrait video and exact native crops; scan/source capture, zoom, cached scripts and physical round trips remain correct');
 }finally{await browser?.close();await new Promise(resolve=>server.close(resolve));}

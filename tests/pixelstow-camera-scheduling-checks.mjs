@@ -26,7 +26,7 @@ const entry=(id,score=100)=>({image:image(id),scan:scan(score),score,frameNumber
   assert.equal(zoomed.sx,100);assert.equal(zoomed.sy,50);assert.equal(zoomed.sw,200);assert.equal(zoomed.sh,100);
   camera.session.rotation=90;
   const turned=camera.visibleVideoRect(400,200,2);
-  assert.equal(turned.sw,200);assert.equal(turned.sh,200);assert.equal(turned.sx,100);assert.equal(turned.sy,0);
+  assert.equal(turned.sw,100);assert.equal(turned.sh,100);assert.equal(turned.sx,150);assert.equal(turned.sy,50);
   assert.equal(camera.snapZoom(2.24,{min:1,max:8,step:0.5}),2);
   assert.equal(camera.snapZoom(9,{min:1,max:4,step:0}),4);
   const hardware={zoom:1},track={getCapabilities:()=>({zoom:{min:1,max:6,step:0.5}}),getSettings:()=>({zoom:1})};

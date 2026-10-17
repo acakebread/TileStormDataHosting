@@ -106,17 +106,19 @@ try {
     Object.defineProperties(canvas,{readyState:{value:2},videoWidth:{value:96},videoHeight:{value:64}});
     camera.video=canvas;
     try {
-      const base=camera.captureFrame(), results=[], search=new AbortController();camera.session.abort=search;
+      const results=[], search=new AbortController();camera.session.abort=search;
       for (const rotation of [90,180,270,0]) {
         camera.rotateButton.click();
-        const frame=camera.captureFrame();
-        results.push(camera.session.rotation===rotation&&!search.signal.aborted&&frame.width===base.width&&frame.height===base.height&&frame.pixels.every((v,i)=>v===base.pixels[i]));
+        const frame=camera.captureFrame(),portrait=rotation%180!==0,width=portrait?43:96;
+        const expected=ctx.getImageData(portrait?26:0,0,width,64).data;
+        results.push(camera.session.rotation===rotation&&search.signal.aborted&&frame.width===width&&frame.height===64&&
+          !camera.video.style.transform.includes('rotate(')&&frame.pixels.every((v,i)=>v===expected[i]));
       }
       return results.every(Boolean);
     } finally {camera.video=video;camera.session.rotation=0;camera.layoutPreview();}
   });
-  assert(rotationCheck,'view rotation must preserve capture orientation, dimensions and every camera pixel');
-  console.log('PASS: all four view rotations retain the exact unrotated asymmetric camera raster');
+  assert(rotationCheck,'frame changes must sample the selected upright native pixels and invalidate the previous crop search');
+  console.log('PASS: all four frame settings preserve upright asymmetric pixels without a display rotation and cancel old-crop searches');
   await page.evaluate(async () => {
     window.unavailableDeviceId = camera.devices.at(-1).deviceId;
     const enumerate = navigator.mediaDevices.enumerateDevices.bind(navigator.mediaDevices);

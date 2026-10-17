@@ -116,12 +116,15 @@
       this.pauseButton.addEventListener("click", () => this.togglePause());
       this.rotateButton.addEventListener("click", () => {
         const session = this.session;
-        if (!session?.ready || session.adjusting || session.handingOff || this.working()) return;
+        if (!session?.ready || session.adjusting || session.handingOff || session.calibrationHold || session.signalHold || this.working()) return;
         session.rotation = (session.rotation + 90) % 360;
+        // Rotate the sampling aperture, not the browser's already-upright video.
+        // Old crops and their marker coordinates cannot follow the new aperture.
+        this.cancelSearches(session, true);
+        session.lastTime = -1;
         this.layoutPreview();
-        if (!session.calibrationHold && !session.signalHold)
-          this.progress.textContent = session.purpose === "source" ? "View rotated. Frame your source photo, then capture it."
-            : "View rotated. Keep all four picture corners inside the guides and hold steady.";
+        this.progress.textContent = session.purpose === "source" ? "Framing changed. Frame your source photo, then capture it."
+          : "Framing changed. Keep all four picture corners inside the guides and hold steady.";
         this.schedule(session, 900);
       });
       this.switchButton.addEventListener("click", () => this.switchCamera());
@@ -490,8 +493,7 @@
       const source = this.videoFrameRect(width, height);
       this.frame.hidden = false;
       this.video.style.visibility = ready ? "visible" : "hidden";
-      const sideways = session.rotation % 180 !== 0;
-      const frameWidth = sideways ? source.sh : source.sw, frameHeight = sideways ? source.sw : source.sh;
+      const frameWidth = source.sw, frameHeight = source.sh;
       const viewW = this.view.clientWidth || 1;
       const viewH = this.fitPortraitPreview(frameWidth, frameHeight) || this.view.clientHeight;
       // Hardware zoom is already in the video frames. A preview zoom enlarges
@@ -511,7 +513,7 @@
       this.video.style.clipPath = "inset(" + (source.sy / height * 100) + "% " +
         ((width - source.sx - source.sw) / width * 100) + "% " +
         ((height - source.sy - source.sh) / height * 100) + "% " + (source.sx / width * 100) + "%)";
-      this.video.style.transform = "translate(-50%, -50%) rotate(" + session.rotation + "deg)" +
+      this.video.style.transform = "translate(-50%, -50%)" +
         (zoom > 1.001 ? " scale(" + zoom + ")" : "");
       Object.assign(this.frame.style, {
         left: left + "px", top: top + "px",
@@ -735,22 +737,24 @@
     }
 
     videoFrameRect(rawWidth, rawHeight) {
-      // A phone's raster can remain portrait regardless of requested dimensions.
-      // Use a native-pixel landscape centre, shared by preview and capture.
-      const sw = rawWidth, sh = this.nativePhotoCapture && rawHeight > rawWidth ? Math.max(1, Math.round(rawWidth * 3 / 4)) : rawHeight;
-      return { sx: 0, sy: Math.floor((rawHeight - sh) / 2), sw, sh };
+      // Change the aperture's aspect without turning the image. A portrait phone
+      // feed starts with a landscape centre; Rotate view selects portrait pixels.
+      const initialAspect = this.nativePhotoCapture && rawHeight > rawWidth ? 4 / 3 : rawWidth / rawHeight;
+      const aspect = (this.session?.rotation || 0) % 180 ? 1 / initialAspect : initialAspect;
+      const sw = Math.max(1, Math.min(rawWidth, Math.round(rawHeight * aspect)));
+      const sh = Math.max(1, Math.min(rawHeight, Math.round(rawWidth / aspect)));
+      return { sx: Math.floor((rawWidth - sw) / 2), sy: Math.floor((rawHeight - sh) / 2), sw, sh };
     }
 
     visibleVideoRect(rawWidth, rawHeight, zoom) {
       const source = this.videoFrameRect(rawWidth, rawHeight);
       if (!(zoom > 1.001)) return source;
-      const rotation = this.session?.rotation || 0, sideways = rotation % 180 !== 0;
-      const frameWidth = sideways ? source.sh : source.sw, frameHeight = sideways ? source.sw : source.sh;
+      const frameWidth = source.sw, frameHeight = source.sh;
       const viewW = this.view?.clientWidth || frameWidth, viewH = this.view?.clientHeight || frameHeight;
       const fit = Math.min(viewW / frameWidth, viewH / frameHeight) * zoom;
       const shownW = Math.min(frameWidth, viewW / fit), shownH = Math.min(frameHeight, viewH / fit);
-      const sw = Math.max(1, Math.min(source.sw, Math.round(sideways ? shownH : shownW)));
-      const sh = Math.max(1, Math.min(source.sh, Math.round(sideways ? shownW : shownH)));
+      const sw = Math.max(1, Math.min(source.sw, Math.round(shownW)));
+      const sh = Math.max(1, Math.min(source.sh, Math.round(shownH)));
       const sx = Math.max(0, Math.min(rawWidth - sw, Math.floor((rawWidth - sw) / 2)));
       const sy = Math.max(0, Math.min(rawHeight - sh, Math.floor((rawHeight - sh) / 2)));
       return { sx, sy, sw, sh };
@@ -858,9 +862,11 @@
       this.pauseButton.title = pauseLabel;
       this.pauseButton.querySelector(".pause-icon").toggleAttribute("hidden", Boolean(session?.paused));
       this.pauseButton.querySelector(".play-icon").toggleAttribute("hidden", !session?.paused);
-      this.rotateButton.disabled = locked || !ready || Boolean(this.switchOperation || session?.handingOff);
+      const changingBlocked = locked || !ready || Boolean(this.switchOperation || session?.handingOff);
+      this.rotateButton.disabled = changingBlocked || Boolean(held);
+      this.rotateButton.title = held ? "Resume the live camera to change framing" : "Switch landscape and portrait framing; keep the camera image upright";
       const next = this.nextDevices(session?.deviceId)[0];
-      this.switchButton.disabled = this.rotateButton.disabled || (!this.nativePhotoCapture && this.devicesKnown && !next);
+      this.switchButton.disabled = changingBlocked || (!this.nativePhotoCapture && this.devicesKnown && !next);
       this.switchButton.title = next?.label ? "Switch to " + next.label : this.switchButton.disabled && ready
         ? "No other camera is available to this browser" : "Switch camera";
       this.switchButton.setAttribute("aria-label", this.switchButton.title);
@@ -1019,8 +1025,8 @@
       if (this.session?.adjusting || this.video.readyState < 2 || !rawWidth || !rawHeight) throw new Error("Wait for the live camera picture, then try again.");
       const zoom = this.session?.zoomMode === "simulated" ? (this.session.zoom || 1) : 1;
       const source = this.visibleVideoRect(rawWidth, rawHeight, zoom);
-      // Rotate view is presentation only. Calibration, markers and manual reads
-      // all receive the camera's original orientation and pixel lattice.
+      // Preview and capture select the same upright native-pixel aperture.
+      // Calibration and markers never receive a rotated or resampled raster.
       const width = source.sw, height = source.sh;
       if (width * height > PixelStow.getLimits().inputPixels) throw new Error("This camera frame exceeds the 32 megapixel photo input limit.");
       const canvas = this.captureCanvas;
@@ -1100,13 +1106,12 @@
     layoutFrozenFrame() {
       const canvas = this.frozenFrame;
       if (!canvas?.style || !this.view || !canvas.width || !canvas.height) return;
-      const rotation = this.session?.rotation || 0, sideways = rotation % 180 !== 0;
-      const width = sideways ? canvas.height : canvas.width, height = sideways ? canvas.width : canvas.height;
+      const width = canvas.width, height = canvas.height;
       const viewW = this.view.clientWidth, viewH = this.view.clientHeight;
       const fit = Math.min(viewW / width, viewH / height);
       Object.assign(canvas.style, { inset: "auto", left: "50%", top: "50%",
         width: canvas.width * fit + "px", height: canvas.height * fit + "px",
-        transform: "translate(-50%, -50%) rotate(" + rotation + "deg)" });
+        transform: "translate(-50%, -50%)" });
       Object.assign(this.frame.style, { left: (viewW - width * fit) / 2 + "px", top: (viewH - height * fit) / 2 + "px",
         width: width * fit + "px", height: height * fit + "px" });
       this.placeCalibration((viewW - width * fit) / 2, (viewH - height * fit) / 2, width * fit);
@@ -1126,6 +1131,7 @@
       if (session.scanningEntry && session.scanningEntry !== entry) session.abort?.abort();
       if (session.readEntry && session.readEntry !== entry) session.readAbort?.abort();
       this.captureButton.toggleAttribute("data-calibration-hold", true);
+      if (this.rotateButton) this.rotateButton.disabled = true;
       hold.timer = setTimeout(() => this.finishCalibrationHold(session, hold), 3000);
     }
 
@@ -1147,7 +1153,7 @@
       this.clearCalibrationHold(session);
       this.clearSignal(session);
       this.updateCalibrationLight(session);
-      this.layoutPreview();
+      this.sync();
       this.progress.textContent = running ? "This calibrated frame reached its recovery time limit. Scanning resumed…"
         : "This calibrated frame did not produce a readable fit. Scanning resumed…";
       this.readProgress.update(this.progress.textContent);
@@ -1266,14 +1272,10 @@
       const rect = {
         x: parseFloat(this.frame.style.left) || 0, y: parseFloat(this.frame.style.top) || 0,
         w: parseFloat(this.frame.style.width) || width, h: parseFloat(this.frame.style.height) || height };
-      const rotation = (session.rotation || 0) * Math.PI / 180, cs = Math.cos(rotation), sn = Math.sin(rotation);
-      const sideways = (session.rotation || 0) % 180 !== 0;
-      const scale = Math.min(rect.w / (sideways ? entry.image.height : entry.image.width),
-        rect.h / (sideways ? entry.image.width : entry.image.height));
+      const scale = Math.min(rect.w / entry.image.width, rect.h / entry.image.height);
       const project = p => {
         const x = p.x + .5 - entry.image.width / 2, y = p.y + .5 - entry.image.height / 2;
-        return { x: rect.x + rect.w / 2 + scale * (cs * x - sn * y),
-          y: rect.y + rect.h / 2 + scale * (sn * x + cs * y) };
+        return { x: rect.x + rect.w / 2 + scale * x, y: rect.y + rect.h / 2 + scale * y };
       };
       const draw = (points, colour, fill, dashed) => {
         if (!points?.length || points.some(p => !Number.isFinite(p.x + p.y))) return;
@@ -1334,7 +1336,7 @@
       canvas.width = Math.round(image.width * factor); canvas.height = Math.round(image.height * factor);
       const context = canvas.getContext("2d", { willReadFrequently: true });
       context.imageSmoothingEnabled = true; context.imageSmoothingQuality = "high";
-      // Same frozen raster, including rotation. Never sample a later video frame.
+      // Same upright frozen raster. Never sample a later video frame.
       context.drawImage(this.captureCanvas, 0, 0, canvas.width, canvas.height);
       return { pixels: new Uint8Array(context.getImageData(0, 0, canvas.width, canvas.height).data.buffer), width: canvas.width, height: canvas.height };
     }

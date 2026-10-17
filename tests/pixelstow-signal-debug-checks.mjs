@@ -132,10 +132,10 @@ try{
   assert(await page.evaluate(()=>camera.session.calibrationHold?.entry===heldTestEntry&&!camera.frozenFrame.hidden));
   assert(await page.evaluate(()=>heldGuideDiagnostic===false&&camera.signalCanvas.hidden&&camera.signalReadout.hidden),
     'normal calibration still freezes its frame with debug collection and overlay disabled');
-  await page.locator('#rotate-camera').click();
-  assert(await page.evaluate(()=>camera.session.rotation===90&&camera.session.calibrationHold?.entry===heldTestEntry&&
-    camera.frozenFrame.style.transform.includes('rotate(90deg)')&&heldMarkerCalls.length===1&&!heldMarkerCalls[0].options.signal.aborted),
-    'rotating a frozen view must preserve its acquired raster and active recovery');
+  assert(await page.locator('#rotate-camera').isDisabled(),'framing cannot change the pixels of a frozen calibration acquisition');
+  assert(await page.evaluate(()=>camera.session.rotation===0&&camera.session.calibrationHold?.entry===heldTestEntry&&
+    !camera.frozenFrame.style.transform.includes('rotate(')&&heldMarkerCalls.length===1&&!heldMarkerCalls[0].options.signal.aborted),
+    'frozen views must remain upright and preserve their acquired raster and active recovery');
   await page.waitForTimeout(3200);
   assert(await page.evaluate(()=>camera.session.calibrationHold?.entry===heldTestEntry&&heldMarkerCalls.length===1),
     'a real display hold must remain frozen beyond three seconds while marker recovery is active');
