@@ -884,10 +884,12 @@
         return;
       }
       const deviceId = options.deviceId ?? null;
+      // Phone Decode starts with a portrait aperture; camera pixels stay upright.
       const session = { facing, purpose, deviceId, deviceLabel: this.devices.find(device => device.deviceId === deviceId)?.label || "",
         manualCapture: Boolean(options.manualCapture), ready: false,
         paused: purpose === "source" || Boolean(options.manualCapture || options.paused) || !this.backgroundAvailable, frames: 0, lastTime: -1,
-        rotation: 0, portrait: this.isPortrait(), history: [], appraised: 0 };
+        rotation: this.nativePhotoCapture && purpose === "read" ? 90 : 0,
+        portrait: this.isPortrait(), history: [], appraised: 0 };
       this.session = session;
       this.frozenFrame.hidden = true;
       this.updateCalibrationLight(session);

@@ -391,13 +391,14 @@ try {
       return stream;
     };
   });
-  const landscapeFeed = async () => {
+  const landscapeFeed = async (portrait = false) => {
     const state = await phone.evaluate(() => {
       const frame = camera.frame.getBoundingClientRect();
       return { width: camera.video.videoWidth, height: camera.video.videoHeight, frameWidth: frame.width, frameHeight: frame.height,
         requests: phoneCameraRequests, adjustments: phoneCameraAdjustments };
     });
-    assert(state.frameWidth>state.frameHeight,'phone preview must be landscape before any physical rotation: '+JSON.stringify(state));
+    assert(portrait ? state.frameHeight>state.frameWidth : state.frameWidth>state.frameHeight,
+      'phone preview must use its mode default before any physical rotation: '+JSON.stringify(state));
     assert(state.requests.length>0);
     for (const {video} of state.requests) {
       assert(video.width.ideal>video.height.ideal);
@@ -408,7 +409,7 @@ try {
   };
   await phone.locator('#open-camera').click();
   await phone.waitForFunction(() => camera.session?.ready && !document.querySelector('#capture-frame').disabled);
-  await landscapeFeed();
+  await landscapeFeed(true);
   await phone.screenshot({ path: path.join(screenshots, 'phone-portrait-startup.png') });
   await stableFeedback(phone);
   const [picker] = await Promise.all([phone.waitForEvent('filechooser'), phone.locator('#camera-take-photo').click()]);

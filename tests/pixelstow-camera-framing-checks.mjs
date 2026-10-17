@@ -78,7 +78,13 @@ try{
     assert.deepEqual(await page.evaluate(()=>checkPortraitFrame()),{width:480,height:360,exact:true,samePixels:true},
       'capture must match the visible centre at native pixels, without rotating or resampling');
   };
-  await page.locator('#open-camera').click();await ready();await wide();
+  await page.locator('#open-camera').click();await ready();
+  assert.equal(await page.evaluate(()=>camera.session.rotation),90,'phone Decode must start with portrait framing');
+  assert.deepEqual(await page.evaluate(()=>checkPortraitFrame()),{width:480,height:640,exact:true,samePixels:true});
+  assert(await page.evaluate(()=>{const frame=camera.frame.getBoundingClientRect();return frame.height>frame.width&&!camera.video.style.transform.includes('rotate(');}),
+    'Decode must open a portrait frame while keeping the camera image upright');
+  await page.screenshot({path:path.join(output,'decode-portrait-default.png')});
+  await page.locator('#rotate-camera').click();await wide();
   await page.screenshot({path:path.join(output,'upright-portrait-sensor.png')});
   await page.evaluate(()=>camera.setZoom(camera.session,2));
   assert.deepEqual(await page.evaluate(()=>checkPortraitFrame(2)),{width:240,height:180,exact:true,samePixels:true},
@@ -93,7 +99,7 @@ try{
   assert.deepEqual(await page.evaluate(()=>checkPortraitFrame(2)),{width:240,height:320,exact:true,samePixels:true});
   await page.evaluate(()=>camera.setZoom(camera.session,1));
   await page.screenshot({path:path.join(output,'upright-portrait-aperture.png')});
-  for(const rotation of [180,270,0]){
+  for(const rotation of [0,90,180]){
     await page.locator('#rotate-camera').click();
     assert.equal(await page.evaluate(()=>camera.session.rotation),rotation);
     assert.deepEqual(await page.evaluate(()=>checkPortraitFrame()),{width:480,height:rotation%180?640:360,exact:true,samePixels:true});
@@ -104,7 +110,7 @@ try{
   await page.waitForFunction(()=>!camera.session.portrait);
   await page.setViewportSize({width:390,height:844});
   await page.waitForFunction(()=>camera.session.portrait);
-  assert.equal(await page.evaluate(()=>camera.session.rotation),90,'physical rotation must not reset an explicitly rotated view');
+  assert.equal(await page.evaluate(()=>camera.session.rotation),270,'physical rotation must not reset an explicitly rotated view');
   for(let i=0;i<3;i++)await page.locator('#rotate-camera').click();
   await wide();
   assert.equal(await page.evaluate(()=>formatChanges.length),0,'device rotation must not renegotiate or reset the working camera feed');
@@ -115,6 +121,10 @@ try{
   assert.deepEqual(await page.evaluate(()=>checkPortraitFrame()),{width:480,height:640,exact:true,samePixels:true});
   await page.locator('#capture-frame').click();await page.waitForFunction(()=>!camera.active&&captured.length===2);
   assert.deepEqual(await page.evaluate(()=>[captured[1].width,captured[1].height]),[480,640]);
+  await page.locator('#open-camera').click();await ready();
+  assert.equal(await page.evaluate(()=>camera.session.rotation),90,'reopening Decode must restore its portrait default after Create or a manual frame change');
+  assert.deepEqual(await page.evaluate(()=>checkPortraitFrame()),{width:480,height:640,exact:true,samePixels:true});
+  await page.locator('#close-camera').click();
   assert(await page.evaluate(()=>sensorTracks.every(track=>track.readyState==='ended')));
   assert.deepEqual(errors,[]);
   console.log('PASS: all four frame settings keep vertical up in real portrait video and exact native crops; scan/source capture, zoom, cached scripts and physical round trips remain correct');

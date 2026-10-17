@@ -27,15 +27,17 @@ are directed to Browse for saved photos. The picker purpose is cleared after
 selection or cancellation. Captured image pixels are preserved.
 
 **Capture** and **Photo** request video only, preferring the rear camera and a
-2560 × 1920 landscape feed, including when the phone is held upright. The initial
-preview reserves a landscape rectangle while permission/device startup completes;
-no physical rotation is needed to select the landscape preference. Sharpness and
-hardware-zoom adjustments retain the stream's resolution/aspect-ratio constraints.
+2560 × 1920 landscape feed, including when the phone is held upright. On phones,
+**Decode** opens with portrait framing and **Create** with landscape framing,
+including the reserved preview area while permission/device startup completes.
+These defaults select the sampling aperture and do not rotate the camera image.
+Sharpness and hardware-zoom adjustments retain the stream's resolution/aspect-ratio constraints.
 Constraints are ideals: actual resolution and orientation depend on the browser/device.
-When a phone supplies a portrait raster, preview and capture share its central
-4:3 landscape region. The scene stays upright and captured pixels are cropped
-at native resolution, without rotating or stretching them. Landscape feeds retain
-their full frame. This framing uses actual video dimensions rather than depending
+When a phone supplies a portrait raster, landscape framing uses its central
+4:3 region and portrait framing uses the corresponding 3:4 region. Preview and
+capture share that region. The scene stays upright and captured pixels are cropped
+at native resolution, without rotating or stretching them. Landscape framing
+retains the full frame of landscape feeds. This uses actual video dimensions rather than depending
 on the camera honoring a landscape request.
 If camera startup reports a format/read error, acquisition retries the same
 selected device with no resolution/aspect-ratio preferences, then a 640 × 480,
@@ -55,7 +57,7 @@ camera zoom and the captured frames already include it. A camera that freezes
 and restarts to apply zoom keeps the existing picture moving instead: the
 preview enlarges around the centre, up to 4×, and the captured raster is the
 visible centre at the video's own pixels, not a resampled enlargement. Opening
-or switching cameras starts again at the unzoomed landscape frame. A zoom change drops queued scan frames without
+or switching cameras starts again at the mode's unzoomed default frame. A zoom change drops queued scan frames without
 shortening the initial framing wait. In portrait the frame uses the full width of the camera column; the scan
 notes take the height that remains. Captures use the outlined region's native pixels, without resizing or JPEG
 conversion. The browser may already scale/process the sensor feed; video detail
@@ -316,8 +318,9 @@ also checks landscape acquisition before any rotation on an upright phone,
 source-camera switching, retained constraints during sharpening/zoom and a
 landscape/portrait round trip. `node tests/pixelstow-camera-framing-checks.mjs`
 adds a real portrait video from a synthetic canvas camera, including a camera
-that ignores landscape preferences. It verifies a wide preview before any
-rotation, exact native centre-crop pixels with and without zoom, source/manual
+that ignores landscape preferences. It verifies Decode's portrait default,
+Create's landscape default, exact upright native centre-crop pixels at every
+frame setting with and without zoom, source/manual
 capture and preserved frame selection after a physical-orientation round
 trip. It first caches the former camera-script URL and verifies that the current
 page loads the repaired script using its updated version URL. Keep this URL in
