@@ -86,6 +86,38 @@
       root.visualViewport?.addEventListener("resize", () => { if (this.panel.open) resize(); });
       this.syncToggleSource();
     }
+    static async imagePng(pixels, width, height, geometry) {
+      if (!geometry) return root.PixelStow.writePng(pixels, width, height);
+      const w = geometry.originalWidth, h = geometry.originalHeight, m = geometry.matrix;
+      if (!Number.isInteger(w) || !Number.isInteger(h) || w <= 0 || h <= 0 ||
+        w * h > root.PixelStow.getLimits().inputPixels || m?.length !== 9 || m.some(v => !Number.isFinite(v)))
+        throw new Error("The recovered picture bounds are invalid.");
+      // Export the same isolated, flat picture shown by the CSS homography,
+      // independently of zoom, analysis margins or the browser background.
+      const output = new Uint8Array(w * h * 4), sum = new Float64Array(4);
+      for (let y = 0; y < h; y++) {
+        if ((y & 31) === 0) await new Promise(resolve => setTimeout(resolve, 0));
+        for (let x = 0; x < w; x++) {
+          const d = m[6]*x + m[7]*y + m[8], cx = (m[0]*x + m[1]*y + m[2])/d, cy = (m[3]*x + m[4]*y + m[5])/d;
+          if (!Number.isFinite(cx + cy)) throw new Error("The recovered picture bounds are invalid.");
+          const nx = Math.min(8, Math.max(1, Math.ceil(Math.hypot(m[0]-cx*m[6], m[3]-cy*m[6])/Math.abs(d))));
+          const ny = Math.min(8, Math.max(1, Math.ceil(Math.hypot(m[1]-cx*m[7], m[4]-cy*m[7])/Math.abs(d))));
+          sum.fill(0);
+          for (let iy = 0; iy < ny; iy++) for (let ix = 0; ix < nx; ix++) {
+            const u = x + (ix+.5)/nx - .5, v = y + (iy+.5)/ny - .5, z = m[6]*u + m[7]*v + m[8];
+            const sx = Math.max(0, Math.min(width-1, (m[0]*u + m[1]*v + m[2])/z));
+            const sy = Math.max(0, Math.min(height-1, (m[3]*u + m[4]*v + m[5])/z));
+            const a = Math.floor(sx), b = Math.floor(sy), fx = sx-a, fy = sy-b;
+            const i = (a+b*width)*4, j = (Math.min(width-1,a+1)+b*width)*4;
+            const k = (a+Math.min(height-1,b+1)*width)*4, l = (Math.min(width-1,a+1)+Math.min(height-1,b+1)*width)*4;
+            for (let channel = 0; channel < 4; channel++) sum[channel] +=
+              (pixels[i+channel]*(1-fx)+pixels[j+channel]*fx)*(1-fy) + (pixels[k+channel]*(1-fx)+pixels[l+channel]*fx)*fy;
+          }
+          for (let channel = 0; channel < 4; channel++) output[(x+y*w)*4+channel] = Math.round(sum[channel]/(nx*ny));
+        }
+      }
+      return root.PixelStow.writePng(output, w, h);
+    }
     get openNow() { return this.panel.open; }
     get clean() { return this.panel.open && this.panel.classList.contains("clean"); }
     showContextMenu(event) {

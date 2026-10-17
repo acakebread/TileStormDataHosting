@@ -265,6 +265,7 @@
     .camera-calibration[data-state="detected"]::before { background: #61e28b; box-shadow: 0 0 7px #61e28b99; }
     .camera-signal { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
     .camera-signal-readout { position: absolute; left: 10px; right: 10px; bottom: 30px; z-index: 2; width: fit-content; max-width: calc(100% - 20px); box-sizing: border-box; margin: 0; padding: 5px 8px; border: 1px solid #ffca6455; border-radius: 6px; background: #081016e8; color: #ffdc98; font-size: .7rem; font-weight: 400; line-height: 1.35; text-align: left; white-space: pre-line; }
+    .camera-signal-readout[data-state="detected"] { border-color: #61e28b55; color: #b8f3c7; }
     .preview-panel.clean #preview-source,
     .preview-panel.clean #compare-ui,
     .preview-panel.clean #comparison-control { display: none !important; }
@@ -993,18 +994,18 @@
     </form>
   </dialog>
   <script src="./pixelstow-spectrum.js?v=20261015-no-pilot1"></script>
-  <script src="./pixelstow-edge-guide.js?v=20261017-signal-debug1"></script>
+  <script src="./pixelstow-edge-guide.js?v=20261017-accepted-debug"></script>
   <script src="./pixelstow-transform.js?v=20261016-early-payload1"></script>
   <script src="./pixelstow-lattice.js?v=20261013-marker-follow2"></script>
-  <script src="./pixelstow.js?v=20261017-signal-debug1"></script>
+  <script src="./pixelstow.js?v=20261017-accepted-debug"></script>
   <script src="./pixelstow-sizing.js?v=20261015-payload-range1"></script>
   <script src="./pixelstow-export.js?v=20261011-exports"></script>
   <script src="./pixelstow-voice.js?v=20261013-voice-clock2"></script>
   <script src="./pixelstow-media.js?v=20261015-preview-icons1"></script>
   <script src="./pixelstow-sharing.js?v=20261016-preview-copy1"></script>
   <script src="./pixelstow-read-progress.js?v=20261016-frame-outline"></script>
-  <script src="./pixelstow-camera.js?v=20261017-debug-toggle"></script>
-  <script src="./pixelstow-preview.js?v=20261017-straight-preview"></script>
+  <script src="./pixelstow-camera.js?v=20261017-view-rotation"></script>
+  <script src="./pixelstow-preview.js?v=20261017-isolated-copy"></script>
   <script>
     const fileInput = document.querySelector("#file");
     const chooseImageButton = document.querySelector("#choose-image");
@@ -1126,9 +1127,12 @@
       toggleScale: () => { if (fitMode) setActualSize(); else resetView(); },
       canCopyImage: () => !busy && !media.active && !camera?.active,
       copyImage: () => {
-        const job = current, size = resultDimensions(job);
-        return sharing.copyImage(fullPreview.panel.classList.contains("show-source")
-          ? async () => PixelStow.writePng(await carrierFor(job), size.width, size.height) : undefined);
+        const job = current, size = resultDimensions(job), source = fullPreview.panel.classList.contains("show-source");
+        const result = job?.transformResult;
+        const geometry = !encodedPng && result?.found && !result.unreadable &&
+          size.width === job.width && size.height === job.height ? result.geometry : null;
+        return sharing.copyImage(async () => PixelStowPreview.imagePng(source ? await carrierFor(job) :
+          job.recoverPixels || job.decodePixels || job.pixels, size.width, size.height, geometry));
       },
       resize: sizeViewport,
       onFrame: (open) => syncAnalysisOverlay(open)

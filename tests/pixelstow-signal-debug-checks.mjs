@@ -51,7 +51,10 @@ try{
     const state=camera.frame.dataset.calibration;
     const hasCanvas=!camera.signalCanvas.hidden,hasText=!camera.signalReadout.hidden;
     camera.showSignal(session,entry,positive);
-    const matched=camera.signalReadout.textContent.includes('Green: calibration matched');
+    const overlay=camera.signalCanvas.getContext('2d').getImageData(0,0,camera.signalCanvas.width,camera.signalCanvas.height).data;
+    const greenOnly=Array.from(overlay).every((v,i)=>i%4!==0||!overlay[i+3]||overlay[i]<overlay[i+1]);
+    const matched=camera.signalReadout.textContent.includes('Green: calibration matched')&&
+      !camera.signalReadout.textContent.includes('Amber')&&camera.signalReadout.dataset.state==='detected'&&greenOnly;
     camera.cancelSearches(session);
     const cleared=camera.signalCanvas.hidden&&camera.signalReadout.hidden&&!session.signalDebug;
     camera.close();
@@ -63,6 +66,7 @@ try{
   assert(result.negative.diagnostic.strongest.score>0);
   assert.equal(result.negative.diagnostic.strongest.band.length,4);
   assert(result.positive?.detected,'the complete synthetic guide must still match');
+  assert.equal(result.positive.diagnostic.accepted.length,4,'confirmed overlays must identify their four accepted strips');
   assert.equal(result.positive.scale,result.normalScale);
   assert.deepEqual(result.positive.corners,result.normalCorners,'debug collection must not change accepted geometry');
   assert(result.unchanged&&result.aborted);
@@ -79,7 +83,7 @@ try{
       videoWidth:{configurable:true,get:()=>width},videoHeight:{configurable:true,get:()=>height}});
     camera.schedule=()=>{}; // Frame sampling is covered separately with the fake clock.
     window.openHeldTest=()=>{
-      const session={purpose:'read',ready:true,history:[],frames:1};camera.session=session;
+      const session={purpose:'read',ready:true,rotation:0,history:[],frames:1};camera.session=session;
       camera.panel.hidden=false;camera.panel.showModal();camera.sync();
       window.heldTestEntry={image:heldTestImage,frameNumber:1,capturedAt:Date.now(),guideKind:'edge'};
       camera.showSignal(session,heldTestEntry,negative);
@@ -128,6 +132,10 @@ try{
   assert(await page.evaluate(()=>camera.session.calibrationHold?.entry===heldTestEntry&&!camera.frozenFrame.hidden));
   assert(await page.evaluate(()=>heldGuideDiagnostic===false&&camera.signalCanvas.hidden&&camera.signalReadout.hidden),
     'normal calibration still freezes its frame with debug collection and overlay disabled');
+  await page.locator('#rotate-camera').click();
+  assert(await page.evaluate(()=>camera.session.rotation===90&&camera.session.calibrationHold?.entry===heldTestEntry&&
+    camera.frozenFrame.style.transform.includes('rotate(90deg)')&&heldMarkerCalls.length===1&&!heldMarkerCalls[0].options.signal.aborted),
+    'rotating a frozen view must preserve its acquired raster and active recovery');
   await page.waitForTimeout(3200);
   assert(await page.evaluate(()=>camera.session.calibrationHold?.entry===heldTestEntry&&heldMarkerCalls.length===1),
     'a real display hold must remain frozen beyond three seconds while marker recovery is active');

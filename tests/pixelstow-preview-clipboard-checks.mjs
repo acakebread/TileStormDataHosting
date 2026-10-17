@@ -24,7 +24,7 @@ try{
     window.clipboardCopies=[];
     Object.defineProperty(navigator,'clipboard',{configurable:true,value:{write:async items=>{
       const blob=await items[0].getType('image/png'),image=await PixelStow.decodePng(new Uint8Array(await blob.arrayBuffer()));
-      const expected=fullPreview.panel.classList.contains('show-source')?await carrierFor(current):current.recoverPixels;
+      const expected=window.expectedClipboard || (fullPreview.panel.classList.contains('show-source')?await carrierFor(current):current.recoverPixels);
       clipboardCopies.push({width:image.width,height:image.height,exact:image.pixels.length===expected.length&&image.pixels.every((v,i)=>v===expected[i])});
     }}});
     const width=480,height=640,pixels=new Uint8Array(width*height*4);
@@ -52,10 +52,10 @@ try{
   assert.deepEqual(await page.evaluate(()=>clipboardCopies[0]),{width:480,height:640,exact:true},'copy uses the full stored raster, without zoom, labels or overlays');
   assert(await page.locator('#preview-context-menu').isHidden());
   assert(await page.locator('#preview-screen-footer').isHidden());
-  await page.mouse.move(x,y);await page.mouse.down({button:'right'});
-  await page.mouse.move(x+55,y+35);await page.mouse.up({button:'right'});
+  await page.mouse.move(x,y);await page.mouse.down();
+  await page.mouse.move(x+55,y+35);await page.mouse.up();
   const moved=await view();assert(Math.abs(moved[0]-before[0]-55)<1&&Math.abs(moved[1]-before[1]-35)<1);
-  assert(await page.locator('#preview-context-menu').isHidden(),'a right drag pans without opening a menu');
+  assert(await page.locator('#preview-context-menu').isHidden(),'a left drag pans without opening a menu');
   assert.equal(moved[2],before[2]);assert.equal(moved[3],before[3]);
   await page.keyboard.press('Shift+F10');
   assert(await page.locator('#preview-context-menu').isVisible());
@@ -68,6 +68,38 @@ try{
   assert.deepEqual(await page.evaluate(()=>clipboardCopies[1]),{width:480,height:640,exact:true},'source mode copies the full extracted source');
   await page.mouse.click(x,y,{button:'right'});await page.mouse.click(x+260,y+120);
   assert(await page.locator('#preview-context-menu').isHidden(),'clicking outside dismisses the menu');
+  await page.keyboard.press('Escape');
+  await page.evaluate(async()=>{
+    const encoded=current.recoverPixels,source=await carrierFor(current),nativeW=480,nativeH=640,width=760,height=600;
+    const surround=input=>{
+      const output=new Uint8Array(width*height*4);
+      for(let i=0;i<output.length;i+=4)output.set([255,0,255,255],i);
+      for(let y=0;y<nativeH;y++)for(let x=0;x<nativeW;x++){
+        const at=(x+y*nativeW)*4,to=(699-y+(x+50)*width)*4;
+        output.set(input.subarray(at,at+4),to);
+      }
+      return output;
+    };
+    window.isolatedExpected={encoded,source};
+    Object.assign(current,{width,height,resultWidth:width,resultHeight:height,pixels:surround(encoded),
+      recoverPixels:surround(encoded),decodePixels:surround(encoded),carrierPromise:Promise.resolve(surround(source)),
+      transformResult:{found:true,geometry:{originalWidth:nativeW,originalHeight:nativeH,matrix:[0,-1,699,1,0,50,0,0,1]}}});
+    await startComparison();
+  });
+  await page.getByRole('button',{name:'Preview',exact:true}).click();
+  for(const source of [true,false]) {
+    await page.evaluate(source=>{
+      if(fullPreview.panel.classList.contains('show-source')!==source)fullPreview.toggleSource();
+      window.expectedClipboard=isolatedExpected[source?'source':'encoded'];
+    },source);
+    // A keyboard context menu also works when the source picture was tilted,
+    // cropped and zoomed; no screenshot/background pixels enter the clipboard.
+    await page.keyboard.press('Shift+F10');
+    await page.getByRole('menuitem',{name:'Copy image to clipboard'}).click();
+    await page.waitForFunction(count=>clipboardCopies.length===count&&!busy,source?3:4);
+    assert.deepEqual(await page.evaluate(()=>clipboardCopies.at(-1)),{width:480,height:640,exact:true},
+      'recovered preview copy must export only the flat carrier with exact source/encoded pixels');
+  }
   assert.deepEqual(errors,[]);
-  console.log('PASS: lower preview right-click/keyboard Copy menu copies exact native PNG pixels in encoded and source modes; right-drag pans, Escape/outside click dismiss, no real clipboard access');
+  console.log('PASS: preview Copy exports exact native source/encoded PNG pixels; recovered rotated captures exclude their surround and flatten to the carrier; left-drag pans, menu dismissal works, no real clipboard access');
 }finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve));}

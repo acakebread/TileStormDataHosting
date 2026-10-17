@@ -396,6 +396,19 @@
       }
       const coverage=polygonArea(corners)/(width*height);
       if(coverage<(options.minimumCoverage??.5))return miss('coverage-too-small');
+      if(diagnostic) {
+        // The strongest raw response can be a rejected toolbar or source-photo
+        // feature at a different scale. Show the four strips actually accepted.
+        const r=selected.reduction,L=Math.round(BAND*best.scale/r);
+        const spans=[[vertical.first.position+(64-INSET)*best.scale/r,vertical.second.position+(INSET+BAND-64)*best.scale/r],
+          [horizontal.first.position+(64-INSET)*best.scale/r,horizontal.second.position+(INSET+BAND-64)*best.scale/r]];
+        diagnostic.accepted=best.pairs.flatMap((pair,axis)=>[pair.first,pair.second].map(strip=>{
+          const [start,stop]=spans[axis],y=strip.position;
+          const points=axis?[[y,start],[y+L,start],[y+L,stop],[y,stop]]:[[start,y],[stop,y],[stop,y+L],[start,y+L]];
+          return {axis:axis?'vertical':'horizontal',scale:best.scale,score:strip.score,
+            band:points.map(([x,y])=>selected.map?selected.map(x/selected.w,y/selected.h):{x:x*r-.5,y:y*r-.5})};
+        }));
+      }
       return {detected:true,confirmed:false,experimental:true,kind:'opponent-edge-guide',width,height,reduction,
         ...(diagnostic?{diagnostic:snapshot('matched')}:{}),
         scale:best.scale,fx:Math.cos(orientation)/(128*best.scale),fy:Math.sin(orientation)/(128*best.scale),orientation,score:best.score,agreement:true,

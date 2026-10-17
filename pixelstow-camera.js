@@ -118,10 +118,10 @@
         const session = this.session;
         if (!session?.ready || session.adjusting || session.handingOff || this.working()) return;
         session.rotation = (session.rotation + 90) % 360;
-        this.cancelSearches(session, true);
         this.layoutPreview();
-        this.progress.textContent = session.purpose === "source" ? "View rotated. Frame your source photo, then capture it."
-          : "View rotated. Keep all four picture corners inside the guides and hold steady.";
+        if (!session.calibrationHold && !session.signalHold)
+          this.progress.textContent = session.purpose === "source" ? "View rotated. Frame your source photo, then capture it."
+            : "View rotated. Keep all four picture corners inside the guides and hold steady.";
         this.schedule(session, 900);
       });
       this.switchButton.addEventListener("click", () => this.switchCamera());
@@ -475,6 +475,7 @@
     layoutPreview() {
       const session = this.session;
       if ((session?.handingOff || session?.calibrationHold || session?.signalHold) && this.frozenFrame && !this.frozenFrame.hidden) {
+        this.layoutFrozenFrame();
         this.renderSignal(session);
         return;
       }
@@ -1027,10 +1028,11 @@
     captureFrame() {
       const rawWidth = this.video.videoWidth, rawHeight = this.video.videoHeight;
       if (this.session?.adjusting || this.video.readyState < 2 || !rawWidth || !rawHeight) throw new Error("Wait for the live camera picture, then try again.");
-      const rotation = this.session?.rotation || 0, sideways = rotation % 180 !== 0;
       const zoom = this.session?.zoomMode === "simulated" ? (this.session.zoom || 1) : 1;
       const source = this.visibleVideoRect(rawWidth, rawHeight, zoom);
-      const width = sideways ? source.sh : source.sw, height = sideways ? source.sw : source.sh;
+      // Rotate view is presentation only. Calibration, markers and manual reads
+      // all receive the camera's original orientation and pixel lattice.
+      const width = source.sw, height = source.sh;
       if (width * height > PixelStow.getLimits().inputPixels) throw new Error("This camera frame exceeds the 32 megapixel photo input limit.");
       const canvas = this.captureCanvas;
       if (canvas.width !== width) canvas.width = width;
@@ -1038,9 +1040,7 @@
       const context = canvas.getContext("2d", { willReadFrequently: true });
       context.save();
       context.imageSmoothingEnabled = false;
-      context.translate(width / 2, height / 2);
-      context.rotate(rotation * Math.PI / 180);
-      context.drawImage(this.video, source.sx, source.sy, source.sw, source.sh, -source.sw / 2, -source.sh / 2, source.sw, source.sh);
+      context.drawImage(this.video, source.sx, source.sy, source.sw, source.sh, 0, 0, width, height);
       context.restore();
       return { pixels: new Uint8Array(context.getImageData(0, 0, width, height).data.buffer), width, height, exact: true };
     }
@@ -1105,6 +1105,22 @@
       this.frozenFrame.getContext("2d").putImageData(new ImageData(pixels, image.width, image.height), 0, 0);
       this.frozenFrame.hidden = false;
       this.video.style.visibility = "hidden";
+      this.layoutFrozenFrame();
+    }
+
+    layoutFrozenFrame() {
+      const canvas = this.frozenFrame;
+      if (!canvas?.style || !this.view || !canvas.width || !canvas.height) return;
+      const rotation = this.session?.rotation || 0, sideways = rotation % 180 !== 0;
+      const width = sideways ? canvas.height : canvas.width, height = sideways ? canvas.width : canvas.height;
+      const viewW = this.view.clientWidth, viewH = this.view.clientHeight;
+      const fit = Math.min(viewW / width, viewH / height);
+      Object.assign(canvas.style, { inset: "auto", left: "50%", top: "50%",
+        width: canvas.width * fit + "px", height: canvas.height * fit + "px",
+        transform: "translate(-50%, -50%) rotate(" + rotation + "deg)" });
+      Object.assign(this.frame.style, { left: (viewW - width * fit) / 2 + "px", top: (viewH - height * fit) / 2 + "px",
+        width: width * fit + "px", height: height * fit + "px" });
+      this.placeCalibration((viewW - width * fit) / 2, (viewH - height * fit) / 2, width * fit);
     }
 
     holdCalibrationFrame(session, entry) {
@@ -1258,34 +1274,43 @@
       const ctx = canvas.getContext("2d");
       ctx.setTransform(density, 0, 0, density, 0, 0);
       ctx.clearRect(0, 0, width, height);
-      const frozen = this.frozenFrame && !this.frozenFrame.hidden;
-      const rect = frozen ? { x: 0, y: 0, w: width, h: height } : {
+      const rect = {
         x: parseFloat(this.frame.style.left) || 0, y: parseFloat(this.frame.style.top) || 0,
         w: parseFloat(this.frame.style.width) || width, h: parseFloat(this.frame.style.height) || height };
-      const scale = Math.min(rect.w / entry.image.width, rect.h / entry.image.height);
-      const left = rect.x + (rect.w - entry.image.width * scale) / 2;
-      const top = rect.y + (rect.h - entry.image.height * scale) / 2;
+      const rotation = (session.rotation || 0) * Math.PI / 180, cs = Math.cos(rotation), sn = Math.sin(rotation);
+      const sideways = (session.rotation || 0) % 180 !== 0;
+      const scale = Math.min(rect.w / (sideways ? entry.image.height : entry.image.width),
+        rect.h / (sideways ? entry.image.width : entry.image.height));
+      const project = p => {
+        const x = p.x + .5 - entry.image.width / 2, y = p.y + .5 - entry.image.height / 2;
+        return { x: rect.x + rect.w / 2 + scale * (cs * x - sn * y),
+          y: rect.y + rect.h / 2 + scale * (sn * x + cs * y) };
+      };
       const draw = (points, colour, fill, dashed) => {
         if (!points?.length || points.some(p => !Number.isFinite(p.x + p.y))) return;
         ctx.beginPath();
-        points.forEach((p, i) => i ? ctx.lineTo(left + p.x * scale, top + p.y * scale) : ctx.moveTo(left + p.x * scale, top + p.y * scale));
+        points.map(project).forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
         ctx.closePath(); ctx.fillStyle = fill; ctx.fill();
         ctx.strokeStyle = colour; ctx.lineWidth = 2; ctx.setLineDash(dashed ? [6, 4] : []); ctx.stroke();
       };
-      draw(peak?.band, "#ffca64", "#ffca6426", true);
-      if (measurement?.detected) draw(measurement.corners, "#61e28b", "#61e28b0a", false);
+      if (measurement?.detected) {
+        draw(measurement.corners, "#61e28b", "#61e28b0a", false);
+        for (const strip of measurement.diagnostic?.accepted || []) draw(strip.band, "#61e28b", "#61e28b26", false);
+      } else draw(peak?.band, "#ffca64", "#ffca6426", true);
       canvas.hidden = !peak && !measurement?.detected;
       const held = session.calibrationHold?.entry === entry || session.signalHold?.entry === entry;
       const age = Math.max(0, Date.now() - entry.capturedAt) / 1000;
       const frame = "Frame " + entry.frameNumber + (held ? " · held" : " · " + age.toFixed(1) + "s old");
-      let text = measurement?.detected ? "Green: calibration matched. " : "Calibration NOT acquired. ";
-      text += peak ? "Amber: strongest guide response " + peak.score.toFixed(2) + " · ~" + peak.scale.toFixed(2) +
+      let text = measurement?.detected ? "Green: calibration matched · ~" + measurement.scale.toFixed(2) +
+        "× scale · four matching edges." : "Calibration NOT acquired. ";
+      if (!measurement?.detected) text += peak ? "Amber: strongest guide response " + peak.score.toFixed(2) + " · ~" + peak.scale.toFixed(2) +
         "× candidate scale · wavelengths " + Math.round(64 * peak.scale) + "/" + Math.round(96 * peak.scale) + "px · phase error " +
         Math.round(peak.phaseError * 180 / Math.PI) + "°." : "No measurable guide response.";
       if (peak && !measurement?.detected) text += " Unverified: " + peak.reason +
         (measurement.diagnostic.status === "time-limit" ? "; search budget ended" : measurement.diagnostic.status === "coverage-too-small" ? "; picture too small in frame" : "") + ".";
       const action = session.signalHold ? " · tap to resume" : session.calibrationHold ? " · checking frozen frame" : " · tap to freeze this response";
       this.signalReadout.textContent = frame + action + "\n" + text;
+      this.signalReadout.dataset.state = measurement?.detected ? "detected" : "unverified";
       this.signalReadout.disabled = Boolean(session.calibrationHold || session.handingOff);
       this.signalReadout.setAttribute("aria-label", session.signalHold ? "Resume scanning" : "Freeze diagnostic frame");
       this.signalReadout.hidden = false;

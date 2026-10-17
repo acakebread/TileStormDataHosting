@@ -98,6 +98,25 @@ try {
       count: camera.devices.length, facing: camera.session.facing };
   });
   assert.equal(first.count, 3, 'Chrome must expose three synthetic cameras');
+  const rotationCheck = await page.evaluate(() => {
+    // A fixed asymmetric raster makes a rotated/reversed capture detectable.
+    const video = camera.video, canvas = document.createElement('canvas');canvas.width=96;canvas.height=64;
+    const ctx=canvas.getContext('2d');ctx.fillStyle='#123456';ctx.fillRect(0,0,96,64);
+    ctx.fillStyle='#df8040';ctx.fillRect(0,0,31,23);ctx.fillStyle='#60d0a0';ctx.fillRect(70,44,26,20);
+    Object.defineProperties(canvas,{readyState:{value:2},videoWidth:{value:96},videoHeight:{value:64}});
+    camera.video=canvas;
+    try {
+      const base=camera.captureFrame(), results=[], search=new AbortController();camera.session.abort=search;
+      for (const rotation of [90,180,270,0]) {
+        camera.rotateButton.click();
+        const frame=camera.captureFrame();
+        results.push(camera.session.rotation===rotation&&!search.signal.aborted&&frame.width===base.width&&frame.height===base.height&&frame.pixels.every((v,i)=>v===base.pixels[i]));
+      }
+      return results.every(Boolean);
+    } finally {camera.video=video;camera.session.rotation=0;camera.layoutPreview();}
+  });
+  assert(rotationCheck,'view rotation must preserve capture orientation, dimensions and every camera pixel');
+  console.log('PASS: all four view rotations retain the exact unrotated asymmetric camera raster');
   await page.evaluate(async () => {
     window.unavailableDeviceId = camera.devices.at(-1).deviceId;
     const enumerate = navigator.mediaDevices.enumerateDevices.bind(navigator.mediaDevices);
