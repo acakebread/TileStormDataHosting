@@ -24,9 +24,9 @@ PixelStow's browser utility is `pixelstow.html`. It encodes optional text, file
 attachments and short voice recordings locally into a new image. V5 is the
 default encoding and recovery format. Enable older-format recovery under Image
 recovery options to read versions 1, 3 and 4; all writer choices remain available.
-The separate [MarkerTracker lab](docs/MarkerTracker.md) at `markertracker/`
-develops binary marker acquisition and live GPU-assisted tracking before
-integration into Decode.
+Decode and the [MarkerTracker lab](docs/MarkerTracker.md) at `markertracker/`
+share whole-frame binary acquisition and live GPU-assisted tracking. Camera
+markers can appear anywhere in the preview; there is no outer-edge restriction.
 See [payload format and rollout](docs/PixelStowPayloads.md). Run
 `node tests/pixelstow-checks.mjs` for codec checks and
 `node tests/pixelstow-v5-default-checks.mjs` for the default/opt-in recovery policy,
@@ -80,7 +80,7 @@ real browser workers. Optional local-photo checks are
 `node tests/pixelstow-edge-capture-regression.mjs <camera-capture.png> <expected-scale>`
 checks a supplied optical capture without marker/header reads. Add `--recover`
 to verify that calibration leads to a successful read on its single guided grid.
-Calibration provenance and the camera's single guided grid are checked with
+Calibration provenance and the historical guided file grid are checked with
 `node tests/pixelstow-calibration-data-checks.mjs`.
 Personal input images stay unchanged; generated copies/reports go under ignored
 `artifacts/research/edge-guide`. Supplied photographed screens now detect their
