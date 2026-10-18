@@ -34,6 +34,9 @@ Known corner IDs constrain the lab's missing-corner regions and let it start
 at deeper partition nodes without FFT-scanning impossible rows or columns.
 Both new modes use the first marker's axes and encoded dimensions to try
 predicted headers directly, before falling back to local partition searches.
+Each node compares useful reductions/wavelength families before subdivision and
+checks readable headers early. Confirmed camera-space marker size rejects
+incompatible wavelengths and replaces pending speculative branches.
 Their sampled pixels overlap across node and guidance boundaries using an
 inherited marker-size margin; the permitted marker-centre regions stay constrained.
 See [payload format and rollout](docs/PixelStowPayloads.md). Run
