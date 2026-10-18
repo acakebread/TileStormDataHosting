@@ -28,8 +28,8 @@ Decode and the [MarkerTracker lab](docs/MarkerTracker.md) at `markertracker/`
 share whole-frame binary acquisition and live GPU-assisted tracking. Camera
 markers can appear anywhere in the preview; there is no outer-edge restriction.
 The bottom Debug link opens MarkerTracker, whose Exit button returns to PixelStow.
-The lab defaults to an experimental full quarter-tree worker search, with the
-previous BSP selectable for comparison; Decode keeps the previous acquisition.
+The lab defaults to an experimental pruned quarter-tree worker search, with
+pruned halves and the previous BSP selectable; Decode keeps its previous acquisition.
 See [payload format and rollout](docs/PixelStowPayloads.md). Run
 `node tests/pixelstow-checks.mjs` for codec checks and
 `node tests/pixelstow-v5-default-checks.mjs` for the default/opt-in recovery policy,
