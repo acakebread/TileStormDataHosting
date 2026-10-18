@@ -34,6 +34,8 @@ Known corner IDs constrain the lab's missing-corner regions and let it start
 at deeper partition nodes without FFT-scanning impossible rows or columns.
 Both new modes use the first marker's axes and encoded dimensions to try
 predicted headers directly, before falling back to local partition searches.
+Their sampled pixels overlap across node and guidance boundaries using an
+inherited marker-size margin; the permitted marker-centre regions stay constrained.
 See [payload format and rollout](docs/PixelStowPayloads.md). Run
 `node tests/pixelstow-checks.mjs` for codec checks and
 `node tests/pixelstow-v5-default-checks.mjs` for the default/opt-in recovery policy,
