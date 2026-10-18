@@ -27,6 +27,7 @@ recovery options to read versions 1, 3 and 4; all writer choices remain availabl
 Decode and the [MarkerTracker lab](docs/MarkerTracker.md) at `markertracker/`
 share whole-frame binary acquisition and live GPU-assisted tracking. Camera
 markers can appear anywhere in the preview; there is no outer-edge restriction.
+The bottom Debug link opens MarkerTracker, whose Exit button returns to PixelStow.
 See [payload format and rollout](docs/PixelStowPayloads.md). Run
 `node tests/pixelstow-checks.mjs` for codec checks and
 `node tests/pixelstow-v5-default-checks.mjs` for the default/opt-in recovery policy,
