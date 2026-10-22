@@ -1,0 +1,186 @@
+{
+  "format": 1,
+  "release": "48ecc7682fb8d0e5",
+  "files": [
+    {
+      "path": "buymeacoffee.png",
+      "sha256": "a72341bd3e0d51568e4c621bfb4bd315f6e71cf39fd3e71f7daf4a93f00425a7",
+      "bytes": 4431
+    },
+    {
+      "path": "markertracker/acquire-worker.js",
+      "sha256": "71a36179cf1aa4bceb04e88014b6490120043d2c12d8f92a3524557d5797b99b",
+      "bytes": 5244
+    },
+    {
+      "path": "markertracker/camera-source.js",
+      "sha256": "0fc29785ddee67fa5227766f37fc3e764ba897197349511c84d27eb437da7e54",
+      "bytes": 4304
+    },
+    {
+      "path": "markertracker/engine.js",
+      "sha256": "899a2630d963ac0414ec0a1cbcf268f172f7fd69dbc21d9ab827bebfe3d334f6",
+      "bytes": 48457
+    },
+    {
+      "path": "markertracker/geometry.js",
+      "sha256": "423ce186b777fdd4caa1db10fd88b908c2cbeca435fd893d607e0a1b6df15eab",
+      "bytes": 6081
+    },
+    {
+      "path": "markertracker/index.html",
+      "sha256": "a0a45a1f4f75568a9e924265a6925eab28447a566484cae09d7848841ac97cd1",
+      "bytes": 5640
+    },
+    {
+      "path": "markertracker/local-tracker.js",
+      "sha256": "85755e261724ed3c8c26a7aaa54794b89bc7cff991ec5c2ece2b5c2a2b082f42",
+      "bytes": 25295
+    },
+    {
+      "path": "markertracker/markertracker.js",
+      "sha256": "7b40d04c480a8e505f6b9d3891fda14d99724f7655c26f31c95f565da59fb261",
+      "bytes": 32275
+    },
+    {
+      "path": "markertracker/motion-gate.js",
+      "sha256": "17c432f933bb337ae4de526fdb6e2424f941b8d71b33d983be4f945e460c6a7f",
+      "bytes": 5918
+    },
+    {
+      "path": "markertracker/scan.js",
+      "sha256": "fcb46aa13b683fde43444ff058a0dbcb61ad8907e679e97351744c37379d12e7",
+      "bytes": 4932
+    },
+    {
+      "path": "markertracker/search-gpu.js",
+      "sha256": "f29be14ad203bce9fd84f68d82914ca84359d1f58f114633ba894831e09a5ff9",
+      "bytes": 16480
+    },
+    {
+      "path": "markertracker/search-plan.js",
+      "sha256": "bd18bf53e6854b9e21c4ae19e8d18c746647c2fe8d3efb76c21075df4fa72919",
+      "bytes": 12282
+    },
+    {
+      "path": "markertracker/tree-worker.js",
+      "sha256": "367eecd9fe113aff37581538b3524da7f15dec371a07420fb385f8e6f45c9ba1",
+      "bytes": 23243
+    },
+    {
+      "path": "markertracker/verify-worker.js",
+      "sha256": "2dfbb2788e06c5961e5379ebba9d39bc0a857c99a3c217a29302ae0067dfd7d2",
+      "bytes": 1632
+    },
+    {
+      "path": "massive hadron logo.png",
+      "sha256": "5a1ba8d5ae3003ded608e5658e0df0e5bdee877ee55ddc236f9fadcaf0d03344",
+      "bytes": 1050575
+    },
+    {
+      "path": "pixelstow-app.js",
+      "sha256": "237634d2c156fd9d81979ea41dbd08b3090f388813617935420535b6e95448bb",
+      "bytes": 114583
+    },
+    {
+      "path": "pixelstow-camera.js",
+      "sha256": "f378553d602a768b5035cb65571adcd9ee7ce2e3cdcad4e2558d51e0501da0b5",
+      "bytes": 78509
+    },
+    {
+      "path": "pixelstow-edge-guide.js",
+      "sha256": "15f35bc826718da3ffed27fe9c0e4fc8c9e3a4f24cdf30f30f8aa72357f6ab15",
+      "bytes": 35792
+    },
+    {
+      "path": "pixelstow-export.js",
+      "sha256": "5fa7ea7436b1ad61ed82404962958fc13d9bded887a37e2b3a5c0d92595005b9",
+      "bytes": 5348
+    },
+    {
+      "path": "pixelstow-info.html",
+      "sha256": "3a3a294d6fdac5a967b434395331e07464a0ccb2bd1c5d22c3b3ee13d72e7226",
+      "bytes": 8018
+    },
+    {
+      "path": "pixelstow-lattice.js",
+      "sha256": "7f7479c825c6747d692e881052e9f85850571bc0e26681fcfa5df54c5d94cd50",
+      "bytes": 26573
+    },
+    {
+      "path": "pixelstow-media.js",
+      "sha256": "1c6a229badf1c1d5a4140fd639953bdcf58a8cad7797a2d58bae4e2261cca866",
+      "bytes": 44761
+    },
+    {
+      "path": "pixelstow-message-links.js",
+      "sha256": "342b845da3905b87f766264f92b0a868d20e4eac10b4ecf2527dcc57207193e4",
+      "bytes": 4753
+    },
+    {
+      "path": "pixelstow-preview.js",
+      "sha256": "787c1fd760793ab9ab0b0dc7fec1abb46849fe00cf2bf30d50c2ada54ba7e3d5",
+      "bytes": 21526
+    },
+    {
+      "path": "pixelstow-read-progress.js",
+      "sha256": "3bdb869452040b398920a097b2846616a1c5489ca02a5e9d1849617799107e6e",
+      "bytes": 5548
+    },
+    {
+      "path": "pixelstow-sharing.js",
+      "sha256": "6c6ea9e1ef0c81d1df73fb5bf99106b2a21543531f3bfca7daec0001601f8f41",
+      "bytes": 17685
+    },
+    {
+      "path": "pixelstow-sizing.js",
+      "sha256": "20c56132850b5f177e611bfe1adf43991db44707a424ab1ad707d3fa554eee88",
+      "bytes": 15212
+    },
+    {
+      "path": "pixelstow-spectrum.js",
+      "sha256": "2c7403d53834f317459fdc3b30c39a21ab5293998ab3d4aadb4b381787e8bff3",
+      "bytes": 22438
+    },
+    {
+      "path": "pixelstow-transform-worker.js",
+      "sha256": "95359a3317c1f22b40b58d91424e63902c7ae8707379274e92561d8823df52d1",
+      "bytes": 5567
+    },
+    {
+      "path": "pixelstow-transform.js",
+      "sha256": "2cb8999c78d5d4b5afcd8bcf7f18d0a68e52a0f23f83b40bc1608b0734953394",
+      "bytes": 77598
+    },
+    {
+      "path": "pixelstow-voice.js",
+      "sha256": "ef20ce5c1bc356b1d3d7ca9ce5c846f8f8e100f4d926ef2c61da1de83e6ca5a8",
+      "bytes": 13159
+    },
+    {
+      "path": "pixelstow.html",
+      "sha256": "d00bd88acc176f7e2750928da2464542ef716b5fe4948a887a99c3a5ca4dcecb",
+      "bytes": 68636
+    },
+    {
+      "path": "pixelstow.js",
+      "sha256": "656d8cd7fc908a2aa2d7d716a970d31186408dd3f1f70c86cd829f6a0722670f",
+      "bytes": 254247
+    },
+    {
+      "path": "preview.mkv",
+      "sha256": "21100227d30019c4d2ee33ef9ad3dcc1073069f269669fbdaa0ff6a6a966c245",
+      "bytes": 81375508
+    },
+    {
+      "path": "preview.webm",
+      "sha256": "b041c2673b747bd54799fae6e3ba1074c4e0c05504be5dfbe97471d7a3d32523",
+      "bytes": 55433361
+    },
+    {
+      "path": "web_portal_background.png",
+      "sha256": "c50fcad907f435e8023374086ddefe00e6be3a8c90da625724dfe98a5e2f5e4f",
+      "bytes": 437085
+    }
+  ]
+}

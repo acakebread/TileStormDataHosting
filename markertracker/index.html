@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex">
+  <title>MarkerTracker</title>
+  <link rel="canonical" href="https://www.massivehadron.com/markertracker/">
+  <style>
+    :root { color-scheme: dark; --bg: #081016; --text: #f2f6fb; --muted: #a8b7c8; --line: #2a394a; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font: 16px/1.4 "Segoe UI", system-ui, sans-serif; }
+    body { display: flex; flex-direction: column; height: 100dvh; }
+    header, footer { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 10px 12px; border-color: var(--line); }
+    header { border-bottom: 1px solid var(--line); flex: 0 0 auto; padding-top: max(10px, env(safe-area-inset-top)); }
+    footer { border-top: 1px solid var(--line); flex: 0 0 calc(128px + env(safe-area-inset-bottom)); padding-bottom: max(10px, env(safe-area-inset-bottom)); box-sizing: border-box; overflow: auto; align-content: flex-start; }
+    h1 { margin: 0; font-size: 1.05rem; font-weight: 650; }
+    button, select, #exit { min-height: 44px; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line); background: #122033; color: var(--text); font: inherit; }
+    #exit { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; margin-left: auto; text-decoration: none; }
+    button[hidden] { display: none; }
+    #stage { position: relative; flex: 1 1 0; min-height: 0; overflow: hidden; background: #000; display: flex; align-items: center; justify-content: center; touch-action: none; user-select: none; -webkit-user-select: none; }
+    #view, #marks { max-width: 100%; max-height: 100%; }
+    #view { position: absolute; display: block; visibility: hidden; pointer-events: none; }
+    #preview { position: absolute; overflow: hidden; pointer-events: none; }
+    #marks, #search-frame { position: absolute; pointer-events: none; }
+    #search-frame[hidden] { display: none; }
+    #show-scan-label, #freeze-capture-label, #gpu-search-label { display: inline-flex; gap: 6px; align-items: center; min-height: 44px; }
+    #status { margin: 0; flex: 1 0 100%; color: var(--muted); }
+    #compute-status { flex: 1 0 100%; font-size: .82rem; font-weight: 600; white-space: pre-line; overflow-wrap: anywhere; color: #efc66a; }
+    #compute-status[data-backend="gpu"] { color: #61e28b; }
+    #compute-status[data-backend="fallback"] { color: #ff8f80; }
+    #compute-status[data-backend="cpu"] { color: #8fcfff; }
+    #search-stats { flex: 1 0 100%; font-size: .78rem; color: #8fcfff; white-space: pre-line; overflow-wrap: anywhere; }
+    #search-method { max-width: 175px; padding: 8px; }
+    video { position: absolute; max-width: none; max-height: none; pointer-events: none; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>MarkerTracker</h1>
+    <select id="search-method" aria-label="Marker acquisition method"><option value="tree">Pruned quarters</option><option value="tree-binary">Pruned halves</option><option value="bsp">Previous BSP</option></select>
+    <button id="start" type="button">Open camera</button>
+    <button id="again" type="button" hidden>Search again</button>
+    <button id="stop" type="button" hidden>Close camera</button>
+    <button id="zoom" type="button" hidden aria-label="Reset camera zoom">1.0×</button>
+    <label id="show-scan-label" title="Show node progress over the live feed; node coordinates refer to the searched capture"><input id="show-scan" type="checkbox" checked>Show scan</label>
+    <label id="gpu-search-label" title="Accelerate FFT and marker pilot maps when supported. Uncheck to compare CPU search; tracking remains live."><input id="gpu-search" type="checkbox" checked>GPU search</label>
+    <label id="freeze-capture-label" title="Inspect the exact searched picture and hold it when all four markers are found"><input id="freeze-capture" type="checkbox">Freeze capture</label>
+    <a id="exit" href="../pixelstow.html?v=20261018-capture1" title="Return to PixelStow">Exit</a>
+  </header>
+  <div id="stage">
+    <div id="preview"><video id="video" playsinline muted autoplay></video></div>
+    <canvas id="view" aria-hidden="true"></canvas>
+    <canvas id="search-frame" hidden aria-label="Captured picture being searched"></canvas>
+    <canvas id="marks"></canvas>
+  </div>
+  <footer>
+    <output id="compute-status" aria-label="Actual search backend">GPU search requested · waiting for search work.</output>
+    <p id="status" role="status">Open the camera and point it at an encoded picture.</p>
+    <output id="search-stats">Hold the camera steady to begin a search. Moving frames are checked with a small preview before a search buffer is captured.</output>
+  </footer>
+  <script src="../pixelstow-spectrum.js?v=48ecc7682fb8d0e5"></script>
+  <script src="../pixelstow-edge-guide.js?v=48ecc7682fb8d0e5"></script>
+  <script src="../pixelstow-transform.js?v=48ecc7682fb8d0e5"></script>
+  <script src="../pixelstow-lattice.js?v=48ecc7682fb8d0e5"></script>
+  <script src="../pixelstow.js?v=48ecc7682fb8d0e5"></script>
+  <script src="./geometry.js?v=48ecc7682fb8d0e5"></script>
+  <script src="./local-tracker.js?v=48ecc7682fb8d0e5"></script>
+  <script src="./camera-source.js?v=48ecc7682fb8d0e5"></script>
+  <script src="./scan.js?v=48ecc7682fb8d0e5"></script>
+  <script src="./motion-gate.js?v=48ecc7682fb8d0e5"></script>
+  <script src="./engine.js?v=48ecc7682fb8d0e5"></script>
+  <script src="./markertracker.js?v=48ecc7682fb8d0e5"></script>
+</body>
+</html>

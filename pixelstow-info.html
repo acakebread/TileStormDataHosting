@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="How to create and open PixelStow photo messages, share encoded images and choose an encoding format.">
+  <title>About PixelStow</title>
+  <link rel="canonical" href="https://www.massivehadron.com/pixelstow-info.html">
+  <style>
+    :root { color-scheme: dark; --bg: #081016; --text: #f2f6fb; --muted: #a8b7c8; --border: #2a394a; --azure: #8cebed; --yellow: #f5e69e; }
+    * { box-sizing: border-box; }
+    html { scroll-padding-top: 24px; }
+    body { margin: 0; min-height: 100vh; background: linear-gradient(rgba(7, 12, 18, .76), rgba(7, 12, 18, .94)), url("./web_portal_background.png") center top / cover fixed; color: var(--text); font: 16px/1.6 "Segoe UI", "Trebuchet MS", system-ui, sans-serif; }
+    main { max-width: 960px; margin: 2vh auto; padding: 28px; }
+    article { padding: 32px; background: rgba(18, 25, 35, .95); border: 1px solid var(--border); border-radius: 24px; box-shadow: 0 28px 80px rgba(0, 0, 0, .4); }
+    header { display: flex; align-items: center; gap: 24px; margin-bottom: 22px; }
+    header img { display: block; width: 108px; height: 108px; object-fit: contain; }
+    h1 { margin: 0; color: var(--azure); font-size: clamp(1.9rem, 5vw, 3rem); line-height: 1.1; }
+    h2 { margin: 30px 0 10px; color: var(--yellow); font-size: 1.3rem; scroll-margin-top: 24px; }
+    p, ul, ol { margin: 0 0 16px; color: var(--muted); }
+    li { margin-bottom: 8px; }
+    strong { color: var(--text); }
+    a { color: var(--azure); text-underline-offset: 3px; }
+    a:hover { color: white; }
+    a:focus-visible { outline: 2px solid var(--azure); outline-offset: 4px; border-radius: 2px; }
+    nav, footer { display: flex; flex-wrap: wrap; gap: 12px 24px; }
+    nav { padding: 14px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+    footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid var(--border); }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+    caption { text-align: left; color: var(--muted); margin-bottom: 12px; }
+    th, td { text-align: left; vertical-align: top; padding: 12px; border-bottom: 1px solid var(--border); }
+    td { color: var(--muted); }
+    tbody th { width: 25%; }
+    @media (max-width: 620px) {
+      main { margin: 0; padding: 12px; }
+      article { padding: 20px 16px; border-radius: 16px; }
+      header { gap: 16px; }
+      header img { width: 72px; height: 72px; }
+      th, td { padding: 10px 6px; }
+      tbody th { width: 29%; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <article>
+      <header>
+        <a href="./pixelstow.html" aria-label="Open PixelStow"><img src="./massive%20hadron%20logo.png" alt="Massive Hadron" width="108" height="108"></a>
+        <h1>About PixelStow</h1>
+      </header>
+      <p>PixelStow puts a message, files or a short voice recording inside a photo. The encoded image carries those contents, so someone with the image can open it in PixelStow.</p>
+      <nav aria-label="On this page">
+        <a href="#getting-started">Getting started</a>
+        <a href="#sharing">Sharing images</a>
+        <a href="#passwords-and-privacy">Passwords and privacy</a>
+        <a href="#encoding-formats">Encoding formats</a>
+      </nav>
+
+      <section aria-labelledby="getting-started">
+        <h2 id="getting-started">Getting started</h2>
+        <ol>
+          <li><strong>Choose a source photo.</strong> Browse for an image, paste one, or take a source photo with the camera.</li>
+          <li><strong>Add your contents.</strong> Enter a message, attach files or record audio. Leave the password blank for public contents, or set a password to lock them.</li>
+          <li><strong>Encode and save.</strong> Encoding creates a new image. Keep the downloaded encoded PNG; your original source file is preserved.</li>
+        </ol>
+        <p>To open an encoded image, use Browse or Paste in <a href="./pixelstow.html">PixelStow</a>. If it is locked, enter its password. Recovered messages, audio and files appear under Image contents.</p>
+        <p>For a resized or photographed image that Browse does not recognise, try <strong>Image recovery options</strong>. Holding the preview also starts a full search when no decoded image is available. Camera reading can work with images displayed on a screen or printed, but recovery depends on framing, focus, lighting and image quality.</p>
+        <p>If a decoded message starts with a web link, PixelStow asks whether to open it. Choose <strong>Not now</strong> to keep reading; the Open link button remains available.</p>
+      </section>
+
+      <section aria-labelledby="sharing">
+        <h2 id="sharing">Sharing encoded images</h2>
+        <p><strong>Send the original encoded PNG as a file or document.</strong> Messaging and social apps can resize or recompress photos, which may damage the embedded contents. Include the PixelStow opening link so the recipient knows where to read the image.</p>
+        <p>A JPEG download is offered only when PixelStow has checked that the exported JPEG still contains the message and every attachment. That check applies to the saved file; further editing or compression can still affect recovery.</p>
+        <p>Larger messages and attachments need more image capacity. The suggested size and read margin help you choose a suitable image. Smaller source images normally keep their native resolution to preserve their appearance.</p>
+      </section>
+
+      <section aria-labelledby="passwords-and-privacy">
+        <h2 id="passwords-and-privacy">Passwords and privacy</h2>
+        <p>Encoding and decoding happen locally in your browser. PixelStow does not upload your source image, message, attachments or password.</p>
+        <p>A blank password leaves the contents public. A password encrypts the message and attachments, including their filenames. The photo itself remains visible. The password is not stored in the image, so keep it separately.</p>
+      </section>
+
+      <section aria-labelledby="encoding-formats">
+        <h2 id="encoding-formats">Encoding formats</h2>
+        <p><strong>Use Version 6 for new images.</strong> It is the default and the format used by normal Browse and camera recovery. The older writer choices remain available for compatibility work and comparison.</p>
+        <table>
+          <caption>Formats available in the Encoding format selector</caption>
+          <thead><tr><th scope="col">Format</th><th scope="col">Purpose</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Version 6</th><td>The current format, with compact recovery markers, adaptive signal strength and a reversible brightness curve. An optional reference records the original tones and colours for image restoration.</td></tr>
+            <tr><th scope="row">Version 5</th><td>An earlier format with compact recovery markers and adaptive contrast. Retained for comparison with earlier exports.</td></tr>
+            <tr><th scope="row">Version 4</th><td>An older format using larger recovery patches and marker brightness balancing.</td></tr>
+            <tr><th scope="row">Version 3</th><td>An earlier recovery format with larger markers around the image.</td></tr>
+            <tr><th scope="row">Version 1</th><td>The original image carrier. Retained for compatibility with readers that use the original format.</td></tr>
+          </tbody>
+        </table>
+        <p>Normal image and camera searches read Version 6 only. Selecting an older writer checks the image it generates using that format, but does not enable automatic recovery of older images. Use a format supported by the recipient's reader when compatibility is required.</p>
+      </section>
+
+      <footer>
+        <a href="./pixelstow.html">Open PixelStow</a>
+        <a href="./tech.html">Back to technology</a>
+      </footer>
+    </article>
+  </main>
+</body>
+</html>

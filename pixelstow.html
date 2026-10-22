@@ -1,0 +1,1102 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>PixelStow</title>
+  <link rel="canonical" href="https://www.massivehadron.com/pixelstow.html">
+  <style>
+    .attachment-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 12px 0; padding: 12px; border: 1px solid #2a394a; border-radius: 8px; }
+    .attachment-row > span { flex: 1 1 240px; min-width: 0; overflow-wrap: anywhere; }
+    .attachment-row audio { width: 100%; min-width: 0; }
+    .attachment-controls input { max-width: 100%; min-width: 0; }
+    .attachment-row .hint { width: 100%; margin: 0; }
+    .attachment-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+    .attachment-controls select { box-sizing: border-box; min-width: 0; min-height: 44px; padding: 8px; background: #081016; color: #f2f6fb; border: 1px solid #2a394a; border-radius: 6px; font: inherit; max-width: 100%; }
+    .voice-recording-controls { flex-wrap: nowrap; gap: 8px; width: fit-content; max-width: 100%; }
+    .voice-recording-controls select { flex: 0 1 auto; width: auto; }
+    #record-audio { flex: 0 0 44px; width: 44px; min-height: 44px; padding: 0; }
+    .recording-actions:not(:has(button:not([hidden]))) { display: none; }
+    :root {
+      color-scheme: dark;
+      --bg: #081016;
+      --text: #f2f6fb;
+      --muted: #a8b7c8;
+      --border: #2a394a;
+      --tile-azure: #8cebed;
+      --tile-community: #f5e69e;
+    }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font: 16px/1.5 "Segoe UI", "Trebuchet MS", system-ui, sans-serif;
+    }
+
+    .video-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      overflow: hidden;
+      pointer-events: none;
+      background: url("./web_portal_background.png") center top / cover no-repeat;
+    }
+
+    .video-backdrop video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      filter: brightness(0.74) saturate(1.04);
+    }
+
+    .video-backdrop::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(7, 12, 18, 0.48), rgba(7, 12, 18, 0.84));
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .video-backdrop video {
+        display: none;
+      }
+    }
+
+    .wrap {
+      position: relative;
+      z-index: 1;
+      box-sizing: border-box;
+      max-width: 1040px;
+      margin: 2vh auto;
+      padding: 28px;
+    }
+
+    .card {
+      background: rgba(18, 25, 35, 0.92);
+      backdrop-filter: blur(10px) saturate(1.08);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 32px;
+      box-shadow: 0 28px 80px rgba(0, 0, 0, 0.45);
+    }
+
+    .masthead {
+      display: grid;
+      grid-template-columns: 136px minmax(0, 1fr);
+      gap: 8px 24px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .studio-mark {
+      display: block;
+      width: 136px;
+      height: 136px;
+      object-fit: contain;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(2.2rem, 5vw, 3.5rem);
+      line-height: 1;
+      letter-spacing: 0;
+      color: var(--tile-azure);
+      text-shadow: 0 0 18px rgba(140, 235, 237, 0.22);
+    }
+
+    h2 {
+      margin: 22px 0 8px;
+      color: var(--tile-community);
+      font-size: 1.22rem;
+    }
+
+    p,
+    .hint {
+      margin: 0 0 14px;
+      color: var(--muted);
+    }
+    .hint.repetition-warning { color: #ffe285; border-left: 3px solid #ffe285; padding-left: 10px; }
+    .read-prognosis { margin: 18px 0 12px; padding: 14px; border: 1px solid var(--border); border-radius: 10px; }
+    .read-prognosis p { margin: 0 0 10px; }
+    .read-prognosis > p:first-child { height: 1.5em; }
+    .encoding-status { box-sizing: border-box; height: 9em; margin-top: 12px; overflow: auto; scrollbar-gutter: stable; font-size: .85rem; }
+    .read-prognosis .encoding-status .hint { margin: 0 0 6px; font-size: inherit; }
+    .encoding-status .error { color: #ffb4b4; }
+    .quality-label { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: .35em; }
+    #encoding-quality-value, #brightness-curve-value { min-width: 4ch; margin: 0; font: inherit; line-height: inherit; font-variant-numeric: tabular-nums; }
+    #brightness-curve-reset { min-height: 44px; padding: 4px 10px; font-size: inherit; }
+    .quality-scale { position: relative; --quality-max: 100%; --quality-ratio: 1; --quality-thumb: 24px; }
+    .quality-scale::before { content: ""; position: absolute; left: 0; right: 0; top: calc(50% - 4px); height: 8px; background: #182931; border-radius: 4px; pointer-events: none; }
+    .password-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; margin-top: 14px; }
+    .password-heading label { margin: 0; }
+    #change-encoding-password { padding: 6px 10px; min-height: 44px; font-size: .85rem; }
+    .prognosis-scale { position: relative; height: 64px; margin: 0 8px 6px; border-radius: 8px; }
+    .prognosis-scale::before { content: ""; position: absolute; inset: 25px 0; border-radius: 8px; background: linear-gradient(90deg, #63d79c, #efc66a 55%, #ed7777); }
+    .source-sizing .prognosis-scale::before { background: linear-gradient(90deg, #4b8399, #69dccb 50%, #385762); }
+    .source-sizing .prognosis-scale::after { content: ""; position: absolute; left: 50%; top: 22px; bottom: 22px; width: 2px; background: #d0eee8; pointer-events: none; }
+    .prognosis-pointer { position: absolute; top: 14px; bottom: 14px; width: 14px; transform: translateX(-50%); border: 2px solid #fff; border-radius: 6px; background: #081016; }
+    #prognosis-target { position: absolute; inset: 0; width: 100%; height: 64px; margin: 0; opacity: 0; cursor: ew-resize; touch-action: none; }
+    .prognosis-scale:focus-within { outline: 2px solid var(--tile-azure); outline-offset: 5px; }
+    .prognosis-limit { position: absolute; inset-block: 25px; background: rgba(8,16,22,.6); pointer-events: none; }
+    #prognosis-low-limit { left: 0; border-radius: 8px 0 0 8px; }
+    #prognosis-high-limit { right: 0; border-radius: 0 8px 8px 0; }
+    .prognosis-labels { display: flex; justify-content: space-between; font-size: 0.82rem; color: var(--muted); }
+    .read-prognosis .hint { margin: 10px 0 0; }
+
+    a {
+      color: var(--tile-azure);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    label {
+      display: block;
+      margin: 14px 0 6px;
+      font-weight: 700;
+    }
+
+    .byte-count {
+      font-weight: 600;
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+
+    input[type="text"],
+    input[type="password"],
+    textarea {
+      box-sizing: border-box;
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      background: rgba(7, 16, 24, 0.78);
+      color: var(--text);
+      font: inherit;
+    }
+
+    textarea {
+      min-height: 110px;
+      resize: vertical;
+    }
+
+    .drop {
+      margin-top: 18px;
+      padding: 16px;
+      border: 1px dashed rgba(140, 235, 237, 0.45);
+      border-radius: 14px;
+      background: rgba(8, 15, 22, 0.48);
+    }
+
+    .drop.dragover {
+      border-color: var(--tile-azure);
+      background: rgba(140, 235, 237, 0.08);
+    }
+
+    .file-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .image-toolbar { margin-top: 14px; }
+    .image-label { margin: 0 0 6px; color: var(--text); font-weight: 700; }
+    .image-actions > button { white-space: nowrap; }
+    .image-actions #preview-audio,
+    .image-actions #full-preview { width: 44px; padding: 0; flex: 0 0 44px; }
+    .image-actions #preview-audio { background: rgba(7, 16, 24, 0.78); color: var(--text); }
+    .image-actions #choose-image { white-space: normal; }
+    #choose-image .choose-cancel { display: none; }
+    #choose-image.searching .choose-cancel { display: block; }
+
+    .preview {
+      margin-top: 14px;
+    }
+
+    .preview-bottom-row { display: flex; align-items: center; gap: 8px; }
+    .preview-bottom-row .comparison-control { flex: 1; min-width: 0; }
+    #preview-bottom-row:not(:has(#comparison-control:not([hidden]))) { display: none; }
+    /* The page image is one picture. Hold switches source and encoded; tap opens fullscreen. */
+    body:not(.preview-modal-open) #preview:not(.inline-source) #preview-source { display: none !important; }
+    body:not(.preview-modal-open) #preview.inline-source #preview-source { display: block !important; clip-path: none !important; }
+    body:not(.preview-modal-open) #preview.inline-source #preview-encoded { visibility: hidden; }
+    body:not(.preview-modal-open) #preview-mode:not([hidden]) { display: block; }
+    #preview-markers { position: relative; display: inline-flex; flex: 0 0 44px; width: 44px; height: 48px; margin: 0; }
+    #show-transform { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+    .analysis-icon { display: flex; align-items: center; justify-content: center; box-sizing: border-box; width: 100%; height: 100%; border: 1px solid rgba(140, 235, 237, .55); border-radius: 8px; background: rgba(7, 16, 24, .78); color: var(--text); }
+    #show-transform:enabled:checked + .analysis-icon { background: var(--tile-azure); color: #081016; border-color: var(--tile-azure); }
+    #show-transform:focus-visible + .analysis-icon { outline: 2px solid var(--tile-azure); outline-offset: 2px; }
+    #show-transform:disabled { cursor: not-allowed; }
+    #show-transform:disabled + .analysis-icon { opacity: .45; }
+    .image-caption { margin: 8px 0; }
+    .image-caption .loaded-image { margin: 0; font-size: 0.82rem; font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .image-caption #capacity { margin: 2px 0 0; font-size: 0.78rem; }
+    .decode-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px; margin: 0 0 8px; font-size: .82rem; }
+    .decode-stats dt { color: var(--muted); }
+    .decode-stats dd { margin: 0; }
+    .decode-stats small { display: block; color: var(--muted); }
+    .decode-stats [data-load="clean"], .decode-stats [data-load="light"] { color: #63d79c; }
+    .decode-stats [data-load="moderate"] { color: #efc66a; }
+    .decode-stats [data-load="heavy"] { color: #ed7777; }
+    .image-caption.has-read-stats #capacity, .image-caption.has-read-stats #image-read-status { display: none; }
+    #preview[hidden] + .image-caption > :not(#status) { display: none; }
+    .image-caption:has(#status:not(:empty)) #image-read-status { display: none; }
+    .image-caption #status:not(:empty) { margin: 6px 0; }
+    .read-details { margin-top: 8px; font-size: .82rem; }
+    .read-details summary { cursor: pointer; color: var(--tile-azure); }
+    #recovery-progress { max-height: 14rem; overflow: auto; padding: 0 8px; border-left: 2px solid var(--border); }
+    .read-live-status { min-width: 0; height: 1.5em; margin: 2px 0; font-size: .8rem; line-height: 1.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color .25s ease; }
+    @media (prefers-reduced-motion: reduce) { .read-live-status { transition: none; } }
+    html.preview-modal-open, body.preview-modal-open { overflow: hidden; overscroll-behavior: none; }
+    .preview-panel {
+      box-sizing: border-box; position: fixed; inset: 0; width: 100%; height: 100%; height: 100dvh;
+      max-width: none; max-height: none; margin: 0; padding: 0; border: 0; border-radius: 0;
+      background: #000; color: var(--text); overflow: hidden;
+    }
+    .preview-panel::backdrop { background: #000; }
+    .preview-panel[open] { display: grid; grid-template-rows: minmax(0, 1fr) auto; padding-top: env(safe-area-inset-top); }
+    .preview-screen { position: relative; min-height: 0; }
+    .preview-screen > .preview { position: relative; height: 100%; margin: 0; }
+    .preview-screen .viewport { height: 100%; border-radius: 0; background: #000; touch-action: none; overscroll-behavior: contain; -webkit-touch-callout: none; }
+    .preview-screen .preview-bottom-row,
+    .preview-screen .image-caption,
+    .preview-screen #preview-note { display: none !important; }
+    .preview-screen-footer { padding: 4px max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); background: #081016; touch-action: manipulation; }
+    .preview-screen-footer .comparison-control { margin: 0 auto; max-width: 800px; }
+    .preview-screen-actions { display: contents; }
+    .preview-screen-toolbar {
+      display: flex; flex-wrap: nowrap; align-items: center; justify-content: center; max-width: 480px; margin: 0 auto;
+      /* Keep six 44px targets on narrow screens, with gaps capped below half a button. */
+      gap: clamp(8px, calc((100% - 264px) / 5), 20px);
+    }
+    #preview-screen-scale { display: grid; place-items: center; }
+    #preview-screen-scale svg { display: block; }
+    #preview-screen-scale svg[hidden] { display: none; }
+    .preview-screen-toolbar button { flex: 0 0 44px; width: 44px; min-height: 48px; padding: 0; font-size: 0.82rem; font-weight: 500; }
+    #preview-audio svg { display: block; }
+    .preview-audio-label { display: none; }
+    .preview-screen-toolbar #preview-screen-close { color: var(--tile-azure); font-weight: 700; }
+    #preview-screen-toggle[aria-pressed="true"] { border-color: var(--tile-azure); color: var(--tile-azure); }
+    .preview-context-menu { position: fixed; z-index: 4; max-width: calc(100% - 16px); padding: 5px; border: 1px solid var(--border); border-radius: 8px; background: #121923; box-shadow: 0 6px 24px #0009; }
+    .preview-context-menu button { display: block; width: 100%; white-space: nowrap; text-align: left; }
+    .camera-calibration { position: absolute; top: 12px; left: 50%; z-index: 2; box-sizing: border-box; max-width: calc(100% - 24px); transform: translateX(-50%); padding: 5px 10px; border-radius: 6px; background: #081016df; color: #bdc8cf; font-size: .8rem; line-height: 1.3; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
+    .camera-calibration::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 50%; background: #86939b; }
+    .camera-calibration[data-state="none"] { color: #ed7777; }
+    .camera-calibration[data-state="one"] { color: #f0a34a; }
+    .camera-calibration[data-state="partial"] { color: #f2db55; }
+    .camera-calibration[data-state="none"]::before,
+    .camera-calibration[data-state="one"]::before,
+    .camera-calibration[data-state="partial"]::before { background: currentColor; }
+    .camera-calibration[data-state="detected"] { color: #b8f3c7; }
+    .camera-calibration[data-state="detected"]::before { background: #61e28b; box-shadow: 0 0 7px #61e28b99; }
+    .camera-markers { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none; }
+    .preview-panel.clean #preview-source,
+    .preview-panel.clean #compare-ui,
+    .preview-panel.clean #comparison-control { display: none !important; }
+    .preview-panel.clean.show-source #preview-source { display: block !important; clip-path: none !important; }
+    .preview-panel.clean.show-source #preview-encoded { visibility: hidden; }
+    #preview-mode { display: none; }
+    .preview-panel.clean #preview-mode:not([hidden]) { display: block; }
+
+    .viewport {
+      position: relative;
+      width: 100%;
+      overflow: hidden;
+      border-radius: 12px;
+      background: rgba(0, 0, 0, 0.28);
+      touch-action: none;
+      overscroll-behavior: auto;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .preview-note { position: absolute; z-index: 2; left: 10px; bottom: 8px; width: fit-content; max-width: calc(100% - 20px); box-sizing: border-box; margin: 0; padding: 2px 5px; border-radius: 4px; color: #92989f; background: rgba(8, 16, 22, .72); font-size: .72rem; line-height: 1.4; pointer-events: none; }
+
+    .viewport.panning,
+    .viewport.panning * {
+      cursor: grabbing !important;
+    }
+
+    .compare {
+      position: absolute;
+      top: 0;
+      left: 0;
+      transform-origin: 0 0;
+      line-height: 0;
+    }
+
+    .compare canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      background: transparent;
+      transform-origin: 0 0;
+    }
+
+    #preview-source {
+      position: absolute;
+      inset: 0;
+    }
+
+    #transform-outline { position: absolute; inset: 0; pointer-events: none; }
+    html.camera-modal-open, body.camera-modal-open { overscroll-behavior: none; }
+    /* The page has to be able to scroll, or iPhone Safari keeps the address bar
+       expanded after a rotation and covers the camera. */
+    html.camera-modal-open body { min-height: calc(100lvh + 80px); padding-bottom: 96px; }
+    .camera-panel {
+      box-sizing: border-box; position: fixed; inset: 0; width: 100%; height: 100%; height: 100svh;
+      max-width: none; max-height: none; margin: 0; border: 0; border-radius: 0;
+      padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right))
+        max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+      background: #081016; color: var(--text); overflow: hidden; touch-action: none;
+    }
+    .camera-panel[open] { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; gap: 10px; }
+    .camera-panel::backdrop { background: #081016; }
+    .camera-header { display: flex; gap: 12px; align-items: center; justify-content: space-between; min-width: 0; }
+    .camera-header > div { min-width: 0; }
+    .camera-header h2 { margin: 0; font-size: 1.1rem; }
+    .camera-header .hint { margin: 3px 0 0; font-size: 0.82rem; }
+    .camera-device-name { font-size: .85em; font-weight: 500; overflow-wrap: anywhere; color: var(--muted); }
+    .camera-device-name[data-mode="good"] { color: #61e28b; }
+    .camera-device-name[data-mode="bad"], .camera-mode-warning { color: #ed7777; }
+    .camera-mode-warning { white-space: normal; overflow-wrap: anywhere; }
+    .camera-header button { flex: 0 0 auto; }
+    #close-camera { width: 44px; padding: 0; }
+    .camera-icon svg { display: block; pointer-events: none; }
+    .camera-view { position: relative; min-width: 0; min-height: 0; line-height: 0; background: #000; overflow: hidden; touch-action: none; cursor: pointer; }
+    .camera-view[aria-disabled="true"] { cursor: default; }
+    .camera-view:focus-visible { outline: 2px solid var(--tile-azure); outline-offset: -2px; }
+    .camera-view video { position: absolute; z-index: 0; display: block; left: 50%; top: 50%; max-width: none; max-height: none; object-fit: contain; transform: translate(-50%, -50%); }
+    .camera-frame { position: absolute; z-index: 1; box-sizing: border-box; border: 3px solid var(--frame-outline, rgba(140, 235, 237, 0.65)); pointer-events: none; }
+    .camera-target { position: absolute; inset: 6%; }
+    .camera-target span { position: absolute; width: 24px; height: 24px; border: 3px solid var(--frame-outline, #8cebed); border-radius: 2px; }
+    .camera-target span:nth-child(1) { left: 0; top: 0; border-right: 0; border-bottom: 0; }
+    .camera-target span:nth-child(2) { right: 0; top: 0; border-left: 0; border-bottom: 0; }
+    .camera-target span:nth-child(3) { right: 0; bottom: 0; border-left: 0; border-top: 0; }
+    .camera-target span:nth-child(4) { left: 0; bottom: 0; border-right: 0; border-top: 0; }
+    .camera-frame-note { position: absolute; left: 8px; right: 8px; bottom: 5px; margin: 0; text-align: center; color: white; font-size: 0.75rem; line-height: 1.4; text-shadow: 0 1px 3px #000; }
+    .camera-footer { display: grid; grid-template-rows: auto auto minmax(0, 1fr); gap: 8px; min-height: 0; }
+    .camera-feedback { box-sizing: border-box; height: clamp(104px, 18dvh, 164px); overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; touch-action: pan-y; }
+    .camera-controls { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: stretch; gap: 8px; margin: 0; }
+    .camera-controls button { margin: 0; padding: 9px 6px; min-width: 0; line-height: 1.15; }
+    .camera-controls .camera-shutter { color: #081016; background: var(--tile-azure); font-weight: 700; }
+    .camera-controls .camera-shutter[data-calibration-hold] { background: #61e28b; border-color: #61e28b; }
+    #capture-frame { grid-column: 1 / -1; grid-row: 1; margin-right: 104px; }
+    #pause-camera { grid-column: 2; grid-row: 1; justify-self: end; width: 44px; margin-right: 52px; padding: 0; z-index: 1; }
+    #pause-camera svg { display: block; }
+    #pause-camera svg[hidden] { display: none; }
+    #switch-camera { grid-column: 2; grid-row: 1; justify-self: end; width: 44px; padding: 0; z-index: 1; }
+    #switch-camera svg { display: block; }
+    #rotate-camera { grid-column: 1; grid-row: 2; }
+    .camera-native-photo { grid-column: 2; grid-row: 2; }
+    .camera-controls:not(:has(#pause-camera:not([hidden]))) #capture-frame { margin-right: 52px; }
+    .camera-controls:not(:has(#camera-take-photo:not([hidden]))) #rotate-camera { grid-column: 1 / -1; }
+    .camera-feedback > .hint { margin: 0 0 8px; font-size: 0.82rem; overflow-wrap: anywhere; }
+    @media (orientation: portrait) {
+      .camera-panel[open] {
+        grid-template-rows: auto auto minmax(0, 1fr);
+        gap: 4px;
+        padding: max(6px, env(safe-area-inset-top)) max(6px, env(safe-area-inset-right))
+          max(6px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left));
+      }
+      .camera-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0 8px; }
+      .camera-header > div { display: contents; }
+      .camera-header h2 { grid-column: 1; grid-row: 1; font-size: 1rem; }
+      .camera-header .hint { grid-column: 1 / -1; grid-row: 2; margin: 4px 0 0; font-size: 0.75rem; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .camera-header button { grid-column: 2; grid-row: 1; padding: 4px 8px; }
+      .camera-view { width: 100%; min-height: 0; }
+      .camera-footer { position: relative; min-height: 0; overflow: hidden; gap: 6px; grid-template-rows: auto auto minmax(0, 1fr); }
+      .camera-footer .read-live-status {
+        position: static; grid-row: 1;
+        margin: 0; height: auto; padding: 1px 6px; pointer-events: none;
+        background: #081016d0; text-shadow: 0 1px 2px #000;
+      }
+      .camera-footer .camera-controls { grid-row: 2; }
+      .camera-footer .camera-feedback { grid-row: 3; }
+      .camera-controls { gap: 6px; }
+      .camera-controls button { padding: 4px 4px; line-height: 1.1; }
+      .camera-feedback { height: 100%; max-height: none; min-height: 0; }
+    }
+    @media (orientation: landscape) and (max-height: 600px) {
+      /* The preview uses the full remaining height. Title and controls sit beside
+         it, so the Safari address bar does not push the picture off the screen. */
+      .camera-panel[open] {
+        grid-template-columns: minmax(0, 1fr) minmax(158px, 34vw);
+        grid-template-rows: auto minmax(0, 1fr);
+        gap: 6px;
+        padding: max(4px, env(safe-area-inset-top)) max(4px, env(safe-area-inset-right))
+          max(4px, env(safe-area-inset-bottom)) max(4px, env(safe-area-inset-left));
+      }
+      .camera-view { grid-column: 1; grid-row: 1 / -1; }
+      .camera-header { grid-column: 2; grid-row: 1; flex-direction: column; align-items: stretch; gap: 4px; }
+      .camera-header h2 { font-size: 0.95rem; }
+      .camera-header .hint { margin: 0; font-size: 0.72rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .camera-header button { align-self: end; padding: 4px 8px; }
+      .camera-footer { grid-column: 2; grid-row: 2; min-height: 0; overflow: hidden; gap: 4px; grid-template-rows: auto auto minmax(0, 1fr); }
+      .camera-feedback { height: 100%; max-height: 72px; min-height: 0; }
+      .camera-panel[open] #capture-frame { grid-column: 1 / -1; grid-row: 1; margin-right: 0; }
+      .camera-panel[open] #pause-camera,
+      .camera-panel[open] #switch-camera { grid-row: 2; width: 100%; margin: 0; justify-self: stretch; }
+      .camera-panel[open] #pause-camera { grid-column: 1; }
+      .camera-panel[open] #switch-camera { grid-column: 2; }
+      .camera-panel[open] #rotate-camera { grid-column: 1; grid-row: 3; }
+      .camera-panel[open] .camera-native-photo { grid-column: 2; grid-row: 3; }
+      .camera-panel[open] .camera-controls:not(:has(#camera-take-photo:not([hidden]))) #rotate-camera { grid-column: 1 / -1; }
+    }
+    .camera-open > .preview,
+    .camera-open > .loaded-image,
+    .camera-open > #capacity,
+    .camera-open > .payload-panel,
+    .transform-reader { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
+    .transform-reader summary { cursor: pointer; color: var(--tile-azure); font-weight: 700; }
+    .transform-reader > :last-child { margin-bottom: 0; }
+    #recovery-progress > .hint:empty { display: none; }
+
+    .compare-ui {
+      position: absolute;
+      pointer-events: none;
+    }
+
+    .split-line::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: -11px;
+      width: 24px;
+      pointer-events: auto;
+      touch-action: none;
+      cursor: ew-resize;
+    }
+
+    .comparison-control { display: flex; align-items: center; gap: 10px; font-size: 0.82rem; }
+    .comparison-control input { flex: 1; min-width: 0; min-height: 44px; margin: 0; accent-color: #69dccb; }
+    #split { appearance: none; -webkit-appearance: none; height: 48px; background: transparent; cursor: ew-resize; }
+    #split::-webkit-slider-runnable-track { height: 8px; background: #385762; border-radius: 4px; }
+    #split::-moz-range-track { height: 8px; background: #385762; border-radius: 4px; }
+    #split::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; width: 36px; height: 36px; margin-top: -14px; border: 2px solid #102028; border-radius: 50%; background: #69dccb; }
+    #split::-moz-range-thumb { width: 32px; height: 32px; border: 2px solid #102028; border-radius: 50%; background: #69dccb; }
+    #encoding-quality, #brightness-curve { position: relative; display: block; appearance: none; -webkit-appearance: none; width: calc(var(--quality-max) + (1 - var(--quality-ratio)) * var(--quality-thumb)); min-height: 44px; margin: 0; padding: 0; background: transparent; touch-action: pan-y; }
+    #encoding-quality::-webkit-slider-runnable-track, #brightness-curve::-webkit-slider-runnable-track { height: 8px; background: #385762; border-radius: 4px; }
+    #encoding-quality::-moz-range-track, #brightness-curve::-moz-range-track { height: 8px; background: #385762; border-radius: 4px; }
+    #encoding-quality::-webkit-slider-thumb, #brightness-curve::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; box-sizing: border-box; width: 24px; height: 24px; margin-top: -8px; border: 2px solid #102028; border-radius: 50%; background: #69dccb; }
+    #encoding-quality::-moz-range-thumb, #brightness-curve::-moz-range-thumb { box-sizing: border-box; width: 24px; height: 24px; border: 2px solid #102028; border-radius: 50%; background: #69dccb; }
+    #encoding-quality:focus-visible, #brightness-curve:focus-visible { outline: 2px solid var(--tile-azure); outline-offset: 2px; border-radius: 8px; }
+    @media (pointer: coarse) {
+      .quality-scale { --quality-thumb: 48px; }
+      #encoding-quality, #brightness-curve { appearance: none; -webkit-appearance: none; height: 64px; padding: 0; background: transparent; touch-action: pan-y; }
+      #encoding-quality::-webkit-slider-thumb, #brightness-curve::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; box-sizing: border-box; width: 48px; height: 48px; margin-top: -20px; border: 2px solid #102028; border-radius: 50%; background: #69dccb; }
+      #encoding-quality::-moz-range-thumb, #brightness-curve::-moz-range-thumb { box-sizing: border-box; width: 48px; height: 48px; border: 2px solid #102028; border-radius: 50%; background: #69dccb; }
+    }
+    .split-handle {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: 44px; height: 44px; padding: 0; background: #69dccb; color: #102028;
+      pointer-events: auto; touch-action: none; cursor: ew-resize;
+    }
+    .intro { grid-column: 1 / -1; margin: 0; font-size: 0.95rem; }
+    .intro-mobile { display: none; }
+    .more-info { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border); }
+    .more-info p:last-child { margin-bottom: 0; }
+    .audio-action { margin: 0 0 14px; }
+    .audio-action p { margin: 6px 0 0; }
+    .preview-audio { background: #8cebed; color: #081016; }
+    #preview-encoded-image { background: var(--tile-community); border-color: var(--tile-community); color: #081016; }
+    .paste-target { min-height: 100px; padding: 16px; border: 2px dashed var(--tile-azure); border-radius: 8px; }
+    .paste-target:empty::before { content: "Touch and hold here, then choose Paste"; color: var(--muted); pointer-events: none; }
+    #share-link { min-height: 72px; }
+    #facebook-message { min-height: 200px; }
+    .open-card-note { color: var(--text); padding: 12px; border: 1px solid var(--tile-community); border-radius: 8px; }
+
+    .split-line {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      margin-left: -1px;
+      background: #69dccb;
+      box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.65);
+      pointer-events: none;
+      touch-action: none;
+    }
+
+    .compare-tag {
+      position: absolute;
+      top: 10px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      background: rgba(15, 21, 30, 0.82);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      line-height: 1.4;
+      pointer-events: none;
+    }
+
+    .compare-tag.left { left: 10px; }
+    .compare-tag.right { right: 10px; }
+
+    .payload-panel {
+      margin: 18px 0;
+      padding: 20px;
+      border: 2px solid var(--tile-community);
+      border-radius: 12px;
+      background: rgba(8, 16, 22, 0.92);
+    }
+
+    .payload-panel h2:first-child { margin-top: 0; }
+    #unlock-prompt, #contents-summary { color: var(--text); font-weight: 600; }
+    .message-link { align-items: center; margin: 0 0 14px; }
+    .message-link .hint { flex: 1 1 12rem; min-width: 0; margin: 0; overflow-wrap: anywhere; }
+    #message-link-request-url { overflow-wrap: anywhere; }
+
+    .loaded-image { margin: 12px 0; color: var(--text); font-weight: 600; overflow-wrap: anywhere; }
+    .export-dialog {
+      box-sizing: border-box;
+      width: min(520px, calc(100% - 32px));
+      padding: 24px;
+      border: 2px solid var(--tile-azure);
+      border-radius: 14px;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .export-dialog::backdrop { background: rgba(0, 0, 0, 0.72); }
+    .export-dialog h2 { margin-top: 0; }
+    #export-preview { overflow-wrap: anywhere; }
+
+    .actions,
+    .links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .support {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px 20px;
+      align-items: center;
+      margin-top: 28px;
+    }
+
+    .support p {
+      margin: 0;
+      flex: 1 1 16rem;
+    }
+
+    a.coffee {
+      flex: 0 0 auto;
+      line-height: 0;
+    }
+
+    a.coffee img {
+      display: block;
+      height: 52px;
+      width: auto;
+    }
+
+    a.coffee:hover {
+      filter: brightness(1.06);
+      text-decoration: none;
+    }
+
+    [hidden] {
+      display: none !important;
+    }
+
+    button,
+    .button-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      box-sizing: border-box;
+      min-height: 44px;
+      padding: 0 14px;
+      border: 1px solid rgba(140, 235, 237, 0.55);
+      border-radius: 8px;
+      background: rgba(7, 16, 24, 0.78);
+      color: var(--text);
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    button:hover,
+    .button-link:hover {
+      filter: brightness(1.08);
+      text-decoration: none;
+    }
+
+    button:disabled {
+      opacity: 0.45;
+      cursor: default;
+      filter: none;
+    }
+
+    .status {
+      min-height: 1.5em;
+      margin: 16px 0 0;
+      color: var(--text);
+    }
+    .status:empty { min-height: 0; margin: 0; }
+
+    .status.error {
+      color: #ffb4b4;
+    }
+
+    .readout {
+      margin-top: 8px;
+    }
+
+    @media (max-width: 620px) {
+      .wrap {
+        margin: 0;
+        padding: 8px;
+      }
+
+      .card {
+        padding: 14px;
+        border-radius: 14px;
+      }
+
+      .masthead {
+        grid-template-columns: 56px minmax(0, 1fr);
+        gap: 6px 12px;
+      }
+
+      .studio-mark {
+        width: 56px;
+        height: 56px;
+      }
+      h1 { font-size: clamp(1.7rem, 8vw, 2.2rem); }
+      .intro { grid-column: 1 / -1; font-size: 0.9rem; }
+      .intro .intro-desktop { display: none; }
+      .intro .intro-mobile { display: inline; }
+      .drop { margin-top: 12px; padding: 10px; }
+      .image-toolbar { margin-top: 0; }
+      .image-actions { display: grid; grid-template-columns: repeat(4, minmax(44px, 1fr)) 44px; gap: 5px; }
+      .image-actions:has(#preview-audio:not([hidden])) { grid-template-columns: repeat(5, minmax(44px, 1fr)) 44px; }
+      .image-actions > button { font-size: 0.78rem; padding: 0 3px; min-width: 0; font-weight: 500; }
+      .image-actions > #choose-image, .image-actions > #open-camera { font-weight: 700; }
+      button, .button-link { font-size: 0.85rem; padding: 0 10px; }
+      .preview { margin-top: 8px; }
+      .image-label { margin-top: 0; }
+      .payload-panel { padding: 12px; margin: 12px 0; }
+      .image-caption { margin: 6px 0; }
+      .read-prognosis > p:first-child { height: 3em; }
+      .encoding-status { height: 15em; }
+      .status { margin-top: 8px; font-size: 0.9rem; }
+      .attachment-row { padding: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="video-backdrop" aria-hidden="true">
+    <video autoplay muted loop playsinline poster="./web_portal_background.png">
+      <source src="./preview.webm" type="video/webm">
+      <source src="./preview.mkv" type="video/x-matroska">
+    </video>
+  </div>
+  <main class="wrap">
+    <section class="card">
+      <div class="masthead">
+        <a href="./tech.html" aria-label="Back to technology">
+          <img class="studio-mark" src="./massive%20hadron%20logo.png" alt="Massive Hadron">
+        </a>
+        <h1>PixelStow</h1>
+        <p class="intro"><span class="intro-desktop">Put a message, files or a short voice recording inside a photo. Send the encoded image as a birthday card, then open it here to read the message and hear the audio.</span><span class="intro-mobile">Put messages, files or audio in a photo.</span> <a href="./pixelstow-info.html">More info</a>.</p>
+      </div>
+
+      <div class="drop" id="drop">
+        <div id="open-card" tabindex="-1">
+          <p class="open-card-note" id="open-card-note" hidden>Opening a photo card? Tap Browse to choose the original image from Files, or copy the photo and tap Paste. If it is locked, enter its password below the preview.</p>
+        </div>
+        <div class="image-toolbar">
+          <p class="image-label">Image</p>
+          <div class="file-row image-actions" id="image-actions">
+            <input id="file" type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg" aria-label="Browse for an image" hidden>
+            <button id="choose-image" type="button" title="Open an image to decode or use as a source" aria-label="Browse"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z"/><path class="choose-cancel" d="m9 10 6 6m0-6-6 6"/></svg></button>
+            <button id="paste-image" type="button" aria-label="Paste image" title="Paste an image to decode or use as a source"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m9.06 11.9 8.07-8.06a2.85 2.85 0 1 1 4.03 4.03l-8.06 8.08"/><path d="M7.07 14.94c-1.66 0-3 1.35-3 3.02 0 1.33-2.5 1.52-2 2.02 1.08 1.1 2.49 2.02 4 2.02 2.2 0 4-1.8 4-4.04a3.01 3.01 0 0 0-3-3.02z"/></svg></button>
+            <button id="open-camera" type="button" title="Decode an image with the camera" aria-label="Decode with camera"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3"/></svg></button>
+            <button id="camera-source" type="button" title="Take a source photo to create an encoded image" aria-label="Create from a camera photo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M12 18v-6"/><path d="M9 15h6"/></svg></button>
+            <input id="camera-file" type="file" accept="image/*" capture="environment" aria-label="Take a photo with the camera" hidden>
+            <button class="preview-audio" id="preview-audio" type="button" aria-label="Play audio" title="Play audio" disabled hidden><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7m3-10a9 9 0 0 1 0 13"/></svg><span class="preview-audio-label">Play audio</span></button>
+            <button id="full-preview" type="button" title="Full screen preview" aria-label="Full screen preview" disabled>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" focusable="false"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg>
+            </button>
+          </div>
+        </div>
+        <dialog class="camera-panel" id="camera-panel" hidden aria-labelledby="camera-title">
+          <header class="camera-header">
+            <div>
+              <h2 id="camera-title">Camera scanner</h2>
+              <p class="hint" id="camera-help">Point at an encoded picture anywhere in the preview. Pinch to zoom and hold steady.</p>
+            </div>
+            <button class="camera-icon" id="close-camera" type="button" aria-label="Close camera" title="Close camera" autofocus><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+          </header>
+          <div class="camera-view" id="camera-view" role="button" tabindex="0" aria-label="Capture and read the live camera preview" aria-disabled="true">
+            <video id="camera-video" autoplay muted playsinline aria-label="Live camera preview"></video>
+            <canvas class="camera-markers" id="camera-markers" hidden aria-hidden="true"></canvas>
+            <span class="camera-calibration" id="camera-calibration" data-state="searching" role="status" hidden>Searching</span>
+            <div class="camera-frame" id="camera-frame" hidden aria-hidden="true">
+              <div class="camera-target"><span></span><span></span><span></span><span></span></div>
+              <p class="camera-frame-note">Pinch to zoom · tap to capture</p>
+            </div>
+          </div>
+          <div class="camera-footer">
+            <p class="read-live-status" id="camera-read-status" role="status" aria-live="polite" aria-atomic="true"></p>
+            <div class="file-row camera-controls">
+              <button class="camera-shutter" id="capture-frame" type="button">Capture and read</button>
+              <button id="pause-camera" type="button" aria-label="Pause scanning" title="Pause scanning"><svg class="pause-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="14" y="3" width="5" height="18" rx="1"/><rect x="5" y="3" width="5" height="18" rx="1"/></svg><svg class="play-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" hidden><path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"/></svg></button>
+              <button id="switch-camera" type="button" aria-label="Switch camera" title="Switch camera"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M11 19H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/><path d="M13 5h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-5"/><circle cx="12" cy="12" r="3"/><path d="m18 22-3-3 3-3"/><path d="m6 2 3 3-3 3"/></svg></button>
+              <button class="camera-icon" id="rotate-camera" type="button" aria-label="Rotate view" title="Switch landscape and portrait framing; keep the camera image upright"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="3" width="8" height="12" rx="1.5"/><rect x="9" y="14" width="13" height="8" rx="1.5"/><path d="M15 3h2a4 4 0 0 1 4 4v3m-3-3 3 3 2-3"/></svg></button>
+              <button class="camera-native-photo camera-icon" id="camera-take-photo" type="button" aria-label="Take photo with phone camera" title="Take photo with phone camera"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M13 5H9L7 8H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-7"/><circle cx="12" cy="14" r="3"/><path d="m20 2-5 6h4l-1 4 5-7h-3l1-3Z"/></svg></button>
+            </div>
+            <div class="camera-feedback" tabindex="0" role="region" aria-label="Camera scan status and capture details">
+              <p class="hint camera-mode-warning" id="camera-mode-warning" role="status" hidden></p>
+              <p class="hint" id="camera-progress" role="status"></p>
+              <p class="hint" id="camera-signature"></p>
+            </div>
+          </div>
+        </dialog>
+        <div class="preview" id="preview" hidden>
+          <div class="viewport" id="viewport">
+            <div class="compare" id="compare">
+              <canvas id="preview-encoded"></canvas>
+              <canvas id="preview-source" hidden></canvas>
+              <canvas id="transform-outline" hidden aria-label="Detected image boundary, recovery markers and calibration bands"></canvas>
+            </div>
+            <div class="compare-ui" id="compare-ui" hidden>
+              <span class="compare-tag left" id="tag-encoded">Encoded</span>
+              <span class="compare-tag right" id="tag-source">Source</span>
+              <div class="split-line" id="split-line"><button class="split-handle" id="split-handle" type="button" tabindex="-1" aria-label="Drag comparison divider">↔</button></div>
+            </div>
+            <span class="compare-tag right" id="preview-mode" hidden></span>
+            <p class="hint preview-note" id="preview-note" hidden>(Scroll to zoom; left-drag to pan)</p>
+          </div>
+          <div class="preview-bottom-row" id="preview-bottom-row">
+            <div class="comparison-control" id="comparison-control" hidden>
+              <span>Encoded</span>
+              <input id="split" type="range" min="0" max="1000" value="500" aria-label="Comparison divider. Encoded image on the left, recovered source on the right.">
+              <span>Source</span>
+            </div>
+          </div>
+        </div>
+          <div class="image-caption">
+            <dl class="decode-stats" id="decode-stats" aria-label="Decoded image statistics" hidden>
+              <div><dt id="read-input-label">Capture resolution</dt><dd id="read-capture"></dd></div>
+              <div><dt>Decoded resolution</dt><dd id="read-resolution"></dd></div>
+              <div><dt>Redundancy</dt><dd id="read-redundancy"></dd></div>
+              <div><dt>Read rating</dt><dd><span id="read-rating"></span><small id="read-corrections"></small></dd></div>
+            </dl>
+            <p class="status" id="status" role="status"></p>
+            <p class="loaded-image" id="loaded-image" hidden></p>
+            <p class="read-live-status" id="image-read-status" role="status" aria-live="polite" aria-atomic="true"></p>
+            <p class="hint" id="capacity">Your original stays unchanged.</p>
+            <p class="hint" id="calibration-analysis" hidden></p>
+            <details class="read-details" id="read-details" hidden>
+              <summary>Read details</summary>
+              <div id="recovery-progress" hidden>
+                <p class="hint" id="read-failure-detail" hidden></p>
+                <p class="hint" id="allocation-detail" hidden></p>
+                <p class="hint" id="tone-detail" hidden></p>
+                <p class="hint" id="transform-status" role="status"></p>
+                <p class="hint" id="transform-signature" role="status"></p>
+                <p class="hint" id="recovery-framing" hidden>Markers were detected, but the contents could not be read. Solid boxes mark confirmed detections; any dashed boxes show expected positions. Retake the photo with all four corners visible, the picture filling more of the frame, and sharp focus. Avoid glare.</p>
+                <button id="cancel-transform" type="button" hidden>Cancel search</button>
+              </div>
+            </details>
+          </div>
+        <section class="payload-panel" id="payload-panel" hidden aria-label="Embedded image contents">
+          <form id="unlock-form" hidden>
+            <h2>Password protected image</h2>
+            <p id="unlock-prompt">This image is password protected. Please enter the password to read the message and any attached files.</p>
+            <label for="unlock-password">Password</label>
+            <input id="unlock-password" type="password" autocomplete="off" spellcheck="false" aria-describedby="unlock-prompt" required>
+            <div class="actions">
+              <button id="unlock" type="submit">Unlock image</button>
+            </div>
+            <p class="hint">Press Enter or choose Unlock image.</p>
+          </form>
+          <div id="decoded-content" hidden>
+            <h2>Image contents</h2>
+            <div class="actions message-link" id="message-link" hidden>
+              <a class="button-link" id="open-message-link" target="_blank" rel="noopener noreferrer" title="Open link in a new tab">Open link ↗</a>
+              <span class="hint" id="message-link-destination"></span>
+            </div>
+            <p id="contents-summary" role="status" tabindex="-1"></p>
+            <div class="audio-action" id="audio-action" hidden>
+              <p class="hint" id="voice-status" role="status"></p>
+            </div>
+            <div id="decoded-message" hidden>
+              <label for="readout">Message <span class="byte-count" id="readout-bytes">(0 bytes)</span></label>
+              <textarea class="readout" id="readout" readonly></textarea>
+            </div>
+            <section id="decoded-files" hidden>
+              <h2>Attached files</h2>
+              <div id="decoded-attachments"></div>
+            </section>
+            <div class="actions">
+              <button id="relock" type="button" hidden>Lock again</button>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <section id="composition">
+      <label for="message">Message <span class="byte-count" id="message-bytes">(0 bytes)</span></label>
+      <textarea id="message" maxlength="16384" spellcheck="true"></textarea>
+      <p class="hint">Put a web link on the first line to offer opening it when the image is decoded.</p>
+
+      <label for="record-quality">Voice recording size</label>
+      <div class="attachment-controls voice-recording-controls">
+        <button id="record-audio" type="button" aria-label="Record voice message" title="Record voice message" disabled><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m11 4-6 5H2v6h3l6 5z"/><path d="M15 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 3 7"/><circle cx="19" cy="19" r="3" fill="#ed7777" stroke="none"/></svg></button>
+        <select id="record-quality">
+          <option value="compatible">Original recording — compatible</option>
+          <option value="compact" disabled>Smaller voice — 8 kbit/s Opus</option>
+          <option value="tiny" disabled>Smallest voice — 6 kbit/s Opus</option>
+        </select>
+      </div>
+      <p class="hint" id="record-help">Checking whether this browser can make smaller voice files…</p>
+      <div class="actions recording-actions">
+        <button id="stop-audio" type="button" hidden>Stop and attach recording</button>
+        <button id="cancel-audio" type="button" hidden>Discard recording</button>
+      </div>
+      <p class="hint" id="record-status" role="status"></p>
+
+      <h2>Attachments <span class="byte-count" id="attachment-bytes">(0 bytes)</span></h2>
+      <div class="attachment-controls">
+        <label for="attachment-kind">File type</label>
+        <select id="attachment-kind">
+          <option value="all">Any file</option>
+          <option value="audio">Audio</option>
+          <option value="image">Image</option>
+          <option value="document">Document</option>
+        </select>
+        <input id="attachment-file" type="file" multiple aria-label="Attach files">
+      </div>
+      <p class="hint">Attach files with or without a text message. Audio gets a player when decoded; other files can be downloaded. The total payload size must fit the photo.</p>
+      <div id="attachment-list" aria-label="Files to encode"></div>
+
+      <label class="quality-label" for="encoding-quality"><span>Durability / image quality</span> <output id="encoding-quality-value" for="encoding-quality">80%</output></label>
+      <div class="quality-scale"><input id="encoding-quality" type="range" min="0" max="1" step="any" value="0.8" aria-valuetext="80% image quality"></div>
+      <div class="prognosis-labels"><span>More durable · stronger pattern</span><span>Higher image quality</span></div>
+      <p class="hint">80% uses the accepted signal strength. Move left for stronger wavelets. Scaling limits the available quality for the chosen read margin.</p>
+      <label><input id="colour-wavelets" type="checkbox" checked> Colour wavelets to match the image (V6)</label>
+      <p class="hint">Matches the encoding pattern to the source colours. Turn off for a neutral pattern. Encode again to apply.</p>
+      <details class="transform-reader">
+        <summary>Tone and colour recovery</summary>
+        <label><input id="tone-reference" type="checkbox" checked> Include original tone and colour reference for restoration</label>
+        <p class="hint">V6 records a 60-byte reference to help restore photographed colours, brightness and contrast. Turn this off to save capacity. This reference does not control wavelet colouring.</p>
+        <label for="source-curve">Source brightness mapping</label>
+        <select id="source-curve">
+          <option value="gentle" selected>Gentle · original image detail</option>
+          <option value="adjustable">Adjustable contrast</option>
+        </select>
+        <p class="hint">Gentle uses the original brightness adjustment for cleaner source recovery. Adjustable contrast offers stronger tone changes. Both support coloured wavelets.</p>
+        <div id="adjustable-source-curve" hidden>
+        <label><input id="luminance-curve" type="checkbox" checked> Preserve hue in brightness curve</label>
+        <label class="quality-label" for="brightness-curve"><span>Brightness curve</span> <output id="brightness-curve-value" for="brightness-curve">0.125 · default</output></label>
+        <div class="quality-scale"><input id="brightness-curve" type="range" min="0" max="1" step="any" value="0.125" aria-describedby="brightness-curve-mapping brightness-curve-hint"></div>
+        <div class="prognosis-labels"><span>0 · Linear</span><button id="brightness-curve-reset" type="button">Reset to 0.125</button><span>1 · Extreme</span></div>
+        <p class="hint" id="brightness-curve-mapping"></p>
+        <p class="hint" id="brightness-curve-hint">Luminance-only curve, preserving colour balance within wavelet headroom. The brightness setting and hue mode are saved in the image for recovery. Encode again to apply changes.</p>
+        </div>
+      </details>
+      <label><input id="scale-source" type="checkbox"> Scale source for payload</label>
+
+      <section class="read-prognosis" id="read-prognosis" hidden aria-label="Estimated camera-read difficulty">
+        <p><strong id="prognosis-title"></strong></p>
+        <div class="prognosis-scale"><span class="prognosis-limit" id="prognosis-low-limit" aria-hidden="true"></span><span class="prognosis-limit" id="prognosis-high-limit" aria-hidden="true"></span><span class="prognosis-pointer" id="prognosis-pointer" aria-hidden="true"></span><input id="prognosis-target" type="range" min="0" max="1" step="0.001" value="0.2" aria-label="Desired photo-read margin" aria-describedby="prognosis-detail"></div>
+        <div class="prognosis-labels" id="prognosis-labels" aria-hidden="true"><span>More margin</span><span>Moderate</span><span>Tricky read</span></div>
+        <div class="encoding-status" id="encoding-status" role="status" tabindex="0" aria-label="Encoding status">
+          <p class="hint" id="payload-budget"></p>
+          <p class="hint" id="source-size-plan"></p>
+          <p class="hint" id="prognosis-detail"></p>
+        </div>
+      </section>
+
+      <div id="encoding-passwords">
+        <div class="password-heading">
+          <label id="encoding-password-label" for="password">Password for encoding</label>
+          <button id="change-encoding-password" type="button" aria-label="Change password" hidden>Change</button>
+        </div>
+        <input id="password" type="password" autocomplete="off" spellcheck="false" aria-describedby="encoding-password-help">
+        <input id="confirm" type="password" autocomplete="off" spellcheck="false" aria-describedby="encoding-password-help" hidden>
+        <p class="hint" id="encoding-password-help">Use a blank password for a public message. A password locks the text and every attachment, including filenames. It is not stored in the image.</p>
+      </div>
+      </section>
+
+      <div class="actions">
+        <button id="preview-encoded-image" type="button" disabled>Preview</button>
+        <button id="encode" type="button" disabled>Encode into a new image</button>
+        <button id="decode" type="button" disabled>Decode image</button>
+        <a class="button-link" id="download" href="#" hidden>Download encoded PNG</a>
+        <button id="save-encoded-jpeg" type="button" hidden>Download encoded JPEG</button>
+        <button id="save-message" type="button" hidden>Download message</button>
+        <button id="save-source" type="button" hidden>Download source PNG</button>
+        <button id="save-source-jpeg" type="button" hidden>Download source JPEG</button>
+        <button id="copy-image" type="button" hidden>Copy image to clipboard</button>
+        <button id="share-image" type="button" hidden>Send via WhatsApp / Share</button>
+        <button id="share-message" type="button" hidden>Opening link / WhatsApp message</button>
+        <button id="post-facebook" type="button" hidden>Post to Facebook</button>
+      </div>
+      <p class="hint" id="share-help" hidden>Choose WhatsApp in the share menu. Include the opening link; send the PNG as a Document / original file if WhatsApp offers that option. Photo sharing can resize it and lose its contents.</p>
+
+      <details class="transform-reader" id="transform-reader">
+        <summary>Image recovery options</summary>
+        <p class="hint">Browse checks the native V6 marker first. For a resized, padded or photographed V6 image, retry here or choose a specific search. Wider searches stop after 60 seconds. All processing stays in this browser.</p>
+        <div class="attachment-controls">
+          <label for="transform-mode">Search</label>
+          <select id="transform-mode">
+            <option value="auto">Automatic · recommended</option>
+            <option value="padding">Padding only · original size</option>
+            <option value="affine">Rotation, scale, stretch and shear</option>
+            <option value="perspective">Perspective · flat quadrilateral</option>
+          </select>
+          <button id="find-transform" type="button" disabled>Retry image recovery</button>
+        </div>
+        <label><input id="transform-force" type="checkbox"> Search anyway if the frequency signature is weak</label>
+        <label id="restore-colour-option" hidden><input id="restore-colour" type="checkbox" checked> Restore recorded tone and colour in the decoded image</label>
+        <p class="hint">Yellow: decoded marker header. Green: confirmed known pattern. Blue: side-reference cross-check. Dashed: expected position, not confirmed. The payload checksum determines whether the message can be read.</p>
+      </details>
+
+      <section id="encoding-format">
+        <label for="carrier-version">Encoding format</label>
+        <select id="carrier-version">
+          <option value="6">Version 6 (default)</option>
+          <option value="5">Version 5</option>
+          <option value="4">Version 4</option>
+          <option value="3">Version 3</option>
+          <option value="1">Version 1</option>
+        </select>
+        <p class="hint"><a href="./pixelstow-info.html#encoding-formats">Format version details</a>.</p>
+      </section>
+
+      <section class="more-info" id="more-info" aria-labelledby="more-info-title">
+        <h2 id="more-info-title">About PixelStow</h2>
+        <p>Everything is processed in this browser and is not uploaded. Encoding saves a new image. <a href="./pixelstow-info.html">More info</a>.</p>
+      </section>
+
+      <div class="links">
+        <a class="button-link" href="./tech.html">Back to technology</a>
+        <a class="button-link" href="./massive-hadron.html">Massive Hadron</a>
+      </div>
+
+      <div class="support">
+        <a class="coffee" href="https://www.buymeacoffee.com/acakebread" target="_blank" rel="noopener noreferrer">
+          <img src="./buymeacoffee.png" alt="Buy me a coffee">
+        </a>
+        <p>If you want to use this utility in your application, please contact me at <a href="mailto:acakebread@massivehadron.com">acakebread@massivehadron.com</a> and I will grant access to the repo.</p>
+      </div>
+    </section>
+  </main>
+  <dialog class="preview-panel" id="preview-panel" aria-label="Full screen image preview. Tap for controls; hold to switch encoded image and source when available; drag with the left mouse button or one or two fingers to pan; pinch to zoom; Escape to close." tabindex="-1">
+    <div class="preview-screen" id="preview-screen"></div>
+    <div class="preview-screen-footer" id="preview-screen-footer">
+      <div class="preview-screen-toolbar" id="preview-screen-toolbar">
+        <div class="preview-screen-actions" id="preview-screen-actions"></div>
+        <button id="preview-screen-scale" type="button" aria-label="100%" title="100%">
+          <svg class="scale-actual" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m15 15 6 6m-6-6v4.8m0-4.8h4.8"/><path d="M9 19.8V15m0 0H4.2M9 15l-6 6"/><path d="M15 4.2V9m0 0h4.8M15 9l6-6"/><path d="M9 4.2V9m0 0H4.2M9 9 3 3"/></svg>
+          <svg class="scale-fit" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" hidden><path d="m21 21-6-6m6 6v-4.8m0 4.8h-4.8"/><path d="M3 16.2V21m0 0h4.8M3 21l6-6"/><path d="M21 7.8V3m0 0h-4.8M21 3l-6 6"/><path d="m3 7.8V3m0 0h4.8M3 3l6 6"/></svg>
+        </button>
+        <button id="preview-screen-hide" type="button" aria-label="Maximise preview" title="Maximise preview"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" focusable="false"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg></button>
+        <button id="preview-screen-toggle" type="button" aria-label="Show source image" title="Show source image" aria-pressed="false" disabled hidden><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 7h18m-4-4 4 4-4 4M21 17H3m4-4-4 4 4 4"/></svg></button>
+        <label id="preview-markers" title="Show recovery diagnostics for this image"><input id="show-transform" type="checkbox" aria-label="Analysis"><span class="analysis-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" focusable="false"><rect x="3" y="3" width="18" height="14" rx="2"/><path d="M8 21h8m-4-4v4"/><rect x="7" y="7" width="3" height="6" rx=".5"/><path d="m14 8 1-1v6m-1 0h3"/></svg></span></label>
+        <button id="preview-screen-close" type="button" aria-label="Close preview" title="Close preview"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+      </div>
+    </div>
+    <div class="preview-context-menu" id="preview-context-menu" role="menu" aria-label="Preview actions" hidden>
+      <button id="preview-context-copy" type="button" role="menuitem">Copy image to clipboard</button>
+    </div>
+  </dialog>
+  <dialog class="export-dialog" id="message-link-dialog" aria-labelledby="message-link-title" aria-describedby="message-link-request-url">
+    <h2 id="message-link-title">Open this link?</h2>
+    <p id="message-link-request-url"></p>
+    <div class="actions">
+      <button id="message-link-open" type="button">Open link ↗</button>
+      <button id="message-link-decline" type="button" autofocus>Not now</button>
+    </div>
+  </dialog>
+  <dialog class="export-dialog" id="paste-dialog" aria-labelledby="paste-title">
+    <h2 id="paste-title">Paste a photo</h2>
+    <p id="paste-help">Copy the actual photo first. Touch and hold in the box, then choose Paste (or press Ctrl / Cmd + V).</p>
+    <div class="paste-target" id="paste-target" contenteditable="true" role="textbox" aria-label="Paste image here" aria-describedby="paste-help" inputmode="none" spellcheck="false"></div>
+    <p class="hint">If only a link or text was copied, save the original image to Files and use Browse.</p>
+    <div class="actions"><button id="paste-close" type="button">Close</button></div>
+  </dialog>
+  <dialog class="export-dialog" id="share-dialog" aria-labelledby="share-title">
+    <h2 id="share-title">Share your photo card</h2>
+    <p id="share-description">Download a copy of the original image, attach it in WhatsApp as a Document / original file, and include this opening link.</p>
+    <label for="share-link">Message to include</label>
+    <textarea id="share-link" readonly></textarea>
+    <div class="actions">
+      <button id="download-share-image" type="button">Download image to send</button>
+      <button id="copy-share-link" type="button">Copy message</button>
+      <a class="button-link" id="whatsapp-link" target="_blank" rel="noopener noreferrer">Open WhatsApp with this message</a>
+      <button id="share-close" type="button">Close</button>
+    </div>
+    <p class="hint" id="share-status" role="status">The WhatsApp link includes the message only. Attach the original image separately.</p>
+  </dialog>
+  <dialog class="export-dialog" id="facebook-dialog" aria-labelledby="facebook-title">
+    <h2 id="facebook-title">Post to Facebook</h2>
+    <p>Share the encoded photo to Facebook first. Paste the message below into its caption or a comment separately, then finish posting in Facebook.</p>
+    <p class="hint" id="facebook-file"></p>
+    <label for="facebook-message">Message to put under the photo</label>
+    <textarea id="facebook-message" readonly></textarea>
+    <div class="actions">
+      <button id="copy-facebook-message" type="button">Copy Facebook message</button>
+      <button id="share-facebook-photo" type="button" hidden>Share photo (choose Facebook)</button>
+    </div>
+    <p>If Facebook is not in the share sheet, download the photo, open Facebook and create a Photo/Video post. Attach the downloaded photo and paste the message.</p>
+    <div class="actions">
+      <button id="download-facebook-photo" type="button">Download photo to post</button>
+      <a class="button-link" href="https://www.facebook.com/" target="_blank" rel="noopener noreferrer">Open Facebook</a>
+      <button id="facebook-close" type="button">Close</button>
+    </div>
+    <p class="hint" id="facebook-status" role="status"></p>
+  </dialog>
+  <dialog class="export-dialog" id="export-dialog" aria-labelledby="export-title" aria-describedby="export-description">
+    <form id="export-form">
+      <h2 id="export-title">Save file</h2>
+      <p id="export-description">Choose the export filename. The file's extension is added if needed.</p>
+      <label for="export-name">Filename</label>
+      <input id="export-name" type="text" autocomplete="off" spellcheck="false" required aria-describedby="export-preview export-error">
+      <p class="hint" id="export-preview" role="status"></p>
+      <p class="status error" id="export-error" role="alert" hidden></p>
+      <div class="actions">
+        <button id="export-save" type="submit">Save file</button>
+        <button id="export-cancel" type="button">Cancel</button>
+      </div>
+    </form>
+  </dialog>
+  <script src="./pixelstow-spectrum.js?v=48ecc7682fb8d0e5"></script>
+  <script src="./pixelstow-edge-guide.js?v=48ecc7682fb8d0e5"></script>
+  <script src="./pixelstow-transform.js?v=48ecc7682fb8d0e5"></script>
+  <script src="./pixelstow-lattice.js?v=48ecc7682fb8d0e5"></script>
+  <script src="./pixelstow.js?v=48ecc7682fb8d0e5"></script>
+  <script src="./pixelstow-sizing.js?v=48ecc7682fb8d0e5"></script>
+  <script src="./pixelstow-export.js?v=48ecc7682fb8d0e5"></script>
+  <script src="./pixelstow-voice.js?v=48ecc7682fb8d0e5"></script>
+  <script src="./pixelstow-media.js?v=48ecc7682fb8d0e5"></script>
+  <script src="./pixelstow-sharing.js?v=48ecc7682fb8d0e5"></script>
+  <script src="./pixelstow-read-progress.js?v=48ecc7682fb8d0e5"></script>
+  <script src="./pixelstow-message-links.js?v=48ecc7682fb8d0e5"></script>
+  <script src="./markertracker/geometry.js?v=48ecc7682fb8d0e5"></script>
+  <script src="./markertracker/local-tracker.js?v=48ecc7682fb8d0e5"></script>
+  <script src="./markertracker/camera-source.js?v=48ecc7682fb8d0e5"></script>
+  <script src="./markertracker/scan.js?v=48ecc7682fb8d0e5"></script>
+  <script src="./markertracker/motion-gate.js?v=48ecc7682fb8d0e5"></script>
+  <script src="./markertracker/engine.js?v=48ecc7682fb8d0e5"></script>
+  <script src="./pixelstow-camera.js?v=48ecc7682fb8d0e5"></script>
+  <script src="./pixelstow-preview.js?v=48ecc7682fb8d0e5"></script>
+  <script src="./pixelstow-app.js?v=48ecc7682fb8d0e5"></script>
+</body>
+</html>
