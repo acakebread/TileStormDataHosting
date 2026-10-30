@@ -34,6 +34,7 @@ export function createTalk({ face }) {
   let interimAt = 0;
   let pending = null;
   let pendingAt = 0;
+  let keepMessage = false;
 
   function show(text) {
     state.hidden = false;
@@ -139,16 +140,16 @@ export function createTalk({ face }) {
     };
     rec.onerror = event => {
       if (event.error === 'aborted' || event.error === 'no-speech') return;
-      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-        box.checked = false;
-        stopListening();
-        show(event.error === 'not-allowed'
-          ? 'The microphone is blocked. Allow it for this site, then tick Talk to Eggbot again.'
-          : 'Speech recognition is blocked in this browser.');
-        return;
-      }
-      if (event.error === 'audio-capture') show('No microphone was found.');
-      else if (event.error === 'network') show('Speech recognition needs a network connection.');
+      stopListening();
+      keepMessage = true;
+      box.checked = false;
+      const detail = {
+        'not-allowed': 'Chrome refused speech recognition without a new prompt, because this site already has microphone permission.',
+        'service-not-allowed': 'Speech recognition is switched off in this browser.',
+        'audio-capture': 'No microphone was found.',
+        network: 'Speech recognition needs a network connection. Chrome sends the audio to its speech service.'
+      }[event.error] || `Speech recognition stopped (${event.error}).`;
+      show(detail);
     };
     rec.onend = () => {
       if (recognition !== rec || !box.checked) return;
@@ -171,11 +172,12 @@ export function createTalk({ face }) {
       voice.stop();
       attentive = false;
       pending = null;
-      state.hidden = true;
+      if (!keepMessage) state.hidden = true;
+      keepMessage = false;
       return;
     }
-    // Chrome only shows the microphone prompt when listening starts inside the tick itself.
-    show('Listening. Say Hello Eggbot. Allow the microphone if the browser asks.');
+    // Permission is already stored for this site, so Chrome does not show Allow again.
+    show('Listening. Say Hello Eggbot.');
     startListening();
     voice.unlock().catch(error => console.warn('Swazzle reed unavailable:', error));
   });

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { EggbotRig } from './eggbot/rig.js';
 import { ArrivalTurn, clamp, dragAngles, GridJourney, SEQUENCE, SequenceClock, TiltReturn } from './eggbot/behaviour.js';
-import { createTalk } from './eggbot/talk.js';
+import { createTalk } from './eggbot/talk.js?v=3';
 
 const canvas = document.getElementById('scene');
 const stage = document.getElementById('stage');
@@ -332,7 +332,6 @@ async function initialise() {
     play('none');
     // restorePose resets the glTF wrapper too, so reapply its wheel anchor.
     model.position.copy(rig.contact).negate();
-    talk = createTalk({ face: facePlayer });
     controls(); resize();
     loading.hidden = true;
     stage.dataset.ready = 'true';
@@ -342,4 +341,5 @@ async function initialise() {
   } catch (error) { fail('Eggbot could not load. Please reload the page to try again.', error); }
 }
 
+talk = createTalk({ face: facePlayer });
 initialise();

@@ -10,7 +10,7 @@
   <script type="importmap">
     {"imports":{"three":"./eggbot/vendor/three/build/three.module.js","three/addons/":"./eggbot/vendor/three/addons/"}}
   </script>
-  <script type="module" src="./eggbot.js"></script>
+  <script type="module" src="./eggbot.js?v=3"></script>
   <script>
     // This must run without modules: Chrome blocks them on file:// pages.
     if (location.protocol === 'file:') document.addEventListener('DOMContentLoaded', () => {
@@ -43,7 +43,7 @@
       </fieldset>
       <fieldset id="talkControls">
         <legend>Talk</legend>
-        <label class="talk-option"><input type="checkbox" id="talkToEggbot" disabled><span>Talk to Eggbot</span><small>Say hello, then ask a question</small></label>
+        <label class="talk-option"><input type="checkbox" id="talkToEggbot"><span>Talk to Eggbot</span><small>Say hello, then ask a question</small></label>
         <p id="talkState" class="talk-state" hidden></p>
       </fieldset>
       <!-- Eye debug controls: uncomment for future tuning. Styles and input handlers are retained.
