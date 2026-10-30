@@ -165,7 +165,7 @@ export function createTalk({ face }) {
     if (document.hidden) stopListening();
     else startListening();
   });
-  box.addEventListener('change', async () => {
+  box.addEventListener('change', () => {
     if (!box.checked) {
       stopListening();
       voice.stop();
@@ -174,10 +174,10 @@ export function createTalk({ face }) {
       state.hidden = true;
       return;
     }
-    try { await voice.unlock(); }
-    catch (error) { console.warn('Swazzle reed unavailable:', error); }
-    show('Listening. Say Hello Eggbot.');
+    // Chrome only shows the microphone prompt when listening starts inside the tick itself.
+    show('Listening. Say Hello Eggbot. Allow the microphone if the browser asks.');
     startListening();
+    voice.unlock().catch(error => console.warn('Swazzle reed unavailable:', error));
   });
 
   return {
