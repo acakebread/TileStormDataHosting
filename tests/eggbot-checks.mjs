@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { ArrivalTurn, BlinkClock, dragAngles, GridJourney, IdleMotion, lidOffset, movementEase, SequenceClock, TiltReturn } from '../eggbot/behaviour.js';
+import { currentTimeReply, interpret, tryGetReply, unrecognisedReply } from '../eggbot/speech.js';
 import * as THREE from '../eggbot/vendor/three/build/three.core.js';
 import { EggbotRig } from '../eggbot/rig.js';
 
@@ -340,5 +341,17 @@ for (const animation of gltf.animations) {
   rig.updatePose();
   rig.shoulders.forEach((shoulder, index) => assert.deepEqual(shoulder.node.quaternion.toArray(), authoredShoulders[index].toArray()));
 }
+
+assert.equal(interpret('hello eggbot', false).greeting, true);
+assert.equal(interpret('hey egg bought', false).greeting, true);
+assert.equal(interpret('how are you', false).addressed, false);
+assert.equal(interpret('how are you?', true).question, true);
+assert.equal(tryGetReply('hello eggbot how are you'), "I'm fine");
+assert.equal(tryGetReply("what's the time", new Date(2026, 0, 1, 15, 5)), "it's three oh five");
+assert.equal(currentTimeReply(new Date(2026, 0, 1, 15, 0)), "it's three o'clock");
+assert.equal(currentTimeReply(new Date(2026, 0, 1, 15, 25)), "it's three twenty five");
+assert.equal(tryGetReply('can you help me'), "I'll try");
+assert.equal(tryGetReply('why are you taking so long'), 'I am doing my best');
+assert.equal(unrecognisedReply(() => 0), "I don't understand");
 
 console.log(`Eggbot checks passed: one-shot camera-facing arrival, tilt recovery, procedural wobble, frequent stationary glances, visible shoulder-only balance and clip isolation; drag directions, Idle yaw/pitch hierarchy (wheel height difference ≤ ${(maxWheelHeightDifference * 1000).toFixed(1)}mm), blink timing, eyelid coverage, GLB structure, antenna skinning, animation ranges and sequence rollover.`);

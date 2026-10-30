@@ -33,7 +33,9 @@ legend { width: 100%; padding: 0 0 10px; font-size: 11px; font-weight: 700; lett
 .play-symbol { font-size: 10px; }
 fieldset label { display: flex; flex-wrap: wrap; gap: 0 9px; padding: 8px 0; align-items: center; cursor: pointer; font-size: 13px; }
 fieldset label small { display: block; flex-basis: 100%; margin-left: 25px; font-size: 10px; color: var(--muted); }
-input[type="radio"] { accent-color: var(--accent); width: 15px; height: 15px; margin: 0; }
+input[type="radio"], input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px; margin: 0; }
+.talk-option:has(input:disabled) { cursor: default; }
+.talk-state { margin: 0 0 4px; font-size: 12px; color: var(--accent); }
 .instructions { border-top: 1px solid var(--line); padding-top: 13px; font-size: 12px; color: var(--muted); }
 .instructions summary { cursor: pointer; color: var(--text); }
 .panel-note { margin: 24px 0 0; font-size: 10px; color: #8094a8; }

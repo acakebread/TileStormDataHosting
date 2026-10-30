@@ -45,6 +45,17 @@ upright over one second. Recovery pauses while dragging and restarts from the
 current angle when grabbed again. This applies in every animation mode; it
 does not change the camera pitch or the selected clip's authored body motion.
 
+**Talk to Eggbot** is off until ticked. In Chrome, Edge or Safari it starts the
+browser speech service and the microphone. Say Hello Eggbot (hi and hey, and a
+few mishearings such as egg bought, also count). He turns toward the camera and
+answers in the Swazzle reed voice. Familiar questions use the same replies as
+the game, including the local clock for the time. Anything else he has attended
+to is answered with "I don't understand", "sorry", or "I can't hear you".
+Four seconds of quiet after his reply returns him to glancing. The control is
+disabled where the browser has no speech recognition. The page must be HTTPS
+or localhost. His answers are also written under the checkbox, because Swazzle
+is not English.
+
 The eye debug controls are retained in an HTML comment in `eggbot.html` for
 future tuning; uncomment them to enable live comparison. They expose the saved
 test scene's gaze strength (1.3) and pupil UV bias (0, 0.07).

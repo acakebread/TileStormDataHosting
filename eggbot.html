@@ -41,10 +41,15 @@
         <label><input type="radio" name="gaze" value="world"><span>Follow the orb</span><small>World tracking</small></label>
         <label><input type="radio" name="gaze" value="disabled"><span>Eyes at rest</span><small>No tracking</small></label>
       </fieldset>
+      <fieldset id="talkControls">
+        <legend>Talk</legend>
+        <label class="talk-option"><input type="checkbox" id="talkToEggbot" disabled><span>Talk to Eggbot</span><small>Say hello, then ask a question</small></label>
+        <p id="talkState" class="talk-state" hidden></p>
+      </fieldset>
       <!-- Eye debug controls: uncomment for future tuning. Styles and input handlers are retained.
       <details class="instructions eye-settings"><summary>Eye adjustments</summary><p>Unity test scene values. Offsets move the pupils and their following eyelids together.</p><label>Gaze strength <input type="number" data-eye-setting="strength" value="1.3" min="0" max="4" step="0.1"></label><label>Pupil offset U <input type="number" data-eye-setting="x" value="0" min="-0.32" max="0.32" step="0.01"></label><label>Pupil offset V <input type="number" data-eye-setting="y" value="0.07" min="-0.32" max="0.32" step="0.01"></label></details>
       -->
-      <details class="instructions"><summary>How to play</summary><p>Click or tap the grid to move Eggbot and clear any manual tilt. Drag to turn and tilt him; he eases upright after two seconds. Right-drag to orbit the camera. Scroll to zoom.</p><p>On a touchscreen, use one finger for Eggbot; two fingers to orbit and pinch to zoom.</p><p>With the scene focused, use arrow keys to turn Eggbot, Shift + arrows to orbit, + / − to zoom, and 0 to reset the view and position.</p><p>No animation uses gentle wobbling, shoulder balance movements, and frequent glances while stationary. Selecting an animation turns these off.</p><p>Single animations marked “once” hold their last pose. The sequence repeats Idle → Console Start → Console Loop → Console End.</p></details>
+      <details class="instructions"><summary>How to play</summary><p>Click or tap the grid to move Eggbot and clear any manual tilt. Drag to turn and tilt him; he eases upright after two seconds. Right-drag to orbit the camera. Scroll to zoom.</p><p>On a touchscreen, use one finger for Eggbot; two fingers to orbit and pinch to zoom.</p><p>With the scene focused, use arrow keys to turn Eggbot, Shift + arrows to orbit, + / − to zoom, and 0 to reset the view and position.</p><p>No animation uses gentle wobbling, shoulder balance movements, and frequent glances while stationary. Selecting an animation turns these off.</p><p>Single animations marked “once” hold their last pose. The sequence repeats Idle → Console Start → Console Loop → Console End.</p><p>Tick Talk to Eggbot, say Hello Eggbot, then ask a question. He turns toward you and answers. About four seconds of silence sends him back to glancing. Chrome, Edge or Safari can listen, and the page must be served over HTTPS or localhost.</p></details>
       <p class="panel-note">The TileStorm animation testbed,<br>now in your browser.</p>
     </aside>
     <section class="stage" id="stage" aria-label="Eggbot 3D playground">

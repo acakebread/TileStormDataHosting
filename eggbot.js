@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { EggbotRig } from './eggbot/rig.js';
 import { ArrivalTurn, clamp, dragAngles, GridJourney, SEQUENCE, SequenceClock, TiltReturn } from './eggbot/behaviour.js';
+import { createTalk } from './eggbot/talk.js';
 
 const canvas = document.getElementById('scene');
 const stage = document.getElementById('stage');
@@ -21,7 +22,7 @@ let renderer, scene, camera, model, mixer, rig, clips = [], activeAction = null,
 let sequence = null, selection = 'none', lastStatus = '', lastFrame = null, worldTime = 0;
 let cameraYaw = 0, cameraPitch = 15, cameraDistance = cameraDefaultDistance;
 let orb, dragged = false, touchGesture = null;
-let ground, journey = null, arrivalTurn = null, tap = null, destination;
+let ground, journey = null, arrivalTurn = null, tap = null, destination, talk;
 const bindPose = [];
 
 function fail(message, error) {
@@ -95,7 +96,13 @@ function fitWorldTarget() {
   const distance = 1.55 / Math.sin(Math.min(verticalHalf, horizontalHalf));
   if (cameraDistance < distance) zoom(distance);
 }
-function resetView() { journey = null; arrivalTurn = null; destination.visible = false; tiltReturn.set(0); rig.turntable.position.set(0, 0, 0); cameraYaw = 0; cameraPitch = 15; cameraDistance = cameraDefaultDistance; rig.resetView(); applyCamera(); fitWorldTarget(); }
+function facePlayer() {
+  if (!rig) return;
+  journey = null;
+  destination.visible = false;
+  arrivalTurn = new ArrivalTurn(rig.turntable.position, rig.yaw, camera.position);
+}
+function resetView() { journey = null; arrivalTurn = null; destination.visible = false; tiltReturn.set(0); rig.turntable.position.set(0, 0, 0); cameraYaw = 0; cameraPitch = 15; cameraDistance = cameraDefaultDistance; rig.resetView(); applyCamera(); fitWorldTarget(); if (talk?.attentive) facePlayer(); }
 
 function walkTo(clientX, clientY) {
   const bounds = canvas.getBoundingClientRect();
@@ -222,7 +229,8 @@ function animate(time) {
   const delta = lastFrame === null ? 0 : Math.max(0, (time - lastFrame) / 1000);
   lastFrame = time;
   rig.tilt = tiltReturn.tick(delta, dragged);
-  rig.updateProceduralMotion(delta, selection === 'none', !journey && !arrivalTurn && !dragged);
+  talk?.tick(delta);
+  rig.updateProceduralMotion(delta, selection === 'none', !journey && !arrivalTurn && !dragged && !talk?.attentive);
   // Restore the actor's animation rotation before mixing: the rig extracts its
   // yaw after evaluation, so even a held frame must be evaluated afresh.
   if (activeAction) {
@@ -324,6 +332,7 @@ async function initialise() {
     play('none');
     // restorePose resets the glTF wrapper too, so reapply its wheel anchor.
     model.position.copy(rig.contact).negate();
+    talk = createTalk({ face: facePlayer });
     controls(); resize();
     loading.hidden = true;
     stage.dataset.ready = 'true';
