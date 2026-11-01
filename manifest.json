@@ -21,8 +21,8 @@
 			"id": "5YXeyP.json",
 			"mapHash": "5YXeyP",
 			"name": "small local test",
-			"sizeBytes": 848,
-			"updatedUtc": "2026-10-28T07:46:11.8230000Z",
+			"sizeBytes": 829,
+			"updatedUtc": "2026-11-01T15:06:54.3376540Z",
 			"utc": "6X3Ehx",
 			"visibility": "private"
 		},
@@ -34,8 +34,8 @@
 			"id": "6VDuh3.json",
 			"mapHash": "6VDuh3",
 			"name": "Jungle test",
-			"sizeBytes": 1653,
-			"updatedUtc": "2026-10-25T19:21:58.3284634Z",
+			"sizeBytes": 1511,
+			"updatedUtc": "2026-11-01T15:06:54.3376540Z",
 			"utc": "1FyuN5",
 			"visibility": "private"
 		},
@@ -47,8 +47,8 @@
 			"id": "CK4prk.json",
 			"mapHash": "CK4prk",
 			"name": "Little Egypt 2",
-			"sizeBytes": 850,
-			"updatedUtc": "2026-10-20T18:36:03.1420000Z",
+			"sizeBytes": 846,
+			"updatedUtc": "2026-11-01T15:06:54.3376540Z",
 			"utc": "5Ecx4r",
 			"visibility": "public"
 		},
@@ -60,8 +60,8 @@
 			"id": "9A7ju3.json",
 			"mapHash": "9A7ju3",
 			"name": "feudal test",
-			"sizeBytes": 841,
-			"updatedUtc": "2026-10-06T06:23:26.3250000Z",
+			"sizeBytes": 815,
+			"updatedUtc": "2026-11-01T15:06:54.3376540Z",
 			"utc": "0Hek9Y",
 			"visibility": "private"
 		},
@@ -73,8 +73,8 @@
 			"id": "CAfAAv.json",
 			"mapHash": "CAfAAv",
 			"name": "Industrial test",
-			"sizeBytes": 2498,
-			"updatedUtc": "2026-10-05T05:44:08.1780383Z",
+			"sizeBytes": 2356,
+			"updatedUtc": "2026-11-01T15:06:54.3376540Z",
 			"utc": "1NK5HN",
 			"visibility": "private"
 		},
@@ -86,8 +86,8 @@
 			"id": "6yarpw.json",
 			"mapHash": "6yarpw",
 			"name": "Medieval test",
-			"sizeBytes": 3599,
-			"updatedUtc": "2026-10-05T05:43:56.3652597Z",
+			"sizeBytes": 3297,
+			"updatedUtc": "2026-11-01T15:06:54.3376540Z",
 			"utc": "5uqMmE",
 			"visibility": "private"
 		},
@@ -99,8 +99,8 @@
 			"id": "6rDpFF.json",
 			"mapHash": "6rDpFF",
 			"name": "Mike Test 01",
-			"sizeBytes": 2680,
-			"updatedUtc": "2026-10-05T05:43:29.0237369Z",
+			"sizeBytes": 2420,
+			"updatedUtc": "2026-11-01T15:06:54.3376540Z",
 			"utc": "0HejYy",
 			"visibility": "private"
 		},
@@ -112,8 +112,8 @@
 			"id": "Dfcv05.json",
 			"mapHash": "Dfcv05",
 			"name": "multi level test",
-			"sizeBytes": 1301,
-			"updatedUtc": "2026-10-04T09:07:26.5800000Z",
+			"sizeBytes": 1282,
+			"updatedUtc": "2026-11-01T15:06:54.3376540Z",
 			"utc": "14DmUj",
 			"visibility": "private"
 		},
@@ -125,8 +125,8 @@
 			"id": "A0eN6p.json",
 			"mapHash": "A0eN6p",
 			"name": "Little Egypt",
-			"sizeBytes": 454,
-			"updatedUtc": "2026-09-30T11:47:21.6540000Z",
+			"sizeBytes": 450,
+			"updatedUtc": "2026-11-01T15:06:54.3376540Z",
 			"utc": "6ePMR1",
 			"visibility": "public"
 		},
@@ -138,8 +138,8 @@
 			"id": "4i3rjK.json",
 			"mapHash": "4i3rjK",
 			"name": "eggbot's pipe test",
-			"sizeBytes": 814,
-			"updatedUtc": "2026-09-27T15:09:15.4274247Z",
+			"sizeBytes": 810,
+			"updatedUtc": "2026-11-01T15:06:54.3376540Z",
 			"utc": "9DEnK1",
 			"visibility": "private"
 		},
@@ -151,8 +151,8 @@
 			"id": "2NqYCC.json",
 			"mapHash": "2NqYCC",
 			"name": "Egypt test",
-			"sizeBytes": 2415,
-			"updatedUtc": "2026-05-29T10:48:20.3144336Z"
+			"sizeBytes": 2220,
+			"updatedUtc": "2026-11-01T15:06:54.3376540Z"
 		},
 		{
 			"contentType": "application/json;charset=utf-8",
@@ -162,8 +162,8 @@
 			"id": "C2XMmJ.json",
 			"mapHash": "C2XMmJ",
 			"name": "external test",
-			"sizeBytes": 602,
-			"updatedUtc": "2026-05-29T10:46:19.0438084Z"
+			"sizeBytes": 598,
+			"updatedUtc": "2026-11-01T15:06:54.3376540Z"
 		}
 	],
 	"generatedUtc": "2026-11-01T14:39:16.6450226Z",
