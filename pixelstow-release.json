@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "release": "48ecc7682fb8d0e5",
+  "release": "50f75a58873d5cc3",
   "files": [
     {
       "path": "buymeacoffee.png",
@@ -9,67 +9,67 @@
     },
     {
       "path": "markertracker/acquire-worker.js",
-      "sha256": "71a36179cf1aa4bceb04e88014b6490120043d2c12d8f92a3524557d5797b99b",
-      "bytes": 5244
+      "sha256": "e68ddfefea918f7f7a9f35e313915779bc66dd25ac04a50fe703014d94195d05",
+      "bytes": 5233
     },
     {
       "path": "markertracker/camera-source.js",
-      "sha256": "0fc29785ddee67fa5227766f37fc3e764ba897197349511c84d27eb437da7e54",
-      "bytes": 4304
+      "sha256": "3607ab24ef3bf061da8dd7c053fb943d87600b8fe85e65f7ee7629a159333063",
+      "bytes": 4368
     },
     {
       "path": "markertracker/engine.js",
-      "sha256": "899a2630d963ac0414ec0a1cbcf268f172f7fd69dbc21d9ab827bebfe3d334f6",
-      "bytes": 48457
+      "sha256": "4cde7a00a0cecbd38400c1f97695b8c75d5949fa6b6a334558319769631cd4f9",
+      "bytes": 48247
     },
     {
       "path": "markertracker/geometry.js",
-      "sha256": "423ce186b777fdd4caa1db10fd88b908c2cbeca435fd893d607e0a1b6df15eab",
-      "bytes": 6081
+      "sha256": "bc679c090f77e526557ad3b06a697fb847176d12aca098df9a4b7677f31718cb",
+      "bytes": 6099
     },
     {
       "path": "markertracker/index.html",
-      "sha256": "a0a45a1f4f75568a9e924265a6925eab28447a566484cae09d7848841ac97cd1",
+      "sha256": "e5423c2e0246ceb9c8d0774c17084c8e058312bbcac94b4e54aa6c45b934f79d",
       "bytes": 5640
     },
     {
       "path": "markertracker/local-tracker.js",
-      "sha256": "85755e261724ed3c8c26a7aaa54794b89bc7cff991ec5c2ece2b5c2a2b082f42",
-      "bytes": 25295
+      "sha256": "57d619b93715c55d5b132482f8bce024017c0adb05df46348f1b6018bf5172f3",
+      "bytes": 25310
     },
     {
       "path": "markertracker/markertracker.js",
-      "sha256": "7b40d04c480a8e505f6b9d3891fda14d99724f7655c26f31c95f565da59fb261",
-      "bytes": 32275
+      "sha256": "297c2c715e41b78fc85d00d770812204e01917c100c553ac189a62d4c9c23b7d",
+      "bytes": 32363
     },
     {
       "path": "markertracker/motion-gate.js",
-      "sha256": "17c432f933bb337ae4de526fdb6e2424f941b8d71b33d983be4f945e460c6a7f",
-      "bytes": 5918
+      "sha256": "34266d7f4972e7ebdfc65d59d15c6a15c7f04fe0c23368a48690e7b656a3440c",
+      "bytes": 5903
     },
     {
       "path": "markertracker/scan.js",
-      "sha256": "fcb46aa13b683fde43444ff058a0dbcb61ad8907e679e97351744c37379d12e7",
+      "sha256": "13d4df5a9fa1651d0b296e972dad38486fe07adb7b45bf4218d3a2272a165937",
       "bytes": 4932
     },
     {
       "path": "markertracker/search-gpu.js",
-      "sha256": "f29be14ad203bce9fd84f68d82914ca84359d1f58f114633ba894831e09a5ff9",
+      "sha256": "5bfc24bea65a8dbcbe083058145511bafa72b869de5d3ff8c32fc2795f1aa0b2",
       "bytes": 16480
     },
     {
       "path": "markertracker/search-plan.js",
-      "sha256": "bd18bf53e6854b9e21c4ae19e8d18c746647c2fe8d3efb76c21075df4fa72919",
-      "bytes": 12282
+      "sha256": "d5b9eaafdda11b403e6536541085aba2ab65d4a881d3894a89f402c6d67dfc9d",
+      "bytes": 12272
     },
     {
       "path": "markertracker/tree-worker.js",
-      "sha256": "367eecd9fe113aff37581538b3524da7f15dec371a07420fb385f8e6f45c9ba1",
-      "bytes": 23243
+      "sha256": "0ef11a4355891bd9a476075c23211d6abaec43388f5e61face52269169551de9",
+      "bytes": 23252
     },
     {
       "path": "markertracker/verify-worker.js",
-      "sha256": "2dfbb2788e06c5961e5379ebba9d39bc0a857c99a3c217a29302ae0067dfd7d2",
+      "sha256": "5aec747a1a533e3d44cf48293661d4156c047614fdb8752f365818b85948e22a",
       "bytes": 1632
     },
     {
@@ -79,23 +79,23 @@
     },
     {
       "path": "pixelstow-app.js",
-      "sha256": "237634d2c156fd9d81979ea41dbd08b3090f388813617935420535b6e95448bb",
-      "bytes": 114583
+      "sha256": "e124911b865b23a5c47865e22045ddacec0360b56501fc03b04c87e131272145",
+      "bytes": 115906
     },
     {
       "path": "pixelstow-camera.js",
-      "sha256": "f378553d602a768b5035cb65571adcd9ee7ce2e3cdcad4e2558d51e0501da0b5",
-      "bytes": 78509
+      "sha256": "f44f802ea1d1e15a0109fad0f386e957616e1520a2003806a7daf4de7f892015",
+      "bytes": 78764
     },
     {
       "path": "pixelstow-edge-guide.js",
-      "sha256": "15f35bc826718da3ffed27fe9c0e4fc8c9e3a4f24cdf30f30f8aa72357f6ab15",
-      "bytes": 35792
+      "sha256": "caf0ec7e5f9254fc01693b1405b1cf4496872d719dd127e85a6eeda6ad8c85c0",
+      "bytes": 35789
     },
     {
       "path": "pixelstow-export.js",
-      "sha256": "5fa7ea7436b1ad61ed82404962958fc13d9bded887a37e2b3a5c0d92595005b9",
-      "bytes": 5348
+      "sha256": "a28d96d83b9c25d4439158516d6e70d621613fb03a7327b661ff95783e81fc6d",
+      "bytes": 5279
     },
     {
       "path": "pixelstow-info.html",
@@ -104,68 +104,68 @@
     },
     {
       "path": "pixelstow-lattice.js",
-      "sha256": "7f7479c825c6747d692e881052e9f85850571bc0e26681fcfa5df54c5d94cd50",
-      "bytes": 26573
+      "sha256": "c0c6c3f410ab6bb7c518386a0a6f9309f7289ea2bedb337c0df750337c476763",
+      "bytes": 26603
     },
     {
       "path": "pixelstow-media.js",
-      "sha256": "1c6a229badf1c1d5a4140fd639953bdcf58a8cad7797a2d58bae4e2261cca866",
-      "bytes": 44761
+      "sha256": "0992b1c3d4df9c1f95474987dc91694e85c34c4a7b22b51c32196f4f4f10e8b7",
+      "bytes": 44837
     },
     {
       "path": "pixelstow-message-links.js",
-      "sha256": "342b845da3905b87f766264f92b0a868d20e4eac10b4ecf2527dcc57207193e4",
-      "bytes": 4753
+      "sha256": "e70608705b4e8b7f8768a7f1875235c1ca4008fcdc9518decbffe787bd8b15f3",
+      "bytes": 4682
     },
     {
       "path": "pixelstow-preview.js",
-      "sha256": "787c1fd760793ab9ab0b0dc7fec1abb46849fe00cf2bf30d50c2ada54ba7e3d5",
-      "bytes": 21526
+      "sha256": "4e90957b45ef7e7e8f664d00f5ff2eb4b913b44e381d68451e0cd82c6e4f5d64",
+      "bytes": 21894
     },
     {
       "path": "pixelstow-read-progress.js",
-      "sha256": "3bdb869452040b398920a097b2846616a1c5489ca02a5e9d1849617799107e6e",
-      "bytes": 5548
+      "sha256": "389a4c71ed49098ecd71eebe9e075037227d76381f93051889128bb08c37cf80",
+      "bytes": 5516
     },
     {
       "path": "pixelstow-sharing.js",
-      "sha256": "6c6ea9e1ef0c81d1df73fb5bf99106b2a21543531f3bfca7daec0001601f8f41",
-      "bytes": 17685
+      "sha256": "1cf0484229ffbc74d92bc5cba11134dc1049ae7192a5a20bb28cbfe9becd1994",
+      "bytes": 17420
     },
     {
       "path": "pixelstow-sizing.js",
-      "sha256": "20c56132850b5f177e611bfe1adf43991db44707a424ab1ad707d3fa554eee88",
-      "bytes": 15212
+      "sha256": "5a591685ae4fb9f075b18247b326f6a2b2f9d5a4427660455e32c057b68c7737",
+      "bytes": 15257
     },
     {
       "path": "pixelstow-spectrum.js",
-      "sha256": "2c7403d53834f317459fdc3b30c39a21ab5293998ab3d4aadb4b381787e8bff3",
-      "bytes": 22438
+      "sha256": "bcd4076451fe5fd8e28d1ad59d96457b1c8663f7c937d7a027327c06dee4cfe4",
+      "bytes": 22440
     },
     {
       "path": "pixelstow-transform-worker.js",
-      "sha256": "95359a3317c1f22b40b58d91424e63902c7ae8707379274e92561d8823df52d1",
-      "bytes": 5567
+      "sha256": "1d3d8191cd218698daa233614cc8609a39b65443607b2fa0747daa7728134ab7",
+      "bytes": 5818
     },
     {
       "path": "pixelstow-transform.js",
-      "sha256": "2cb8999c78d5d4b5afcd8bcf7f18d0a68e52a0f23f83b40bc1608b0734953394",
-      "bytes": 77598
+      "sha256": "48790fccccf05beaefbdec66da2acb06460a09ae505ffa13d97d773a0f14c67f",
+      "bytes": 77602
     },
     {
       "path": "pixelstow-voice.js",
-      "sha256": "ef20ce5c1bc356b1d3d7ca9ce5c846f8f8e100f4d926ef2c61da1de83e6ca5a8",
-      "bytes": 13159
+      "sha256": "1947e62d54ba6ff0c12c1a3d7638e715a7654bf8342c1bc8b92d74737d3a3d62",
+      "bytes": 12815
     },
     {
       "path": "pixelstow.html",
-      "sha256": "d00bd88acc176f7e2750928da2464542ef716b5fe4948a887a99c3a5ca4dcecb",
-      "bytes": 68636
+      "sha256": "75f7cf521a12c37096fd1b8cbaacea8b77cdb9bd8a020290d8f760d16e0e9074",
+      "bytes": 68994
     },
     {
       "path": "pixelstow.js",
-      "sha256": "656d8cd7fc908a2aa2d7d716a970d31186408dd3f1f70c86cd829f6a0722670f",
-      "bytes": 254247
+      "sha256": "4c0a8f0bc23c23dc45adcbeb512424b12c4659a9ac983c94ba406ce7fdc7b138",
+      "bytes": 254473
     },
     {
       "path": "preview.mkv",
