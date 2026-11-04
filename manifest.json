@@ -3,6 +3,19 @@
 		{
 			"contentType": "application/json;charset=utf-8",
 			"description": "",
+			"downloadUrl": "maps/5YXeyP.json",
+			"fileName": "5YXeyP.json",
+			"id": "5YXeyP.json",
+			"mapHash": "5YXeyP",
+			"name": "small local test",
+			"sizeBytes": 1174,
+			"updatedUtc": "2026-11-04T12:34:25.6339829Z",
+			"utc": "6Qfv4f",
+			"visibility": "private"
+		},
+		{
+			"contentType": "application/json;charset=utf-8",
+			"description": "",
 			"downloadUrl": "maps/5Harkc.json",
 			"fileName": "5Harkc.json",
 			"id": "5Harkc.json",
@@ -166,21 +179,8 @@
 			"updatedUtc": "2026-11-01T15:45:44.2433530Z",
 			"utc": "DmQY1r",
 			"visibility": "public"
-		},
-		{
-			"contentType": "application/json;charset=utf-8",
-			"description": "",
-			"downloadUrl": "maps/5YXeyP.json",
-			"fileName": "5YXeyP.json",
-			"id": "5YXeyP.json",
-			"mapHash": "5YXeyP",
-			"name": "small local test",
-			"sizeBytes": 829,
-			"updatedUtc": "2026-11-01T15:45:44.2433530Z",
-			"utc": "A5Cfhr",
-			"visibility": "private"
 		}
 	],
-	"generatedUtc": "2026-11-03T07:09:09.4879287Z",
+	"generatedUtc": "2026-11-04T12:34:25.6329785Z",
 	"repositoryName": "TileStorm Shared Maps"
 }
