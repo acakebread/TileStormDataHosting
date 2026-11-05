@@ -3,6 +3,19 @@
 		{
 			"contentType": "application/json;charset=utf-8",
 			"description": "",
+			"downloadUrl": "maps/CAfAAv.json",
+			"fileName": "CAfAAv.json",
+			"id": "CAfAAv.json",
+			"mapHash": "CAfAAv",
+			"name": "Industrial test",
+			"sizeBytes": 2398,
+			"updatedUtc": "2026-11-05T10:15:30.3627320Z",
+			"utc": "2T2p11",
+			"visibility": "private"
+		},
+		{
+			"contentType": "application/json;charset=utf-8",
+			"description": "",
 			"downloadUrl": "maps/5YXeyP.json",
 			"fileName": "5YXeyP.json",
 			"id": "5YXeyP.json",
@@ -61,19 +74,6 @@
 			"sizeBytes": 815,
 			"updatedUtc": "2026-11-01T15:45:44.2433530Z",
 			"utc": "0xtf1R",
-			"visibility": "private"
-		},
-		{
-			"contentType": "application/json;charset=utf-8",
-			"description": "",
-			"downloadUrl": "maps/CAfAAv.json",
-			"fileName": "CAfAAv.json",
-			"id": "CAfAAv.json",
-			"mapHash": "CAfAAv",
-			"name": "Industrial test",
-			"sizeBytes": 2356,
-			"updatedUtc": "2026-11-01T15:45:44.2433530Z",
-			"utc": "6t8cVe",
 			"visibility": "private"
 		},
 		{
@@ -155,6 +155,6 @@
 			"visibility": "private"
 		}
 	],
-	"generatedUtc": "2026-11-05T10:15:14.8327015Z",
+	"generatedUtc": "2026-11-05T10:15:30.3627320Z",
 	"repositoryName": "TileStorm Shared Maps"
 }
