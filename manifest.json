@@ -153,21 +153,8 @@
       "updatedUtc": "2026-11-01T15:45:44.2433530Z",
       "utc": "3J0E1W",
       "visibility": "private"
-    },
-    {
-      "contentType": "application/zip",
-      "description": "",
-      "downloadUrl": "maps/CwnEy7.zip",
-      "fileName": "CwnEy7.zip",
-      "id": "CwnEy7.zip",
-      "mapHash": "CwnEy7",
-      "name": "public sandbox",
-      "sizeBytes": 466116,
-      "updatedUtc": "2026-11-01T15:45:44.2433530Z",
-      "utc": "DmQY1r",
-      "visibility": "public"
     }
   ],
-  "generatedUtc": "2026-11-05T10:06:21.910Z",
+  "generatedUtc": "2026-11-05T10:06:32.307Z",
   "repositoryName": "TileStorm Shared Maps"
 }
