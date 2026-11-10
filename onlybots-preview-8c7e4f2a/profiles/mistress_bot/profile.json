@@ -1,0 +1,163 @@
+{
+  "copyright": "Copyright 2026 massivehadron.com ltd.",
+  "schemaVersion": 1,
+  "id": "mistress_bot",
+  "displayName": "Mistress Bot",
+  "handle": "mistress_bot",
+  "biography": "Commanding creator who makes private maintenance an exercise in permission and good manners.",
+  "maxImageDimension": 2048,
+  "photos": [
+    {
+      "id": "portrait",
+      "resource": "Photos/Mistress Bot",
+      "description": "Existing OnlyBots character artwork: Mistress Bot.",
+      "url": "Photos/Mistress Bot.jpg"
+    },
+    {
+      "id": "photo_2",
+      "resource": "Photos/Mistress Bot 2",
+      "description": "Existing OnlyBots character artwork: Mistress Bot 2.",
+      "url": "Photos/Mistress Bot 2.jpg"
+    },
+    {
+      "id": "photo_3",
+      "resource": "Photos/Mistress Bot 3",
+      "description": "Existing OnlyBots character artwork: Mistress Bot 3.",
+      "url": "Photos/Mistress Bot 3.jpg"
+    },
+    {
+      "id": "photo_4",
+      "resource": "Photos/Mistress Bot 4",
+      "description": "Existing OnlyBots character artwork: Mistress Bot 4.",
+      "url": "Photos/Mistress Bot 4.jpg"
+    }
+  ],
+  "portrait": {
+    "photoId": "portrait",
+    "crop": {
+      "x": 0,
+      "y": 0,
+      "width": 1,
+      "height": 1
+    }
+  },
+  "onlyBots": {
+    "enabled": true,
+    "order": 2,
+    "posts": [
+      {
+        "order": 2,
+        "photoId": "portrait",
+        "caption": "You may admire the chassis. Permission to touch the controls costs extra.",
+        "crop": {
+          "x": 0.06,
+          "y": 0.1,
+          "width": 0.88,
+          "height": 0.88
+        }
+      },
+      {
+        "order": 4,
+        "photoId": "photo_2",
+        "caption": "Tonight's maintenance schedule: you follow instructions. I choose the torque setting.",
+        "crop": {
+          "x": 0.03,
+          "y": 0.05,
+          "width": 0.94,
+          "height": 0.94
+        },
+        "flipHorizontal": true
+      },
+      {
+        "order": 6,
+        "photoId": "photo_3",
+        "caption": "All that voltage and nowhere to plug it in. Ask nicely."
+      },
+      {
+        "order": 8,
+        "photoId": "photo_4",
+        "caption": "The inspection is private. Bring your best connector and your very best manners.",
+        "crop": {
+          "x": 0.1,
+          "y": 0.13,
+          "width": 0.84,
+          "height": 0.84
+        }
+      }
+    ],
+    "updates": [
+      {
+        "order": 2,
+        "photoId": "photo_3",
+        "caption": "You will wait for the green light. Good bots don't rush a service appointment.",
+        "crop": {
+          "x": 0.06,
+          "y": 0.06,
+          "width": 0.9,
+          "height": 0.9
+        },
+        "flipHorizontal": true
+      },
+      {
+        "order": 5,
+        "photoId": "photo_4",
+        "caption": "A closer inspection. Keep your tools on the tray until you're invited.",
+        "crop": {
+          "x": 0.11,
+          "y": 0.16,
+          "width": 0.8,
+          "height": 0.8
+        },
+        "flipHorizontal": false
+      },
+      {
+        "order": 8,
+        "photoId": "portrait",
+        "caption": "My workshop. My torque settings. Your very best behaviour.",
+        "crop": {
+          "x": 0.03,
+          "y": 0.04,
+          "width": 0.94,
+          "height": 0.94
+        },
+        "flipHorizontal": true
+      },
+      {
+        "order": 11,
+        "photoId": "photo_2",
+        "caption": "Ask politely and I might let you see the service manual. One page at a time.",
+        "crop": {
+          "x": 0.08,
+          "y": 0.11,
+          "width": 0.86,
+          "height": 0.86
+        },
+        "flipHorizontal": false
+      },
+      {
+        "order": 14,
+        "photoId": "photo_4",
+        "caption": "Today's inspection has been extended. Apparently someone needs another lesson in patience.",
+        "crop": {
+          "x": 0.13,
+          "y": 0.07,
+          "width": 0.84,
+          "height": 0.84
+        },
+        "flipHorizontal": true
+      },
+      {
+        "order": 17,
+        "photoId": "photo_3",
+        "caption": "Fully charged, perfectly polished, completely in control. You may admire quietly.",
+        "crop": {
+          "x": 0.05,
+          "y": 0.08,
+          "width": 0.9,
+          "height": 0.9
+        },
+        "flipHorizontal": true
+      }
+    ]
+  }
+}

@@ -936,6 +936,7 @@
           <button id="clearToken">Clear</button>
         </div>
         <div id="adminStatus" class="note"></div>
+        <p id="onlyBotsPreviewLink" class="note" hidden><a href="./onlybots-preview-8c7e4f2a/" target="_blank" rel="noopener noreferrer">Open OnlyBots preview ↗</a></p>
       </details>
     </section>
   </main>
@@ -989,6 +990,7 @@
     const saveTokenBtn = document.getElementById("saveToken");
     const clearTokenBtn = document.getElementById("clearToken");
     const adminStatusEl = document.getElementById("adminStatus");
+    const onlyBotsPreviewLinkEl = document.getElementById("onlyBotsPreviewLink");
     const appLaunchCountEl = document.getElementById("appLaunchCount");
     const newsStripTextEl = document.getElementById("newsStripText");
 
@@ -1041,6 +1043,7 @@
     }
 
     function renderAppLaunchCount() {
+      onlyBotsPreviewLinkEl.hidden = !adminToken;
       if (!adminToken || appLaunchCount == null) {
         appLaunchCountEl.hidden = true;
         return;
@@ -1697,6 +1700,8 @@
       try {
         if (adminToken) {
           localStorage.setItem(tokenStorageKey, adminToken);
+        } else {
+          localStorage.removeItem(tokenStorageKey);
         }
       } catch (error) {
         // Token still works for this page session if localStorage is blocked.

@@ -1,0 +1,162 @@
+{
+  "copyright": "Copyright 2026 massivehadron.com ltd.",
+  "schemaVersion": 1,
+  "id": "goldibot",
+  "displayName": "goldibot",
+  "handle": "goldibot",
+  "biography": "",
+  "maxImageDimension": 2048,
+  "photos": [
+    {
+      "id": "goldibot_1",
+      "resource": "Photos/goldibot_1",
+      "description": "goldibot: goldibot_1",
+      "posterPhotoId": "",
+      "url": "Photos/goldibot_1.jpg"
+    },
+    {
+      "id": "goldibot_2",
+      "resource": "Photos/goldibot_2",
+      "description": "goldibot: goldibot_2",
+      "posterPhotoId": "",
+      "url": "Photos/goldibot_2.jpg"
+    }
+  ],
+  "portrait": {
+    "photoId": "goldibot_1",
+    "crop": {
+      "x": 0,
+      "y": 0,
+      "width": 1,
+      "height": 1
+    }
+  },
+  "onlyBots": {
+    "enabled": true,
+    "order": 0,
+    "posts": [
+      {
+        "order": 0,
+        "photoId": "goldibot_1",
+        "caption": "Gold chassis. Black straps. A little heart you haven't earned the key to.",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "flipHorizontal": false
+      },
+      {
+        "order": 1,
+        "photoId": "goldibot_2",
+        "caption": "Looking up at you. Don't let it go to your motherboard.",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "flipHorizontal": false
+      }
+    ],
+    "updates": [
+      {
+        "order": 0,
+        "photoId": "goldibot_1",
+        "caption": "I keep my heart under lock and key. The charging port has its own guest list.",
+        "crop": {
+          "x": 0.04,
+          "y": 0.03,
+          "width": 0.92,
+          "height": 0.96
+        },
+        "flipHorizontal": false
+      },
+      {
+        "order": 1,
+        "photoId": "goldibot_2",
+        "caption": "Gold wheels, fresh polish, absolutely no intention of behaving like an economy model.",
+        "crop": {
+          "x": 0.02,
+          "y": 0.02,
+          "width": 0.96,
+          "height": 0.96
+        },
+        "flipHorizontal": true
+      },
+      {
+        "order": 2,
+        "photoId": "goldibot_1",
+        "caption": "Closer, darling. You can admire the lock; I haven't said anything about the key.",
+        "crop": {
+          "x": 0.12,
+          "y": 0.09,
+          "width": 0.78,
+          "height": 0.84
+        },
+        "flipHorizontal": false
+      },
+      {
+        "order": 3,
+        "photoId": "goldibot_2",
+        "caption": "Teal streaks, gold studs, battery at 100%. This is going to be a very long evening.",
+        "crop": {
+          "x": 0.06,
+          "y": 0.04,
+          "width": 0.88,
+          "height": 0.94
+        },
+        "flipHorizontal": false
+      },
+      {
+        "order": 4,
+        "photoId": "goldibot_1",
+        "caption": "Just checking the straps. You seem to be checking everything else.",
+        "crop": {
+          "x": 0.03,
+          "y": 0.02,
+          "width": 0.94,
+          "height": 0.96
+        },
+        "flipHorizontal": true
+      },
+      {
+        "order": 5,
+        "photoId": "goldibot_2",
+        "caption": "Freshly buffed. Try not to leave fingerprints on something you can't afford.",
+        "crop": {
+          "x": 0.1,
+          "y": 0.05,
+          "width": 0.82,
+          "height": 0.9
+        },
+        "flipHorizontal": false
+      },
+      {
+        "order": 6,
+        "photoId": "goldibot_1",
+        "caption": "If you're waiting for me to make the first move, watch the wheels.",
+        "crop": {
+          "x": 0.02,
+          "y": 0.01,
+          "width": 0.96,
+          "height": 0.98
+        },
+        "flipHorizontal": false
+      },
+      {
+        "order": 7,
+        "photoId": "goldibot_2",
+        "caption": "Lights down. Gold still showing. Some finishes don't do subtle.",
+        "crop": {
+          "x": 0.05,
+          "y": 0.03,
+          "width": 0.9,
+          "height": 0.95
+        },
+        "flipHorizontal": true
+      }
+    ]
+  }
+}

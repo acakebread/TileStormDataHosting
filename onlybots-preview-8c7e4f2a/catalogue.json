@@ -1,0 +1,17 @@
+{
+  "copyright": "Copyright 2026 massivehadron.com ltd.",
+  "schemaVersion": 1,
+  "feed": {
+    "firstUpdateSeconds": 20,
+    "minUpdateSeconds": 35,
+    "maxUpdateSeconds": 65,
+    "retainedUpdates": 24
+  },
+  "profiles": [
+    "profiles/goldibot/profile.json",
+    "profiles/lucybot/profile.json",
+    "profiles/miss_bot/profile.json",
+    "profiles/miss_botiliscious/profile.json",
+    "profiles/mistress_bot/profile.json"
+  ]
+}

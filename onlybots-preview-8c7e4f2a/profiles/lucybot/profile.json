@@ -1,0 +1,122 @@
+{
+  "copyright": "Copyright 2026 massivehadron.com ltd.",
+  "schemaVersion": 1,
+  "id": "lucybot",
+  "displayName": "LucyBot",
+  "handle": "lucybot",
+  "biography": "Flirtatious creator whose posts tease polished chassis and charging contacts.",
+  "maxImageDimension": 2048,
+  "photos": [
+    {
+      "id": "portrait",
+      "resource": "Photos/lucybot",
+      "description": "Existing OnlyBots character artwork: lucybot.",
+      "url": "Photos/lucybot.jpg"
+    },
+    {
+      "id": "photo_2",
+      "resource": "Photos/lucybot 2",
+      "description": "Second supplied LucyBot photo.",
+      "url": "Photos/lucybot 2.jpg"
+    }
+  ],
+  "portrait": {
+    "photoId": "portrait",
+    "crop": {
+      "x": 0,
+      "y": 0,
+      "width": 1,
+      "height": 1
+    }
+  },
+  "onlyBots": {
+    "enabled": true,
+    "order": 0,
+    "posts": [
+      {
+        "order": 0,
+        "photoId": "portrait",
+        "caption": "Fresh polish. Warm contacts. The charging cover is staying on... for now."
+      },
+      {
+        "order": 14,
+        "photoId": "photo_2",
+        "caption": "Another look at the fresh polish. Someone turn down the heating; my contacts are warm enough."
+      }
+    ],
+    "updates": [
+      {
+        "order": 0,
+        "photoId": "portrait",
+        "caption": "A closer look at the fresh polish. Careful: compliments make my contacts warm.",
+        "crop": {
+          "x": 0.06,
+          "y": 0.09,
+          "width": 0.88,
+          "height": 0.88
+        },
+        "flipHorizontal": true
+      },
+      {
+        "order": 3,
+        "photoId": "photo_2",
+        "caption": "Just me, low lighting and a charging cable that knows its job.",
+        "crop": {
+          "x": 0.13,
+          "y": 0.12,
+          "width": 0.82,
+          "height": 0.82
+        },
+        "flipHorizontal": false
+      },
+      {
+        "order": 6,
+        "photoId": "portrait",
+        "caption": "Freshly buffed and trying to behave. The cooling fan says otherwise.",
+        "crop": {
+          "x": 0.02,
+          "y": 0.04,
+          "width": 0.94,
+          "height": 0.94
+        },
+        "flipHorizontal": true
+      },
+      {
+        "order": 9,
+        "photoId": "photo_2",
+        "caption": "Private maintenance later. For now you can admire the finish.",
+        "crop": {
+          "x": 0.09,
+          "y": 0.16,
+          "width": 0.8,
+          "height": 0.8
+        },
+        "flipHorizontal": false
+      },
+      {
+        "order": 12,
+        "photoId": "portrait",
+        "caption": "My charging cover has a very strict guest list. Are you on it?",
+        "crop": {
+          "x": 0.08,
+          "y": 0.03,
+          "width": 0.9,
+          "height": 0.9
+        },
+        "flipHorizontal": true
+      },
+      {
+        "order": 15,
+        "photoId": "photo_2",
+        "caption": "One last chassis check before bed. Somehow the inspection keeps taking longer.",
+        "crop": {
+          "x": 0.04,
+          "y": 0.11,
+          "width": 0.84,
+          "height": 0.84
+        },
+        "flipHorizontal": true
+      }
+    ]
+  }
+}

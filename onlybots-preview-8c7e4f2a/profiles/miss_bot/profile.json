@@ -1,0 +1,135 @@
+{
+  "copyright": "Copyright 2026 massivehadron.com ltd.",
+  "schemaVersion": 1,
+  "id": "miss_bot",
+  "displayName": "Miss Bot",
+  "handle": "miss_bot",
+  "biography": "Fresh polish, premium oil and playful maintenance teasers.",
+  "maxImageDimension": 2048,
+  "photos": [
+    {
+      "id": "portrait",
+      "resource": "Photos/miss bot 1",
+      "description": "Supplied Miss Bot photo 1.",
+      "url": "Photos/miss bot 1.jpg"
+    },
+    {
+      "id": "photo_2",
+      "resource": "Photos/miss bot 2",
+      "description": "Supplied Miss Bot photo 2.",
+      "url": "Photos/miss bot 2.jpg"
+    },
+    {
+      "id": "photo_3",
+      "resource": "Photos/miss bot 3",
+      "description": "Supplied Miss Bot photo 3.",
+      "url": "Photos/miss bot 3.jpg"
+    },
+    {
+      "id": "photo_4",
+      "resource": "Photos/miss bot 4",
+      "description": "Supplied Miss Bot photo 4.",
+      "url": "Photos/miss bot 4.jpg"
+    },
+    {
+      "id": "photo_5",
+      "resource": "Photos/miss bot 5",
+      "description": "Supplied Miss Bot photo 5.",
+      "url": "Photos/miss bot 5.jpg"
+    }
+  ],
+  "portrait": {
+    "photoId": "portrait",
+    "crop": {
+      "x": 0,
+      "y": 0,
+      "width": 1,
+      "height": 1
+    }
+  },
+  "onlyBots": {
+    "enabled": true,
+    "order": 3,
+    "posts": [
+      {
+        "order": 9,
+        "photoId": "portrait",
+        "caption": "New bot on the feed. Fresh polish, warm contacts. Mind your cooling fan."
+      },
+      {
+        "order": 10,
+        "photoId": "photo_2",
+        "caption": "Premium oil on the wheels. The slow roll is entirely deliberate."
+      },
+      {
+        "order": 11,
+        "photoId": "photo_3",
+        "caption": "The service hatch stays closed until you've said something nice about my chassis."
+      },
+      {
+        "order": 12,
+        "photoId": "photo_4",
+        "caption": "Just a little private maintenance. Bring your best manners and a clean polishing cloth."
+      },
+      {
+        "order": 13,
+        "photoId": "photo_5",
+        "caption": "Fully charged and freshly buffed. Try not to overheat."
+      }
+    ],
+    "updates": [
+      {
+        "order": 18,
+        "photoId": "photo_2",
+        "caption": "Another coat of premium oil. Another reason to keep watching.",
+        "flipHorizontal": true
+      },
+      {
+        "order": 19,
+        "photoId": "portrait",
+        "caption": "Fresh polish, warm bearings. The maintenance schedule just became very personal.",
+        "crop": {
+          "x": 0.06,
+          "y": 0.08,
+          "width": 0.9,
+          "height": 0.9
+        }
+      },
+      {
+        "order": 20,
+        "photoId": "photo_3",
+        "caption": "A little closer to the service hatch. Keep your cooling fan under control.",
+        "crop": {
+          "x": 0.1,
+          "y": 0.12,
+          "width": 0.84,
+          "height": 0.84
+        },
+        "flipHorizontal": true
+      },
+      {
+        "order": 21,
+        "photoId": "photo_4",
+        "caption": "Private polishing appointment. Bring premium oil and your very best manners.",
+        "crop": {
+          "x": 0.03,
+          "y": 0.06,
+          "width": 0.92,
+          "height": 0.92
+        }
+      },
+      {
+        "order": 22,
+        "photoId": "photo_5",
+        "caption": "Fully charged, freshly buffed and in no hurry to close the workshop.",
+        "crop": {
+          "x": 0.08,
+          "y": 0.1,
+          "width": 0.88,
+          "height": 0.88
+        },
+        "flipHorizontal": true
+      }
+    ]
+  }
+}

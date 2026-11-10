@@ -1,0 +1,164 @@
+{
+  "copyright": "Copyright 2026 massivehadron.com ltd.",
+  "schemaVersion": 1,
+  "id": "miss_botiliscious",
+  "displayName": "Miss Botiliscious",
+  "handle": "miss_botiliscious",
+  "biography": "Glamorous creator focused on premium oil, wheel lubrication and private clips.",
+  "maxImageDimension": 2048,
+  "photos": [
+    {
+      "id": "portrait",
+      "resource": "Photos/Miss Botiliscious",
+      "description": "Existing OnlyBots character artwork: Miss Botiliscious.",
+      "url": "Photos/Miss Botiliscious.jpg"
+    },
+    {
+      "id": "photo_2",
+      "resource": "Photos/Miss Botiliscious 2",
+      "description": "Existing OnlyBots character artwork: Miss Botiliscious 2.",
+      "url": "Photos/Miss Botiliscious 2.jpg"
+    },
+    {
+      "id": "photo_3",
+      "resource": "Photos/miss botiliscious 3",
+      "description": "Existing OnlyBots character artwork: miss botiliscious 3.",
+      "url": "Photos/miss botiliscious 3.jpg"
+    },
+    {
+      "id": "photo_4",
+      "resource": "Photos/miss botiliscious 4",
+      "description": "Existing OnlyBots character artwork: miss botiliscious 4.",
+      "url": "Photos/miss botiliscious 4.jpg"
+    }
+  ],
+  "portrait": {
+    "photoId": "portrait",
+    "crop": {
+      "x": 0,
+      "y": 0,
+      "width": 1,
+      "height": 1
+    }
+  },
+  "onlyBots": {
+    "enabled": true,
+    "order": 1,
+    "posts": [
+      {
+        "order": 1,
+        "photoId": "portrait",
+        "caption": "Premium oil, slowly applied. My wheels have never rolled this smoothly.",
+        "crop": {
+          "x": 0.05,
+          "y": 0.08,
+          "width": 0.9,
+          "height": 0.9
+        }
+      },
+      {
+        "order": 3,
+        "photoId": "photo_2",
+        "caption": "A little peek beneath the service hatch. Try to keep your cooling fan under control.",
+        "flipHorizontal": true
+      },
+      {
+        "order": 5,
+        "photoId": "photo_3",
+        "caption": "New wheel-lubrication routine. This much glide should come with a warning light.",
+        "crop": {
+          "x": 0.09,
+          "y": 0.1,
+          "width": 0.84,
+          "height": 0.84
+        }
+      },
+      {
+        "order": 7,
+        "photoId": "photo_4",
+        "caption": "Private bot clips after dark. Fully polished, dangerously overclocked.",
+        "crop": {
+          "x": 0.02,
+          "y": 0.04,
+          "width": 0.94,
+          "height": 0.94
+        },
+        "flipHorizontal": true
+      }
+    ],
+    "updates": [
+      {
+        "order": 1,
+        "photoId": "photo_2",
+        "caption": "Premium oil on the rims. A slow roll past the camera. You're welcome.",
+        "crop": {
+          "x": 0.04,
+          "y": 0.1,
+          "width": 0.86,
+          "height": 0.86
+        },
+        "flipHorizontal": true
+      },
+      {
+        "order": 4,
+        "photoId": "photo_3",
+        "caption": "The deluxe lubrication routine has a second coat. Patience gets the best finish.",
+        "crop": {
+          "x": 0.12,
+          "y": 0.14,
+          "width": 0.8,
+          "height": 0.8
+        },
+        "flipHorizontal": false
+      },
+      {
+        "order": 7,
+        "photoId": "portrait",
+        "caption": "This shine isn't a filter. It's expensive oil and a very attentive service schedule.",
+        "crop": {
+          "x": 0.03,
+          "y": 0.06,
+          "width": 0.92,
+          "height": 0.92
+        },
+        "flipHorizontal": true
+      },
+      {
+        "order": 10,
+        "photoId": "photo_4",
+        "caption": "A close-up from the private bot clips. Some wheels were made to be watched.",
+        "crop": {
+          "x": 0.08,
+          "y": 0.15,
+          "width": 0.82,
+          "height": 0.82
+        },
+        "flipHorizontal": false
+      },
+      {
+        "order": 13,
+        "photoId": "photo_2",
+        "caption": "Wheel wax, warm bearings and absolutely nowhere I need to be in a hurry.",
+        "crop": {
+          "x": 0.06,
+          "y": 0.04,
+          "width": 0.9,
+          "height": 0.9
+        },
+        "flipHorizontal": true
+      },
+      {
+        "order": 16,
+        "photoId": "photo_3",
+        "caption": "After-hours polishing. The reflections are free; the full maintenance routine is a teaser.",
+        "crop": {
+          "x": 0.14,
+          "y": 0.08,
+          "width": 0.84,
+          "height": 0.84
+        },
+        "flipHorizontal": true
+      }
+    ]
+  }
+}
