@@ -1,0 +1,36 @@
+{
+  "copyright": "Copyright 2026 massivehadron.com ltd.",
+  "schemaVersion": 1,
+  "id": "granbot",
+  "displayName": "Granbot",
+  "handle": "granbot",
+  "location": "Old Botfield, the house with the oiled gate",
+  "portrait": {
+    "photoId": "portrait",
+    "crop": {
+      "x": 0.24,
+      "y": 0.33,
+      "width": 0.5,
+      "height": 0.5
+    }
+  },
+  "photos": [
+    {
+      "id": "portrait",
+      "resource": "Photos/granbot",
+      "description": "Existing BotsUp character artwork: granbot.",
+      "url": "Photos/granbot.png"
+    }
+  ],
+  "instabot": {
+    "showAvatar": true,
+    "enabled": true,
+    "activityUpdates": [
+      {
+        "kind": "like",
+        "text": "liked your post.",
+        "weight": 4
+      }
+    ]
+  }
+}

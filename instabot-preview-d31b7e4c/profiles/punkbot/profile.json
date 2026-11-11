@@ -1,0 +1,190 @@
+{
+  "copyright": "Copyright 2026 massivehadron.com ltd.",
+  "schemaVersion": 1,
+  "id": "punkbot",
+  "displayName": "Punkbot",
+  "handle": "punkbot",
+  "location": "",
+  "portrait": {
+    "photoId": "portrait",
+    "crop": {
+      "x": 0,
+      "y": 0,
+      "width": 1,
+      "height": 1
+    }
+  },
+  "photos": [
+    {
+      "id": "portrait",
+      "resource": "Photos/punkbot",
+      "description": "Existing Instabot character artwork: punkbot.",
+      "url": "Photos/punkbot.jpg"
+    },
+    {
+      "id": "gig",
+      "resource": "Photos/punkbot gig",
+      "description": "Existing Instabot character artwork: punkbot gig.",
+      "url": "Photos/punkbot%20gig.jpg"
+    },
+    {
+      "id": "band",
+      "resource": "Photos/punkbot band",
+      "description": "Existing Instabot character artwork: punkbot band.",
+      "url": "Photos/punkbot%20band.jpg"
+    }
+  ],
+  "instabot": {
+    "showAvatar": true,
+    "enabled": true,
+    "posts": [
+      {
+        "place": "The Underbot",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Eggzistence last night. Mosh pit was pure static. If your chassis didn't get dented you weren't there. #eggzistence #punkbots #live",
+        "likes": 8740,
+        "minutesAgo": 25,
+        "photoId": "band",
+        "comments": [
+          {
+            "author": "feedback_loop",
+            "text": "Still finding rivets in my wheel arches.",
+            "minutesAgo": 24
+          },
+          {
+            "author": "loose_bolts_12",
+            "text": "Bass dropped. So did three of my bolts.",
+            "minutesAgo": 23
+          }
+        ]
+      },
+      {
+        "place": "Botfield Warehouse",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Soundcheck done. Amp is at eleven. If the floor doesn't shake the neighbours will. See you in the pit. #punk #livewire #eggzistence",
+        "likes": 6120,
+        "minutesAgo": 55,
+        "photoId": "gig"
+      },
+      {
+        "place": "Backstage",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "New sticker on the chassis. Old scars stay. Punk is not a phase, it's a firmware. #punkbot #diy #noauthority",
+        "likes": 4310,
+        "minutesAgo": 110,
+        "photoId": "portrait"
+      },
+      {
+        "place": "The Underbot",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Bass is too clean. Fixed that. Now it sounds like a short circuit in a good way. #eggzistence #punk #loud",
+        "likes": 7890,
+        "minutesAgo": 320,
+        "photoId": "band"
+      },
+      {
+        "place": "Botfield",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Punk pals after the show. Dented, charged, and still standing. This is the scene. #punkbots #family #eggzistence",
+        "likes": 5200,
+        "minutesAgo": 1800,
+        "photoId": "portrait"
+      },
+      {
+        "place": "Rehearsal Space",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Practice till the neighbours complain. Then practice louder. #punk #rehearsal #noapology",
+        "likes": 3980,
+        "minutesAgo": 3100,
+        "photoId": "band"
+      }
+    ],
+    "updates": [
+      {
+        "place": "The Underbot",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Another night, another blown speaker. Worth it. Pit was electric. #eggzistence #live #punkbots",
+        "likes": 7200,
+        "minutesAgo": 0,
+        "photoId": "gig"
+      },
+      {
+        "place": "Back alley, Botfield",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Sticker run with the crew. If it doesn't peel it wasn't real. #diy #punk #street",
+        "likes": 4550,
+        "minutesAgo": 0,
+        "photoId": "portrait"
+      },
+      {
+        "place": "Warehouse Stage",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Full set. No setlist. Just volume and friends who show up. This is the band. #eggzistence #punkbots #livewire",
+        "likes": 6800,
+        "minutesAgo": 0,
+        "photoId": "band"
+      },
+      {
+        "place": "The Pit",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "If you left with all your panels intact you weren't trying. See you next gig. #mosh #punk #eggzistence",
+        "likes": 8100,
+        "minutesAgo": 0,
+        "photoId": "gig"
+      }
+    ],
+    "featured": true,
+    "showStory": true,
+    "storyOrder": 2
+  }
+}

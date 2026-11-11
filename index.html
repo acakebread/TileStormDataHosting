@@ -936,7 +936,10 @@
           <button id="clearToken">Clear</button>
         </div>
         <div id="adminStatus" class="note"></div>
-        <p id="onlyBotsPreviewLink" class="note" hidden><a href="./onlybots-preview-8c7e4f2a/" target="_blank" rel="noopener noreferrer">Open OnlyBots preview ↗</a></p>
+        <div id="tabletPreviewLinks" class="note" hidden>
+          <a href="./onlybots-preview-8c7e4f2a/" target="_blank" rel="noopener noreferrer">Open OnlyBots preview ↗</a>
+          · <a href="./instabot-preview-d31b7e4c/" target="_blank" rel="noopener noreferrer">Open Instabot preview ↗</a>
+        </div>
       </details>
     </section>
   </main>
@@ -990,7 +993,7 @@
     const saveTokenBtn = document.getElementById("saveToken");
     const clearTokenBtn = document.getElementById("clearToken");
     const adminStatusEl = document.getElementById("adminStatus");
-    const onlyBotsPreviewLinkEl = document.getElementById("onlyBotsPreviewLink");
+    const tabletPreviewLinksEl = document.getElementById("tabletPreviewLinks");
     const appLaunchCountEl = document.getElementById("appLaunchCount");
     const newsStripTextEl = document.getElementById("newsStripText");
 
@@ -1043,7 +1046,7 @@
     }
 
     function renderAppLaunchCount() {
-      onlyBotsPreviewLinkEl.hidden = !adminToken;
+      tabletPreviewLinksEl.hidden = !adminToken;
       if (!adminToken || appLaunchCount == null) {
         appLaunchCountEl.hidden = true;
         return;

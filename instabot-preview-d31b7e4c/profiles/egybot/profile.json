@@ -1,0 +1,65 @@
+{
+  "copyright": "Copyright 2026 massivehadron.com ltd.",
+  "schemaVersion": 1,
+  "id": "egybot",
+  "displayName": "Egybot",
+  "handle": "egybot",
+  "location": "",
+  "portrait": {
+    "photoId": "front",
+    "crop": {
+      "x": 0.25,
+      "y": 0.5,
+      "width": 0.5,
+      "height": 0.5
+    }
+  },
+  "photos": [
+    {
+      "id": "front",
+      "resource": "Photos/egybot_front",
+      "description": "Egybot: front view.",
+      "url": "Photos/egybot_front.png"
+    },
+    {
+      "id": "side",
+      "resource": "Photos/egybot_side",
+      "description": "Egybot: side view.",
+      "url": "Photos/egybot_side.png"
+    }
+  ],
+  "instabot": {
+    "showAvatar": true,
+    "enabled": true,
+    "posts": [
+      {
+        "place": "Valley of the Kings",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Found a tomb. Didn't read the curse. #archaeology #nofilter",
+        "likes": 8960,
+        "minutesAgo": 2900,
+        "photoId": "front"
+      }
+    ],
+    "updates": [
+      {
+        "place": "Valley of the Kings",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Curse update: mild. #archaeology #blessed",
+        "likes": 7150,
+        "minutesAgo": 0,
+        "photoId": "side"
+      }
+    ]
+  }
+}

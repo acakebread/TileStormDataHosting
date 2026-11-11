@@ -1,0 +1,35 @@
+{
+  "copyright": "Copyright 2026 massivehadron.com ltd.",
+  "schemaVersion": 1,
+  "id": "mum",
+  "displayName": "Mum",
+  "handle": "mum",
+  "location": "Lower Botfield",
+  "portrait": {
+    "photoId": "",
+    "crop": {
+      "x": 0,
+      "y": 0,
+      "width": 1,
+      "height": 1
+    }
+  },
+  "photos": [],
+  "instabot": {
+    "showAvatar": false,
+    "enabled": true,
+    "activityUpdates": [
+      {
+        "kind": "like",
+        "text": "liked your post.",
+        "weight": 4
+      }
+    ],
+    "activity": [
+      {
+        "text": "liked your post.",
+        "minutesAgo": 4320
+      }
+    ]
+  }
+}

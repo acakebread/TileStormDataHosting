@@ -16,8 +16,8 @@ the public repository.
 
 The preview contains six creators and 19 photographs. Five creators use copies
 of the tablet app's OnlyBots profiles. Kelly Bot has a web-only profile that
-uses her existing Instabot photos and captions. The snapshot copier preserves
-her profile and keeps it in the catalogue.
+uses her existing photos with captions written for OnlyBots. The snapshot
+copier preserves her profile and keeps it in the catalogue.
 
 The feed mixes creators, keeps all initial posts and the latest 24 timed updates,
 starts updates after 20 seconds, then waits 35–65 seconds between arrivals.

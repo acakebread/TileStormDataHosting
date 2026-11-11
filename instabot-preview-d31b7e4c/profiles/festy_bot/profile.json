@@ -1,0 +1,68 @@
+{
+  "copyright": "Copyright 2026 massivehadron.com ltd.",
+  "schemaVersion": 1,
+  "id": "festy_bot",
+  "displayName": "FestyBot",
+  "handle": "FestyBot",
+  "location": "Botfield",
+  "portrait": {
+    "photoId": "portrait",
+    "crop": {
+      "x": 0,
+      "y": 0,
+      "width": 1,
+      "height": 1
+    }
+  },
+  "photos": [
+    {
+      "id": "profile",
+      "resource": "Photos/festybot 1",
+      "description": "FestyBot: profile view.",
+      "url": "Photos/festybot%201.jpg"
+    },
+    {
+      "id": "portrait",
+      "resource": "Photos/festybot 1",
+      "description": "Artwork: festybot 1.",
+      "url": "Photos/festybot%201.jpg"
+    }
+  ],
+  "instabot": {
+    "showAvatar": true,
+    "enabled": true,
+    "posts": [
+      {
+        "place": "Field Stage",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Solar sound rig is online and kicking. Bass is hitting right through the turf. #festybot #festival #solarstage",
+        "likes": 5190,
+        "minutesAgo": 7,
+        "photoId": "profile"
+      }
+    ],
+    "updates": [
+      {
+        "place": "Main Stage",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Light rig synced with the bass drops. Crowd is fully charged. #festybot #rave #live",
+        "likes": 6550,
+        "minutesAgo": 0,
+        "photoId": "profile"
+      }
+    ],
+    "featured": true,
+    "showStory": true,
+    "storyOrder": 8
+  }
+}

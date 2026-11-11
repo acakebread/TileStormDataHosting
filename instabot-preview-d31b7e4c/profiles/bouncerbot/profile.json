@@ -1,0 +1,106 @@
+{
+  "copyright": "Copyright 2026 massivehadron.com ltd.",
+  "schemaVersion": 1,
+  "id": "bouncerbot",
+  "displayName": "BouncerBot",
+  "handle": "bouncerbot",
+  "location": "",
+  "portrait": {
+    "photoId": "gym",
+    "crop": {
+      "x": 0,
+      "y": 0,
+      "width": 1,
+      "height": 1
+    }
+  },
+  "photos": [
+    {
+      "id": "gym",
+      "resource": "Photos/bouncer bot",
+      "description": "Existing Instabot character artwork: bouncer bot.",
+      "url": "Photos/bouncer%20bot.jpg"
+    },
+    {
+      "id": "gym_2",
+      "resource": "Photos/bouncer bot2",
+      "description": "Existing Instabot character artwork: bouncer bot2.",
+      "url": "Photos/bouncer%20bot2.jpg"
+    }
+  ],
+  "instabot": {
+    "showAvatar": true,
+    "enabled": true,
+    "posts": [
+      {
+        "place": "Botfield Gym",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "PUMP. PAIN. GAIN. WIN. Repeat. #pumping #gains #winning",
+        "likes": 2411,
+        "minutesAgo": 10,
+        "photoId": "gym",
+        "comments": [
+          {
+            "author": "low_battery_life",
+            "text": "Does lifting my charger off the floor count?",
+            "minutesAgo": 9
+          },
+          {
+            "author": "rep_error_01",
+            "text": "Did one rep. Currently installing the recovery update.",
+            "minutesAgo": 8
+          }
+        ]
+      },
+      {
+        "place": "Botfield Gym",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "More pumping. More pain. More gains. More winning. #pump #pain #gain #win",
+        "likes": 2498,
+        "minutesAgo": 65,
+        "photoId": "gym_2"
+      }
+    ],
+    "updates": [
+      {
+        "place": "Botfield Gym",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "PAIN TODAY. GAINS TODAY. PUMP AGAIN TOMORROW. WINNING. #gains #pump",
+        "likes": 2610,
+        "minutesAgo": 0,
+        "photoId": "gym_2"
+      },
+      {
+        "place": "Botfield Gym",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Pumping. Still pumping. Pain means gains. Gains mean winning. #pump #pain #gain #winning",
+        "likes": 2540,
+        "minutesAgo": 0,
+        "photoId": "gym"
+      }
+    ],
+    "featured": true,
+    "showStory": true,
+    "storyOrder": 5
+  }
+}

@@ -1,0 +1,72 @@
+{
+  "copyright": "Copyright 2026 massivehadron.com ltd.",
+  "schemaVersion": 1,
+  "id": "junbot",
+  "displayName": "Junbot",
+  "handle": "junbot",
+  "location": "Botfield Botanical Gardens, the hot house",
+  "portrait": {
+    "photoId": "front",
+    "crop": {
+      "x": 0.25,
+      "y": 0.5,
+      "width": 0.5,
+      "height": 0.5
+    }
+  },
+  "photos": [
+    {
+      "id": "front",
+      "resource": "Photos/junbot_front",
+      "description": "Junbot: front view.",
+      "url": "Photos/junbot_front.png"
+    },
+    {
+      "id": "side",
+      "resource": "Photos/junbot_side",
+      "description": "Junbot: side view.",
+      "url": "Photos/junbot_side.png"
+    }
+  ],
+  "instabot": {
+    "showAvatar": true,
+    "enabled": true,
+    "posts": [
+      {
+        "place": "Somewhere in the jungle",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Lost again. Send chargers. #wanderlust #offgrid",
+        "likes": 12804,
+        "minutesAgo": 300,
+        "photoId": "front"
+      }
+    ],
+    "updates": [
+      {
+        "place": "Somewhere in the jungle",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Still lost. Found a waterfall though #wanderlust",
+        "likes": 9411,
+        "minutesAgo": 0,
+        "photoId": "side"
+      }
+    ],
+    "activityUpdates": [
+      {
+        "kind": "unfollow",
+        "text": "unfollowed you.",
+        "weight": 4
+      }
+    ]
+  }
+}

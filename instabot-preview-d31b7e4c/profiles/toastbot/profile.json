@@ -1,0 +1,79 @@
+{
+  "copyright": "Copyright 2026 massivehadron.com ltd.",
+  "schemaVersion": 1,
+  "id": "toastbot",
+  "displayName": "Toastbot",
+  "handle": "toastbot",
+  "location": "Botfield Heights (two-slot detached)",
+  "portrait": {
+    "photoId": "",
+    "crop": {
+      "x": 0,
+      "y": 0,
+      "width": 1,
+      "height": 1
+    }
+  },
+  "photos": [
+    {
+      "id": "holiday",
+      "resource": "Photos/HolidayPhuket",
+      "description": "Existing Phuket holiday stand-in; Instabot retains its boats-only crop.",
+      "url": "Photos/HolidayPhuket.jpg"
+    }
+  ],
+  "instabot": {
+    "showAvatar": false,
+    "enabled": true,
+    "posts": [
+      {
+        "place": "Phuket",
+        "crop": {
+          "x": 0.625,
+          "y": 0.35,
+          "width": 0.375,
+          "height": 0.5
+        },
+        "caption": "Promoted AND on holiday. Hard work pays off! #blessed #grindset",
+        "likes": 5441,
+        "minutesAgo": 4300,
+        "photoId": "holiday",
+        "comments": [
+          {
+            "author": "eggbot",
+            "text": "Looks warmer than the loading bay.",
+            "minutesAgo": 4298
+          }
+        ]
+      }
+    ],
+    "updates": [
+      {
+        "place": "Phuket",
+        "crop": {
+          "x": 0.625,
+          "y": 0.35,
+          "width": 0.375,
+          "height": 0.5
+        },
+        "caption": "Back in the office tomorrow (I own the office now) #ceo #grindset",
+        "likes": 6020,
+        "minutesAgo": 0,
+        "photoId": "holiday"
+      }
+    ],
+    "activityUpdates": [
+      {
+        "kind": "unfollow",
+        "text": "unfollowed you.",
+        "weight": 4
+      }
+    ],
+    "activity": [
+      {
+        "text": "unfollowed you.",
+        "minutesAgo": 10080
+      }
+    ]
+  }
+}

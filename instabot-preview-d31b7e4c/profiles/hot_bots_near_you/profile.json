@@ -1,0 +1,30 @@
+{
+  "copyright": "Copyright 2026 massivehadron.com ltd.",
+  "schemaVersion": 1,
+  "id": "hot_bots_near_you",
+  "displayName": "hot_bots_near_you",
+  "handle": "hot_bots_near_you",
+  "location": "",
+  "portrait": {
+    "photoId": "",
+    "crop": {
+      "x": 0,
+      "y": 0,
+      "width": 1,
+      "height": 1
+    }
+  },
+  "photos": [],
+  "instabot": {
+    "showAvatar": false,
+    "enabled": true,
+    "activityUpdates": [
+      {
+        "kind": "follow",
+        "text": "started following you.",
+        "weight": 4
+      }
+    ],
+    "privateAccount": true
+  }
+}

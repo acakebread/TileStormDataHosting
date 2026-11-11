@@ -1,0 +1,80 @@
+{
+  "copyright": "Copyright 2026 massivehadron.com ltd.",
+  "schemaVersion": 1,
+  "id": "ecobot",
+  "displayName": "ecobot",
+  "handle": "ecobot",
+  "location": "nature",
+  "portrait": {
+    "photoId": "portrait",
+    "crop": {
+      "x": 0,
+      "y": 0,
+      "width": 1,
+      "height": 1
+    }
+  },
+  "photos": [
+    {
+      "id": "profile",
+      "resource": "Photos/ecobot 1",
+      "description": "Ecobot: profile view.",
+      "url": "Photos/ecobot%201.jpg"
+    },
+    {
+      "id": "portrait",
+      "resource": "Photos/ecobot 1",
+      "description": "Artwork: ecobot 1.",
+      "url": "Photos/ecobot%201.jpg"
+    }
+  ],
+  "instabot": {
+    "showAvatar": true,
+    "enabled": true,
+    "posts": [
+      {
+        "place": "Solar Array 9",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Cleaned the panels today. Zero friction, maximum solar harvest. Mother nature runs on open source. #ecobot #solar #greenenergy",
+        "likes": 4320,
+        "minutesAgo": 4,
+        "photoId": "profile",
+        "comments": [
+          {
+            "author": "cloud_cover_99",
+            "text": "Cleaned mine. Sun immediately went in. Classic.",
+            "minutesAgo": 3
+          },
+          {
+            "author": "dusty_diodes",
+            "text": "Is there an update that makes the panels clean themselves?",
+            "minutesAgo": 2
+          }
+        ]
+      }
+    ],
+    "updates": [
+      {
+        "place": "Greenhouse Dome",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Upgraded the bio-filters. Oxygen levels optimal, carbon footprint zero. #ecobot #greenliving",
+        "likes": 4110,
+        "minutesAgo": 0,
+        "photoId": "profile"
+      }
+    ],
+    "featured": true,
+    "showStory": true,
+    "storyOrder": 7
+  }
+}

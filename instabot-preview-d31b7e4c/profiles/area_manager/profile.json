@@ -1,0 +1,66 @@
+{
+  "copyright": "Copyright 2026 massivehadron.com ltd.",
+  "schemaVersion": 1,
+  "id": "area_manager",
+  "displayName": "Area Manager",
+  "handle": "areamanager",
+  "location": "Upper Botfield (the gated bit)",
+  "portrait": {
+    "photoId": "",
+    "crop": {
+      "x": 0,
+      "y": 0,
+      "width": 1,
+      "height": 1
+    }
+  },
+  "photos": [
+    {
+      "id": "holiday",
+      "resource": "Photos/HolidayBarbados",
+      "description": "Existing Barbados retreat stand-in; Instabot retains its sea-only crop.",
+      "url": "Photos/HolidayBarbados.jpg"
+    }
+  ],
+  "instabot": {
+    "showAvatar": false,
+    "enabled": true,
+    "posts": [
+      {
+        "place": "Barbados",
+        "crop": {
+          "x": 0.6,
+          "y": 0.2,
+          "width": 0.4,
+          "height": 0.533
+        },
+        "caption": "Team retreat! So proud of what we've achieved this quarter. #leadership #grateful #wellearned",
+        "likes": 2310,
+        "minutesAgo": 120,
+        "photoId": "holiday"
+      }
+    ],
+    "updates": [
+      {
+        "place": "Barbados",
+        "crop": {
+          "x": 0.6,
+          "y": 0.2,
+          "width": 0.4,
+          "height": 0.533
+        },
+        "caption": "Day 3 of the retreat. Strategy session (pool). #leadership #visionary",
+        "likes": 1876,
+        "minutesAgo": 0,
+        "photoId": "holiday"
+      }
+    ],
+    "activityUpdates": [
+      {
+        "kind": "mention",
+        "text": "mentioned you: @eggbot can you cover my shifts while I'm away?",
+        "weight": 8
+      }
+    ]
+  }
+}

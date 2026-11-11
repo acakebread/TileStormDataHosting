@@ -1,0 +1,48 @@
+<!doctype html>
+<!-- Copyright 2026 massivehadron.com ltd. -->
+
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow, noarchive">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#090a0b">
+  <title>Instabot</title>
+  <link rel="stylesheet" href="./instabot.css">
+  <script type="module" src="./instabot.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="header-content">
+      <h1><img src="./icon.png" width="40" height="40" alt="">Instabot</h1>
+      <button id="latest" class="latest" type="button" disabled>Latest feed</button>
+      <a class="portal" href="../">← Portal</a>
+    </div>
+  </header>
+  <div class="layout">
+    <details id="profilePanel" class="panel profile" open>
+      <summary>Eggbot’s profile</summary>
+      <div id="profile" class="profile-content"></div>
+    </details>
+    <main id="feedColumn" class="feed-column" aria-label="Instabot feed" tabindex="-1">
+      <nav id="stories" class="stories" aria-label="Stories" hidden></nav>
+      <p id="status" class="status" role="status">Loading the feed…</p>
+      <div id="feed" class="feed"></div>
+    </main>
+    <details id="activityPanel" class="panel activity" open>
+      <summary>Activity <span id="activityCount" class="activity-count" hidden></span></summary>
+      <div id="activity" class="activity-list"></div>
+    </details>
+  </div>
+  <dialog id="viewer" aria-labelledby="viewerHeading">
+    <div class="viewer-header">
+      <h2 id="viewerHeading"></h2>
+      <button id="closeViewer" type="button">Close <span aria-hidden="true">×</span></button>
+    </div>
+    <div id="viewerBody" class="viewer-body"></div>
+  </dialog>
+  <p id="notice" class="notice" role="status" hidden></p>
+  <noscript><p class="status">Enable JavaScript to load the feed.</p></noscript>
+</body>
+</html>

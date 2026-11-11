@@ -1,0 +1,72 @@
+{
+  "copyright": "Copyright 2026 massivehadron.com ltd.",
+  "schemaVersion": 1,
+  "id": "indbot",
+  "displayName": "Indbot",
+  "handle": "indbot",
+  "location": "",
+  "portrait": {
+    "photoId": "front",
+    "crop": {
+      "x": 0.25,
+      "y": 0.5,
+      "width": 0.5,
+      "height": 0.5
+    }
+  },
+  "photos": [
+    {
+      "id": "front",
+      "resource": "Photos/indbot_front",
+      "description": "Indbot: front view.",
+      "url": "Photos/indbot_front.png"
+    },
+    {
+      "id": "side",
+      "resource": "Photos/indbot_side",
+      "description": "Indbot: side view.",
+      "url": "Photos/indbot_side.png"
+    }
+  ],
+  "instabot": {
+    "showAvatar": true,
+    "enabled": true,
+    "posts": [
+      {
+        "place": "Site 7",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "New hard hat, who dis #sitelife #blessed",
+        "likes": 431,
+        "minutesAgo": 540,
+        "photoId": "front"
+      }
+    ],
+    "updates": [
+      {
+        "place": "Site 7",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Lunch break number four #sitelife",
+        "likes": 388,
+        "minutesAgo": 0,
+        "photoId": "side"
+      }
+    ],
+    "activityUpdates": [
+      {
+        "kind": "unfollow",
+        "text": "unfollowed you.",
+        "weight": 4
+      }
+    ]
+  }
+}

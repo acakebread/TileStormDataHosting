@@ -1,0 +1,41 @@
+{
+  "copyright": "Copyright 2026 massivehadron.com ltd.",
+  "schemaVersion": 1,
+  "owner": "profiles/eggbot/profile.json",
+  "profiles": [
+    "profiles/alpinebot/profile.json",
+    "profiles/area_manager/profile.json",
+    "profiles/botifit/profile.json",
+    "profiles/botsy/profile.json",
+    "profiles/bouncerbot/profile.json",
+    "profiles/crypto_bot_4u/profile.json",
+    "profiles/ecobot/profile.json",
+    "profiles/egybot/profile.json",
+    "profiles/festy_bot/profile.json",
+    "profiles/free_oil_giveaway/profile.json",
+    "profiles/granbot/profile.json",
+    "profiles/hot_bots_near_you/profile.json",
+    "profiles/indbot/profile.json",
+    "profiles/junbot/profile.json",
+    "profiles/kelly_bot/profile.json",
+    "profiles/medbot/profile.json",
+    "profiles/mum/profile.json",
+    "profiles/punkbot/profile.json",
+    "profiles/site_manager/profile.json",
+    "profiles/spambot_9000/profile.json",
+    "profiles/sven_botman/profile.json",
+    "profiles/toastbot/profile.json"
+  ],
+  "appActivityUpdates": [
+    {
+      "kind": "notice",
+      "text": "Your posts are doing worse than 98% of bots. Boost them for $4.99?",
+      "weight": 8
+    }
+  ],
+  "feed": {
+    "firstUpdateSeconds": 30,
+    "minUpdateSeconds": 45,
+    "maxUpdateSeconds": 90
+  }
+}

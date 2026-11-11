@@ -1,0 +1,78 @@
+{
+  "copyright": "Copyright 2026 massivehadron.com ltd.",
+  "schemaVersion": 1,
+  "id": "eggbot",
+  "displayName": "Eggbot",
+  "handle": "eggbot",
+  "biography": "Tiler. Professional. Tired.\nViews my own. Nobody else's either.",
+  "followers": 4,
+  "following": 418,
+  "portrait": {
+    "photoId": "HolidayMaldives",
+    "crop": {
+      "x": 0.508,
+      "y": 0.388,
+      "width": 0.273,
+      "height": 0.365
+    }
+  },
+  "photos": [
+    {
+      "id": "HolidayMaldives",
+      "url": "Photos/HolidayMaldives.jpg"
+    },
+    {
+      "id": "HolidayBarbados",
+      "url": "Photos/HolidayBarbados.jpg"
+    },
+    {
+      "id": "HolidaySite",
+      "url": "Photos/HolidaySite.jpg"
+    }
+  ],
+  "instabot": {
+    "enabled": true,
+    "showAvatar": true,
+    "posts": [
+      {
+        "place": "Maldives",
+        "crop": {
+          "x": 0.25,
+          "y": 0,
+          "width": 0.75,
+          "height": 1
+        },
+        "caption": "One day.",
+        "likes": 0,
+        "minutesAgo": 10080,
+        "photoId": "HolidayMaldives"
+      },
+      {
+        "place": "Barbados",
+        "crop": {
+          "x": 0.08,
+          "y": 0,
+          "width": 0.75,
+          "height": 1
+        },
+        "caption": "Holiday mode.",
+        "likes": 1,
+        "minutesAgo": 20160,
+        "photoId": "HolidayBarbados"
+      },
+      {
+        "place": "Botfield Industrial Estate",
+        "crop": {
+          "x": 0.125,
+          "y": 0,
+          "width": 0.75,
+          "height": 1
+        },
+        "caption": "Best day of the week.",
+        "likes": 2,
+        "minutesAgo": 30240,
+        "photoId": "HolidaySite"
+      }
+    ]
+  }
+}

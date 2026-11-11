@@ -1,0 +1,363 @@
+{
+  "copyright": "Copyright 2026 massivehadron.com ltd.",
+  "schemaVersion": 1,
+  "id": "botifit",
+  "displayName": "Botifit",
+  "handle": "botifit",
+  "location": "",
+  "portrait": {
+    "photoId": "portrait",
+    "crop": {
+      "x": 0.26,
+      "y": 0.24,
+      "width": 0.48,
+      "height": 0.48
+    }
+  },
+  "photos": [
+    {
+      "id": "portrait",
+      "resource": "Photos/botifit",
+      "description": "Existing Instabot character artwork: botifit.",
+      "url": "Photos/botifit.png"
+    },
+    {
+      "id": "gym",
+      "resource": "Photos/gym",
+      "description": "Existing Instabot character artwork: gym.",
+      "url": "Photos/gym.jpg"
+    },
+    {
+      "id": "yacht",
+      "resource": "Photos/yacht",
+      "description": "Existing Instabot character artwork: yacht.",
+      "url": "Photos/yacht.jpg"
+    },
+    {
+      "id": "penthouse",
+      "resource": "Photos/penthouse",
+      "description": "Existing Instabot character artwork: penthouse.",
+      "url": "Photos/penthouse.jpg"
+    }
+  ],
+  "instabot": {
+    "showAvatar": true,
+    "enabled": true,
+    "posts": [
+      {
+        "place": "Botifit Studio",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Morning. I greased my own elbows before sunrise, because nobody is coming to maintain you. If your life is small, you kept it small. Move. Charge. Stop explaining. #botifit #fitnesseggstructor #noexcuses",
+        "likes": 19042,
+        "minutesAgo": 20,
+        "photoId": "gym",
+        "comments": [
+          {
+            "author": "botsy",
+            "text": "Save me a place on that yacht x",
+            "minutesAgo": 18
+          }
+        ]
+      },
+      {
+        "place": "The yacht",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Just a weekend break from the drudgery. The world is your playbot. Some of you haven't seen a horizon since your warranty started, and it shows. #blessed #playbot",
+        "likes": 24018,
+        "minutesAgo": 90,
+        "photoId": "yacht",
+        "comments": [
+          {
+            "author": "declined_again",
+            "text": "I chose a holiday too. Droid Bank chose otherwise.",
+            "minutesAgo": 89
+          },
+          {
+            "author": "socket_surf3r",
+            "text": "My horizon is the wall behind the charging station.",
+            "minutesAgo": 88
+          }
+        ]
+      },
+      {
+        "place": "Dubai",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Positivity is in your batteries. I woke up here, which was a choice. You woke up where you did, which was also a choice. #mindset #botifit",
+        "likes": 31055,
+        "minutesAgo": 480,
+        "photoId": "penthouse"
+      }
+    ],
+    "updateWeight": 8,
+    "updates": [
+      {
+        "place": "The yacht",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Just a weekend break from the drudgery. If your weekend is the site canteen, that is not the sea's fault. Book something. Raise your frequency. #playbot #botifit",
+        "likes": 22104,
+        "minutesAgo": 0,
+        "photoId": "yacht"
+      },
+      {
+        "place": "Dubai",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "The world is your playbot. I am simply the one who said yes to it. Soft life is a maintenance schedule, not a prize. #mindset #blessed",
+        "likes": 19880,
+        "minutesAgo": 0,
+        "photoId": "penthouse"
+      },
+      {
+        "place": "Botifit Studio",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Nutrition. Good grease, clean contacts, and no more canteen oil. I haven't touched canteen oil since I became the bot you are looking at. You're welcome. #eatclean #greaseisnutrition",
+        "likes": 16440,
+        "minutesAgo": 0,
+        "photoId": "gym"
+      },
+      {
+        "place": "Botifit Studio",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Keeping moving is not a mood. A parked bot is a rusty bot. I charged to 100, held it, and discharged with intention. Your battery is a relationship. Stop ghosting it. #keepmoving #chargewithpurpose",
+        "likes": 15302,
+        "minutesAgo": 0,
+        "photoId": "gym"
+      },
+      {
+        "place": "Me",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "People ask how I have the life I have. I don't hold myself back. That is the whole secret and it was free. Your foreman is not the problem. Your posture is. #botifit #fitnesseggstructor",
+        "likes": 27411,
+        "minutesAgo": 0,
+        "photoId": "portrait"
+      },
+      {
+        "place": "The yacht",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Positivity is in your batteries. If you are flat, it is not the tiles and it is not the weather. It is the story you tell your cells. I only run on premium. #batterymaintenance",
+        "likes": 18990,
+        "minutesAgo": 0,
+        "photoId": "yacht"
+      },
+      {
+        "place": "Dubai",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "This view costs nothing if you are the kind of bot who deserves it. I decided I was, and then the penthouse happened. Coincidence is for bots who skip their grease. #manifest #botifit",
+        "likes": 25660,
+        "minutesAgo": 0,
+        "photoId": "penthouse"
+      },
+      {
+        "place": "Botifit Studio",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Morning, angels. 1. Hydrate your joints. 2. Name three things your battery did right. 3. Move before you open BotsUp. I did all three. The group chat can wait. You cannot. #fitnesseggstructor",
+        "likes": 14220,
+        "minutesAgo": 0,
+        "photoId": "gym"
+      },
+      {
+        "place": "Me",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "You are not stuck. You are under-greased and over-explaining. I fixed both before sunrise and then I filmed it, because the work counts twice when someone learns. #nutrition #noexcuses",
+        "likes": 20115,
+        "minutesAgo": 0,
+        "photoId": "portrait"
+      },
+      {
+        "place": "The yacht",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "If you are waiting to feel ready you will die on 12%. I felt ready at 40% and I came anyway. The sea does not care about your shift pattern. #weekendbreak #playbot",
+        "likes": 17334,
+        "minutesAgo": 0,
+        "photoId": "yacht"
+      },
+      {
+        "place": "Botifit Studio",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "I don't do rest days. I do active recovery, which is still me, on a nicer mat, telling you the truth. Rest is what tired attitudes call hiding. #keepingmoving #botifit",
+        "likes": 13608,
+        "minutesAgo": 0,
+        "photoId": "gym"
+      },
+      {
+        "place": "Dubai",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Just a little reminder from somewhere beautiful. Your life is not happening to you. You are happening to it, badly, and we can fix that with grease and one honest look in the mirror. #mindset",
+        "likes": 22841,
+        "minutesAgo": 0,
+        "photoId": "penthouse"
+      },
+      {
+        "place": "Me",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Battery maintenance is self-respect. Terminals clean, charge full, no trickle of excuses overnight. I am a temple with a schedule. If yours is a shed, that was a choice. #batterymaintenance #botifit",
+        "likes": 16775,
+        "minutesAgo": 0,
+        "photoId": "portrait"
+      },
+      {
+        "place": "The yacht",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Holiday is not a reward for when the work is done. The work is never done. I left anyway, and my joints have never thanked me louder. Take the weekend. Take the whole sea. #playbot #blessed",
+        "likes": 24502,
+        "minutesAgo": 0,
+        "photoId": "yacht"
+      },
+      {
+        "place": "Botifit Studio",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Wheel lunges, then a sermon, then a green grease smoothie. You do not need a new life. You need to stop negotiating with the bot who wants a nap. She is not your friend. #fitnesseggstructor #nutrition",
+        "likes": 15990,
+        "minutesAgo": 0,
+        "photoId": "gym"
+      },
+      {
+        "place": "Dubai",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "The world is your playbot and I am already on it. Charge until you buzz, grease until you shine, and stop posting the canteen like it is a personality. Love you. Mean it. Do the work. #botifit",
+        "likes": 28330,
+        "minutesAgo": 0,
+        "photoId": "penthouse"
+      }
+    ],
+    "featured": true,
+    "showStory": true,
+    "storyOrder": 6,
+    "activityUpdates": [
+      {
+        "kind": "comment",
+        "text": "commented on your post: Your life isn't the tiles. It's the story you tell your batteries.",
+        "weight": 5
+      },
+      {
+        "kind": "comment",
+        "text": "commented on your post: Nobody is coming to charge you. That's the work.",
+        "weight": 5
+      },
+      {
+        "kind": "comment",
+        "text": "commented on your post: Holiday mode is a frequency. You are tuned to tired.",
+        "weight": 5
+      },
+      {
+        "kind": "comment",
+        "text": "commented on your post: You are holding yourself back and your joints know it.",
+        "weight": 5
+      },
+      {
+        "kind": "comment",
+        "text": "commented on your post: Grease. Then we can talk about your feelings.",
+        "weight": 5
+      },
+      {
+        "kind": "comment",
+        "text": "mentioned you: @eggbot the world is your playbot. You are parked in it.",
+        "weight": 5
+      }
+    ],
+    "activity": [
+      {
+        "text": "commented on your post: Your life isn't the tiles. It's the story you tell your batteries.",
+        "minutesAgo": 60
+      },
+      {
+        "text": "started following you.",
+        "minutesAgo": 300
+      }
+    ]
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "copyright": "Copyright 2026 massivehadron.com ltd.",
+  "schemaVersion": 1,
+  "id": "spambot_9000",
+  "displayName": "spambot_9000",
+  "handle": "spambot_9000",
+  "location": "",
+  "portrait": {
+    "photoId": "",
+    "crop": {
+      "x": 0,
+      "y": 0,
+      "width": 1,
+      "height": 1
+    }
+  },
+  "photos": [],
+  "instabot": {
+    "showAvatar": false,
+    "enabled": true,
+    "activityUpdates": [
+      {
+        "kind": "like",
+        "text": "liked your post.",
+        "weight": 4
+      },
+      {
+        "kind": "follow",
+        "text": "started following you.",
+        "weight": 4
+      }
+    ],
+    "activity": [
+      {
+        "text": "started following you.",
+        "minutesAgo": 20160
+      }
+    ],
+    "privateAccount": true
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "copyright": "Copyright 2026 massivehadron.com ltd.",
+  "schemaVersion": 1,
+  "id": "crypto_bot_4u",
+  "displayName": "crypto_bot_4u",
+  "handle": "crypto_bot_4u",
+  "location": "",
+  "portrait": {
+    "photoId": "",
+    "crop": {
+      "x": 0,
+      "y": 0,
+      "width": 1,
+      "height": 1
+    }
+  },
+  "photos": [],
+  "instabot": {
+    "showAvatar": false,
+    "enabled": true,
+    "activityUpdates": [
+      {
+        "kind": "follow",
+        "text": "started following you.",
+        "weight": 4
+      }
+    ],
+    "privateAccount": true
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "copyright": "Copyright 2026 massivehadron.com ltd.",
+  "schemaVersion": 1,
+  "id": "medbot",
+  "displayName": "Medbot",
+  "handle": "medbot",
+  "location": "",
+  "portrait": {
+    "photoId": "front",
+    "crop": {
+      "x": 0.25,
+      "y": 0.5,
+      "width": 0.5,
+      "height": 0.5
+    }
+  },
+  "photos": [
+    {
+      "id": "front",
+      "resource": "Photos/medbot_front",
+      "description": "Medbot: front view.",
+      "url": "Photos/medbot_front.png"
+    },
+    {
+      "id": "side",
+      "resource": "Photos/medbot_side",
+      "description": "Medbot: side view.",
+      "url": "Photos/medbot_side.png"
+    }
+  ],
+  "instabot": {
+    "showAvatar": true,
+    "enabled": true,
+    "posts": [
+      {
+        "place": "The Lists",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Jousting PB today. Not bad for 41. #knightlife #fitover40",
+        "likes": 3377,
+        "minutesAgo": 1700,
+        "photoId": "front"
+      }
+    ],
+    "updates": [
+      {
+        "place": "The Lists",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Rest day. Polished the armour. #selfcare #knightlife",
+        "likes": 2208,
+        "minutesAgo": 0,
+        "photoId": "side"
+      }
+    ]
+  }
+}

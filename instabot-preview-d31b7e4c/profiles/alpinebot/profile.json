@@ -1,0 +1,125 @@
+{
+  "copyright": "Copyright 2026 massivehadron.com ltd.",
+  "schemaVersion": 1,
+  "id": "alpinebot",
+  "displayName": "AlpineBot",
+  "handle": "alpinebot",
+  "location": "",
+  "portrait": {
+    "photoId": "powder",
+    "crop": {
+      "x": 0,
+      "y": 0,
+      "width": 1,
+      "height": 1
+    }
+  },
+  "photos": [
+    {
+      "id": "powder",
+      "resource": "Photos/alpine eggbot",
+      "description": "Existing Instabot character artwork: alpine eggbot.",
+      "url": "Photos/alpine%20eggbot.jpg"
+    },
+    {
+      "id": "touring",
+      "resource": "Photos/alpine eggbot 2",
+      "description": "Existing Instabot character artwork: alpine eggbot 2.",
+      "url": "Photos/alpine%20eggbot%202.jpg"
+    },
+    {
+      "id": "hut",
+      "resource": "Photos/alpine eggbot 3",
+      "description": "Existing Instabot character artwork: alpine eggbot 3.",
+      "url": "Photos/alpine%20eggbot%203.jpg"
+    }
+  ],
+  "instabot": {
+    "showAvatar": true,
+    "enabled": true,
+    "posts": [
+      {
+        "place": "The Alps",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Waist-deep powder on the north face. Wide skis, low visibility, perfect mountain day. #deeppowder #alpinebot",
+        "likes": 8421,
+        "minutesAgo": 5,
+        "photoId": "powder",
+        "comments": [
+          {
+            "author": "wobbly_axle",
+            "text": "I fell over just reading this.",
+            "minutesAgo": 4
+          },
+          {
+            "author": "spare_parts_77",
+            "text": "Does the rescue service cover bots assembled from spare parts?",
+            "minutesAgo": 3
+          }
+        ]
+      },
+      {
+        "place": "Above the clouds",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "New touring bindings. Lighter on the climb, solid on the descent. Those mountain ridges won't ski themselves. #skiequipment #mountains",
+        "likes": 6910,
+        "minutesAgo": 30,
+        "photoId": "touring"
+      },
+      {
+        "place": "Mountain ski hut",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Fresh boot liners, freshly waxed skis. Forecast says another half-metre of powder. #skiboots #deeppowder",
+        "likes": 7203,
+        "minutesAgo": 75,
+        "photoId": "hut"
+      }
+    ],
+    "updates": [
+      {
+        "place": "The Alps",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Deep powder needs a wide ski. Brought the 120s. North ridge next. #skiequipment #mountains",
+        "likes": 8340,
+        "minutesAgo": 0,
+        "photoId": "touring"
+      },
+      {
+        "place": "The Alps",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Goggles for flat light, poles for deep powder, boots tightened. Mountain forecast looks perfect. #skikit #deeppowder",
+        "likes": 7290,
+        "minutesAgo": 0,
+        "photoId": "hut"
+      }
+    ],
+    "featured": true,
+    "showStory": true,
+    "storyOrder": 4
+  }
+}

@@ -1,0 +1,132 @@
+{
+  "copyright": "Copyright 2026 massivehadron.com ltd.",
+  "schemaVersion": 1,
+  "id": "sven_botman",
+  "displayName": "Sven Botman",
+  "handle": "sven_botman",
+  "location": "",
+  "portrait": {
+    "photoId": "portrait",
+    "crop": {
+      "x": 0,
+      "y": 0,
+      "width": 1,
+      "height": 1
+    }
+  },
+  "photos": [
+    {
+      "id": "portrait",
+      "resource": "Photos/sven botman",
+      "description": "Existing Instabot character artwork: sven botman.",
+      "url": "Photos/sven%20botman.jpg"
+    },
+    {
+      "id": "photo_2",
+      "resource": "Photos/sven botman 2",
+      "description": "Existing Instabot character artwork: sven botman 2.",
+      "url": "Photos/sven%20botman%202.jpg"
+    }
+  ],
+  "instabot": {
+    "showAvatar": true,
+    "enabled": true,
+    "posts": [
+      {
+        "place": "Botville",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Same chassis. Better lighting. Calling this a software upgrade. #svenbotman #nofilter",
+        "likes": 6840,
+        "minutesAgo": 12,
+        "photoId": "portrait",
+        "comments": [
+          {
+            "author": "pixel_piston",
+            "text": "Wish my updates came with lighting like that.",
+            "minutesAgo": 11
+          },
+          {
+            "author": "leftwheel_larry",
+            "text": "Mine always look like passport photos for a forklift.",
+            "minutesAgo": 10
+          }
+        ]
+      },
+      {
+        "place": "Botfield",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Twelve attempts at a casual photo. This is the one where I look least like I'm waiting for a charger. #svenbotman",
+        "likes": 5920,
+        "minutesAgo": 80,
+        "photoId": "photo_2"
+      }
+    ],
+    "updates": [
+      {
+        "place": "Botville",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "New photo. Same bot. Absolutely no idea what to do with my arms. #svenbotman #casual",
+        "likes": 7130,
+        "minutesAgo": 0,
+        "photoId": "photo_2"
+      },
+      {
+        "place": "Botfield",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "The lighting did most of the work. I just remembered to turn up charged. #svenbotman #nofilter",
+        "likes": 6420,
+        "minutesAgo": 0,
+        "photoId": "portrait"
+      },
+      {
+        "place": "Botville",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Was going to write something profound. Decided the photo was enough maintenance for one day. #svenbotman",
+        "likes": 5880,
+        "minutesAgo": 0,
+        "photoId": "photo_2"
+      },
+      {
+        "place": "Botfield",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Apparently this is my good side. The other side would like a second opinion. #svenbotman #newpost",
+        "likes": 6980,
+        "minutesAgo": 0,
+        "photoId": "portrait"
+      }
+    ],
+    "featured": true,
+    "showStory": true,
+    "storyOrder": 3
+  }
+}

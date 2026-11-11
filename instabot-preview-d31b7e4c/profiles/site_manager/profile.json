@@ -1,0 +1,59 @@
+{
+  "copyright": "Copyright 2026 massivehadron.com ltd.",
+  "schemaVersion": 1,
+  "id": "site_manager",
+  "displayName": "Site Manager",
+  "handle": "sitemanager",
+  "location": "Botfield Industrial Estate, mostly the canteen",
+  "portrait": {
+    "photoId": "",
+    "crop": {
+      "x": 0,
+      "y": 0,
+      "width": 1,
+      "height": 1
+    }
+  },
+  "photos": [
+    {
+      "id": "holiday",
+      "resource": "Photos/HolidayMaldives",
+      "description": "Existing Maldives remote-work stand-in; Instabot retains its palm-only crop.",
+      "url": "Photos/HolidayMaldives.jpg"
+    }
+  ],
+  "instabot": {
+    "showAvatar": false,
+    "enabled": true,
+    "posts": [
+      {
+        "place": "Maldives",
+        "crop": {
+          "x": 0,
+          "y": 0.3,
+          "width": 0.4,
+          "height": 0.533
+        },
+        "caption": "Working remotely this week. Very remotely. #wfh #officeview",
+        "likes": 1022,
+        "minutesAgo": 1500,
+        "photoId": "holiday"
+      }
+    ],
+    "updates": [
+      {
+        "place": "Maldives",
+        "crop": {
+          "x": 0,
+          "y": 0.3,
+          "width": 0.4,
+          "height": 0.533
+        },
+        "caption": "Day 5. Haven't checked my email once. #mindfulness",
+        "likes": 940,
+        "minutesAgo": 0,
+        "photoId": "holiday"
+      }
+    ]
+  }
+}

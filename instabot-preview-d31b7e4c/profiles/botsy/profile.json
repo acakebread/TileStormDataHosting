@@ -1,0 +1,274 @@
+{
+  "copyright": "Copyright 2026 massivehadron.com ltd.",
+  "schemaVersion": 1,
+  "id": "botsy",
+  "displayName": "Botsy",
+  "handle": "botsy",
+  "location": "Botville, two streets away",
+  "portrait": {
+    "photoId": "portrait",
+    "crop": {
+      "x": 0.24,
+      "y": 0.33,
+      "width": 0.52,
+      "height": 0.52
+    }
+  },
+  "photos": [
+    {
+      "id": "portrait",
+      "resource": "Photos/botsy",
+      "description": "Existing BotsUp character artwork: botsy.",
+      "url": "Photos/botsy.png"
+    },
+    {
+      "id": "vogue",
+      "resource": "Photos/botsy vogue",
+      "description": "Existing BotsUp character artwork: botsy vogue.",
+      "url": "Photos/botsy%20vogue.jpg"
+    },
+    {
+      "id": "nightclub",
+      "resource": "Photos/botsy nightclub",
+      "description": "Existing BotsUp character artwork: botsy nightclub.",
+      "url": "Photos/botsy%20nightclub.jpg"
+    }
+  ],
+  "instabot": {
+    "showAvatar": true,
+    "enabled": true,
+    "posts": [
+      {
+        "place": "Botville",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Front cover of B.O.T. Vogue. They asked for glam. I brought the whole chassis. Jewels & Gears, baby. #botvogue #influencer #queenofglam",
+        "likes": 12840,
+        "minutesAgo": 15,
+        "photoId": "vogue",
+        "comments": [
+          {
+            "author": "botifit",
+            "text": "That cover deserves a frame.",
+            "minutesAgo": 13
+          },
+          {
+            "author": "chrome_dreams",
+            "text": "CoverBot energy. My camera only ever finds my charging port.",
+            "minutesAgo": 14
+          },
+          {
+            "author": "thermal_throttle",
+            "text": "My cooling fan kicked in just looking at this.",
+            "minutesAgo": 13
+          }
+        ]
+      },
+      {
+        "place": "Neon District",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Club night. Rings on. Lasers up. Someone buy me a premium oil or get out of the way. #nightbot #hottohandle #overclocked",
+        "likes": 9650,
+        "minutesAgo": 35,
+        "photoId": "nightclub"
+      },
+      {
+        "place": "Botville",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Hair down, antenna up. Someone in Botville should take me for a roll ;) #single #botville #hottohandle",
+        "likes": 4870,
+        "minutesAgo": 45,
+        "photoId": "portrait"
+      },
+      {
+        "place": "Botville",
+        "crop": {
+          "x": 0.24,
+          "y": 0.33,
+          "width": 0.52,
+          "height": 0.52
+        },
+        "caption": "Still can't believe they put me on the cover. B.O.T. Vogue. Me. The Influencer Reinvented. Screenshot this for your motherboard. #botvogue #glam",
+        "likes": 15220,
+        "minutesAgo": 180,
+        "photoId": "vogue"
+      },
+      {
+        "place": "Neon District",
+        "crop": {
+          "x": 0.1,
+          "y": 0.23,
+          "width": 0.31,
+          "height": 0.31
+        },
+        "caption": "These rings catch every laser in the room. Designed to be noticed. You're welcome. #sparkle #clubbot #botsy",
+        "likes": 11040,
+        "minutesAgo": 600,
+        "photoId": "nightclub"
+      },
+      {
+        "place": "Botville",
+        "crop": {
+          "x": 0.24,
+          "y": 0.33,
+          "width": 0.52,
+          "height": 0.52
+        },
+        "caption": "No filter. Just good firmware. #nofilter #freshlywaxed",
+        "likes": 6233,
+        "minutesAgo": 2200,
+        "photoId": "portrait"
+      }
+    ],
+    "updates": [
+      {
+        "place": "Botville",
+        "crop": {
+          "x": 0.1,
+          "y": 0.23,
+          "width": 0.31,
+          "height": 0.31
+        },
+        "caption": "New rings. Still waiting for someone to notice. @eggbot #sparkle #hint",
+        "likes": 5102,
+        "minutesAgo": 0,
+        "photoId": "portrait"
+      },
+      {
+        "place": "Botville",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "They called. I answered. Front page of B.O.T. Vogue. Jewels & Gears issue. Still processing (at 100%). #botvogue #queenofglam #influencer",
+        "likes": 14110,
+        "minutesAgo": 0,
+        "photoId": "vogue"
+      },
+      {
+        "place": "Botfield Industrial Estate",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Just happened to be passing a tile site. Twice. #coincidence #hivis",
+        "likes": 3870,
+        "minutesAgo": 0,
+        "photoId": "portrait"
+      },
+      {
+        "place": "Neon District",
+        "crop": {
+          "x": 0,
+          "y": 0,
+          "width": 1,
+          "height": 1
+        },
+        "caption": "Last night the lasers found me. Or I found them. Either way the floor was ours. #nightbot #overclocked",
+        "likes": 8900,
+        "minutesAgo": 0,
+        "photoId": "nightclub"
+      },
+      {
+        "place": "Botville",
+        "crop": {
+          "x": 0.24,
+          "y": 0.33,
+          "width": 0.52,
+          "height": 0.52
+        },
+        "caption": "Overheating again. Someone come and check my thermal paste ;) #summerbody #throttling",
+        "likes": 7714,
+        "minutesAgo": 0,
+        "photoId": "portrait"
+      },
+      {
+        "place": "Botville",
+        "crop": {
+          "x": 0.24,
+          "y": 0.33,
+          "width": 0.52,
+          "height": 0.52
+        },
+        "caption": "Vogue said glam. I said watch this. Cover story. Still the same bot who messages you at 2am. #botvogue #stillme",
+        "likes": 13450,
+        "minutesAgo": 0,
+        "photoId": "vogue"
+      }
+    ],
+    "featured": true,
+    "showStory": true,
+    "storyOrder": 0,
+    "activityUpdates": [
+      {
+        "kind": "comment",
+        "text": "commented on your post: Holiday mode suits you ;)",
+        "weight": 5,
+        "postIndex": 1
+      },
+      {
+        "kind": "comment",
+        "text": "commented on your post: Take me with you next time x",
+        "weight": 5,
+        "postIndex": 1
+      },
+      {
+        "kind": "comment",
+        "text": "commented on your post: That hard hat though",
+        "weight": 5,
+        "postIndex": 2
+      },
+      {
+        "kind": "comment",
+        "text": "commented on your post: Best day of the week? I could make it better ;)",
+        "weight": 5,
+        "postIndex": 2
+      },
+      {
+        "kind": "comment",
+        "text": "mentioned you: @eggbot check your BotsUp x",
+        "weight": 5,
+        "postIndex": 1
+      },
+      {
+        "kind": "comment",
+        "text": "commented on your post: Like if you're single. I'll go first",
+        "weight": 5,
+        "postIndex": 1
+      },
+      {
+        "kind": "like",
+        "text": "liked your post.",
+        "weight": 12
+      }
+    ],
+    "activity": [
+      {
+        "text": "liked your post.",
+        "minutesAgo": 120
+      },
+      {
+        "text": "started following you.",
+        "minutesAgo": 1440
+      }
+    ]
+  }
+}
