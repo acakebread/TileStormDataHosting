@@ -32,10 +32,10 @@
     {
       "id": "goldibot_4",
       "resource": "Photos/goldibot_4",
-      "description": "Goldibot's fourth photo.",
+      "description": "Goldibot shows off her new charging-port zipper.",
       "posterPhotoId": "",
       "maxImageDimension": 1024,
-      "url": "Photos/goldibot_4.jpg"
+      "url": "Photos/goldibot_4.jpg?v=b2bcab7dd6bd"
     }
   ],
   "videos": [

@@ -275,8 +275,8 @@ function setViewerStatus(message) {
 
 function updateVideoPlaySurface(video) {
   const playSurface = video.parentElement.querySelector('.video-play-surface');
-  playSurface.hidden = !video.paused && video.controls;
-  playSurface.setAttribute('aria-label', video.paused ? 'Play video' : 'Show video controls');
+  playSurface.hidden = false;
+  playSurface.setAttribute('aria-label', video.paused ? 'Play video' : 'Pause video');
 }
 
 function releaseViewerMedia() {
@@ -320,8 +320,8 @@ async function renderGallery(continuePlaying = false) {
   ui.galleryVideos.setAttribute('aria-pressed', String(isVideo));
   ui.galleryPhotos.setAttribute('aria-pressed', String(!isVideo));
   ui.viewerCaption.textContent = item.description || '';
-  ui.galleryPrevious.disabled = index === 0;
-  ui.galleryNext.disabled = index === items.length - 1;
+  ui.galleryPrevious.disabled = items.length < 2 || (isVideo && index === 0);
+  ui.galleryNext.disabled = items.length < 2 || (isVideo && index === items.length - 1);
   ui.galleryPosition.value = (index + 1) + ' / ' + items.length;
   ui.galleryStop.hidden = !isVideo;
   ui.galleryStop.disabled = !continuePlaying;
@@ -356,12 +356,8 @@ async function renderGallery(continuePlaying = false) {
       });
     };
     playSurface.onclick = () => {
-      if (video.paused) {
-        play();
-      } else if (!video.controls) {
-        video.controls = true;
-        updateVideoPlaySurface(video);
-      }
+      if (video.paused) play();
+      else video.pause();
     };
     video.onplay = () => {
       if (request !== state.viewerRequest) return;
@@ -417,7 +413,7 @@ async function renderGallery(continuePlaying = false) {
     image.className = 'gallery-media gallery-photo';
     image.src = picture.url;
     image.alt = item.description || profile.displayName;
-    enablePhotoSwipe(image);
+    enablePhotoNavigation(image);
     ui.viewerStage.append(image);
     setViewerStatus('');
   } catch {
@@ -436,17 +432,22 @@ function selectGallerySection(section) {
 function moveGallery(direction) {
   const gallery = state.gallery;
   if (!gallery) return;
-  const index = gallery.index + direction;
-  if (index < 0 || index >= gallery.profile[gallery.section].length) return;
+  const count = gallery.profile[gallery.section].length;
+  if (count < 2) return;
+  let index = gallery.index + direction;
+  if (gallery.section === 'photos') index = (index + count) % count;
+  if (index < 0 || index >= count) return;
   gallery.index = index;
   renderGallery();
 }
 
-function enablePhotoSwipe(image) {
+function enablePhotoNavigation(image) {
   let start;
+  let tapped = false;
   image.draggable = false;
   image.onpointerdown = event => {
     if (start || !event.isPrimary || event.button !== 0) return;
+    tapped = false;
     start = {id: event.pointerId, x: event.clientX, y: event.clientY};
     image.setPointerCapture(event.pointerId);
   };
@@ -459,8 +460,13 @@ function enablePhotoSwipe(image) {
     const dy = event.clientY - start.y;
     start = null;
     const distance = Math.abs(dx);
+    tapped = Math.hypot(dx, dy) <= 8;
     const threshold = Math.min(64, Math.max(24, image.clientWidth * 0.1));
     if (distance >= threshold && distance > Math.abs(dy) * 1.3) moveGallery(dx < 0 ? 1 : -1);
+  };
+  image.onclick = () => {
+    if (tapped) moveGallery(1);
+    tapped = false;
   };
 }
 

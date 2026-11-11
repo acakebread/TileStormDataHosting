@@ -9,7 +9,7 @@
   <meta name="referrer" content="no-referrer">
   <meta name="theme-color" content="#090e14">
   <title>OnlyBots · Preview</title>
-  <link rel="stylesheet" href="./onlybots.css?v=gallery-gestures">
+  <link rel="stylesheet" href="./onlybots.css?v=gallery-media-controls">
 </head>
 <body>
   <main id="passwordGate" class="password-gate">
@@ -81,7 +81,7 @@
       gate.replaceWith(preview.content);
       preview.remove();
       document.getElementById('feedScroller').focus();
-      import('./onlybots.js?v=gallery-gestures').catch(() => {
+      import('./onlybots.js?v=gallery-media-controls').catch(() => {
         const status = document.getElementById('feedStatus');
         status.textContent = 'The preview could not load. Reload the page to try again.';
         status.setAttribute('role', 'alert');

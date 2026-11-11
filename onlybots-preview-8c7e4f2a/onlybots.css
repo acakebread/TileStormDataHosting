@@ -92,7 +92,7 @@ h1 { font-size: 32px; line-height: 1.1; color: var(--blue); margin: 0 0 8px; let
 .gallery-tabs button[aria-pressed="true"] { background: #153346; border-color: #27637e; color: #e0f6ff; }
 .gallery-tabs button:disabled, .gallery-controls button:disabled { cursor: default; }
 .gallery-media { display: block; width: 100%; height: 100%; max-width: 960px; object-fit: contain; }
-.gallery-photo { touch-action: pan-y pinch-zoom; }
+.gallery-photo { touch-action: pan-y pinch-zoom; cursor: pointer; }
 .gallery-video { position: relative; width: 100%; height: 100%; max-width: 960px; }
 .video-play-surface {
   position: absolute;
