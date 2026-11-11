@@ -45,12 +45,18 @@ export const pictures = {
     const blob = await fetchFile(new URL(photo.url, profile.sourceUrl), 'blob');
     const original = URL.createObjectURL(blob);
     const image = new Image();
+    let keepOriginal = false;
     try {
       image.src = original;
       await image.decode();
-      const requested = photo.maxImageDimension ?? profile.maxImageDimension ?? 512;
-      const limit = Number.isFinite(requested) && requested > 0 ? Math.floor(requested) : 512;
+      const requested = [photo.maxImageDimension, profile.maxImageDimension]
+        .find(value => Number.isFinite(value) && value > 0) ?? 512;
+      const limit = Math.max(1, Math.floor(requested));
       const scale = Math.min(1, limit / Math.max(image.naturalWidth, image.naturalHeight));
+      if (scale === 1) {
+        keepOriginal = true;
+        return {url: original, width: image.naturalWidth, height: image.naturalHeight};
+      }
       const canvas = document.createElement('canvas');
       canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
       canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
@@ -67,7 +73,7 @@ export const pictures = {
       return result;
     } finally {
       image.removeAttribute('src');
-      URL.revokeObjectURL(original);
+      if (!keepOriginal) URL.revokeObjectURL(original);
     }
   },
   dispose() {

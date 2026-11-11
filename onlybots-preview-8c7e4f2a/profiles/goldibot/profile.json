@@ -20,6 +20,22 @@
       "description": "goldibot: goldibot_2",
       "posterPhotoId": "",
       "url": "Photos/goldibot_2.jpg"
+    },
+    {
+      "id": "goldibot_3",
+      "resource": "Photos/goldibot_3",
+      "description": "Goldibot's third photo.",
+      "posterPhotoId": "",
+      "maxImageDimension": 1024,
+      "url": "Photos/goldibot_3.jpg"
+    },
+    {
+      "id": "goldibot_4",
+      "resource": "Photos/goldibot_4",
+      "description": "Goldibot's fourth photo.",
+      "posterPhotoId": "",
+      "maxImageDimension": 1024,
+      "url": "Photos/goldibot_4.jpg"
     }
   ],
   "portrait": {
@@ -58,6 +74,16 @@
           "height": 1
         },
         "flipHorizontal": false
+      },
+      {
+        "order": 2,
+        "photoId": "goldibot_3",
+        "caption": "Fresh gold, just for the guest list. Look as long as you like."
+      },
+      {
+        "order": 3,
+        "photoId": "goldibot_4",
+        "caption": "Last look before the lights go down. Some things shine better after hours."
       }
     ],
     "updates": [
@@ -156,6 +182,16 @@
           "height": 0.95
         },
         "flipHorizontal": true
+      },
+      {
+        "order": 8,
+        "photoId": "goldibot_3",
+        "caption": "Back for another look? I had a feeling you would be."
+      },
+      {
+        "order": 9,
+        "photoId": "goldibot_4",
+        "caption": "Closing time is for bots who have somewhere better to be."
       }
     ]
   }
