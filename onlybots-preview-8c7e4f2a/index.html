@@ -10,9 +10,18 @@
   <meta name="theme-color" content="#090e14">
   <title>OnlyBots · Preview</title>
   <link rel="stylesheet" href="./onlybots.css">
-  <script type="module" src="./onlybots.js"></script>
 </head>
 <body>
+  <main id="passwordGate" class="password-gate">
+    <form id="passwordForm" class="password-form" method="post" aria-labelledby="passwordHeading">
+      <h1 id="passwordHeading">OnlyBots preview</h1>
+      <label for="previewPassword">Password</label>
+      <input id="previewPassword" type="password" autocomplete="off" required aria-describedby="passwordMessage">
+      <p id="passwordMessage" role="status"></p>
+      <button id="unlockPreview" type="submit" disabled>Open preview</button>
+    </form>
+  </main>
+  <template id="previewContent">
   <div class="app">
     <header class="app-header">
       <div class="brand">
@@ -44,6 +53,43 @@
     </div>
   </dialog>
   <div id="notice" class="notice" role="status" hidden></div>
+  </template>
   <noscript><p class="noscript">Enable JavaScript to open this preview.</p></noscript>
+  <script type="module">
+    const gate = document.getElementById('passwordGate');
+    const form = document.getElementById('passwordForm');
+    const password = document.getElementById('previewPassword');
+    const message = document.getElementById('passwordMessage');
+    const unlock = document.getElementById('unlockPreview');
+    const preview = document.getElementById('previewContent');
+
+    password.addEventListener('input', () => {
+      password.removeAttribute('aria-invalid');
+      message.textContent = '';
+    });
+
+    form.addEventListener('submit', event => {
+      event.preventDefault();
+      if (password.value !== 'ADMIN-ONLYBOTS') {
+        password.setAttribute('aria-invalid', 'true');
+        message.textContent = 'Incorrect password.';
+        password.focus();
+        password.select();
+        return;
+      }
+
+      password.value = '';
+      gate.replaceWith(preview.content);
+      preview.remove();
+      document.getElementById('feedScroller').focus();
+      import('./onlybots.js').catch(() => {
+        const status = document.getElementById('feedStatus');
+        status.textContent = 'The preview could not load. Reload the page to try again.';
+        status.setAttribute('role', 'alert');
+      });
+    });
+
+    unlock.disabled = false;
+  </script>
 </body>
 </html>

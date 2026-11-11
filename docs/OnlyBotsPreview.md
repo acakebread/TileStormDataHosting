@@ -7,15 +7,15 @@ under the portal's **Admin tools** after a non-empty admin token is entered or
 restored in that browser. Clearing the token hides the link. The token is never
 passed to the preview, included in its URL or needed by its JavaScript.
 
-This is an unlisted public page, as requested. Anyone with the URL can open it;
-the page, JSON and images are also readable from the public repository. The
-robots metadata discourages indexing but is not access control. No server,
-Cloudflare changes or verified administrator authentication are involved.
+The unlisted page asks for its own password each time it loads. The browser
+starts the feed and requests its content after the password is accepted. The
+password is checked in the page source. The source, JSON and images remain
+readable from the public repository.
 
-The preview has no runtime dependency on Unity. Its five creator profiles and
-17 photographs are copied snapshots, with the same authored captions, crops,
-horizontal mirrors, initial posts and update templates as the tablet app.
-OnlyBots data can be edited here without touching the main project.
+The preview contains six creators and 19 photographs. Five creators use copies
+of the tablet app's OnlyBots profiles. Kelly Bot has a web-only profile that
+uses her existing Instabot photos and captions. The snapshot copier preserves
+her profile and keeps it in the catalogue.
 
 The feed mixes creators, keeps all initial posts and the latest 24 timed updates,
 starts updates after 20 seconds, then waits 35–65 seconds between arrivals.
@@ -45,7 +45,9 @@ the copied JSON, so retain any website-only edits before doing that. Publish the
 page with the data-hosting repository's existing GitHub Pages workflow.
 
 No tests, builds, compilation checks or browser previews were run. Andrew owns
-validation: check that entering/clearing the portal token shows/hides the link,
-then review creator filters, image framing and mirrors, opening/closing photos,
+validation: check that entering/clearing the portal token shows/hides the link.
+Open the preview directly and through Admin tools. Confirm that an incorrect
+password leaves the feed hidden and the correct password opens it. Then review
+creator filters, image framing and mirrors, opening/closing photos,
 likes, sharing/download, the subscription notice and timed arrivals while
 scrolled down. Review the layout on narrow screens as well.

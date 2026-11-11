@@ -29,6 +29,15 @@ button:hover, .portal-link:hover { background: #1b2a39; border-color: #426079; }
 button:focus-visible, a:focus-visible, main:focus-visible { outline: 2px solid var(--blue); outline-offset: 4px; }
 button:disabled { cursor: wait; opacity: .55; }
 [hidden] { display: none !important; }
+.password-gate { min-height: 100vh; min-height: 100dvh; display: grid; place-items: center; padding: 24px; }
+.password-form { width: min(100%, 380px); padding: 24px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
+.password-form h1 { margin-bottom: 24px; }
+.password-form label { display: block; margin-bottom: 8px; }
+.password-form input { width: 100%; padding: 12px; font: inherit; color: inherit; background: var(--back); border: 1px solid var(--line); border-radius: 8px; }
+.password-form input:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.password-form button { margin-top: 16px; width: 100%; }
+#passwordMessage { margin: 8px 0 0; color: #ff9e9e; }
+#passwordMessage:empty { margin: 0; }
 .app { max-width: 1440px; height: 100vh; height: 100dvh; margin: 0 auto; display: flex; flex-direction: column; }
 .app-header { padding: 20px 28px; display: flex; justify-content: space-between; align-items: center; gap: 24px; flex: 0 0 auto; }
 .brand { display: flex; align-items: center; gap: 16px; }

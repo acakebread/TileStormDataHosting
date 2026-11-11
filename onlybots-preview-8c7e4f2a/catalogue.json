@@ -12,6 +12,7 @@
     "profiles/lucybot/profile.json",
     "profiles/miss_bot/profile.json",
     "profiles/miss_botiliscious/profile.json",
-    "profiles/mistress_bot/profile.json"
+    "profiles/mistress_bot/profile.json",
+    "profiles/kelly_bot/profile.json"
   ]
 }

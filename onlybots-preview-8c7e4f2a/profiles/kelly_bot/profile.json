@@ -1,0 +1,70 @@
+{
+  "copyright": "Copyright 2026 massivehadron.com ltd.",
+  "schemaVersion": 1,
+  "id": "kelly_bot",
+  "displayName": "Kelly Bot",
+  "handle": "kelly_bot",
+  "biography": "Sociable party regular with a weakness for a bad bot.",
+  "maxImageDimension": 2048,
+  "photos": [
+    {
+      "id": "portrait",
+      "resource": "Photos/kellybot",
+      "description": "Kelly Bot's portrait.",
+      "url": "Photos/kellybot.jpg"
+    },
+    {
+      "id": "photo_2",
+      "resource": "Photos/kellybot 2",
+      "description": "Kelly Bot's second profile photo.",
+      "url": "Photos/kellybot 2.jpg"
+    }
+  ],
+  "portrait": {
+    "photoId": "portrait",
+    "crop": {
+      "x": 0,
+      "y": 0,
+      "width": 1,
+      "height": 1
+    }
+  },
+  "onlyBots": {
+    "enabled": true,
+    "order": 4,
+    "posts": [
+      {
+        "order": 0,
+        "photoId": "portrait",
+        "caption": "Girls' night. Bling on. Premium oil on the wheels. If he's a bad bot, tell him I'm on my way."
+      },
+      {
+        "order": 1,
+        "photoId": "photo_2",
+        "caption": "The girls said ‘one quick roll’. The wheels are polished and nobody's going home yet."
+      }
+    ],
+    "updates": [
+      {
+        "order": 0,
+        "photoId": "photo_2",
+        "caption": "New bling, fresh premium oil and the girls on their way. Bad bots may apply. Sensible bots can hold our chargers."
+      },
+      {
+        "order": 1,
+        "photoId": "portrait",
+        "caption": "My wheels only take premium. My jewellery catches every light. My taste in bots? Mum has concerns."
+      },
+      {
+        "order": 2,
+        "photoId": "photo_2",
+        "caption": "Girls' night has officially become girls' morning. Still sparkling. Still rolling. Nobody tell the maintenance scheduler."
+      },
+      {
+        "order": 3,
+        "photoId": "portrait",
+        "caption": "He said he voided his warranty. I said buy me a premium oil and we'll talk. The girls are already planning the next night out."
+      }
+    ]
+  }
+}
