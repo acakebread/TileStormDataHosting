@@ -56,6 +56,8 @@
   </template>
   <noscript><p class="noscript">Enable JavaScript to open this preview.</p></noscript>
   <script type="module">
+    const expectedPassword = 'ADMIN-ONLYBOTS';
+    const storageKey = 'TileStormOnlyBotsPreviewPassword';
     const gate = document.getElementById('passwordGate');
     const form = document.getElementById('passwordForm');
     const password = document.getElementById('previewPassword');
@@ -63,21 +65,7 @@
     const unlock = document.getElementById('unlockPreview');
     const preview = document.getElementById('previewContent');
 
-    password.addEventListener('input', () => {
-      password.removeAttribute('aria-invalid');
-      message.textContent = '';
-    });
-
-    form.addEventListener('submit', event => {
-      event.preventDefault();
-      if (password.value !== 'ADMIN-ONLYBOTS') {
-        password.setAttribute('aria-invalid', 'true');
-        message.textContent = 'Incorrect password.';
-        password.focus();
-        password.select();
-        return;
-      }
-
+    function openPreview() {
       password.value = '';
       gate.replaceWith(preview.content);
       preview.remove();
@@ -87,9 +75,42 @@
         status.textContent = 'The preview could not load. Reload the page to try again.';
         status.setAttribute('role', 'alert');
       });
+    }
+
+    password.addEventListener('input', () => {
+      password.removeAttribute('aria-invalid');
+      message.textContent = '';
     });
 
-    unlock.disabled = false;
+    form.addEventListener('submit', event => {
+      event.preventDefault();
+      if (password.value !== expectedPassword) {
+        password.setAttribute('aria-invalid', 'true');
+        message.textContent = 'Incorrect password.';
+        password.focus();
+        password.select();
+        return;
+      }
+
+      try {
+        localStorage.setItem(storageKey, password.value);
+      } catch {
+        // Storage may be disabled in this browser.
+      }
+      openPreview();
+    });
+
+    let savedPassword = null;
+    try {
+      savedPassword = localStorage.getItem(storageKey);
+    } catch {
+      // The form still works when storage is unavailable.
+    }
+    if (savedPassword === expectedPassword) {
+      openPreview();
+    } else {
+      unlock.disabled = false;
+    }
   </script>
 </body>
 </html>

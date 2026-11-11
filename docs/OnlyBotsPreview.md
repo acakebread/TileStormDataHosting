@@ -7,10 +7,12 @@ under the portal's **Admin tools** after a non-empty admin token is entered or
 restored in that browser. Clearing the token hides the link. The token is never
 passed to the preview, included in its URL or needed by its JavaScript.
 
-The unlisted page asks for its own password each time it loads. The browser
-starts the feed and requests its content after the password is accepted. The
-password is checked in the page source. The source, JSON and images remain
-readable from the public repository.
+The unlisted page has its own password. After accepting it, the preview stores
+it in the browser's local storage for that site and checks it again on future
+visits. Clearing the site's data prompts for the password again. The browser
+loads the feed only after accepting the entered or saved password. The password
+is checked in the page source. The source, JSON and images remain readable from
+the public repository.
 
 The preview contains six creators and 19 photographs. Five creators use copies
 of the tablet app's OnlyBots profiles. Kelly Bot has a web-only profile that
@@ -47,7 +49,8 @@ page with the data-hosting repository's existing GitHub Pages workflow.
 No tests, builds, compilation checks or browser previews were run. Andrew owns
 validation: check that entering/clearing the portal token shows/hides the link.
 Open the preview directly and through Admin tools. Confirm that an incorrect
-password leaves the feed hidden and the correct password opens it. Then review
+password leaves the feed hidden and the correct password opens it. Reload in
+the same browser to check that the saved password opens the feed. Then review
 creator filters, image framing and mirrors, opening/closing photos,
 likes, sharing/download, the subscription notice and timed arrivals while
 scrolled down. Review the layout on narrow screens as well.
