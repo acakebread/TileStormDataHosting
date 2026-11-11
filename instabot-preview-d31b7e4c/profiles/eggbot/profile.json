@@ -8,7 +8,7 @@
   "followers": 4,
   "following": 418,
   "portrait": {
-    "photoId": "HolidayMaldives",
+    "photoId": "holiday_maldives",
     "crop": {
       "x": 0.508,
       "y": 0.388,
@@ -18,15 +18,31 @@
   },
   "photos": [
     {
-      "id": "HolidayMaldives",
+      "id": "holiday_maldives",
+      "resource": "Photos/HolidayMaldives",
+      "place": "Maldives",
+      "description": "One day.",
       "url": "Photos/HolidayMaldives.jpg"
     },
     {
-      "id": "HolidayBarbados",
+      "id": "holiday_phuket",
+      "resource": "Photos/HolidayPhuket",
+      "place": "Phuket",
+      "description": "The brochure is still open.",
+      "url": "Photos/HolidayPhuket.jpg"
+    },
+    {
+      "id": "holiday_barbados",
+      "resource": "Photos/HolidayBarbados",
+      "place": "Barbados",
+      "description": "Sunglasses on. Still in the chair.",
       "url": "Photos/HolidayBarbados.jpg"
     },
     {
-      "id": "HolidaySite",
+      "id": "holiday_site",
+      "resource": "Photos/HolidaySite",
+      "place": "Site",
+      "description": "They were meant to be working.",
       "url": "Photos/HolidaySite.jpg"
     }
   ],
@@ -35,6 +51,7 @@
     "showAvatar": true,
     "posts": [
       {
+        "photoId": "holiday_maldives",
         "place": "Maldives",
         "crop": {
           "x": 0.25,
@@ -44,10 +61,10 @@
         },
         "caption": "One day.",
         "likes": 0,
-        "minutesAgo": 10080,
-        "photoId": "HolidayMaldives"
+        "minutesAgo": 10080
       },
       {
+        "photoId": "holiday_barbados",
         "place": "Barbados",
         "crop": {
           "x": 0.08,
@@ -57,10 +74,10 @@
         },
         "caption": "Holiday mode.",
         "likes": 1,
-        "minutesAgo": 20160,
-        "photoId": "HolidayBarbados"
+        "minutesAgo": 20160
       },
       {
+        "photoId": "holiday_site",
         "place": "Botfield Industrial Estate",
         "crop": {
           "x": 0.125,
@@ -70,8 +87,13 @@
         },
         "caption": "Best day of the week.",
         "likes": 2,
-        "minutesAgo": 30240,
-        "photoId": "HolidaySite"
+        "minutesAgo": 30240
+      },
+      {
+        "photoId": "holiday_phuket",
+        "place": "Phuket",
+        "caption": "The brochure is still open.",
+        "minutesAgo": 40320
       }
     ]
   }

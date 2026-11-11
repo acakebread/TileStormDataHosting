@@ -42,6 +42,9 @@ async function copyPhotos(photos, sourceDirectory, target) {
 }
 
 const profiles = [];
+const tablet = await readJson(path.join(resources, 'EggbotTabletContent.json'));
+const ownerId = 'eggbot';
+let ownerProfile;
 const entries = await readdir(source, {withFileTypes: true});
 for (const directory of entries.filter(entry => entry.isDirectory()).sort((a, b) => a.name.localeCompare(b.name))) {
   const root = path.join(source, directory.name);
@@ -59,6 +62,7 @@ for (const directory of entries.filter(entry => entry.isDirectory()).sort((a, b)
   const target = path.join(destination, 'profiles', authored.id);
   const photos = await copyPhotos(photoRecords.map(photo => ({...photo, stem: path.basename(photo.resource)})),
     path.join(root, 'Photos'), target);
+  const isOwner = authored.id === ownerId;
   await writeJson(path.join(target, 'profile.json'), {
     copyright: authored.copyright || copyright,
     schemaVersion: 1,
@@ -66,35 +70,22 @@ for (const directory of entries.filter(entry => entry.isDirectory()).sort((a, b)
     displayName: authored.displayName,
     handle: authored.handle || authored.id,
     location: authored.location,
+    ...(isOwner ? {biography: authored.biography, followers: tablet.followers ?? 4, following: tablet.following ?? 418} : {}),
     portrait: authored.portrait,
     maxImageDimension: authored.maxImageDimension,
     photos,
     instabot: social
   });
-  profiles.push(`profiles/${authored.id}/profile.json`);
+  const profilePath = `profiles/${authored.id}/profile.json`;
+  if (isOwner) ownerProfile = profilePath;
+  else profiles.push(profilePath);
 }
-
-const tablet = await readJson(path.join(resources, 'EggbotTabletContent.json'));
-const ownerPosts = (tablet.ownerPosts ?? []).map(({resource, ...post}) => ({...post, photoId: path.basename(resource)}));
-const portraitId = path.basename(tablet.ownerPortraitResource);
-const ownerPhotoIds = new Set([portraitId, ...ownerPosts.map(post => post.photoId)]);
-const ownerTarget = path.join(destination, 'profiles', 'eggbot');
-const ownerPhotos = await copyPhotos([...ownerPhotoIds].map(id => ({id, stem: id})),
-  path.join(application, 'EggbotCrib', 'Resources', 'EggbotCrib'), ownerTarget);
-await writeJson(path.join(ownerTarget, 'profile.json'), {
-  copyright, schemaVersion: 1, id: 'eggbot', displayName: 'Eggbot', handle: 'eggbot',
-  biography: tablet.ownerBiography,
-  followers: tablet.followers ?? 4,
-  following: tablet.following ?? 418,
-  portrait: {photoId: portraitId, crop: tablet.ownerPortraitCrop},
-  photos: ownerPhotos,
-  instabot: {enabled: true, showAvatar: true, posts: ownerPosts}
-});
+if (!ownerProfile) throw new Error('The Eggbot owner profile is missing or has Instabot disabled.');
 
 await copyFile(path.join(application, 'Instabot', 'Resources', 'Instabot', 'Textures', 'icon.png'),
   path.join(destination, 'icon.png'));
 await writeJson(path.join(destination, 'catalogue.json'), {
-  copyright, schemaVersion: 1, owner: 'profiles/eggbot/profile.json', profiles,
+  copyright, schemaVersion: 1, owner: ownerProfile, profiles,
   appActivityUpdates: tablet.appActivityUpdates ?? [],
   feed: {firstUpdateSeconds: 30, minUpdateSeconds: 45, maxUpdateSeconds: 90}
 });
