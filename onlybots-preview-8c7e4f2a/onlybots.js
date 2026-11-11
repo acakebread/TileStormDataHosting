@@ -273,6 +273,12 @@ function setViewerStatus(message) {
   ui.viewerStatus.hidden = !message;
 }
 
+function updateVideoPlaySurface(video) {
+  const playSurface = video.parentElement.querySelector('.video-play-surface');
+  playSurface.hidden = !video.paused && video.controls;
+  playSurface.setAttribute('aria-label', video.paused ? 'Play video' : 'Show video controls');
+}
+
 function releaseViewerMedia() {
   const video = ui.viewerStage.querySelector('video');
   if (video) {
@@ -332,7 +338,8 @@ async function renderGallery(continuePlaying = false) {
       frame.append(video, playSurface);
     }
     video.className = 'gallery-media';
-    video.controls = true;
+    // On touch devices, changing the source with native controls enabled flashes them over the next clip.
+    video.controls = !continuePlaying || !window.matchMedia('(pointer: coarse)').matches;
     video.loop = items.length === 1;
     video.playsInline = true;
     video.preload = 'none';
@@ -342,26 +349,37 @@ async function renderGallery(continuePlaying = false) {
       video.play().catch(error => {
         if (request !== state.viewerRequest || error.name === 'AbortError') return;
         gallery.cycling = false;
-        playSurface.hidden = false;
+        video.controls = true;
+        updateVideoPlaySurface(video);
         ui.galleryStop.disabled = true;
         setViewerStatus(error.name === 'NotAllowedError' ? 'Press Play to continue.' : 'This video could not be played.');
       });
     };
-    playSurface.onclick = play;
+    playSurface.onclick = () => {
+      if (video.paused) {
+        play();
+      } else if (!video.controls) {
+        video.controls = true;
+        updateVideoPlaySurface(video);
+      }
+    };
     video.onplay = () => {
       if (request !== state.viewerRequest) return;
       gallery.cycling = true;
-      playSurface.hidden = true;
+      updateVideoPlaySurface(video);
       ui.galleryStop.disabled = false;
       setViewerStatus('');
     };
     video.onpause = () => {
-      if (request === state.viewerRequest && video.paused && !video.ended) playSurface.hidden = false;
+      if (request !== state.viewerRequest || !video.paused || video.ended) return;
+      video.controls = true;
+      updateVideoPlaySurface(video);
     };
     video.onerror = () => {
       if (request !== state.viewerRequest) return;
       gallery.cycling = false;
-      playSurface.hidden = false;
+      video.controls = true;
+      updateVideoPlaySurface(video);
       ui.galleryStop.disabled = true;
       setViewerStatus('This video could not be played.');
     };
@@ -396,9 +414,10 @@ async function renderGallery(continuePlaying = false) {
     const picture = await pictures.load(profile, item.id);
     if (request !== state.viewerRequest) return;
     const image = document.createElement('img');
-    image.className = 'gallery-media';
+    image.className = 'gallery-media gallery-photo';
     image.src = picture.url;
     image.alt = item.description || profile.displayName;
+    enablePhotoSwipe(image);
     ui.viewerStage.append(image);
     setViewerStatus('');
   } catch {
@@ -421,6 +440,28 @@ function moveGallery(direction) {
   if (index < 0 || index >= gallery.profile[gallery.section].length) return;
   gallery.index = index;
   renderGallery();
+}
+
+function enablePhotoSwipe(image) {
+  let start;
+  image.draggable = false;
+  image.onpointerdown = event => {
+    if (start || !event.isPrimary || event.button !== 0) return;
+    start = {id: event.pointerId, x: event.clientX, y: event.clientY};
+    image.setPointerCapture(event.pointerId);
+  };
+  image.onlostpointercapture = event => {
+    if (start?.id === event.pointerId) start = null;
+  };
+  image.onpointerup = event => {
+    if (start?.id !== event.pointerId) return;
+    const dx = event.clientX - start.x;
+    const dy = event.clientY - start.y;
+    start = null;
+    const distance = Math.abs(dx);
+    const threshold = Math.min(64, Math.max(24, image.clientWidth * 0.1));
+    if (distance >= threshold && distance > Math.abs(dy) * 1.3) moveGallery(dx < 0 ? 1 : -1);
+  };
 }
 
 async function sharePost(post, button) {
@@ -492,8 +533,9 @@ ui.galleryStop.addEventListener('click', () => {
   if (!video || !state.gallery) return;
   state.gallery.cycling = false;
   video.pause();
+  video.controls = true;
   video.load();
-  video.parentElement.querySelector('.video-play-surface').hidden = false;
+  updateVideoPlaySurface(video);
   ui.galleryStop.disabled = true;
   setViewerStatus('');
 });
