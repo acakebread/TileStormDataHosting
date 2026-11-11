@@ -8,8 +8,7 @@ import {fileURLToPath} from 'node:url';
 
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const unity = path.resolve(process.argv[2] || path.join(repository, '..', 'TileStormEvolution'));
-const source = path.join(unity, 'Assets', 'Application', 'EggbotProfiles', 'Resources', 'Eggbots');
-const videoSource = path.join(unity, 'Assets', 'StreamingAssets', 'Eggbots');
+const source = path.join(unity, 'Assets', 'Application', 'EggbotProfiles', 'Editor', 'Content', 'Eggbots');
 const destination = path.join(repository, 'onlybots-preview-8c7e4f2a');
 const copyright = `Copyright ${new Date().getFullYear()} massivehadron.com ltd.`;
 // These profiles are authored in the web preview and survive a Unity snapshot refresh.
@@ -46,10 +45,9 @@ async function copyVideoAsset(root, target, relative, extension, profileId) {
 
 async function copyVideos(profile, root, target) {
   const videos = [];
-  const streamingRoot = path.join(videoSource, profile.id);
   for (const video of profile.videos || []) {
     if (!video?.id) throw new Error('Missing video ID for ' + profile.id);
-    const url = await copyVideoAsset(streamingRoot, target, video.resource, '.mp4', profile.id);
+    const url = await copyVideoAsset(root, target, video.resource, '.mp4', profile.id);
     if (!url) continue;
     const posterUrl = video.posterResource && await copyVideoAsset(root, target, video.posterResource, '.png', profile.id);
     videos.push({...video, url, ...(posterUrl ? {posterUrl} : {})});

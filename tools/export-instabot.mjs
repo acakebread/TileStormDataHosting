@@ -7,7 +7,7 @@ import {fileURLToPath} from 'node:url';
 const repository = fileURLToPath(new URL('..', import.meta.url));
 const unity = path.resolve(process.argv[2] || path.join(repository, '..', 'TileStormEvolution'));
 const application = path.join(unity, 'Assets', 'Application');
-const resources = path.join(application, 'EggbotProfiles', 'Resources');
+const resources = path.join(application, 'EggbotProfiles', 'Editor', 'Content');
 const source = path.join(resources, 'Eggbots');
 const destination = path.join(repository, 'instabot-preview-d31b7e4c');
 const copyright = 'Copyright 2026 massivehadron.com ltd.';
