@@ -43,8 +43,10 @@
       "id": "goldibot_roll_up",
       "resource": "Videos/goldibot_roll_up",
       "description": "Goldibot rolls up to the camera and flutters her eyelids.",
+      "posterResource": "Videos/goldibot_roll_up_poster",
       "posterPhotoId": "goldibot_4",
-      "url": "Videos/goldibot_roll_up.mp4?v=1a5d620a6fac"
+      "url": "Videos/goldibot_roll_up.mp4?v=1a5d620a6fac",
+      "posterUrl": "Videos/goldibot_roll_up_poster.png?v=406f94e6a4cc"
     },
     {
       "id": "goldibot_roll_up_2",
@@ -61,8 +63,8 @@
       "description": "Goldibot Rolls Away",
       "posterResource": "Videos/goldibot_rolls_away_poster",
       "posterPhotoId": "goldibot_1",
-      "url": "Videos/goldibot_rolls_away.mp4?v=7642e4d49593",
-      "posterUrl": "Videos/goldibot_rolls_away_poster.png?v=987bf8c2732c"
+      "url": "Videos/goldibot_rolls_away.mp4?v=f9ba152acb7f",
+      "posterUrl": "Videos/goldibot_rolls_away_poster.png?v=4d52dd584c86"
     }
   ],
   "portrait": {
