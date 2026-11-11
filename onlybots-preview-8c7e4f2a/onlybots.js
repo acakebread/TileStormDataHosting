@@ -4,14 +4,16 @@ import {blobFromCanvas, fetchFile, pictures, shuffle} from '../tablet-preview/sh
 
 const ui = Object.fromEntries([
   'latest', 'creators', 'creatorHeading', 'feedScroller', 'feedStatus', 'feed',
-  'photoViewer', 'viewerCreator', 'viewerStage', 'viewerCaption', 'closeViewer', 'notice'
+  'photoViewer', 'viewerCreator', 'viewerStage', 'viewerCaption', 'viewerStatus', 'closeViewer', 'notice',
+  'galleryTabs', 'galleryVideos', 'galleryPhotos', 'galleryControls', 'galleryPrevious',
+  'galleryPosition', 'galleryNext', 'galleryStop'
 ].map(id => [id, document.getElementById(id)]));
 
 const state = {
   profiles: [], initial: [], updates: [], creators: [], round: [], lastCreator: null,
   selected: null, newPosts: 0, sequence: 0, timer: null, noticeTimer: null,
   cards: new Map(), views: new WeakMap(), activePointers: new Set(), pendingRender: false,
-  viewerPost: null, settings: null
+  gallery: null, viewerRequest: 0, settings: null
 };
 
 function avoidRepeat(deck, previous, identity = item => item) {
@@ -149,9 +151,15 @@ function makeCard(post) {
     event.currentTarget.querySelector('span').textContent = post.liked ? 'Liked' : 'Like';
   });
   card.querySelector('.share').addEventListener('click', event => sharePost(post, event.currentTarget));
-  card.querySelector('.subscribe').addEventListener('click', () => toast(
-    post.profile.displayName + ': Extra voltage coming soon. Enjoy the preview for now.'
-  ));
+  const creatorAction = card.querySelector('.subscribe');
+  if (post.profile.videos.length) {
+    creatorAction.textContent = 'View profile';
+    creatorAction.addEventListener('click', () => openGallery(post.profile));
+  } else {
+    creatorAction.addEventListener('click', () => toast(
+      post.profile.displayName + ': Extra voltage coming soon. Enjoy the preview for now.'
+    ));
+  }
   state.views.set(card, post);
   state.cards.set(post.id, card);
   return card;
@@ -246,13 +254,130 @@ function fitViewer() {
 }
 
 async function openPhoto(post) {
+  const request = ++state.viewerRequest;
   const photo = await pictures.load(post.profile, post.source.photoId);
+  if (request !== state.viewerRequest) return;
+  state.gallery = null;
+  ui.galleryTabs.hidden = ui.galleryControls.hidden = true;
+  setViewerStatus('');
+  releaseViewerMedia();
   ui.viewerCreator.textContent = post.profile.displayName;
   ui.viewerCaption.textContent = post.source.caption || '';
-  ui.viewerStage.replaceChildren(photoWindow(post, photo));
-  state.viewerPost = post;
+  ui.viewerStage.append(photoWindow(post, photo));
   if (!ui.photoViewer.open) ui.photoViewer.showModal();
   fitViewer();
+}
+
+function setViewerStatus(message) {
+  ui.viewerStatus.textContent = message;
+  ui.viewerStatus.hidden = !message;
+}
+
+function releaseViewerMedia() {
+  const video = ui.viewerStage.querySelector('video');
+  if (video) {
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+  }
+  ui.viewerStage.replaceChildren();
+}
+
+function resetViewer() {
+  state.viewerRequest++;
+  state.gallery = null;
+  releaseViewerMedia();
+}
+
+function openGallery(profile) {
+  state.gallery = {profile, section: 'videos', index: 0};
+  ui.viewerCreator.textContent = profile.displayName;
+  ui.galleryTabs.hidden = ui.galleryControls.hidden = false;
+  ui.galleryPhotos.disabled = !profile.photos.length;
+  if (!ui.photoViewer.open) ui.photoViewer.showModal();
+  renderGallery();
+}
+
+async function renderGallery() {
+  const {profile, section, index} = state.gallery;
+  const request = ++state.viewerRequest;
+  releaseViewerMedia();
+  setViewerStatus('');
+
+  const items = profile[section];
+  const item = items[index];
+  const isVideo = section === 'videos';
+  ui.galleryVideos.setAttribute('aria-pressed', String(isVideo));
+  ui.galleryPhotos.setAttribute('aria-pressed', String(!isVideo));
+  ui.viewerCaption.textContent = item.description || '';
+  ui.galleryPrevious.disabled = index === 0;
+  ui.galleryNext.disabled = index === items.length - 1;
+  ui.galleryPosition.value = (index + 1) + ' / ' + items.length;
+  ui.galleryStop.hidden = !isVideo;
+  ui.galleryStop.disabled = true;
+
+  if (isVideo) {
+    const video = document.createElement('video');
+    video.className = 'gallery-media';
+    video.controls = true;
+    video.loop = true;
+    video.playsInline = true;
+    video.preload = 'none';
+    video.setAttribute('aria-label', item.description || 'Video from ' + profile.displayName);
+    video.addEventListener('play', () => {
+      if (request !== state.viewerRequest) return;
+      ui.galleryStop.disabled = false;
+      setViewerStatus('');
+    });
+    video.addEventListener('error', () => {
+      if (request !== state.viewerRequest) return;
+      ui.galleryStop.disabled = true;
+      setViewerStatus('This video could not be played.');
+    });
+    video.src = new URL(item.url, profile.sourceUrl).href;
+    ui.viewerStage.append(video);
+
+    const poster = profile.photos.find(photo => photo.id === item.posterPhotoId) ||
+      profile.photos.find(photo => photo.id === profile.portrait?.photoId);
+    if (poster) {
+      try {
+        const picture = await pictures.load(profile, poster.id);
+        if (request === state.viewerRequest) video.poster = picture.url;
+      } catch { /* The video can play without its poster. */ }
+    }
+    return;
+  }
+
+  setViewerStatus('Loading photo…');
+  try {
+    const picture = await pictures.load(profile, item.id);
+    if (request !== state.viewerRequest) return;
+    const image = document.createElement('img');
+    image.className = 'gallery-media';
+    image.src = picture.url;
+    image.alt = item.description || profile.displayName;
+    ui.viewerStage.append(image);
+    setViewerStatus('');
+  } catch {
+    if (request === state.viewerRequest) setViewerStatus('This photo could not be loaded.');
+  }
+}
+
+function selectGallerySection(section) {
+  const gallery = state.gallery;
+  if (!gallery || section === gallery.section || !gallery.profile[section].length) return;
+  gallery.section = section;
+  gallery.index = 0;
+  renderGallery();
+}
+
+function moveGallery(direction) {
+  const gallery = state.gallery;
+  if (!gallery) return;
+  const index = gallery.index + direction;
+  if (index < 0 || index >= gallery.profile[gallery.section].length) return;
+  gallery.index = index;
+  renderGallery();
 }
 
 async function sharePost(post, button) {
@@ -303,7 +428,10 @@ function validateProfile(profile) {
   for (const source of [...(profile.onlyBots.posts || []), ...(profile.onlyBots.updates || [])]) {
     if (!source || !photos.has(source.photoId)) throw new Error('A preview post refers to a missing photo.');
   }
-  return profile;
+  const videos = Array.isArray(profile.videos) ? profile.videos.filter(video =>
+    video?.id && typeof video.url === 'string' && video.url.startsWith('Videos/')
+  ) : [];
+  return {...profile, videos};
 }
 
 ui.latest.addEventListener('click', () => selectCreator(null));
@@ -311,7 +439,18 @@ ui.closeViewer.addEventListener('click', () => ui.photoViewer.close());
 ui.photoViewer.addEventListener('click', event => {
   if (event.target === ui.photoViewer || event.target === ui.viewerStage) ui.photoViewer.close();
 });
-ui.photoViewer.addEventListener('close', () => { state.viewerPost = null; ui.viewerStage.replaceChildren(); });
+ui.photoViewer.addEventListener('close', () => { if (!ui.photoViewer.open) resetViewer(); });
+ui.galleryPhotos.addEventListener('click', () => selectGallerySection('photos'));
+ui.galleryVideos.addEventListener('click', () => selectGallerySection('videos'));
+ui.galleryPrevious.addEventListener('click', () => moveGallery(-1));
+ui.galleryNext.addEventListener('click', () => moveGallery(1));
+ui.galleryStop.addEventListener('click', () => {
+  const video = ui.viewerStage.querySelector('video');
+  if (!video) return;
+  video.pause();
+  video.load();
+  ui.galleryStop.disabled = true;
+});
 window.addEventListener('resize', fitViewer);
 if ('ResizeObserver' in window) new ResizeObserver(fitViewer).observe(ui.viewerStage);
 ui.feedScroller.addEventListener('pointerdown', event => state.activePointers.add(event.pointerId));
@@ -332,6 +471,10 @@ ui.feedScroller.addEventListener('scroll', () => {
   }
 }, {passive: true});
 window.addEventListener('pagehide', event => {
+  if (state.gallery) {
+    ui.photoViewer.close();
+    resetViewer();
+  }
   if (!event.persisted) { window.clearTimeout(state.timer); pictures.dispose(); imageObserver?.disconnect(); }
 });
 

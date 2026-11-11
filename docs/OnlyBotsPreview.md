@@ -11,18 +11,21 @@ The unlisted page has its own password. After accepting it, the preview stores
 it in the browser's local storage for that site and checks it again on future
 visits. Clearing the site's data prompts for the password again. The browser
 loads the feed only after accepting the entered or saved password. The password
-is checked in the page source. The source, JSON and images remain readable from
-the public repository.
+is checked in the page source. The source, JSON, images and videos remain
+readable from the public repository.
 
-The preview contains six creators and 19 photographs. Five creators use copies
+The preview contains six creators, 19 photographs and Goldibot's videos. Five creators use copies
 of the tablet app's OnlyBots profiles. Kelly Bot has a web-only profile that
 uses her existing photos with captions written for OnlyBots. The snapshot
 copier preserves her profile and keeps it in the catalogue.
 
 The feed mixes creators, keeps all initial posts and the latest 24 timed updates,
 starts updates after 20 seconds, then waits 35–65 seconds between arrivals.
-Creator filters, visit-local likes, reading-position preservation, the full photo
-viewer and the original subscription placeholder are reproduced. Share opens
+The preview includes creator filters, visit-local likes, reading-position preservation
+and the full photo viewer. Posts from creators with a video offer **View profile**, with
+Photos and Videos tabs and looping playback. **Stop** returns to the poster. Switching
+media or closing the gallery ends playback. Creators without video keep the subscription
+preview message. Share opens
 the browser's file sharing support when available, otherwise downloads the
 displayed crop and mirror as a JPEG. It never shares the unlisted preview URL
 or connects to the game's Facebook/sharing, premium or installation systems.
@@ -33,8 +36,10 @@ explicitly set `maxImageDimension` to 2048; this can be edited per profile or
 overridden on an individual photo. Larger originals are downloaded and decoded
 before resizing. The icon and layout are static page assets.
 
-`catalogue.json` lists relative profile JSON paths. Each photo's `url` is relative
-to its profile JSON; `resource` retains the original Unity authoring reference.
+`catalogue.json` lists relative profile JSON paths. Each photo and video `url` is
+relative to its profile JSON. `resource` retains the Unity authoring reference. The
+exporter copies video files from Unity's `Assets/StreamingAssets/Eggbots` folder and
+includes a version in each video URL so browsers can pick up replacement clips.
 Edit the copies directly, or refresh the snapshot with:
 
 ```powershell
@@ -53,4 +58,5 @@ password leaves the feed hidden and the correct password opens it. Reload in
 the same browser to check that the saved password opens the feed. Then review
 creator filters, image framing and mirrors, opening/closing photos,
 likes, sharing/download, the subscription notice and timed arrivals while
-scrolled down. Review the layout on narrow screens as well.
+scrolled down. Open Goldibot's profile, play through a loop, try Stop, switch to
+Photos and close the gallery during playback. Review the layout on narrow screens.

@@ -88,6 +88,12 @@ h1 { font-size: 32px; line-height: 1.1; color: var(--blue); margin: 0 0 8px; let
 .viewer-stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 18px 0; }
 .viewer-stage .photo-window { aspect-ratio: auto; }
 .viewer-caption { flex: 0 0 auto; text-align: center; max-width: 860px; margin: 0 auto; line-height: 1.6; font-size: 17px; white-space: pre-wrap; }
+.gallery-tabs, .gallery-controls { display: flex; flex: 0 0 auto; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.gallery-tabs button[aria-pressed="true"] { background: #153346; border-color: #27637e; color: #e0f6ff; }
+.gallery-tabs button:disabled, .gallery-controls button:disabled { cursor: default; }
+.gallery-media { display: block; width: 100%; height: 100%; max-width: 960px; object-fit: contain; }
+.gallery-controls output { min-width: 48px; text-align: center; color: var(--muted); }
+.viewer-status { flex: 0 0 auto; margin: 8px 0 0; text-align: center; color: var(--muted); }
 .noscript { position: fixed; inset: 40% 24px auto; text-align: center; }
 @media (max-width: 900px) {
   .app-header { padding: 16px 18px; gap: 14px; }
@@ -121,6 +127,7 @@ h1 { font-size: 32px; line-height: 1.1; color: var(--blue); margin: 0 0 8px; let
   .photo-viewer { padding: 16px; }
   .viewer-header h2 { font-size: 20px; }
   .viewer-caption { font-size: 15px; }
+  .gallery-tabs button, .gallery-controls button { padding: 8px 12px; }
 }
 @media (prefers-reduced-motion: reduce) {
   button, .portal-link { transition: none; }

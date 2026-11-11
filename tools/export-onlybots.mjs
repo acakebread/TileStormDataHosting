@@ -2,14 +2,16 @@
 
 // Copy a standalone content snapshot. The Unity checkout is only ever read.
 import {copyFile, mkdir, readFile, readdir, writeFile} from 'node:fs/promises';
+import {createHash} from 'node:crypto';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const unity = path.resolve(process.argv[2] || path.join(repository, '..', 'TileStormEvolution'));
 const source = path.join(unity, 'Assets', 'Application', 'EggbotProfiles', 'Resources', 'Eggbots');
+const videoSource = path.join(unity, 'Assets', 'StreamingAssets', 'Eggbots');
 const destination = path.join(repository, 'onlybots-preview-8c7e4f2a');
-const copyright = 'Copyright 2026 massivehadron.com ltd.';
+const copyright = `Copyright ${new Date().getFullYear()} massivehadron.com ltd.`;
 // These profiles are authored in the web preview and survive a Unity snapshot refresh.
 const webOnlyProfileIds = new Set(['kelly_bot']);
 const catalogue = {
@@ -18,11 +20,41 @@ const catalogue = {
   profiles: []
 };
 let photoCount = 0;
+let videoCount = 0;
+
+async function copyVideos(profile, target) {
+  const videos = [];
+  for (const video of profile.videos || []) {
+    const relative = video?.resource;
+    const parts = typeof relative === 'string' ? relative.split('/') : [];
+    if (!video?.id || parts.length < 2 || parts[0] !== 'Videos' ||
+        parts.some(part => !part.trim() || part === '.' || part === '..' || /[\\:*?"<>|\x00-\x1f]/.test(part))) {
+      throw new Error('Unexpected video path for ' + profile.id);
+    }
+    const file = relative + '.mp4';
+    let bytes;
+    try {
+      bytes = await readFile(path.join(videoSource, profile.id, file));
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+      console.warn('Skipped missing OnlyBots video ' + profile.id + '/' + file);
+      continue;
+    }
+    const output = path.join(target, file);
+    await mkdir(path.dirname(output), {recursive: true});
+    await writeFile(output, bytes);
+    const version = createHash('sha256').update(bytes).digest('hex').slice(0, 12);
+    const url = file.split('/').map(encodeURIComponent).join('/') + '?v=' + version;
+    videos.push({...video, url});
+    videoCount++;
+  }
+  return videos;
+}
 
 for (const directory of await readdir(source, {withFileTypes: true})) {
   if (!directory.isDirectory()) continue;
   const root = path.join(source, directory.name);
-  const authored = JSON.parse(await readFile(path.join(root, 'profile.json'), 'utf8'));
+  const authored = JSON.parse((await readFile(path.join(root, 'profile.json'), 'utf8')).replace(/^\uFEFF/, ''));
   if (!authored.onlyBots?.enabled || webOnlyProfileIds.has(authored.id)) continue;
   if (authored.id !== directory.name || !/^[a-z0-9]+(?:_[a-z0-9]+)*$/.test(authored.id)) throw new Error('Unexpected profile ID.');
   const target = path.join(destination, 'profiles', authored.id);
@@ -41,11 +73,12 @@ for (const directory of await readdir(source, {withFileTypes: true})) {
     photos.push({...photo, url: 'Photos/' + filename});
     photoCount++;
   }
+  const videos = await copyVideos(authored, target);
   const profile = {
     copyright: authored.copyright || copyright, schemaVersion: 1,
     id: authored.id, displayName: authored.displayName, handle: authored.handle,
     biography: authored.biography, maxImageDimension: authored.maxImageDimension ?? 2048,
-    photos, portrait: authored.portrait, onlyBots: authored.onlyBots
+    photos, ...(videos.length ? {videos} : {}), portrait: authored.portrait, onlyBots: authored.onlyBots
   };
   await writeFile(path.join(target, 'profile.json'), JSON.stringify(profile, null, 2) + '\n');
   catalogue.profiles.push('profiles/' + authored.id + '/profile.json');
@@ -54,4 +87,4 @@ for (const directory of await readdir(source, {withFileTypes: true})) {
 await copyFile(path.join(unity, 'Assets', 'Application', 'OnlyBots', 'Resources', 'OnlyBots', 'Textures', 'onlybots.jpg'), path.join(destination, 'icon.jpg'));
 for (const id of webOnlyProfileIds) catalogue.profiles.push('profiles/' + id + '/profile.json');
 await writeFile(path.join(destination, 'catalogue.json'), JSON.stringify(catalogue, null, 2) + '\n');
-console.log('Copied ' + (catalogue.profiles.length - webOnlyProfileIds.size) + ' OnlyBots profiles and ' + photoCount + ' photos from Unity.');
+console.log(`Copied ${catalogue.profiles.length - webOnlyProfileIds.size} OnlyBots profiles, ${photoCount} photos and ${videoCount} ${videoCount === 1 ? 'video' : 'videos'} from Unity.`);

@@ -38,6 +38,22 @@
       "url": "Photos/goldibot_4.jpg"
     }
   ],
+  "videos": [
+    {
+      "id": "goldibot_roll_up",
+      "resource": "Videos/goldibot_roll_up",
+      "description": "Goldibot rolls up to the camera and flutters her eyelids.",
+      "posterPhotoId": "goldibot_4",
+      "url": "Videos/goldibot_roll_up.mp4?v=1a5d620a6fac"
+    },
+    {
+      "id": "goldibot_roll_up_2",
+      "resource": "Videos/goldibot_roll_up_2",
+      "description": "goldibot roll up 2",
+      "posterPhotoId": "goldibot_1",
+      "url": "Videos/goldibot_roll_up_2.mp4?v=06ef131255f2"
+    }
+  ],
   "portrait": {
     "photoId": "goldibot_1",
     "crop": {

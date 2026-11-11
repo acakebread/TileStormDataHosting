@@ -9,7 +9,7 @@
   <meta name="referrer" content="no-referrer">
   <meta name="theme-color" content="#090e14">
   <title>OnlyBots · Preview</title>
-  <link rel="stylesheet" href="./onlybots.css">
+  <link rel="stylesheet" href="./onlybots.css?v=gallery">
 </head>
 <body>
   <main id="passwordGate" class="password-gate">
@@ -47,9 +47,20 @@
   </div>
   <dialog id="photoViewer" class="photo-viewer" aria-labelledby="viewerCreator">
     <div class="viewer-content">
-      <header class="viewer-header"><h2 id="viewerCreator"></h2><button id="closeViewer" type="button" aria-label="Close photo">Close <span aria-hidden="true">×</span></button></header>
+      <header class="viewer-header"><h2 id="viewerCreator"></h2><button id="closeViewer" type="button">Close <span aria-hidden="true">×</span></button></header>
+      <div id="galleryTabs" class="gallery-tabs" role="group" aria-label="Profile media" hidden>
+        <button id="galleryVideos" type="button" aria-pressed="true">Videos</button>
+        <button id="galleryPhotos" type="button" aria-pressed="false">Photos</button>
+      </div>
       <div id="viewerStage" class="viewer-stage"></div>
       <p id="viewerCaption" class="viewer-caption"></p>
+      <p id="viewerStatus" class="viewer-status" role="status" hidden></p>
+      <div id="galleryControls" class="gallery-controls" role="group" aria-label="Gallery controls" hidden>
+        <button id="galleryPrevious" type="button">Previous</button>
+        <output id="galleryPosition" aria-live="polite"></output>
+        <button id="galleryNext" type="button">Next</button>
+        <button id="galleryStop" type="button">Stop</button>
+      </div>
     </div>
   </dialog>
   <div id="notice" class="notice" role="status" hidden></div>
@@ -70,7 +81,7 @@
       gate.replaceWith(preview.content);
       preview.remove();
       document.getElementById('feedScroller').focus();
-      import('./onlybots.js').catch(() => {
+      import('./onlybots.js?v=gallery').catch(() => {
         const status = document.getElementById('feedStatus');
         status.textContent = 'The preview could not load. Reload the page to try again.';
         status.setAttribute('role', 'alert');
