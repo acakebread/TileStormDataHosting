@@ -66,10 +66,21 @@
     html,
     body {
       margin: 0;
-      min-height: 100%;
       background: var(--bg);
       color: var(--text);
       font: 16px/1.5 "Segoe UI", "Trebuchet MS", system-ui, sans-serif;
+    }
+
+    html {
+      overflow-x: clip;
+      overscroll-behavior-x: none;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      min-height: 100dvh;
     }
 
     .video-backdrop {
@@ -221,17 +232,17 @@
       position: relative;
       z-index: 1;
       box-sizing: border-box;
+      width: 100%;
       max-width: 1040px;
-      margin: 22px auto 96px;
+      margin: 22px auto 0;
       padding: 28px;
     }
 
     .launch-footer {
-      position: fixed;
-      left: 0;
-      right: 0;
+      position: sticky;
       bottom: 0;
       z-index: 22;
+      margin-top: auto;
       background: rgba(8, 16, 22, 0.94);
       border-top: 1px solid rgba(140, 235, 237, 0.22);
       box-shadow: 0 -14px 36px rgba(0, 0, 0, 0.30);
@@ -417,8 +428,14 @@
       padding: 0;
     }
 
+    .filter-option {
+      position: relative;
+    }
+
     .filter-option input {
       position: absolute;
+      inset: 0;
+      margin: 0;
       opacity: 0;
       pointer-events: none;
     }
@@ -473,6 +490,7 @@
       grid-template-columns: minmax(0, 1fr) minmax(220px, 0.38fr);
       gap: 14px;
       align-items: center;
+      overflow-wrap: anywhere;
       cursor: pointer;
       transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
     }
@@ -505,6 +523,7 @@
     }
 
     .entry-thumb {
+      box-sizing: border-box;
       width: 180px;
       max-width: 42vw;
       aspect-ratio: 16 / 9;
@@ -734,8 +753,9 @@
       color: #ffe5e5;
     }
 
-    input {
-      min-width: min(460px, 100%);
+    #adminToken {
+      box-sizing: border-box;
+      width: min(460px, 100%);
       background: #071018;
       border: 1px solid var(--border);
       border-radius: 10px;
@@ -763,7 +783,13 @@
       font-size: 0.95rem;
     }
 
-    @media (max-width: 520px) {
+    @media (max-height: 480px) {
+      .site-banner {
+        position: relative;
+      }
+    }
+
+    @media (max-width: 640px) {
       .site-banner-inner {
         min-height: 112px;
         padding: 10px 14px;
@@ -777,7 +803,7 @@
       }
 
       .studio-link {
-        width: 86px;
+        width: 100%;
         height: 96px;
       }
 
@@ -794,6 +820,59 @@
         gap: 7px;
       }
 
+      .map-toolbar,
+      .map-toolbar-controls,
+      .map-access-note {
+        justify-content: flex-start;
+        text-align: left;
+      }
+
+      .map-toolbar {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .map-access-note,
+      .map-summary {
+        max-width: none;
+        white-space: normal;
+      }
+
+      .map-toolbar-meta {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 6px;
+      }
+
+      .wrap {
+        margin: 0;
+        padding: 14px;
+      }
+
+      .card {
+        padding: 22px;
+        border-radius: 18px;
+      }
+
+      .entry-top {
+        flex-direction: column;
+      }
+
+      .entry {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .entry-actions {
+        justify-content: flex-start;
+      }
+
+      .entry-thumb-wrap,
+      .entry-thumb-link,
+      .entry-thumb {
+        width: 100%;
+        max-width: none;
+      }
+    }
+
+    @media (max-width: 520px) {
       .launch-footer-inner {
         min-height: 54px;
         padding: 8px 14px;
@@ -813,57 +892,6 @@
         min-height: 30px;
         padding: 0 10px;
         font-size: 0.85rem;
-      }
-
-      .map-toolbar,
-      .map-toolbar-controls,
-      .map-access-note {
-        justify-content: flex-start;
-        text-align: left;
-      }
-
-      .map-toolbar {
-        grid-template-columns: 1fr;
-      }
-
-      .map-access-note,
-      .map-summary {
-        max-width: none;
-        white-space: normal;
-      }
-
-      .map-toolbar-meta {
-        grid-template-columns: 1fr;
-        gap: 6px;
-      }
-
-      .wrap {
-        margin: 0;
-        padding: 14px;
-      }
-
-      .card {
-        padding: 22px;
-        border-radius: 18px;
-      }
-
-      .entry-top {
-        flex-direction: column;
-      }
-
-      .entry {
-        grid-template-columns: 1fr;
-      }
-
-      .entry-actions {
-        justify-content: flex-start;
-      }
-
-      .entry-thumb-wrap,
-      .entry-thumb-link,
-      .entry-thumb {
-        width: 100%;
-        max-width: none;
       }
     }
   </style>
