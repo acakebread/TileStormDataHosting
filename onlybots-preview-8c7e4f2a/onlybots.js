@@ -322,21 +322,46 @@ async function renderGallery(continuePlaying = false) {
 
   if (isVideo) {
     const video = currentVideo || document.createElement('video');
+    const frame = currentVideo ? video.parentElement : document.createElement('div');
+    const playSurface = currentVideo ? frame.querySelector('.video-play-surface') : document.createElement('button');
+    if (!currentVideo) {
+      frame.className = 'gallery-video';
+      playSurface.className = 'video-play-surface';
+      playSurface.type = 'button';
+      playSurface.setAttribute('aria-label', 'Play video');
+      frame.append(video, playSurface);
+    }
     video.className = 'gallery-media';
     video.controls = true;
     video.loop = items.length === 1;
     video.playsInline = true;
     video.preload = 'none';
     video.setAttribute('aria-label', item.description || 'Video from ' + profile.displayName);
+    playSurface.hidden = continuePlaying;
+    const play = () => {
+      video.play().catch(error => {
+        if (request !== state.viewerRequest || error.name === 'AbortError') return;
+        gallery.cycling = false;
+        playSurface.hidden = false;
+        ui.galleryStop.disabled = true;
+        setViewerStatus(error.name === 'NotAllowedError' ? 'Press Play to continue.' : 'This video could not be played.');
+      });
+    };
+    playSurface.onclick = play;
     video.onplay = () => {
       if (request !== state.viewerRequest) return;
       gallery.cycling = true;
+      playSurface.hidden = true;
       ui.galleryStop.disabled = false;
       setViewerStatus('');
+    };
+    video.onpause = () => {
+      if (request === state.viewerRequest && video.paused && !video.ended) playSurface.hidden = false;
     };
     video.onerror = () => {
       if (request !== state.viewerRequest) return;
       gallery.cycling = false;
+      playSurface.hidden = false;
       ui.galleryStop.disabled = true;
       setViewerStatus('This video could not be played.');
     };
@@ -350,15 +375,8 @@ async function renderGallery(continuePlaying = false) {
     if (hasPoster) video.poster = new URL(item.posterUrl, profile.sourceUrl).href;
     else video.removeAttribute('poster');
     video.src = new URL(item.url, profile.sourceUrl).href;
-    if (!currentVideo) ui.viewerStage.append(video);
-    if (continuePlaying) {
-      video.play().catch(error => {
-        if (request !== state.viewerRequest || !gallery.cycling || error.name === 'AbortError') return;
-        gallery.cycling = false;
-        ui.galleryStop.disabled = true;
-        setViewerStatus(error.name === 'NotAllowedError' ? 'Press Play to continue.' : 'This video could not be played.');
-      });
-    }
+    if (!currentVideo) ui.viewerStage.append(frame);
+    if (continuePlaying) play();
 
     if (!hasPoster) {
       const poster = profile.photos.find(photo => photo.id === item.posterPhotoId) ||
@@ -475,6 +493,7 @@ ui.galleryStop.addEventListener('click', () => {
   state.gallery.cycling = false;
   video.pause();
   video.load();
+  video.parentElement.querySelector('.video-play-surface').hidden = false;
   ui.galleryStop.disabled = true;
   setViewerStatus('');
 });

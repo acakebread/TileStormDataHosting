@@ -54,6 +54,15 @@
       "posterPhotoId": "goldibot_1",
       "url": "Videos/goldibot_roll_up_2.mp4?v=06ef131255f2",
       "posterUrl": "Videos/goldibot_roll_up_2_poster.png?v=2e70db5dc55e"
+    },
+    {
+      "id": "goldibot_rolls_away",
+      "resource": "Videos/goldibot_rolls_away",
+      "description": "Goldibot Rolls Away",
+      "posterResource": "Videos/goldibot_rolls_away_poster",
+      "posterPhotoId": "goldibot_1",
+      "url": "Videos/goldibot_rolls_away.mp4?v=7642e4d49593",
+      "posterUrl": "Videos/goldibot_rolls_away_poster.png?v=987bf8c2732c"
     }
   ],
   "portrait": {
