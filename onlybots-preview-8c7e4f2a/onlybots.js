@@ -263,14 +263,13 @@ function renderFeed(preservePosition) {
   ui.feedStatus.hidden = posts.length > 0;
   ui.feedStatus.textContent = 'No posts from this creator yet.';
   state.pendingRender = false;
-  if (ui.feedScroller.scrollTop <= 1) state.newPosts = 0;
+  if (state.selected === null && ui.feedScroller.scrollTop <= 1) state.newPosts = 0;
   refreshLatest();
   refreshTimes();
 }
 
 function selectCreator(id) {
   state.selected = id;
-  state.newPosts = 0;
   ui.creatorHeading.textContent = state.profiles.find(profile => profile.id === id)?.displayName || 'All creators';
   for (const button of ui.creators.children) button.setAttribute('aria-pressed', String(button.dataset.creator === (id || '')));
   renderFeed(false);
@@ -301,7 +300,7 @@ function scheduleUpdate(delay) {
     const post = publication(creator.profile, creator.profile.onlyBots.updates[creator.last], Date.now());
     state.updates.unshift(post);
     state.updates.length = Math.min(state.updates.length, state.settings.retainedUpdates);
-    if (!state.selected || state.selected === post.profile.id) state.newPosts++;
+    state.newPosts = Math.min(state.newPosts + 1, state.updates.length);
     if (state.activePointers.size) { state.pendingRender = true; refreshLatest(); }
     else renderFeed(true);
     const seconds = state.settings.minUpdateSeconds + Math.random() * (state.settings.maxUpdateSeconds - state.settings.minUpdateSeconds);
@@ -381,7 +380,7 @@ function validateProfile(profile) {
   return profile;
 }
 
-ui.latest.addEventListener('click', () => { state.newPosts = 0; renderFeed(false); });
+ui.latest.addEventListener('click', () => selectCreator(null));
 ui.closeViewer.addEventListener('click', () => ui.photoViewer.close());
 ui.photoViewer.addEventListener('click', event => {
   if (event.target === ui.photoViewer || event.target === ui.viewerStage) ui.photoViewer.close();
@@ -401,7 +400,10 @@ window.addEventListener('blur', () => {
   if (state.pendingRender) renderFeed(true);
 });
 ui.feedScroller.addEventListener('scroll', () => {
-  if (ui.feedScroller.scrollTop <= 1 && state.newPosts) { state.newPosts = 0; refreshLatest(); }
+  if (state.selected === null && !state.pendingRender && ui.feedScroller.scrollTop <= 1 && state.newPosts) {
+    state.newPosts = 0;
+    refreshLatest();
+  }
 }, {passive: true});
 window.addEventListener('pagehide', event => {
   if (!event.persisted) { window.clearTimeout(state.timer); pictures.dispose(); imageObserver?.disconnect(); }
