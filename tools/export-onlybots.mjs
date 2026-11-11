@@ -22,30 +22,37 @@ const catalogue = {
 let photoCount = 0;
 let videoCount = 0;
 
-async function copyVideos(profile, target) {
+async function copyVideoAsset(root, target, relative, extension, profileId) {
+  const parts = typeof relative === 'string' ? relative.split('/') : [];
+  if (parts.length < 2 || parts[0] !== 'Videos' ||
+      parts.some(part => !part.trim() || part === '.' || part === '..' || /[\\:*?"<>|\x00-\x1f]/.test(part))) {
+    throw new Error('Unexpected video asset path for ' + profileId);
+  }
+  const file = relative + extension;
+  let bytes;
+  try {
+    bytes = await readFile(path.join(root, file));
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+    console.warn('Skipped missing OnlyBots video asset ' + profileId + '/' + file);
+    return null;
+  }
+  const output = path.join(target, file);
+  await mkdir(path.dirname(output), {recursive: true});
+  await writeFile(output, bytes);
+  const version = createHash('sha256').update(bytes).digest('hex').slice(0, 12);
+  return file.split('/').map(encodeURIComponent).join('/') + '?v=' + version;
+}
+
+async function copyVideos(profile, root, target) {
   const videos = [];
+  const streamingRoot = path.join(videoSource, profile.id);
   for (const video of profile.videos || []) {
-    const relative = video?.resource;
-    const parts = typeof relative === 'string' ? relative.split('/') : [];
-    if (!video?.id || parts.length < 2 || parts[0] !== 'Videos' ||
-        parts.some(part => !part.trim() || part === '.' || part === '..' || /[\\:*?"<>|\x00-\x1f]/.test(part))) {
-      throw new Error('Unexpected video path for ' + profile.id);
-    }
-    const file = relative + '.mp4';
-    let bytes;
-    try {
-      bytes = await readFile(path.join(videoSource, profile.id, file));
-    } catch (error) {
-      if (error.code !== 'ENOENT') throw error;
-      console.warn('Skipped missing OnlyBots video ' + profile.id + '/' + file);
-      continue;
-    }
-    const output = path.join(target, file);
-    await mkdir(path.dirname(output), {recursive: true});
-    await writeFile(output, bytes);
-    const version = createHash('sha256').update(bytes).digest('hex').slice(0, 12);
-    const url = file.split('/').map(encodeURIComponent).join('/') + '?v=' + version;
-    videos.push({...video, url});
+    if (!video?.id) throw new Error('Missing video ID for ' + profile.id);
+    const url = await copyVideoAsset(streamingRoot, target, video.resource, '.mp4', profile.id);
+    if (!url) continue;
+    const posterUrl = video.posterResource && await copyVideoAsset(root, target, video.posterResource, '.png', profile.id);
+    videos.push({...video, url, ...(posterUrl ? {posterUrl} : {})});
     videoCount++;
   }
   return videos;
@@ -73,7 +80,7 @@ for (const directory of await readdir(source, {withFileTypes: true})) {
     photos.push({...photo, url: 'Photos/' + filename});
     photoCount++;
   }
-  const videos = await copyVideos(authored, target);
+  const videos = await copyVideos(authored, root, target);
   const profile = {
     copyright: authored.copyright || copyright, schemaVersion: 1,
     id: authored.id, displayName: authored.displayName, handle: authored.handle,

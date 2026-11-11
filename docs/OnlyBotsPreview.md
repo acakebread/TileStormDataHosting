@@ -23,8 +23,9 @@ The feed mixes creators, keeps all initial posts and the latest 24 timed updates
 starts updates after 20 seconds, then waits 35–65 seconds between arrivals.
 The preview includes creator filters, visit-local likes, reading-position preservation
 and the full photo viewer. Posts from creators with a video offer **View profile**, with
-Photos and Videos tabs and looping playback. **Stop** returns to the poster. Switching
-media or closing the gallery ends playback. Creators without video keep the subscription
+Photos and Videos tabs. Playing a video continues through the gallery in order and wraps
+to the first clip. **Stop** returns to the current video's poster. Switching media manually
+or closing the gallery ends playback. Creators without video keep the subscription
 preview message. Share opens
 the browser's file sharing support when available, otherwise downloads the
 displayed crop and mirror as a JPEG. It never shares the unlisted preview URL
@@ -36,10 +37,11 @@ explicitly set `maxImageDimension` to 2048; this can be edited per profile or
 overridden on an individual photo. Larger originals are downloaded and decoded
 before resizing. The icon and layout are static page assets.
 
-`catalogue.json` lists relative profile JSON paths. Each photo and video `url` is
-relative to its profile JSON. `resource` retains the Unity authoring reference. The
-exporter copies video files from Unity's `Assets/StreamingAssets/Eggbots` folder and
-includes a version in each video URL so browsers can pick up replacement clips.
+`catalogue.json` lists relative profile JSON paths. Each photo and video `url`, and each
+optional `posterUrl`, is relative to its profile JSON. `resource` retains the Unity authoring
+reference. The exporter copies video files from Unity's `Assets/StreamingAssets/Eggbots`
+folder and dedicated PNG posters from the profile's Resources folder. Both URLs include a
+version so browsers can pick up replacements.
 Edit the copies directly, or refresh the snapshot with:
 
 ```powershell

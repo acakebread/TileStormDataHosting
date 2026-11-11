@@ -49,9 +49,11 @@
     {
       "id": "goldibot_roll_up_2",
       "resource": "Videos/goldibot_roll_up_2",
-      "description": "goldibot roll up 2",
+      "description": "Goldibot rolls up to show off her new nose ring and earrings.",
+      "posterResource": "Videos/goldibot_roll_up_2_poster",
       "posterPhotoId": "goldibot_1",
-      "url": "Videos/goldibot_roll_up_2.mp4?v=06ef131255f2"
+      "url": "Videos/goldibot_roll_up_2.mp4?v=06ef131255f2",
+      "posterUrl": "Videos/goldibot_roll_up_2_poster.png?v=2e70db5dc55e"
     }
   ],
   "portrait": {
@@ -99,7 +101,7 @@
       {
         "order": 3,
         "photoId": "goldibot_4",
-        "caption": "Last look before the lights go down. Some things shine better after hours."
+        "caption": "New nose ring, new earrings. I saved the close-up for video 2, darling."
       }
     ],
     "updates": [
@@ -207,7 +209,7 @@
       {
         "order": 9,
         "photoId": "goldibot_4",
-        "caption": "Closing time is for bots who have somewhere better to be."
+        "caption": "The new earrings catch the light just right. The nose ring? That one's for me."
       }
     ]
   }

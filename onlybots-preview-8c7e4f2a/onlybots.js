@@ -298,10 +298,14 @@ function openGallery(profile) {
   renderGallery();
 }
 
-async function renderGallery() {
-  const {profile, section, index} = state.gallery;
+async function renderGallery(continuePlaying = false) {
+  const gallery = state.gallery;
+  const {profile, section, index} = gallery;
   const request = ++state.viewerRequest;
-  releaseViewerMedia();
+  // Keep the video element across automatic advances, including its browser playback permissions.
+  const currentVideo = continuePlaying ? ui.viewerStage.querySelector('video') : null;
+  if (!currentVideo) releaseViewerMedia();
+  gallery.cycling = continuePlaying;
   setViewerStatus('');
 
   const items = profile[section];
@@ -314,36 +318,57 @@ async function renderGallery() {
   ui.galleryNext.disabled = index === items.length - 1;
   ui.galleryPosition.value = (index + 1) + ' / ' + items.length;
   ui.galleryStop.hidden = !isVideo;
-  ui.galleryStop.disabled = true;
+  ui.galleryStop.disabled = !continuePlaying;
 
   if (isVideo) {
-    const video = document.createElement('video');
+    const video = currentVideo || document.createElement('video');
     video.className = 'gallery-media';
     video.controls = true;
-    video.loop = true;
+    video.loop = items.length === 1;
     video.playsInline = true;
     video.preload = 'none';
     video.setAttribute('aria-label', item.description || 'Video from ' + profile.displayName);
-    video.addEventListener('play', () => {
+    video.onplay = () => {
       if (request !== state.viewerRequest) return;
+      gallery.cycling = true;
       ui.galleryStop.disabled = false;
       setViewerStatus('');
-    });
-    video.addEventListener('error', () => {
+    };
+    video.onerror = () => {
       if (request !== state.viewerRequest) return;
+      gallery.cycling = false;
       ui.galleryStop.disabled = true;
       setViewerStatus('This video could not be played.');
-    });
+    };
+    video.onended = () => {
+      if (request !== state.viewerRequest || !ui.photoViewer.open || !gallery.cycling ||
+          !video.ended || items.length < 2) return;
+      gallery.index = (index + 1) % items.length;
+      renderGallery(true);
+    };
+    const hasPoster = typeof item.posterUrl === 'string' && item.posterUrl.startsWith('Videos/');
+    if (hasPoster) video.poster = new URL(item.posterUrl, profile.sourceUrl).href;
+    else video.removeAttribute('poster');
     video.src = new URL(item.url, profile.sourceUrl).href;
-    ui.viewerStage.append(video);
+    if (!currentVideo) ui.viewerStage.append(video);
+    if (continuePlaying) {
+      video.play().catch(error => {
+        if (request !== state.viewerRequest || !gallery.cycling || error.name === 'AbortError') return;
+        gallery.cycling = false;
+        ui.galleryStop.disabled = true;
+        setViewerStatus(error.name === 'NotAllowedError' ? 'Press Play to continue.' : 'This video could not be played.');
+      });
+    }
 
-    const poster = profile.photos.find(photo => photo.id === item.posterPhotoId) ||
-      profile.photos.find(photo => photo.id === profile.portrait?.photoId);
-    if (poster) {
-      try {
-        const picture = await pictures.load(profile, poster.id);
-        if (request === state.viewerRequest) video.poster = picture.url;
-      } catch { /* The video can play without its poster. */ }
+    if (!hasPoster) {
+      const poster = profile.photos.find(photo => photo.id === item.posterPhotoId) ||
+        profile.photos.find(photo => photo.id === profile.portrait?.photoId);
+      if (poster) {
+        try {
+          const picture = await pictures.load(profile, poster.id);
+          if (request === state.viewerRequest) video.poster = picture.url;
+        } catch { /* The video can play without its poster. */ }
+      }
     }
     return;
   }
@@ -446,10 +471,12 @@ ui.galleryPrevious.addEventListener('click', () => moveGallery(-1));
 ui.galleryNext.addEventListener('click', () => moveGallery(1));
 ui.galleryStop.addEventListener('click', () => {
   const video = ui.viewerStage.querySelector('video');
-  if (!video) return;
+  if (!video || !state.gallery) return;
+  state.gallery.cycling = false;
   video.pause();
   video.load();
   ui.galleryStop.disabled = true;
+  setViewerStatus('');
 });
 window.addEventListener('resize', fitViewer);
 if ('ResizeObserver' in window) new ResizeObserver(fitViewer).observe(ui.viewerStage);

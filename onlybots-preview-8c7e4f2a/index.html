@@ -81,7 +81,7 @@
       gate.replaceWith(preview.content);
       preview.remove();
       document.getElementById('feedScroller').focus();
-      import('./onlybots.js?v=gallery').catch(() => {
+      import('./onlybots.js?v=video-sequence').catch(() => {
         const status = document.getElementById('feedStatus');
         status.textContent = 'The preview could not load. Reload the page to try again.';
         status.setAttribute('role', 'alert');
