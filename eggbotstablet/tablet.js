@@ -1,7 +1,7 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {loadCatalogue} from './catalogue.js';
-import {createChat, createMail} from './messages.js';
+import {createChat, createMail} from './messages.js?v=mail-layout';
 import {createPhotos, createBank, createLove, createMarket, createStore} from './apps.js?v=photo-slide';
 import {createScratch, createFruit} from './games.js';
 import {hasPremiumAccess} from './premium.js';

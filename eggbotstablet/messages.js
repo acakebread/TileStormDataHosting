@@ -1,11 +1,11 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {shuffle} from '../tablet-preview/shared.js';
-import {button, element, shortTime, tabs, weighted} from './ui.js';
+import {button, element, shortTime, weighted} from './ui.js';
 
-function splitView(name, navigation) {
+function splitView(name) {
   const items = element('div');
-  const list = element('aside', 'split-list', element('h2', '', name), navigation, items);
+  const list = element('aside', 'split-list', element('h2', '', name), items);
   const detail = element('section', 'split-detail');
   const layout = element('div', 'split-view', list, detail);
   const view = element('section', '', layout);
@@ -228,8 +228,29 @@ const folders = new Map([['Inbox', ''], ['Ugh, Work', 'Work'], ['Money Trouble',
 
 export function createMail(tablet) {
   const {data} = tablet;
-  const navigation = element('div');
-  const {view, layout, items, detail} = splitView('BotMail', navigation);
+  const unreadStatus = element('span', 'muted');
+  const header = element('header', 'mail-header', tablet.art('mail'), element('h2', '', 'BotMail'), unreadStatus);
+  const folderHeading = element('h3', '', 'Inbox');
+  folderHeading.tabIndex = -1;
+  const items = element('div', 'mail-messages');
+  const filters = element('nav', 'mail-filters');
+  filters.setAttribute('aria-label', 'Mail filters');
+  const list = element('section', 'mail-list',
+    element('header', 'mail-list-header', folderHeading, button('Filters', showFilters, 'mail-pane-nav')), items);
+  const detail = element('section', 'mail-preview');
+  detail.setAttribute('aria-label', 'Selected email');
+  const layout = element('div', 'mail-columns', filters, list, detail);
+  const view = element('section', 'mail-app', header, layout);
+  const filterButtons = new Map([...folders].map(([label, kind]) => {
+    const count = element('span', 'mail-filter-count');
+    const control = button('', () => chooseFolder(label), 'mail-filter');
+    control.append(element('span', '', label), count);
+    return [label, {control, count, kind}];
+  }));
+  filters.append(
+    button('Back to messages', showList, 'mail-pane-nav'),
+    ...Array.from(filterButtons.values(), entry => entry.control)
+  );
   const profiles = data.profiles.filter(profile => profile.botMail?.enabled);
   function authored(field, global) {
     return [...(data.tablet[global] ?? []), ...profiles.flatMap(profile => (profile.botMail[field] ?? []).map(letter => ({
@@ -246,6 +267,10 @@ export function createMail(tablet) {
   let deck = [];
   let folder = 'Inbox';
   let selected;
+  let listScroll = 0;
+  items.addEventListener('scroll', () => {
+    if (items.clientHeight) listScroll = items.scrollTop;
+  }, {passive: true});
 
   function unread() {
     return messages.filter(letter => letter.unread).length;
@@ -253,29 +278,55 @@ export function createMail(tablet) {
 
   function renderList() {
     const kind = folders.get(folder);
-    navigation.replaceChildren(tabs([...folders.keys()], folder, label => {
-      folder = label;
-      hideDetail();
-    }));
+    const total = unread();
+    unreadStatus.textContent = total ? total + ' unread' : 'All read';
+    folderHeading.textContent = folder;
+    for (const [label, entry] of filterButtons) {
+      const count = entry.kind ? messages.filter(letter => letter.unread && letter.kind === entry.kind).length : total;
+      entry.count.textContent = count ? String(count) : '';
+      entry.control.setAttribute('aria-pressed', String(folder === label));
+      entry.control.setAttribute('aria-label', label + (count ? ', ' + count + ' unread' : ''));
+    }
     const rows = messages.filter(letter => !kind || letter.kind === kind).map(letter =>
       listRow(letter.senderName || 'Unknown sender', letter.subject, selected === letter, letter.unread ? '●' : '',
-        () => show(letter)));
+        () => show(letter, true)));
     items.replaceChildren(...(rows.length ? rows : [element('p', 'mail-body muted', 'This folder is empty.')]));
+    if (items.clientHeight) items.scrollTop = listScroll;
     tablet.refreshBadges();
   }
 
   function hideDetail() {
     selected = null;
-    layout.classList.remove('has-detail');
+    layout.dataset.pane = 'list';
     empty(detail, 'Choose a message.');
     renderList();
   }
 
-  function show(letter) {
-    if (folders.get(folder) && folders.get(folder) !== letter.kind) folder = 'Inbox';
+  function showList() {
+    hideDetail();
+    folderHeading.focus({preventScroll: true});
+  }
+
+  function showFilters() {
+    layout.dataset.pane = 'filters';
+    filterButtons.get(folder).control.focus({preventScroll: true});
+  }
+
+  function chooseFolder(label) {
+    if (folder !== label) listScroll = 0;
+    folder = label;
+    hideDetail();
+    if (!filterButtons.get(label).control.getClientRects().length) folderHeading.focus({preventScroll: true});
+  }
+
+  function show(letter, moveFocus = false) {
+    if (folders.get(folder) && folders.get(folder) !== letter.kind) {
+      folder = 'Inbox';
+      listScroll = 0;
+    }
     selected = letter;
     letter.unread = false;
-    layout.classList.add('has-detail');
+    layout.dataset.pane = 'detail';
     const text = element('p');
     for (const token of (letter.body || '').split(/(\[[^\]\n]+\])/)) {
       text.append(token.startsWith('[') && token.endsWith(']') ?
@@ -296,16 +347,22 @@ export function createMail(tablet) {
     }));
     const trash = button('Move to bin', () => {
       messages.splice(messages.indexOf(letter), 1);
-      hideDetail();
+      showList();
     }, 'danger');
-    detail.replaceChildren(element('header', 'detail-head',
-      button('Inbox', hideDetail, 'back'), element('span', 'row-copy'), trash),
-      element('article', 'mail-body', element('h2', '', letter.subject),
-        element('strong', '', letter.senderName || 'Unknown sender'),
-        element('p', 'muted', [letter.address, new Date(letter.when).toLocaleString('en-GB', {dateStyle: 'medium', timeStyle: 'short'})]
-          .filter(Boolean).join(' · ')), text,
+    const subject = element('h3', '', letter.subject);
+    subject.tabIndex = -1;
+    const sentAt = new Date(letter.when);
+    const date = element('time', 'muted', sentAt.toLocaleString('en-GB', {dateStyle: 'medium', timeStyle: 'short'}));
+    date.dateTime = sentAt.toISOString();
+    detail.replaceChildren(
+      element('header', 'mail-preview-header', button('Back to messages', showList, 'mail-pane-nav'),
+        element('div', 'mail-subject', subject, trash),
+        element('div', 'mail-from', element('strong', '', letter.senderName || 'Unknown sender'), date),
+        letter.address ? element('p', 'muted mail-address', letter.address) : null),
+      element('article', 'mail-body', text,
         letter.signature ? element('p', 'muted', letter.signature) : null, attachments));
     renderList();
+    if (moveFocus) subject.focus({preventScroll: true});
   }
 
   function deliver() {
@@ -314,7 +371,7 @@ export function createMail(tablet) {
     const letter = {...deck.pop(), unread: true, when: Date.now()};
     messages.unshift(letter);
     renderList();
-    tablet.notify('mail', letter.senderName + ' · ' + letter.subject, () => show(letter));
+    tablet.notify('mail', letter.senderName + ' · ' + letter.subject, () => show(letter, true));
   }
 
   hideDetail();
