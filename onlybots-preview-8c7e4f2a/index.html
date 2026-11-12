@@ -67,11 +67,7 @@
   </template>
   <noscript><p class="noscript">Enable JavaScript to open this preview.</p></noscript>
   <script type="module">
-    if (window.parent !== window && new URLSearchParams(location.search).has('tablet')) {
-      document.body.classList.add('tablet-embedded');
-      document.getElementById('passwordHeading').textContent = 'OnlyBots';
-      document.getElementById('unlockPreview').textContent = 'Open OnlyBots';
-    }
+    const embedded = window.parent !== window && new URLSearchParams(location.search).has('tablet');
     const expectedPassword = 'ADMIN-ONLYBOTS';
     const storageKey = 'TileStormOnlyBotsPreviewPassword';
     const gate = document.getElementById('passwordGate');
@@ -81,11 +77,11 @@
     const unlock = document.getElementById('unlockPreview');
     const preview = document.getElementById('previewContent');
 
-    function openPreview() {
+    function openPreview(focus = true) {
       password.value = '';
       gate.replaceWith(preview.content);
       preview.remove();
-      document.getElementById('feedScroller').focus();
+      if (focus) document.getElementById('feedScroller').focus();
       import('./onlybots.js?v=tablet').catch(() => {
         const status = document.getElementById('feedStatus');
         status.textContent = 'The preview could not load. Reload the page to try again.';
@@ -93,40 +89,61 @@
       });
     }
 
-    password.addEventListener('input', () => {
-      password.removeAttribute('aria-invalid');
-      message.textContent = '';
-    });
-
-    form.addEventListener('submit', event => {
-      event.preventDefault();
-      if (password.value !== expectedPassword) {
-        password.setAttribute('aria-invalid', 'true');
-        message.textContent = 'Incorrect password.';
-        password.focus();
-        password.select();
-        return;
+    function startTablet() {
+      document.body.classList.add('tablet-embedded');
+      form.hidden = true;
+      const status = document.createElement('p');
+      status.setAttribute('role', 'status');
+      status.textContent = 'OnlyBots premium access required.';
+      gate.append(status);
+      function onAccess(event) {
+        if (event.origin !== location.origin || event.source !== window.parent ||
+            event.data?.type !== 'eggbot-tablet-visibility' || event.data.premium !== true) return;
+        window.removeEventListener('message', onAccess);
+        openPreview(event.data.active === true);
       }
+      window.addEventListener('message', onAccess);
+    }
 
+    function startStandalonePreview() {
+      password.addEventListener('input', () => {
+        password.removeAttribute('aria-invalid');
+        message.textContent = '';
+      });
+
+      form.addEventListener('submit', event => {
+        event.preventDefault();
+        if (password.value !== expectedPassword) {
+          password.setAttribute('aria-invalid', 'true');
+          message.textContent = 'Incorrect password.';
+          password.focus();
+          password.select();
+          return;
+        }
+
+        try {
+          localStorage.setItem(storageKey, password.value);
+        } catch {
+          // Storage may be disabled in this browser.
+        }
+        openPreview();
+      });
+
+      let savedPassword = null;
       try {
-        localStorage.setItem(storageKey, password.value);
+        savedPassword = localStorage.getItem(storageKey);
       } catch {
-        // Storage may be disabled in this browser.
+        // The form still works when storage is unavailable.
       }
-      openPreview();
-    });
+      if (savedPassword === expectedPassword) {
+        openPreview();
+      } else {
+        unlock.disabled = false;
+      }
+    }
 
-    let savedPassword = null;
-    try {
-      savedPassword = localStorage.getItem(storageKey);
-    } catch {
-      // The form still works when storage is unavailable.
-    }
-    if (savedPassword === expectedPassword) {
-      openPreview();
-    } else {
-      unlock.disabled = false;
-    }
+    if (embedded) startTablet();
+    else startStandalonePreview();
   </script>
 </body>
 </html>

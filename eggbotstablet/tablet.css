@@ -221,6 +221,12 @@ dialog::backdrop { background: #02070bc7; }
 .contact-card .avatar { width: 74px; }
 dialog .actions { justify-content: end; }
 .action-link { text-decoration: none; }
+.premium-entry { display: grid; gap: 8px; }
+.premium-entry input {
+  width: 100%; border: 1px solid #4e6876; border-radius: 8px; padding: 8px 10px;
+  font: inherit; color: inherit; background: #111c22;
+}
+.premium-entry input[aria-invalid="true"] { border-color: var(--danger); }
 .scratch-card { position: relative; width: min(100%, 680px); aspect-ratio: 1984 / 1152; margin: 18px auto; background: #1c4856 center / cover; border-radius: 10px; overflow: hidden; }
 .scratch-grid { position: absolute; top: 28.12%; left: 40.52%; width: 55.15%; height: 53.13%; display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); padding: 1%; gap: 3%; background: #29223c; touch-action: none; }
 .scratch-grid button { padding: 0; min-height: 0; border-color: #e5cf95; background: linear-gradient(150deg, #716b83, #ccc1d5, #7c748c); color: #262131; font-size: clamp(.6rem, 2vw, 1rem); }

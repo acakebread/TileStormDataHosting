@@ -22,9 +22,11 @@ playground using the original Eggbot art and animations. See
 
 [Eggbot’s tablet](eggbotstablet/) runs as a standalone browser app. The tablet
 reads the hosted Eggbot catalogue for character and app content and embeds the
-existing OnlyBots and Instabot feeds. OnlyBots uses the existing preview password.
-The browser stores OnlyBots installation, Scratch Bling coins and LoveBot credits
-locally. The tablet directory publishes with the rest of this GitHub Pages site.
+existing OnlyBots and Instabot feeds. BotStore requires the game's Buy Me a Coffee
+premium code to install or open OnlyBots. The browser stores the premium unlock
+separately from the installation, so uninstalling preserves the unlock. Scratch
+Bling coins and LoveBot credits also use browser storage. The tablet directory
+publishes with the rest of this GitHub Pages site.
 
 PixelStow is available at `pixelstow.html`; its MarkerTracker lab is at `markertracker/`.
 

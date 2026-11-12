@@ -2,8 +2,9 @@
 
 import {loadCatalogue} from './catalogue.js';
 import {createChat, createMail} from './messages.js';
-import {createPhotos, createBank, createLove, createMarket, createStore} from './apps.js';
+import {createPhotos, createBank, createLove, createMarket, createStore} from './apps.js?v=premium';
 import {createScratch, createFruit} from './games.js';
+import {hasPremiumAccess} from './premium.js';
 import {element, button, image, shortTime, loadSetting, saveSetting, watchSwipe} from './ui.js';
 
 const pages = [
@@ -22,7 +23,7 @@ const apps = {
     frame: '../instabot-preview-d31b7e4c/?tablet=1'},
   love: {name: 'LoveBot', art: './art/love.png', needsContent: true, mount: createLove},
   onlybots: {name: 'OnlyBots', art: '../onlybots-preview-8c7e4f2a/icon.jpg',
-    frame: '../onlybots-preview-8c7e4f2a/?tablet=1'},
+    frame: '../onlybots-preview-8c7e4f2a/?tablet=1&v=premium'},
   market: {name: 'eBot', art: './art/market.jpg', needsContent: true, mount: createMarket},
   botflix: {name: 'BOTFLIX', art: './art/botflix.png'},
   snapbot: {name: 'SnapBot', art: './art/snapbot.jpg'},
@@ -52,6 +53,7 @@ const tablet = {
   get current() { return current; },
   get onlyBotsInstalled() { return onlyBotsInstalled; },
   installOnlyBots(installed) {
+    if (installed && !hasPremiumAccess()) return;
     onlyBotsInstalled = installed;
     saveSetting('onlyBotsInstalled', installed);
     if (installed) {
@@ -94,7 +96,9 @@ function renderHome() {
     badge.hidden = true;
     tile.append(badge);
     icon.append(tile, element('span', 'icon-label', apps[id].name));
-    icon.setAttribute('aria-label', apps[id].name + (offloaded ? ', offloaded' : ''));
+    const locked = id === 'onlybots' && !hasPremiumAccess();
+    icon.setAttribute('aria-label', apps[id].name + (offloaded ? ', offloaded' : '') +
+      (locked ? ', premium access required' : ''));
     return icon;
   }));
   ui['page-dots'].replaceChildren(...pages.map((_, index) => {
@@ -205,7 +209,8 @@ function mount(id) {
     frame.src = config.frame;
     frame.allow = 'web-share';
     function visible(active) {
-      frame.contentWindow?.postMessage({type: 'eggbot-tablet-visibility', active}, location.origin);
+      const premium = id === 'onlybots' && onlyBotsInstalled && hasPremiumAccess();
+      frame.contentWindow?.postMessage({type: 'eggbot-tablet-visibility', active, premium}, location.origin);
     }
     instance = {view: frame, count: 0, open() {
       instance.count = 0;
@@ -241,7 +246,7 @@ function showCurrent() {
 }
 
 function open(id, replace = false) {
-  if (id === 'botflix' || (id === 'onlybots' && !onlyBotsInstalled)) {
+  if (id === 'botflix' || (id === 'onlybots' && (!onlyBotsInstalled || !hasPremiumAccess()))) {
     storeRequest = id;
     id = 'store';
   }
@@ -321,7 +326,7 @@ function tick() {
 
 showCurrent();
 handleLocation();
-if (onlyBotsInstalled) mount('onlybots');
+if (onlyBotsInstalled && hasPremiumAccess()) mount('onlybots');
 tick();
 setInterval(tick, 1000);
 setTimeout(announceUpdate, 50000);

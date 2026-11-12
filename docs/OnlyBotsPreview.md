@@ -14,6 +14,15 @@ loads the feed only after accepting the entered or saved password. The password
 is checked in the page source. The source, JSON, images and videos remain
 readable from the public repository.
 
+The tablet embeds this feed after BotStore accepts the game's Buy Me a Coffee
+premium code. The tablet saves that unlock in the browser and checks it when
+installing or opening OnlyBots. The standalone preview retains its own password.
+The tablet gate checks the shared code in the browser. The media files and
+catalogue are still public, and the gate does not verify individual transactions.
+When the game's premium code changes, update the SHA-256 digest in
+`eggbotstablet/premium.js` using the new code with punctuation removed and letters
+uppercased.
+
 The preview contains six creators, 19 photographs and Goldibot's videos. Five creators use copies
 of the tablet app's OnlyBots profiles. Kelly Bot has a web-only profile that
 uses her existing photos with captions written for OnlyBots. The snapshot

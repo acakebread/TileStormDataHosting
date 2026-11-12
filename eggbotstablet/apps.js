@@ -1,6 +1,7 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {element, button, image, tabs, watchSwipe, money, countdown, loadSetting, saveSetting} from './ui.js';
+import {hasPremiumAccess, premiumShop, redeemPremiumCode} from './premium.js';
 
 export function createPhotos({data}) {
   const photos = (data.owner?.photos ?? []).map(photo => ({
@@ -214,7 +215,7 @@ const storeListings = [
   ['mail', 'Bills, spam and messages that could have waited.'],
   ['chat', 'Seen. Typing. Still waiting for a useful answer.'],
   ['instabot', 'Everyone else’s perfect life. Your twelve-percent battery.'],
-  ['onlybots', 'Premium polish. Password required to open the web feed.', 4],
+  ['onlybots', 'Premium polish. Requires OnlyBots premium access.', 4],
   ['market', 'Impossible gadgets. Dubious parts. Optimistic sellers.'],
   ['botflix', 'Your watchlist is waiting in the cloud.', 64],
   ['snapbot', 'Send snaps that vanish before your shift ends.', 32],
@@ -229,27 +230,107 @@ export function createStore(tablet) {
   const view = element('section', '', content);
   const free = () => tablet.onlyBotsInstalled ? 8 : 12;
 
-  function request(id, size) {
-    const name = tablet.apps[id]?.name ?? id;
-    if (id !== 'onlybots') {
-      tablet.prompt('Insufficient memory', name + ' needs ' + size + ' MB. The tablet has ' + free() + ' MB free.',
-        [button('Try again', () => request(id, size), 'primary')]);
+  function buyPremium() {
+    const link = element('a', 'action-link', 'Buy premium');
+    link.href = premiumShop;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    return link;
+  }
+
+  function continueOnlyBots() {
+    if (tablet.onlyBotsInstalled) {
+      tablet.open('onlybots');
       return;
     }
-    const install = button('Install', () => {
-      install.disabled = true;
-      install.textContent = 'Installing…';
-      const dialog = install.closest('dialog');
-      const complete = setTimeout(() => {
-        if (!dialog.open || !install.isConnected) return;
-        tablet.installOnlyBots(true);
-        dialog.close();
-        render();
-        tablet.toast('OnlyBots installed.');
-      }, 3000);
-      dialog.addEventListener('close', () => clearTimeout(complete), {once: true});
+
+    const progress = element('p', '', 'Downloading 4 MB…');
+    progress.setAttribute('role', 'status');
+    tablet.prompt('Installing OnlyBots', progress, [], 'Cancel');
+    const dialog = progress.closest('dialog');
+    setTimeout(() => {
+      if (!dialog.open || !progress.isConnected) return;
+      tablet.installOnlyBots(true);
+      dialog.close();
+      render();
+      tablet.toast('OnlyBots installed.');
+    }, 3000);
+  }
+
+  function askForPremiumCode() {
+    const code = element('input');
+    code.id = 'onlybots-premium-code';
+    code.type = 'password';
+    code.autocomplete = 'off';
+    code.autocapitalize = 'off';
+    code.spellcheck = false;
+    code.maxLength = 128;
+    const label = element('label', '', 'Premium code');
+    label.htmlFor = code.id;
+    const status = element('p', 'muted');
+    status.id = 'onlybots-premium-status';
+    status.setAttribute('role', 'status');
+    code.setAttribute('aria-describedby', status.id);
+    const entry = element('div', 'premium-entry',
+      element('p', '', 'Enter the OnlyBots premium code from your Buy Me a Coffee purchase.'),
+      label, code, status);
+    const unlock = button('Unlock', async () => {
+      const dialog = entry.closest('dialog');
+      if (unlock.disabled || !dialog?.open) return;
+      unlock.disabled = true;
+      code.readOnly = true;
+      status.textContent = 'Checking code…';
+      try {
+        const accepted = await redeemPremiumCode(code.value);
+        if (!dialog.open || !entry.isConnected) return;
+        if (accepted) {
+          code.value = '';
+          continueOnlyBots();
+          return;
+        }
+        code.setAttribute('aria-invalid', 'true');
+        status.textContent = 'That premium code was not recognised. Check your purchase receipt.';
+      } catch {
+        if (!dialog.open || !entry.isConnected) return;
+        status.textContent = 'Could not check the code. Reload the tablet and try again.';
+      } finally {
+        unlock.disabled = false;
+        code.readOnly = false;
+      }
+      code.focus();
+      code.select();
     }, 'primary');
-    tablet.prompt('Install OnlyBots', 'OnlyBots takes up 4 MB. The web feed asks for the existing OnlyBots preview password when you open it.', [install]);
+    code.addEventListener('input', () => {
+      code.removeAttribute('aria-invalid');
+      status.textContent = '';
+    });
+    code.addEventListener('keydown', event => {
+      if (event.key !== 'Enter' || event.isComposing) return;
+      event.preventDefault();
+      unlock.click();
+    });
+    tablet.prompt('Enter premium code', entry, [buyPremium(), unlock]);
+    code.focus();
+  }
+
+  function requestOnlyBots() {
+    const registered = hasPremiumAccess();
+    const action = button('Continue', registered ? continueOnlyBots : askForPremiumCode, 'primary');
+    const purpose = tablet.onlyBotsInstalled ? 'open' : 'install';
+    tablet.prompt('Premium access required', 'OnlyBots needs premium access to ' + purpose + '. ' +
+      (registered ? 'Your premium access is registered on this browser.' :
+        'Buy premium through Buy Me a Coffee, or continue to enter your purchase code.'),
+    registered ? [action] : [buyPremium(), action]);
+  }
+
+  function request(id, size) {
+    if (id === 'onlybots') {
+      requestOnlyBots();
+      return;
+    }
+    const name = tablet.apps[id]?.name ?? id;
+    tablet.prompt('Insufficient memory', name + ' needs ' + size + ' MB. The tablet has ' + free() + ' MB free.',
+      [button('Try again', () => request(id, size), 'primary')]);
   }
 
   function render() {
