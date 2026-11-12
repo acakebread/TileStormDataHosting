@@ -28,6 +28,8 @@ h1 img { border-radius: 10px; }
 .latest, #closeViewer { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 9px 15px; color: var(--green); }
 .latest:hover, #closeViewer:hover { border-color: var(--green); }
 .portal { justify-self: end; white-space: nowrap; }
+.tablet-embedded .portal { display: none; }
+.tablet-embedded .header-content { grid-template-columns: 1fr auto; }
 .layout { max-width: 1256px; margin: auto; display: grid; grid-template-areas: "profile feed activity"; grid-template-columns: minmax(208px, 1fr) minmax(0, 530px) minmax(235px, 1fr); align-items: start; gap: 24px; padding: 24px; }
 .panel { position: sticky; top: 94px; max-height: calc(100dvh - 116px); overflow: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
 .panel summary { padding: 16px 18px; font-weight: 650; cursor: pointer; }

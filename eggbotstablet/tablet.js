@@ -1,0 +1,328 @@
+// Copyright 2026 massivehadron.com ltd.
+
+import {loadCatalogue} from './catalogue.js';
+import {createChat, createMail} from './messages.js';
+import {createPhotos, createBank, createLove, createMarket, createStore} from './apps.js';
+import {createScratch, createFruit} from './games.js';
+import {element, button, image, shortTime, loadSetting, saveSetting, watchSwipe} from './ui.js';
+
+const pages = [
+  ['store', 'photos', 'scratch', 'fruit', 'bank', 'mail', 'chat', 'instabot'],
+  ['love', 'onlybots', 'market', 'botflix']
+];
+const apps = {
+  store: {name: 'BotStore', art: './art/store.png', mount: createStore},
+  photos: {name: 'Photos', needsContent: true, mount: createPhotos},
+  scratch: {name: 'Scratch Bling', art: './art/scratch.png', needsContent: true, mount: createScratch},
+  fruit: {name: 'Fruit Burst', art: './art/fruit.png', mount: createFruit},
+  bank: {name: 'Droid Bank', art: './art/bank.png', needsContent: true, mount: createBank},
+  mail: {name: 'BotMail', art: './art/mail.png', needsContent: true, mount: createMail},
+  chat: {name: 'BotsUp', art: './art/chat.png', needsContent: true, mount: createChat},
+  instabot: {name: 'Instabot', art: '../instabot-preview-d31b7e4c/icon.png',
+    frame: '../instabot-preview-d31b7e4c/?tablet=1'},
+  love: {name: 'LoveBot', art: './art/love.png', needsContent: true, mount: createLove},
+  onlybots: {name: 'OnlyBots', art: '../onlybots-preview-8c7e4f2a/icon.jpg',
+    frame: '../onlybots-preview-8c7e4f2a/?tablet=1'},
+  market: {name: 'eBot', art: './art/market.jpg', needsContent: true, mount: createMarket},
+  botflix: {name: 'BOTFLIX', art: './art/botflix.png'},
+  snapbot: {name: 'SnapBot', art: './art/snapbot.jpg'},
+  update: {name: 'Software update'}
+};
+
+const ui = Object.fromEntries([
+  'display', 'home', 'app-grid', 'page-dots', 'loading', 'loading-status', 'retry', 'clock', 'app-name',
+  'home-button', 'notification', 'open-notification', 'dismiss-notification', 'toast',
+  'prompt', 'prompt-title', 'prompt-text', 'prompt-actions'
+].map(id => [id, document.getElementById(id)]));
+
+const mounted = new Map();
+let data;
+let loading;
+let homePage = 0;
+let current = 'home';
+let onlyBotsInstalled = loadSetting('onlyBotsInstalled', false) === true;
+let storeRequest;
+let toastTimer;
+let notificationTimer;
+let notificationAction;
+
+const tablet = {
+  apps, open, art, prompt, toast, notify, refreshBadges,
+  get data() { return data; },
+  get current() { return current; },
+  get onlyBotsInstalled() { return onlyBotsInstalled; },
+  installOnlyBots(installed) {
+    onlyBotsInstalled = installed;
+    saveSetting('onlyBotsInstalled', installed);
+    if (installed) {
+      mount('onlybots');
+    } else {
+      mounted.get('onlybots')?.view.remove();
+      mounted.delete('onlybots');
+    }
+    if (current === 'home') renderHome();
+  },
+  takeStoreRequest() {
+    const request = storeRequest;
+    storeRequest = null;
+    return request;
+  }
+};
+
+function art(id, fallback = '') {
+  const app = apps[id];
+  const src = id === 'photos' ? data?.photo(data.owner, data.owner?.photos?.[0]?.id) : app?.art;
+  if (!src) return element('span', 'icon-art', fallback || (id === 'photos' ? '▧' : '?'));
+  const photo = image(src, '', ['botflix', 'snapbot'].includes(id) ? id : '');
+  photo.loading = 'lazy';
+  return element('span', 'icon-art', element('span', 'icon-image', photo));
+}
+
+function renderHome() {
+  ui['app-grid'].replaceChildren(...pages[homePage].map(id => {
+    const offloaded = id === 'botflix' || (id === 'onlybots' && !onlyBotsInstalled);
+    const icon = button('', () => open(id), 'app-icon' + (offloaded ? ' offloaded' : ''));
+    const tile = art(id);
+    if (offloaded) {
+      const cloud = element('span', 'cloud', '↓');
+      cloud.title = 'Offloaded';
+      cloud.setAttribute('aria-hidden', 'true');
+      tile.append(cloud);
+    }
+    const badge = element('span', 'badge');
+    badge.dataset.badge = id;
+    badge.hidden = true;
+    tile.append(badge);
+    icon.append(tile, element('span', 'icon-label', apps[id].name));
+    icon.setAttribute('aria-label', apps[id].name + (offloaded ? ', offloaded' : ''));
+    return icon;
+  }));
+  ui['page-dots'].replaceChildren(...pages.map((_, index) => {
+    const dot = button('', () => setHomePage(index));
+    dot.setAttribute('aria-label', 'Home page ' + (index + 1));
+    if (index === homePage) dot.setAttribute('aria-current', 'page');
+    return dot;
+  }));
+  refreshBadges();
+}
+
+function setHomePage(index) {
+  if (index === homePage || index < 0 || index >= pages.length) return;
+  homePage = index;
+  renderHome();
+  ui['page-dots'].children[index].focus({preventScroll: true});
+}
+
+function refreshBadges() {
+  for (const badge of ui['app-grid'].querySelectorAll('[data-badge]')) {
+    const app = mounted.get(badge.dataset.badge);
+    const count = app?.unread?.() ?? app?.count ?? 0;
+    badge.textContent = count > 99 ? '99+' : String(count);
+    badge.hidden = count === 0;
+  }
+}
+
+function toast(message) {
+  clearTimeout(toastTimer);
+  ui.toast.textContent = message;
+  ui.toast.hidden = false;
+  toastTimer = setTimeout(() => { ui.toast.hidden = true; }, 3200);
+}
+
+function dismissNotification() {
+  ui.notification.hidden = true;
+  notificationAction = null;
+}
+
+function notify(id, message, select) {
+  if (current === id) return;
+  clearTimeout(notificationTimer);
+  notificationAction = () => {
+    if (apps[id].frame || apps[id].mount) open(id);
+    select?.();
+  };
+  ui['open-notification'].textContent = apps[id].name + '\n' + message;
+  ui.notification.hidden = false;
+  notificationTimer = setTimeout(dismissNotification, 5800);
+}
+
+function prompt(title, description, controls = [], dismissLabel = controls.length ? 'Cancel' : 'Close') {
+  const dialog = ui.prompt;
+  if (dialog.open) dialog.close();
+  ui['prompt-title'].textContent = title;
+  ui['prompt-text'].replaceChildren(description);
+  const dismiss = element('button', '', dismissLabel);
+  dismiss.value = 'dismiss';
+  ui['prompt-actions'].replaceChildren(dismiss, ...controls);
+  dialog.showModal();
+}
+
+function offerUpdate(release) {
+  const version = 'BotOS 9.0.' + release;
+  const size = (6.4 + (release - 1) * .3).toFixed(1) + ' GB';
+
+  function install() {
+    const progress = element('progress');
+    progress.max = 100;
+    progress.value = 0;
+    progress.setAttribute('aria-label', 'Update progress');
+    prompt('Installing ' + version, element('div', '', element('p', '', 'Preparing update…'), progress));
+    const started = performance.now();
+    function advance(now) {
+      if (!progress.isConnected || !ui.prompt.open) return;
+      progress.value = Math.min(37, (now - started) / 2600 * 37);
+      if (progress.value < 37) {
+        requestAnimationFrame(advance);
+        return;
+      }
+      const free = Math.max(1, (onlyBotsInstalled ? 8 : 12) - (release - 1));
+      prompt('Not Enough Memory', version + ' needs ' + size + '. This tablet has ' + free + ' MB free.',
+        [button('Try again', install, 'primary')], 'OK');
+    }
+    requestAnimationFrame(advance);
+  }
+
+  prompt(version, 'This update includes important security fixes, performance improvements and several exciting new bugs.\n\nDownload size: ' + size,
+    [button('Install now', install, 'primary')], 'Later');
+}
+
+let updateRelease = 0;
+function announceUpdate() {
+  if (!ui.prompt.open && ui.notification.hidden) {
+    const release = ++updateRelease;
+    notify('update', 'BotOS 9.0.' + release + ' is available', () => offerUpdate(release));
+  }
+  setTimeout(announceUpdate, (150 + Math.random() * 150) * 1000);
+}
+
+function mount(id) {
+  if (mounted.has(id)) return mounted.get(id);
+  const config = apps[id];
+  let instance;
+  if (config.frame) {
+    const frame = element('iframe', 'app-frame');
+    frame.title = config.name;
+    frame.src = config.frame;
+    frame.allow = 'web-share';
+    function visible(active) {
+      frame.contentWindow?.postMessage({type: 'eggbot-tablet-visibility', active}, location.origin);
+    }
+    instance = {view: frame, count: 0, open() {
+      instance.count = 0;
+      visible(true);
+    }, close() { visible(false); }};
+    frame.addEventListener('load', () => visible(current === id));
+  } else {
+    instance = config.mount(tablet);
+    instance.view.classList.add('app-view');
+  }
+  instance.view.hidden = true;
+  ui.display.append(instance.view);
+  mounted.set(id, instance);
+  return instance;
+}
+
+function showCurrent() {
+  ui['app-name'].textContent = apps[current]?.name ?? 'Home';
+  ui.home.hidden = current !== 'home';
+  for (const [id, app] of mounted) app.view.hidden = id !== current;
+  ui.loading.hidden = true;
+  if (current === 'home') {
+    renderHome();
+    return;
+  }
+  if (apps[current].needsContent && !data) {
+    ui.loading.hidden = false;
+    return;
+  }
+  const app = mount(current);
+  app.view.hidden = false;
+  app.open?.();
+}
+
+function open(id, replace = false) {
+  if (id === 'botflix' || (id === 'onlybots' && !onlyBotsInstalled)) {
+    storeRequest = id;
+    id = 'store';
+  }
+  if (id !== 'home' && (!Object.hasOwn(apps, id) || (!apps[id].mount && !apps[id].frame))) id = 'home';
+  const url = location.pathname + location.search + (id === 'home' ? '' : '#' + id);
+  if (location.pathname + location.search + location.hash !== url) {
+    history[replace ? 'replaceState' : 'pushState'](null, '', url);
+  }
+  if (current !== id) {
+    mounted.get(current)?.close?.();
+    current = id;
+    if (ui.prompt.open) ui.prompt.close();
+    dismissNotification();
+  }
+  showCurrent();
+}
+
+function handleLocation() {
+  const id = location.hash.slice(1) || 'home';
+  if (id !== current) open(id, true);
+}
+
+async function startContent() {
+  if (loading) return;
+  loading = true;
+  ui['loading-status'].textContent = 'Loading Eggbot’s content…';
+  ui.retry.hidden = true;
+  try {
+    data = await loadCatalogue();
+    const wallpaper = data.photo(data.owner, data.owner?.photos?.[0]?.id);
+    if (wallpaper) ui.home.style.setProperty('--wallpaper', 'url("' + wallpaper + '")');
+    mount('mail');
+    mount('chat');
+    mount('instabot');
+    if (apps[current]?.needsContent || current === 'home') showCurrent();
+  } catch {
+    ui['loading-status'].textContent = 'Eggbot’s content is unavailable.';
+    ui.retry.hidden = false;
+  } finally {
+    loading = false;
+  }
+}
+
+ui.retry.addEventListener('click', startContent);
+ui['home-button'].addEventListener('click', () => {
+  if (current === 'home') setHomePage(0);
+  else open('home');
+});
+ui['open-notification'].addEventListener('click', () => {
+  const action = notificationAction;
+  dismissNotification();
+  action?.();
+});
+ui['dismiss-notification'].addEventListener('click', dismissNotification);
+watchSwipe(ui.home, step => setHomePage(homePage + step));
+document.addEventListener('keydown', event => {
+  if (current !== 'home' || ui.prompt.open || !['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+  event.preventDefault();
+  setHomePage(homePage + (event.key === 'ArrowRight' ? 1 : -1));
+});
+window.addEventListener('popstate', handleLocation);
+window.addEventListener('hashchange', handleLocation);
+window.addEventListener('message', event => {
+  const instabot = mounted.get('instabot');
+  if (!instabot || event.origin !== location.origin || event.source !== instabot.view.contentWindow ||
+      event.data?.type !== 'eggbot-tablet-activity') return;
+  instabot.count = current === 'instabot' ? 0 : Math.max(0, Number(event.data.count) || 0);
+  refreshBadges();
+  if (typeof event.data.message === 'string') notify('instabot', event.data.message);
+});
+
+function tick() {
+  const now = Date.now();
+  ui.clock.textContent = shortTime.format(now);
+  mounted.get(current)?.tick?.(now);
+}
+
+showCurrent();
+handleLocation();
+if (onlyBotsInstalled) mount('onlybots');
+tick();
+setInterval(tick, 1000);
+setTimeout(announceUpdate, 50000);
+startContent();

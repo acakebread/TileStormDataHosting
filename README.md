@@ -20,6 +20,12 @@ The home page Eggbot icon opens `eggbot.html`, a standalone 3D animation
 playground using the original Eggbot art and animations. See
 [preview, checks and asset export](docs/EggbotPlayground.md).
 
+[Eggbot’s tablet](eggbotstablet/) runs as a standalone browser app. The tablet
+reads the hosted Eggbot catalogue for character and app content and embeds the
+existing OnlyBots and Instabot feeds. OnlyBots uses the existing preview password.
+The browser stores OnlyBots installation, Scratch Bling coins and LoveBot credits
+locally. The tablet directory publishes with the rest of this GitHub Pages site.
+
 PixelStow is available at `pixelstow.html`; its MarkerTracker lab is at `markertracker/`.
 
 These files are generated production assets. Editable PixelStow sources, tests,

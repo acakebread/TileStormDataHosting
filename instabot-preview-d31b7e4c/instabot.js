@@ -17,6 +17,29 @@ const app = {handle: 'instabot'};
 const avatarColours = ['#2d4f46', '#573d58', '#3a4665', '#664732', '#414f33'];
 const fullCrop = {x: 0, y: 0, width: 1, height: 1};
 const number = new Intl.NumberFormat('en-GB');
+const embedded = window.parent !== window && new URLSearchParams(location.search).has('tablet');
+let tabletActive = false;
+let openedInTablet = false;
+if (embedded) {
+  document.body.classList.add('tablet-embedded');
+  window.addEventListener('message', event => {
+    if (event.origin !== location.origin || event.source !== window.parent ||
+        event.data?.type !== 'eggbot-tablet-visibility') return;
+    tabletActive = event.data.active;
+    if (!tabletActive) {
+      if (ui.viewer.open) ui.viewer.close();
+      return;
+    }
+    if (!openedInTablet) {
+      const wide = !window.matchMedia('(max-width: 960px)').matches;
+      ui.profilePanel.open = wide;
+      ui.activityPanel.open = wide;
+      openedInTablet = true;
+    }
+    state.unseen = 0;
+    refreshActivityCount();
+  });
+}
 
 function element(tag, className, text) {
   const node = document.createElement(tag);
@@ -355,8 +378,10 @@ function makeActivity(profile, source, when) {
 }
 
 function refreshActivityCount() {
+  if (tabletActive) state.unseen = 0;
   ui.activityCount.hidden = state.unseen === 0;
   ui.activityCount.textContent = number.format(state.unseen);
+  if (embedded) window.parent.postMessage({type: 'eggbot-tablet-activity', count: state.unseen}, location.origin);
 }
 
 function openActivity(item) {
@@ -456,6 +481,10 @@ function deliverActivity() {
   if (state.activity.length > 9) state.activity.length = 9;
   state.unseen = Math.min(state.unseen + 1, 9);
   renderActivity();
+  if (embedded && !tabletActive) {
+    window.parent.postMessage({type: 'eggbot-tablet-activity', count: state.unseen,
+      message: profile.handle + ' · ' + source.text}, location.origin);
+  }
 }
 
 function scheduleUpdates(feed, delay = feed.firstUpdateSeconds) {
@@ -504,7 +533,7 @@ window.addEventListener('pagehide', event => {
 
 async function start() {
   try {
-    if (window.matchMedia('(max-width: 960px)').matches) {
+    if (!openedInTablet && window.matchMedia('(max-width: 960px)').matches) {
       ui.profilePanel.open = false;
       ui.activityPanel.open = false;
     }

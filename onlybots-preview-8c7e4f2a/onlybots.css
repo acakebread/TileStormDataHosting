@@ -14,6 +14,7 @@
 }
 * { box-sizing: border-box; }
 body { margin: 0; }
+.tablet-embedded .portal-link, .tablet-embedded .preview-label { display: none; }
 button, a { -webkit-tap-highlight-color: transparent; }
 button { font: inherit; cursor: pointer; }
 button, .portal-link {

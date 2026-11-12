@@ -546,6 +546,14 @@ ui.galleryStop.addEventListener('click', () => {
   setViewerStatus('');
 });
 window.addEventListener('resize', fitViewer);
+if (document.body.classList.contains('tablet-embedded')) {
+  window.addEventListener('message', event => {
+    if (event.origin === location.origin && event.source === window.parent &&
+        event.data?.type === 'eggbot-tablet-visibility' && !event.data.active && ui.photoViewer.open) {
+      ui.photoViewer.close();
+    }
+  });
+}
 if ('ResizeObserver' in window) new ResizeObserver(fitViewer).observe(ui.viewerStage);
 ui.feedScroller.addEventListener('pointerdown', event => state.activePointers.add(event.pointerId));
 function endDrag(event) {

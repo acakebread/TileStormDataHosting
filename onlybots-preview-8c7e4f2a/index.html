@@ -9,7 +9,7 @@
   <meta name="referrer" content="no-referrer">
   <meta name="theme-color" content="#090e14">
   <title>OnlyBots · Preview</title>
-  <link rel="stylesheet" href="./onlybots.css?v=gallery-media-controls">
+  <link rel="stylesheet" href="./onlybots.css?v=tablet">
 </head>
 <body>
   <main id="passwordGate" class="password-gate">
@@ -67,6 +67,11 @@
   </template>
   <noscript><p class="noscript">Enable JavaScript to open this preview.</p></noscript>
   <script type="module">
+    if (window.parent !== window && new URLSearchParams(location.search).has('tablet')) {
+      document.body.classList.add('tablet-embedded');
+      document.getElementById('passwordHeading').textContent = 'OnlyBots';
+      document.getElementById('unlockPreview').textContent = 'Open OnlyBots';
+    }
     const expectedPassword = 'ADMIN-ONLYBOTS';
     const storageKey = 'TileStormOnlyBotsPreviewPassword';
     const gate = document.getElementById('passwordGate');
@@ -81,7 +86,7 @@
       gate.replaceWith(preview.content);
       preview.remove();
       document.getElementById('feedScroller').focus();
-      import('./onlybots.js?v=gallery-media-controls').catch(() => {
+      import('./onlybots.js?v=tablet').catch(() => {
         const status = document.getElementById('feedStatus');
         status.textContent = 'The preview could not load. Reload the page to try again.';
         status.setAttribute('role', 'alert');

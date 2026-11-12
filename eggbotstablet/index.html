@@ -1,0 +1,54 @@
+<!doctype html>
+<!-- Copyright 2026 massivehadron.com ltd. -->
+
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101820">
+  <meta name="description" content="Open Eggbot’s tablet and explore the apps from TileStorm Evolution.">
+  <title>Eggbot’s Tablet · TileStorm Evolution</title>
+  <link rel="stylesheet" href="./tablet.css">
+  <script type="module" src="./tablet.js"></script>
+</head>
+<body>
+  <header class="masthead">
+    <a href="../" class="portal-link">← TileStorm Evolution</a>
+    <h1>Eggbot’s Tablet</h1>
+  </header>
+  <main class="device" aria-label="Eggbot’s tablet">
+    <div class="camera" aria-hidden="true"></div>
+    <div class="glass">
+      <header class="status-bar">
+        <time id="clock"></time>
+        <span id="app-name">Home</span>
+        <span class="battery" aria-label="Battery 12 percent">12% <i aria-hidden="true"></i></span>
+      </header>
+      <div class="display" id="display">
+        <section id="home" class="home" aria-label="Home screen">
+          <div id="app-grid" class="app-grid"></div>
+          <nav id="page-dots" class="page-dots" aria-label="Home screen pages"></nav>
+        </section>
+        <section id="loading" class="waiting" aria-label="App content" hidden>
+          <p id="loading-status" role="status">Loading Eggbot’s content…</p>
+          <button type="button" id="retry" hidden>Try again</button>
+        </section>
+      </div>
+      <div id="notification" class="notification" hidden>
+        <button type="button" id="open-notification"></button>
+        <button type="button" id="dismiss-notification" aria-label="Dismiss notification">×</button>
+      </div>
+      <p id="toast" class="toast" role="status" hidden></p>
+    </div>
+    <button type="button" class="home-button" id="home-button" aria-label="Home" title="Home"><i aria-hidden="true"></i></button>
+  </main>
+  <dialog id="prompt" aria-labelledby="prompt-title">
+    <form method="dialog">
+      <h2 id="prompt-title"></h2>
+      <div id="prompt-text"></div>
+      <div id="prompt-actions" class="actions"></div>
+    </form>
+  </dialog>
+  <noscript><p class="waiting">Enable JavaScript to use Eggbot’s tablet.</p></noscript>
+</body>
+</html>
