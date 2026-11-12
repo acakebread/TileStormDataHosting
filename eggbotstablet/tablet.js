@@ -5,7 +5,8 @@ import {createChat, createMail} from './messages.js';
 import {createPhotos, createBank, createLove, createMarket, createStore} from './apps.js?v=premium';
 import {createScratch, createFruit} from './games.js';
 import {hasPremiumAccess} from './premium.js';
-import {element, button, image, shortTime, loadSetting, saveSetting, watchSwipe} from './ui.js';
+import {createHomePager} from './home.js';
+import {element, button, image, shortTime, loadSetting, saveSetting} from './ui.js';
 
 const pages = [
   ['store', 'photos', 'scratch', 'fruit', 'bank', 'mail', 'chat', 'instabot'],
@@ -31,15 +32,15 @@ const apps = {
 };
 
 const ui = Object.fromEntries([
-  'display', 'home', 'app-grid', 'page-dots', 'loading', 'loading-status', 'retry', 'clock', 'app-name',
+  'display', 'home', 'home-pages', 'page-dots', 'loading', 'loading-status', 'retry', 'clock', 'app-name',
   'home-button', 'notification', 'open-notification', 'dismiss-notification', 'toast',
   'prompt', 'prompt-title', 'prompt-text', 'prompt-actions'
 ].map(id => [id, document.getElementById(id)]));
 
 const mounted = new Map();
+const homePager = createHomePager(ui['home-pages'], ui['page-dots'], pages);
 let data;
 let loading;
-let homePage = 0;
 let current = 'home';
 let onlyBotsInstalled = loadSetting('onlyBotsInstalled', false) === true;
 let storeRequest;
@@ -71,20 +72,20 @@ const tablet = {
   }
 };
 
-function art(id, fallback = '') {
+function art(id, fallback = '', loading = 'lazy') {
   const app = apps[id];
   const src = id === 'photos' ? data?.photo(data.owner, data.owner?.photos?.[0]?.id) : app?.art;
   if (!src) return element('span', 'icon-art', fallback || (id === 'photos' ? '▧' : '?'));
   const photo = image(src, '', ['botflix', 'snapbot'].includes(id) ? id : '');
-  photo.loading = 'lazy';
+  photo.loading = loading;
   return element('span', 'icon-art', element('span', 'icon-image', photo));
 }
 
 function renderHome() {
-  ui['app-grid'].replaceChildren(...pages[homePage].map(id => {
+  homePager.render(id => {
     const offloaded = id === 'botflix' || (id === 'onlybots' && !onlyBotsInstalled);
     const icon = button('', () => open(id), 'app-icon' + (offloaded ? ' offloaded' : ''));
-    const tile = art(id);
+    const tile = art(id, '', 'eager');
     if (offloaded) {
       const cloud = element('span', 'cloud', '↓');
       cloud.title = 'Offloaded';
@@ -100,25 +101,12 @@ function renderHome() {
     icon.setAttribute('aria-label', apps[id].name + (offloaded ? ', offloaded' : '') +
       (locked ? ', premium access required' : ''));
     return icon;
-  }));
-  ui['page-dots'].replaceChildren(...pages.map((_, index) => {
-    const dot = button('', () => setHomePage(index));
-    dot.setAttribute('aria-label', 'Home page ' + (index + 1));
-    if (index === homePage) dot.setAttribute('aria-current', 'page');
-    return dot;
-  }));
+  });
   refreshBadges();
 }
 
-function setHomePage(index) {
-  if (index === homePage || index < 0 || index >= pages.length) return;
-  homePage = index;
-  renderHome();
-  ui['page-dots'].children[index].focus({preventScroll: true});
-}
-
 function refreshBadges() {
-  for (const badge of ui['app-grid'].querySelectorAll('[data-badge]')) {
+  for (const badge of ui['home-pages'].querySelectorAll('[data-badge]')) {
     const app = mounted.get(badge.dataset.badge);
     const count = app?.unread?.() ?? app?.count ?? 0;
     badge.textContent = count > 99 ? '99+' : String(count);
@@ -256,6 +244,7 @@ function open(id, replace = false) {
     history[replace ? 'replaceState' : 'pushState'](null, '', url);
   }
   if (current !== id) {
+    if (current === 'home') homePager.cancelDrag();
     mounted.get(current)?.close?.();
     current = id;
     if (ui.prompt.open) ui.prompt.close();
@@ -292,7 +281,7 @@ async function startContent() {
 
 ui.retry.addEventListener('click', startContent);
 ui['home-button'].addEventListener('click', () => {
-  if (current === 'home') setHomePage(0);
+  if (current === 'home') homePager.goTo(0);
   else open('home');
 });
 ui['open-notification'].addEventListener('click', () => {
@@ -301,11 +290,10 @@ ui['open-notification'].addEventListener('click', () => {
   action?.();
 });
 ui['dismiss-notification'].addEventListener('click', dismissNotification);
-watchSwipe(ui.home, step => setHomePage(homePage + step));
 document.addEventListener('keydown', event => {
   if (current !== 'home' || ui.prompt.open || !['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
   event.preventDefault();
-  setHomePage(homePage + (event.key === 'ArrowRight' ? 1 : -1));
+  homePager.step(event.key === 'ArrowRight' ? 1 : -1);
 });
 window.addEventListener('popstate', handleLocation);
 window.addEventListener('hashchange', handleLocation);
