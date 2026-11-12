@@ -2,10 +2,10 @@
 
 import {loadCatalogue} from './catalogue.js';
 import {createChat, createMail} from './messages.js';
-import {createPhotos, createBank, createLove, createMarket, createStore} from './apps.js?v=premium';
+import {createPhotos, createBank, createLove, createMarket, createStore} from './apps.js?v=photo-slide';
 import {createScratch, createFruit} from './games.js';
 import {hasPremiumAccess} from './premium.js';
-import {createHomePager} from './home.js';
+import {createHomePager} from './home.js?v=photo-slide';
 import {element, button, image, shortTime, loadSetting, saveSetting} from './ui.js';
 
 const pages = [

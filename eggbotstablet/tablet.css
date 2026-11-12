@@ -87,9 +87,9 @@ img { display: block; max-width: 100%; }
   background: linear-gradient(135deg, #09161ed9, #102a339e 55%, #10232edb), var(--wallpaper, none) center / cover;
 }
 .home-pages { flex: 1; min-height: 0; overflow: hidden; overflow: clip; }
-.home-track {
+.slide-track {
   display: flex; width: 100%; height: 100%;
-  transform: translate3d(var(--home-offset, 0%), 0, 0);
+  transform: translate3d(var(--slide-offset, 0%), 0, 0);
 }
 .home-page { flex: 0 0 100%; min-width: 0; }
 .app-grid {
@@ -200,8 +200,12 @@ img { display: block; max-width: 100%; }
 .accounts { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 8px; margin-bottom: 17px; }
 .accounts .row { display: block; }
 .gallery { height: 100%; display: flex; flex-direction: column; background: #060b0d; touch-action: pan-y; }
-.gallery-stage { flex: 1; min-height: 0; display: grid; place-items: center; border: 0; background: #060b0d; padding: 0; overflow: hidden; border-radius: 0; }
+.gallery-stage { position: relative; flex: 1; min-height: 0; border: 0; background: #060b0d; padding: 0; overflow: hidden; border-radius: 0; }
+.gallery-stage:hover:not(:disabled) { background: #060b0d; }
 .gallery-stage img { width: 100%; height: 100%; min-height: 0; object-fit: contain; }
+.gallery-stage > img, .gallery-stage .slide-track { position: absolute; inset: 0; }
+.gallery-stage .slide-track { pointer-events: none; }
+.gallery-stage .slide-track img { flex: 0 0 100%; min-width: 0; }
 .gallery-controls { display: flex; justify-content: center; align-items: center; gap: 12px; padding: 10px; }
 .gallery-controls output { min-width: 6ch; text-align: center; font: .86rem var(--mono); }
 .love-card { width: min(100%, 390px); margin: auto; border-radius: 16px; overflow: hidden; border: 1px solid var(--border); background: #291f2a; touch-action: pan-y; }
@@ -260,7 +264,7 @@ dialog .actions { justify-content: end; }
   .notification { top: 34px; }
 }
 @media (prefers-reduced-motion: no-preference) {
-  .home-track:not(.dragging) { transition: transform var(--home-slide-duration, 280ms) ease-in-out; }
+  .slide-track:not(.instant) { transition: transform var(--slide-duration, 280ms) ease-in-out; }
   .app-icon:hover .icon-art { transform: translateY(-2px); }
   .icon-art { transition: transform .15s ease; }
 }

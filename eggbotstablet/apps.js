@@ -2,6 +2,7 @@
 
 import {element, button, image, tabs, watchSwipe, money, countdown, loadSetting, saveSetting} from './ui.js';
 import {hasPremiumAccess, premiumShop, redeemPremiumCode} from './premium.js';
+import {createSlideGesture} from './slide.js';
 
 export function createPhotos({data}) {
   const photos = (data.owner?.photos ?? []).map(photo => ({
@@ -12,36 +13,81 @@ export function createPhotos({data}) {
     view.append(element('p', 'waiting', 'There are no photos to show.'));
     return {view};
   }
+  if (photos.length === 1) {
+    const [photo] = photos;
+    view.append(element('div', 'gallery-stage', image(photo.url, photo.description || 'Eggbot’s photo')));
+    return {view};
+  }
+
   let index = 0;
-  const photo = image('');
+  let pending;
   const stage = button('', () => step(1), 'gallery-stage');
-  stage.append(photo);
-  stage.setAttribute('aria-label', 'Show next photo');
+  const track = element('span', 'slide-track', image(''), image(''), image(''));
+  track.setAttribute('aria-hidden', 'true');
+  stage.append(track);
   const position = element('output');
   const controls = element('div', 'gallery-controls',
     button('Previous', () => step(-1)), position, button('Next', () => step(1)));
-  controls.hidden = photos.length < 2;
   view.append(stage, controls);
 
+  const slider = createSlideGesture(stage, track, {
+    step,
+    canDrag: () => !pending,
+    constrain: (offset, width) => Math.max(-2 * width, Math.min(0, offset))
+  });
+
+  function wrap(value) {
+    return (value + photos.length) % photos.length;
+  }
+
   function show() {
-    photo.src = photos[index].url;
-    photo.alt = photos[index].description || 'Eggbot’s photo';
+    for (const [slot, frame] of Array.from(track.children).entries()) {
+      const {url} = photos[wrap(index + slot - 1)];
+      if (frame.getAttribute('src') !== url) frame.src = url;
+    }
+    stage.setAttribute('aria-label', (photos[index].description || 'Eggbot’s photo') + ' — show next photo');
     position.textContent = (index + 1) + ' / ' + photos.length;
   }
 
-  function step(direction) {
-    index = (index + direction + photos.length) % photos.length;
+  function finish(move) {
+    if (pending !== move) return;
+    pending = null;
+    index = wrap(index + move.direction);
+    // Keep the photo that slid into view and recycle the frame that left.
+    if (move.direction > 0) track.append(track.firstElementChild);
+    else track.prepend(track.lastElementChild);
+    slider.jumpTo(-100);
     show();
   }
 
-  watchSwipe(view, step);
+  function step(direction) {
+    if (pending) return;
+    if (!direction) {
+      slider.slideTo(-100);
+      return;
+    }
+    const move = {direction};
+    pending = move;
+    slider.slideTo(-100 * (1 + direction));
+    const animation = track.getAnimations().find(item => item.transitionProperty === 'transform');
+    if (animation) animation.finished.then(() => finish(move), () => finish(move));
+    else finish(move);
+  }
+
   view.addEventListener('keydown', event => {
     if (!['ArrowRight', 'ArrowLeft'].includes(event.key)) return;
     event.preventDefault();
     step(event.key === 'ArrowRight' ? 1 : -1);
   });
+  slider.jumpTo(-100);
   show();
-  return {view};
+  return {
+    view,
+    close() {
+      if (pending) finish(pending);
+      else slider.jumpTo(-100);
+    }
+  };
 }
 
 export function createBank(tablet) {
