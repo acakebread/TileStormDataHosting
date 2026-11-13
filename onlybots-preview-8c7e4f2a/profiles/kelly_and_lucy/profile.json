@@ -26,14 +26,14 @@
       "resource": "Photos/kelly_and_lucy_3",
       "description": "A closer studio portrait with Kelly and Lucy wheel to wheel.",
       "maxImageDimension": 1024,
-      "url": "Photos/kelly_and_lucy_3.jpg"
+      "url": "Photos/kelly_and_lucy_3.jpg?v=c821ed1acab2"
     },
     {
       "id": "studio_4",
       "resource": "Photos/kelly_and_lucy_4",
       "description": "Kelly and Lucy lean in until their eyelashes nearly touch.",
       "maxImageDimension": 1024,
-      "url": "Photos/kelly_and_lucy_4.jpg"
+      "url": "Photos/kelly_and_lucy_4.jpg?v=c8caab7dbd18"
     }
   ],
   "videos": [
