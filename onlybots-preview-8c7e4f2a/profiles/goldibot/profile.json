@@ -35,7 +35,7 @@
       "description": "Goldibot shows off her new charging-port zipper.",
       "posterPhotoId": "",
       "maxImageDimension": 1024,
-      "url": "Photos/goldibot_4.jpg?v=b2bcab7dd6bd"
+      "url": "Photos/goldibot_4.jpg?v=f949381c1b5d"
     }
   ],
   "videos": [
@@ -65,6 +65,15 @@
       "posterPhotoId": "goldibot_1",
       "url": "Videos/goldibot_rolls_away.mp4?v=f9ba152acb7f",
       "posterUrl": "Videos/goldibot_rolls_away_poster.png?v=4d52dd584c86"
+    },
+    {
+      "id": "goldibot_catwalk",
+      "resource": "Videos/goldibot_catwalk",
+      "description": "Goldibot on the catwalk.",
+      "posterResource": "Videos/goldibot_catwalk_poster",
+      "posterPhotoId": "goldibot_1",
+      "url": "Videos/goldibot_catwalk.mp4?v=a4e1943d3825",
+      "posterUrl": "Videos/goldibot_catwalk_poster.png?v=7d9f31ea3345"
     }
   ],
   "portrait": {
