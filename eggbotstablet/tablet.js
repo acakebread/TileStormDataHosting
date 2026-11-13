@@ -5,6 +5,7 @@ import {createChat, createMail} from './messages.js?v=mail-layout';
 import {createPhotos, createBank, createLove, createMarket, createStore} from './apps.js?v=creator-access-2';
 import {createScratch, createFruit} from './games.js';
 import {hasOnlyBotsAccess, hasPremiumAccess} from './premium.js?v=creator-access-2';
+import {linkPurchaseProfile, purchaseStatus, refreshPurchases} from './purchases.js?v=linked-purchases';
 import {createHomePager} from './home.js?v=onlybots-shop';
 import {element, button, image, shortTime, loadSetting, saveSetting} from './ui.js';
 
@@ -32,7 +33,7 @@ const apps = {
 };
 
 const ui = Object.fromEntries([
-  'display', 'home', 'home-pages', 'page-dots', 'loading', 'loading-status', 'retry', 'clock', 'app-name',
+  'display', 'home', 'home-pages', 'page-dots', 'loading', 'loading-status', 'retry', 'clock', 'app-name', 'tip-status',
   'home-button', 'notification', 'open-notification', 'dismiss-notification', 'toast',
   'prompt', 'prompt-title', 'prompt-text', 'prompt-actions'
 ].map(id => [id, document.getElementById(id)]));
@@ -256,8 +257,14 @@ function open(id, replace = false) {
 }
 
 function handleLocation() {
+  const profile = new URLSearchParams(location.hash.slice(1)).get('purchase-profile');
+  if (profile !== null) {
+    history.replaceState(null, '', location.pathname + location.search);
+    linkPurchaseProfile(profile);
+  }
   const id = location.hash.slice(1) || 'home';
   if (id !== current) open(id, true);
+  return profile !== null;
 }
 
 async function startContent() {
@@ -314,8 +321,15 @@ function tick() {
   mounted.get(current)?.tick?.(now);
 }
 
+function renderTipStatus() {
+  const tipped = purchaseStatus('dollar_tip');
+  ui['tip-status'].textContent = tipped === undefined ? '' : tipped ? 'Tip given' : 'No tip';
+}
+
+window.addEventListener('tilestorm-purchases-changed', renderTipStatus);
 showCurrent();
-handleLocation();
+if (!handleLocation()) refreshPurchases();
+renderTipStatus();
 if (onlyBotsInstalled && hasOnlyBotsAccess()) mount('onlybots');
 tick();
 setInterval(tick, 1000);

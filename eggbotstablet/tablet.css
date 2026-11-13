@@ -70,11 +70,12 @@ img { display: block; max-width: 100%; }
   overflow: hidden; border: 1px solid #080d10; border-radius: 13px; background: #10191e;
 }
 .status-bar {
-  flex: none; display: grid; grid-template-columns: 1fr 1fr 1fr;
+  flex: none; display: grid; grid-template-columns: 1fr minmax(0, 1fr) 1fr;
   align-items: center; height: 34px; padding: 0 14px;
   color: #dbe8ec; background: #0a1116; font: 500 .76rem var(--mono);
 }
-#app-name { text-align: center; color: #a7c1cc; }
+#app-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; color: #a7c1cc; }
+.status-right { display: flex; justify-content: end; align-items: center; gap: clamp(6px, 1.6vw, 14px); white-space: nowrap; }
 .battery { display: flex; justify-content: end; align-items: center; gap: 6px; }
 .battery i { width: 20px; height: 10px; border: 1px solid #a7bcc5; border-radius: 2px; padding: 1px; }
 .battery i::before { content: ''; display: block; height: 100%; width: 20%; background: #ffb989; }

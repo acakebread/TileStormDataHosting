@@ -8,8 +8,8 @@
   <meta name="theme-color" content="#101820">
   <meta name="description" content="Open Eggbot’s tablet and explore the apps from TileStorm Evolution.">
   <title>Eggbot’s Tablet · TileStorm Evolution</title>
-  <link rel="stylesheet" href="./tablet.css?v=mail-layout">
-  <script type="module" src="./tablet.js?v=creator-access-2"></script>
+  <link rel="stylesheet" href="./tablet.css?v=tip-status">
+  <script type="module" src="./tablet.js?v=tip-status"></script>
 </head>
 <body>
   <header class="masthead">
@@ -22,7 +22,10 @@
       <header class="status-bar">
         <time id="clock"></time>
         <span id="app-name">Home</span>
-        <span class="battery" aria-label="Battery 12 percent">12% <i aria-hidden="true"></i></span>
+        <div class="status-right">
+          <span id="tip-status" role="status"></span>
+          <span class="battery" aria-label="Battery 12 percent">12% <i aria-hidden="true"></i></span>
+        </div>
       </header>
       <div class="display" id="display">
         <section id="home" class="home" aria-label="Home screen">
