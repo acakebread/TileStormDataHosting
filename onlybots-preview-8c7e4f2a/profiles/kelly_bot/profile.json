@@ -18,6 +18,18 @@
       "resource": "Photos/kellybot 2",
       "description": "Kelly Bot's second profile photo.",
       "url": "Photos/kellybot 2.jpg?v=09bd6537e654"
+    },
+    {
+      "id": "photo_3",
+      "resource": "Photos/kellybot 3",
+      "description": "Kelly Bot's third profile photo.",
+      "url": "Photos/kellybot%203.jpg?v=0698923c2cd7"
+    },
+    {
+      "id": "photo_4",
+      "resource": "Photos/kellybot 4",
+      "description": "Kelly Bot's fourth profile photo.",
+      "url": "Photos/kellybot%204.jpg?v=00c1aa73ee2a"
     }
   ],
   "portrait": {
@@ -42,6 +54,16 @@
         "order": 1,
         "photoId": "photo_2",
         "caption": "I saved you a seat in the back booth. Bring premium oil and a convincing reason to stay past closing."
+      },
+      {
+        "order": 2,
+        "photoId": "photo_3",
+        "caption": "Fresh polish for the late shift. Go on, take a closer look."
+      },
+      {
+        "order": 3,
+        "photoId": "photo_4",
+        "caption": "One last look before I roll out. You can keep the photo."
       }
     ],
     "updates": [

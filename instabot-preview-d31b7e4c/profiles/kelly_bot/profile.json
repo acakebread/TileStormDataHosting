@@ -26,6 +26,18 @@
       "resource": "Photos/kellybot 2",
       "description": "Supplied dating profile photo.",
       "url": "Photos/kellybot%202.jpg?v=09bd6537e654"
+    },
+    {
+      "id": "photo_3",
+      "resource": "Photos/kellybot 3",
+      "description": "Kelly Bot's third profile photo.",
+      "url": "Photos/kellybot%203.jpg?v=0698923c2cd7"
+    },
+    {
+      "id": "photo_4",
+      "resource": "Photos/kellybot 4",
+      "description": "Kelly Bot's fourth profile photo.",
+      "url": "Photos/kellybot%204.jpg?v=00c1aa73ee2a"
     }
   ],
   "instabot": {
@@ -69,6 +81,16 @@
         "likes": 5880,
         "minutesAgo": 50,
         "photoId": "photo_2"
+      },
+      {
+        "caption": "Fresh polish. The girls are already asking where we're going next.",
+        "minutesAgo": 12,
+        "photoId": "photo_3"
+      },
+      {
+        "caption": "One more for the feed before the night gets away from us.",
+        "minutesAgo": 20,
+        "photoId": "photo_4"
       }
     ],
     "updates": [
