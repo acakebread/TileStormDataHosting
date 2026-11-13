@@ -11,13 +11,13 @@
       "id": "portrait",
       "resource": "Photos/kellybot",
       "description": "Kelly Bot's portrait.",
-      "url": "Photos/kellybot.jpg"
+      "url": "Photos/kellybot.jpg?v=2188d06ebd81"
     },
     {
       "id": "photo_2",
       "resource": "Photos/kellybot 2",
       "description": "Kelly Bot's second profile photo.",
-      "url": "Photos/kellybot 2.jpg"
+      "url": "Photos/kellybot 2.jpg?v=09bd6537e654"
     }
   ],
   "portrait": {
