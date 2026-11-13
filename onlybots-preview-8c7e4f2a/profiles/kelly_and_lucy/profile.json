@@ -36,6 +36,17 @@
       "url": "Photos/kelly_and_lucy_4.jpg"
     }
   ],
+  "videos": [
+    {
+      "id": "kelly_and_lucy",
+      "resource": "Videos/kelly_and_lucy",
+      "description": "Kelly and Lucy in the studio.",
+      "posterResource": "Videos/kelly_and_lucy_poster",
+      "posterPhotoId": "studio_1",
+      "url": "Videos/kelly_and_lucy.mp4?v=75ee78bfffeb",
+      "posterUrl": "Videos/kelly_and_lucy_poster.png?v=60779f7fe71a"
+    }
+  ],
   "portrait": {
     "photoId": "studio_1"
   },
