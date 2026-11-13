@@ -9,6 +9,7 @@
   },
   "profiles": [
     "profiles/goldibot/profile.json",
+    "profiles/kelly_and_lucy/profile.json",
     "profiles/lucybot/profile.json",
     "profiles/miss_bot/profile.json",
     "profiles/miss_botiliscious/profile.json",

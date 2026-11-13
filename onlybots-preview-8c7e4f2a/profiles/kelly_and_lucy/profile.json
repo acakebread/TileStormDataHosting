@@ -1,0 +1,79 @@
+{
+  "copyright": "Copyright 2026 massivehadron.com ltd.",
+  "schemaVersion": 1,
+  "id": "kelly_and_lucy",
+  "displayName": "Kelly and Lucy",
+  "handle": "kelly_and_lucy",
+  "biography": "Kelly Bot and Lucybot. Two bots, one studio booking, and four very different ideas of what to do with it.",
+  "maxImageDimension": 2048,
+  "photos": [
+    {
+      "id": "studio_1",
+      "resource": "Photos/kelly_and_lucy_1",
+      "description": "Kelly and Lucy face each other in a full-length studio portrait.",
+      "maxImageDimension": 1024,
+      "url": "Photos/kelly_and_lucy_1.jpg"
+    },
+    {
+      "id": "studio_2",
+      "resource": "Photos/kelly_and_lucy_2",
+      "description": "Kelly and Lucy turn towards each other, with their gold and chrome wheels in view.",
+      "maxImageDimension": 1024,
+      "url": "Photos/kelly_and_lucy_2.jpg"
+    },
+    {
+      "id": "studio_3",
+      "resource": "Photos/kelly_and_lucy_3",
+      "description": "A closer studio portrait with Kelly and Lucy wheel to wheel.",
+      "maxImageDimension": 1024,
+      "url": "Photos/kelly_and_lucy_3.jpg"
+    },
+    {
+      "id": "studio_4",
+      "resource": "Photos/kelly_and_lucy_4",
+      "description": "Kelly and Lucy lean in until their eyelashes nearly touch.",
+      "maxImageDimension": 1024,
+      "url": "Photos/kelly_and_lucy_4.jpg"
+    }
+  ],
+  "portrait": {
+    "photoId": "studio_1"
+  },
+  "onlyBots": {
+    "enabled": true,
+    "posts": [
+      {
+        "order": 0,
+        "photoId": "studio_1",
+        "caption": "We said one quick photo. Then someone brought out the wheel polish."
+      },
+      {
+        "order": 1,
+        "photoId": "studio_2",
+        "caption": "Gold or chrome? We were meant to settle this in one take."
+      },
+      {
+        "order": 2,
+        "photoId": "studio_3",
+        "caption": "The photographer said wheel to wheel. We took that fairly literally."
+      },
+      {
+        "order": 3,
+        "photoId": "studio_4",
+        "caption": "Last take. Whoever blinks first pays for the studio."
+      }
+    ],
+    "updates": [
+      {
+        "order": 0,
+        "photoId": "studio_2",
+        "caption": "We compared wheel finishes under the studio lights. Both of us won."
+      },
+      {
+        "order": 1,
+        "photoId": "studio_4",
+        "caption": "The photographer is still waiting for one of us to blink."
+      }
+    ]
+  }
+}
