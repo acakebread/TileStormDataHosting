@@ -2,9 +2,9 @@
 
 import {loadCatalogue} from './catalogue.js';
 import {createChat, createMail} from './messages.js?v=mail-layout';
-import {createPhotos, createBank, createLove, createMarket, createStore} from './apps.js?v=onlybots-shop';
+import {createPhotos, createBank, createLove, createMarket, createStore} from './apps.js?v=creator-access-2';
 import {createScratch, createFruit} from './games.js';
-import {hasOnlyBotsAccess, hasPremiumAccess} from './premium.js?v=onlybots-shop';
+import {hasOnlyBotsAccess, hasPremiumAccess} from './premium.js?v=creator-access-2';
 import {createHomePager} from './home.js?v=onlybots-shop';
 import {element, button, image, shortTime, loadSetting, saveSetting} from './ui.js';
 
@@ -24,7 +24,7 @@ const apps = {
     frame: '../instabot-preview-d31b7e4c/?tablet=1'},
   love: {name: 'LoveBot', art: './art/love.png', needsContent: true, mount: createLove},
   onlybots: {name: 'OnlyBots', art: '../onlybots-preview-8c7e4f2a/icon.jpg',
-    frame: '../onlybots-preview-8c7e4f2a/?tablet=1&v=onlybots-shop'},
+    frame: '../onlybots-preview-8c7e4f2a/?tablet=1&v=creator-access-2'},
   market: {name: 'eBot', art: './art/market.jpg', needsContent: true, mount: createMarket},
   botflix: {name: 'BOTFLIX', art: './art/botflix.png'},
   snapbot: {name: 'SnapBot', art: './art/snapbot.jpg'},

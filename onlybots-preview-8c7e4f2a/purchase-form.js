@@ -1,6 +1,6 @@
 // Copyright 2026 massivehadron.com ltd.
 
-import {onlyBotsShop} from '../eggbotstablet/premium.js?v=onlybots-shop';
+import {onlyBotsShop} from '../eggbotstablet/premium.js?v=creator-access-2';
 
 export function createPurchaseForm({buyLabel, redeem, onAccepted, invalidMessage}) {
   const form = document.getElementById('purchaseFormTemplate').content.firstElementChild.cloneNode(true);

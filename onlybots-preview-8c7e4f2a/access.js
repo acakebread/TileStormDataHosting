@@ -1,7 +1,7 @@
 // Copyright 2026 massivehadron.com ltd.
 
-import {hasOnlyBotsAccess, onlyBotsPriceUsd, redeemOnlyBotsCode} from '../eggbotstablet/premium.js?v=onlybots-shop';
-import {createPurchaseForm} from './purchase-form.js?v=onlybots-shop';
+import {hasOnlyBotsAccess, onlyBotsPriceUsd, redeemOnlyBotsCode} from '../eggbotstablet/premium.js?v=creator-access-2';
+import {createPurchaseForm} from './purchase-form.js?v=creator-access-2';
 
 const embedded = window.parent !== window && new URLSearchParams(location.search).has('tablet');
 const gate = document.getElementById('accessGate');
@@ -11,7 +11,7 @@ function openPreview(focus, tabletPremium = false) {
   gate.replaceWith(preview.content);
   preview.remove();
   if (focus) document.getElementById('feedScroller').focus();
-  import('./onlybots.js?v=onlybots-shop').then(feed => feed.start(tabletPremium)).catch(() => {
+  import('./onlybots.js?v=creator-access-2').then(feed => feed.start(tabletPremium)).catch(() => {
     const status = document.getElementById('feedStatus');
     status.textContent = 'The preview could not load. Reload the page to try again.';
     status.setAttribute('role', 'alert');

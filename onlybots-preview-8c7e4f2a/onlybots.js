@@ -1,8 +1,8 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {blobFromCanvas, fetchFile, pictures, shuffle} from '../tablet-preview/shared.js';
-import {creatorPriceUsd, hasCreatorAccess, redeemCreatorCode} from '../eggbotstablet/premium.js?v=onlybots-shop';
-import {createPurchaseForm} from './purchase-form.js?v=onlybots-shop';
+import {creatorPriceUsd, hasCreatorAccess, hasCreatorProduct, redeemCreatorCode} from '../eggbotstablet/premium.js?v=creator-access-2';
+import {createPurchaseForm} from './purchase-form.js?v=creator-access-2';
 
 const ui = Object.fromEntries([
   'latest', 'creators', 'creatorHeading', 'feedScroller', 'feedStatus', 'feed',
@@ -154,7 +154,7 @@ function makeCard(post) {
   });
   card.querySelector('.share').addEventListener('click', event => sharePost(post, event.currentTarget));
   const creatorAction = card.querySelector('.subscribe');
-  if (creatorPriceUsd(post.profile.id) !== undefined || post.profile.videos.length) {
+  if (hasCreatorProduct(post.profile.id) || post.profile.videos.length) {
     creatorAction.textContent = 'View profile';
     creatorAction.addEventListener('click', () => openCreatorProfile(post.profile));
   } else {
@@ -298,14 +298,15 @@ function resetViewer() {
 }
 
 function openCreatorProfile(profile) {
-  if (state.tabletPremium || hasCreatorAccess(profile.id)) {
+  if (hasCreatorAccess(profile.id, state.tabletPremium)) {
     openGallery(profile);
     return;
   }
 
   const dialog = ui.profilePurchase;
+  const price = creatorPriceUsd(profile.id);
   const form = createPurchaseForm({
-    buyLabel: `Buy profile · US$${creatorPriceUsd(profile.id)}`,
+    buyLabel: price === undefined ? 'Buy profile' : `Buy profile · US$${price}`,
     redeem: code => redeemCreatorCode(profile.id, code),
     onAccepted: () => {
       dialog.close();

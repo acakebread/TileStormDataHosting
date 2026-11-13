@@ -1,7 +1,7 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {element, button, image, tabs, watchSwipe, money, countdown, loadSetting, saveSetting} from './ui.js';
-import {hasOnlyBotsAccess, onlyBotsPriceUsd, onlyBotsShop, redeemOnlyBotsCode} from './premium.js?v=onlybots-shop';
+import {hasOnlyBotsAccess, onlyBotsPriceUsd, onlyBotsShop, redeemOnlyBotsCode} from './premium.js?v=creator-access-2';
 import {createSlideGesture} from './slide.js';
 
 export function createPhotos({data}) {

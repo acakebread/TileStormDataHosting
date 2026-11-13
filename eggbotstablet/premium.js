@@ -9,7 +9,8 @@ export const onlyBotsPriceUsd = 30;
 const appDigest = '4ac0e570e668ad6308c806426dbc260bdb79832e8c53c69590d794e3ff0b185f';
 const premiumDigest = '7a5630c3b47a2c6e0f59990dc0f50788a81392749d6209413c68fdfd9076ce32';
 const creatorProducts = new Map([
-  ['goldibot', {priceUsd: 20, digest: '555b530d8d1f53ca8e2b387036ade13ebb70bfa8e87f762c25d4a6441393fbbc'}]
+  ['goldibot', {priceUsd: 20, includedWithPremium: true, digest: '555b530d8d1f53ca8e2b387036ade13ebb70bfa8e87f762c25d4a6441393fbbc'}],
+  ['kelly_and_lucy', {digest: '7eca5c295cdfd0baa06c844251abcc56305bfc7ad512ef9b3902be58f7132d24'}]
 ]);
 const appReceipt = 'onlyBotsAccess';
 const premiumReceipt = 'onlyBotsPremium';
@@ -38,8 +39,14 @@ export function creatorPriceUsd(id) {
   return creatorProducts.get(id)?.priceUsd;
 }
 
-export function hasCreatorAccess(id) {
-  return !creatorProducts.has(id) || hasReceipt(creatorReceipt(id)) || hasPremiumAccess();
+export function hasCreatorProduct(id) {
+  return creatorProducts.has(id);
+}
+
+export function hasCreatorAccess(id, tabletPremium = false) {
+  const product = creatorProducts.get(id);
+  return !product || hasReceipt(creatorReceipt(id)) ||
+    (product.includedWithPremium && (tabletPremium || hasPremiumAccess()));
 }
 
 async function digestCode(code) {

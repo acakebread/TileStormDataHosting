@@ -10,8 +10,9 @@ passed to the preview, included in its URL or needed by its JavaScript.
 The standalone page and BotStore accept the same Buy Me a Coffee codes as Unity.
 The US$30 OnlyBots code opens the feed and its preview posts. **View profile** on
 Goldibot's posts accepts her US$20 code and opens the photo and video gallery.
-Existing premium codes and saved web premium unlocks open both. The standalone
-page uses purchase codes in place of its old preview password.
+Existing premium codes and saved web premium unlocks open both. Kelly and Lucy's
+video requires their own Shop code for all viewers. Their photos appear in the
+feed, and **Buy profile** opens the Shop for current pricing.
 
 Both pages save and read unlocks on the same site and browser. The tablet saves
 installation separately, shows the home icon after installation, and keeps unlocks
