@@ -21,10 +21,8 @@ catalogue and media URLs remain directly accessible. If a code changes, update
 its SHA-256 digest in `eggbotstablet/premium.js` using the code with punctuation
 removed and letters uppercased.
 
-The preview contains six creators, 19 photographs and Goldibot's videos. Five creators use copies
-of the tablet app's OnlyBots profiles. Kelly Bot has a web-only profile that
-uses her existing photos with captions written for OnlyBots. The snapshot
-copier preserves her profile and keeps it in the catalogue.
+The preview copies enabled OnlyBots profiles from the Unity project. Kelly Bot's photos,
+captions and timed updates come from the same profile used in the game.
 
 The feed mixes creators, keeps all initial posts and the latest 24 timed updates,
 starts updates after 20 seconds, then waits 35–65 seconds between arrivals.
