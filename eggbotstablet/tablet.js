@@ -2,10 +2,10 @@
 
 import {loadCatalogue} from './catalogue.js';
 import {createChat, createMail} from './messages.js?v=mail-layout';
-import {createPhotos, createBank, createLove, createMarket, createStore} from './apps.js?v=photo-slide';
+import {createPhotos, createBank, createLove, createMarket, createStore} from './apps.js?v=onlybots-shop';
 import {createScratch, createFruit} from './games.js';
-import {hasPremiumAccess} from './premium.js';
-import {createHomePager} from './home.js?v=photo-slide';
+import {hasOnlyBotsAccess, hasPremiumAccess} from './premium.js?v=onlybots-shop';
+import {createHomePager} from './home.js?v=onlybots-shop';
 import {element, button, image, shortTime, loadSetting, saveSetting} from './ui.js';
 
 const pages = [
@@ -24,7 +24,7 @@ const apps = {
     frame: '../instabot-preview-d31b7e4c/?tablet=1'},
   love: {name: 'LoveBot', art: './art/love.png', needsContent: true, mount: createLove},
   onlybots: {name: 'OnlyBots', art: '../onlybots-preview-8c7e4f2a/icon.jpg',
-    frame: '../onlybots-preview-8c7e4f2a/?tablet=1&v=premium'},
+    frame: '../onlybots-preview-8c7e4f2a/?tablet=1&v=onlybots-shop'},
   market: {name: 'eBot', art: './art/market.jpg', needsContent: true, mount: createMarket},
   botflix: {name: 'BOTFLIX', art: './art/botflix.png'},
   snapbot: {name: 'SnapBot', art: './art/snapbot.jpg'},
@@ -54,7 +54,7 @@ const tablet = {
   get current() { return current; },
   get onlyBotsInstalled() { return onlyBotsInstalled; },
   installOnlyBots(installed) {
-    if (installed && !hasPremiumAccess()) return;
+    if (installed && !hasOnlyBotsAccess()) return;
     onlyBotsInstalled = installed;
     saveSetting('onlyBotsInstalled', installed);
     if (installed) {
@@ -83,7 +83,8 @@ function art(id, fallback = '', loading = 'lazy') {
 
 function renderHome() {
   homePager.render(id => {
-    const offloaded = id === 'botflix' || (id === 'onlybots' && !onlyBotsInstalled);
+    if (id === 'onlybots' && !onlyBotsInstalled) return null;
+    const offloaded = id === 'botflix';
     const icon = button('', () => open(id), 'app-icon' + (offloaded ? ' offloaded' : ''));
     const tile = art(id, '', 'eager');
     if (offloaded) {
@@ -97,9 +98,9 @@ function renderHome() {
     badge.hidden = true;
     tile.append(badge);
     icon.append(tile, element('span', 'icon-label', apps[id].name));
-    const locked = id === 'onlybots' && !hasPremiumAccess();
+    const locked = id === 'onlybots' && !hasOnlyBotsAccess();
     icon.setAttribute('aria-label', apps[id].name + (offloaded ? ', offloaded' : '') +
-      (locked ? ', premium access required' : ''));
+      (locked ? ', OnlyBots access required' : ''));
     return icon;
   });
   refreshBadges();
@@ -197,8 +198,9 @@ function mount(id) {
     frame.src = config.frame;
     frame.allow = 'web-share';
     function visible(active) {
-      const premium = id === 'onlybots' && onlyBotsInstalled && hasPremiumAccess();
-      frame.contentWindow?.postMessage({type: 'eggbot-tablet-visibility', active, premium}, location.origin);
+      const onlyBotsAccess = id === 'onlybots' && onlyBotsInstalled && hasOnlyBotsAccess();
+      const premium = onlyBotsAccess && hasPremiumAccess();
+      frame.contentWindow?.postMessage({type: 'eggbot-tablet-visibility', active, onlyBotsAccess, premium}, location.origin);
     }
     instance = {view: frame, count: 0, open() {
       instance.count = 0;
@@ -234,7 +236,7 @@ function showCurrent() {
 }
 
 function open(id, replace = false) {
-  if (id === 'botflix' || (id === 'onlybots' && (!onlyBotsInstalled || !hasPremiumAccess()))) {
+  if (id === 'botflix' || (id === 'onlybots' && (!onlyBotsInstalled || !hasOnlyBotsAccess()))) {
     storeRequest = id;
     id = 'store';
   }
@@ -314,7 +316,7 @@ function tick() {
 
 showCurrent();
 handleLocation();
-if (onlyBotsInstalled && hasPremiumAccess()) mount('onlybots');
+if (onlyBotsInstalled && hasOnlyBotsAccess()) mount('onlybots');
 tick();
 setInterval(tick, 1000);
 setTimeout(announceUpdate, 50000);

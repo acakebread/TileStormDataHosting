@@ -52,7 +52,7 @@ export function createHomePager(viewport, navigation, pages) {
     goTo, cancelDrag: slider.cancel,
     step(direction) { goTo(page + direction); },
     render(createIcon) {
-      grids.forEach((grid, index) => grid.replaceChildren(...pages[index].map(createIcon)));
+      grids.forEach((grid, index) => grid.replaceChildren(...pages[index].map(createIcon).filter(Boolean)));
     }
   };
 }

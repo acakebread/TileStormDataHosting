@@ -1,7 +1,7 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {element, button, image, tabs, watchSwipe, money, countdown, loadSetting, saveSetting} from './ui.js';
-import {hasPremiumAccess, premiumShop, redeemPremiumCode} from './premium.js';
+import {hasOnlyBotsAccess, onlyBotsPriceUsd, onlyBotsShop, redeemOnlyBotsCode} from './premium.js?v=onlybots-shop';
 import {createSlideGesture} from './slide.js';
 
 export function createPhotos({data}) {
@@ -261,7 +261,7 @@ const storeListings = [
   ['mail', 'Bills, spam and messages that could have waited.'],
   ['chat', 'Seen. Typing. Still waiting for a useful answer.'],
   ['instabot', 'Everyone else’s perfect life. Your twelve-percent battery.'],
-  ['onlybots', 'Premium polish. Requires OnlyBots premium access.', 4],
+  ['onlybots', 'Premium polish. Requires OnlyBots access.', 4],
   ['market', 'Impossible gadgets. Dubious parts. Optimistic sellers.'],
   ['botflix', 'Your watchlist is waiting in the cloud.', 64],
   ['snapbot', 'Send snaps that vanish before your shift ends.', 32],
@@ -276,9 +276,9 @@ export function createStore(tablet) {
   const view = element('section', '', content);
   const free = () => tablet.onlyBotsInstalled ? 8 : 12;
 
-  function buyPremium() {
-    const link = element('a', 'action-link', 'Buy premium');
-    link.href = premiumShop;
+  function buyOnlyBots() {
+    const link = element('a', 'action-link', `Buy OnlyBots · US$${onlyBotsPriceUsd}`);
+    link.href = onlyBotsShop;
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
     return link;
@@ -299,26 +299,26 @@ export function createStore(tablet) {
       tablet.installOnlyBots(true);
       dialog.close();
       render();
-      tablet.toast('OnlyBots installed.');
+      tablet.toast('OnlyBots installed. Find it on page two.');
     }, 3000);
   }
 
-  function askForPremiumCode() {
+  function askForOnlyBotsCode() {
     const code = element('input');
-    code.id = 'onlybots-premium-code';
+    code.id = 'onlybots-app-code';
     code.type = 'password';
     code.autocomplete = 'off';
     code.autocapitalize = 'off';
     code.spellcheck = false;
     code.maxLength = 128;
-    const label = element('label', '', 'Premium code');
+    const label = element('label', '', 'OnlyBots code');
     label.htmlFor = code.id;
     const status = element('p', 'muted');
-    status.id = 'onlybots-premium-status';
+    status.id = 'onlybots-app-status';
     status.setAttribute('role', 'status');
     code.setAttribute('aria-describedby', status.id);
     const entry = element('div', 'premium-entry',
-      element('p', '', 'Enter the OnlyBots premium code from your Buy Me a Coffee purchase.'),
+      element('p', '', 'Enter the OnlyBots code from your Buy Me a Coffee purchase confirmation.'),
       label, code, status);
     const unlock = button('Unlock', async () => {
       const dialog = entry.closest('dialog');
@@ -327,7 +327,7 @@ export function createStore(tablet) {
       code.readOnly = true;
       status.textContent = 'Checking code…';
       try {
-        const accepted = await redeemPremiumCode(code.value);
+        const accepted = await redeemOnlyBotsCode(code.value);
         if (!dialog.open || !entry.isConnected) return;
         if (accepted) {
           code.value = '';
@@ -335,7 +335,7 @@ export function createStore(tablet) {
           return;
         }
         code.setAttribute('aria-invalid', 'true');
-        status.textContent = 'That premium code was not recognised. Check your purchase receipt.';
+        status.textContent = 'That OnlyBots code was not recognised. Check your purchase confirmation.';
       } catch {
         if (!dialog.open || !entry.isConnected) return;
         status.textContent = 'Could not check the code. Reload the tablet and try again.';
@@ -355,18 +355,18 @@ export function createStore(tablet) {
       event.preventDefault();
       unlock.click();
     });
-    tablet.prompt('Enter premium code', entry, [buyPremium(), unlock]);
+    tablet.prompt('Enter OnlyBots code', entry, [buyOnlyBots(), unlock]);
     code.focus();
   }
 
   function requestOnlyBots() {
-    const registered = hasPremiumAccess();
-    const action = button('Continue', registered ? continueOnlyBots : askForPremiumCode, 'primary');
+    const registered = hasOnlyBotsAccess();
+    const action = button('Continue', registered ? continueOnlyBots : askForOnlyBotsCode, 'primary');
     const purpose = tablet.onlyBotsInstalled ? 'open' : 'install';
-    tablet.prompt('Premium access required', 'OnlyBots needs premium access to ' + purpose + '. ' +
-      (registered ? 'Your premium access is registered on this browser.' :
-        'Buy premium through Buy Me a Coffee, or continue to enter your purchase code.'),
-    registered ? [action] : [buyPremium(), action]);
+    tablet.prompt('OnlyBots access required', 'You need OnlyBots access to ' + purpose + ' it. ' +
+      (registered ? 'Your access is registered on this browser.' :
+        'Buy OnlyBots through Buy Me a Coffee, or continue to enter your purchase code.'),
+    registered ? [action] : [buyOnlyBots(), action]);
   }
 
   function request(id, size) {

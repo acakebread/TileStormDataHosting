@@ -1,19 +1,21 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {blobFromCanvas, fetchFile, pictures, shuffle} from '../tablet-preview/shared.js';
+import {creatorPriceUsd, hasCreatorAccess, redeemCreatorCode} from '../eggbotstablet/premium.js?v=onlybots-shop';
+import {createPurchaseForm} from './purchase-form.js?v=onlybots-shop';
 
 const ui = Object.fromEntries([
   'latest', 'creators', 'creatorHeading', 'feedScroller', 'feedStatus', 'feed',
   'photoViewer', 'viewerCreator', 'viewerStage', 'viewerCaption', 'viewerStatus', 'closeViewer', 'notice',
   'galleryTabs', 'galleryVideos', 'galleryPhotos', 'galleryControls', 'galleryPrevious',
-  'galleryPosition', 'galleryNext', 'galleryStop'
+  'galleryPosition', 'galleryNext', 'galleryStop', 'profilePurchase', 'profilePurchaseHeading'
 ].map(id => [id, document.getElementById(id)]));
 
 const state = {
   profiles: [], initial: [], updates: [], creators: [], round: [], lastCreator: null,
   selected: null, newPosts: 0, sequence: 0, timer: null, noticeTimer: null,
   cards: new Map(), views: new WeakMap(), activePointers: new Set(), pendingRender: false,
-  gallery: null, viewerRequest: 0, settings: null
+  gallery: null, viewerRequest: 0, settings: null, tabletPremium: false
 };
 
 function avoidRepeat(deck, previous, identity = item => item) {
@@ -152,9 +154,9 @@ function makeCard(post) {
   });
   card.querySelector('.share').addEventListener('click', event => sharePost(post, event.currentTarget));
   const creatorAction = card.querySelector('.subscribe');
-  if (post.profile.videos.length) {
+  if (creatorPriceUsd(post.profile.id) !== undefined || post.profile.videos.length) {
     creatorAction.textContent = 'View profile';
-    creatorAction.addEventListener('click', () => openGallery(post.profile));
+    creatorAction.addEventListener('click', () => openCreatorProfile(post.profile));
   } else {
     creatorAction.addEventListener('click', () => toast(
       post.profile.displayName + ': Extra voltage coming soon. Enjoy the preview for now.'
@@ -295,11 +297,40 @@ function resetViewer() {
   releaseViewerMedia();
 }
 
+function openCreatorProfile(profile) {
+  if (state.tabletPremium || hasCreatorAccess(profile.id)) {
+    openGallery(profile);
+    return;
+  }
+
+  const dialog = ui.profilePurchase;
+  const form = createPurchaseForm({
+    buyLabel: `Buy profile · US$${creatorPriceUsd(profile.id)}`,
+    redeem: code => redeemCreatorCode(profile.id, code),
+    onAccepted: () => {
+      dialog.close();
+      openGallery(profile);
+    },
+    invalidMessage: 'That code does not match this profile. Check your purchase confirmation.'
+  });
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.textContent = 'Cancel';
+  cancel.addEventListener('click', () => dialog.close());
+  form.querySelector('.purchase-actions').prepend(cancel);
+  ui.profilePurchaseHeading.textContent = 'Unlock ' + profile.displayName;
+  dialog.replaceChildren(ui.profilePurchaseHeading, form);
+  dialog.showModal();
+  form.querySelector('input').focus();
+}
+
 function openGallery(profile) {
-  state.gallery = {profile, section: 'videos', index: 0};
+  const section = profile.videos.length ? 'videos' : 'photos';
+  state.gallery = {profile, section, index: 0};
   ui.viewerCreator.textContent = profile.displayName;
   ui.galleryTabs.hidden = ui.galleryControls.hidden = false;
   ui.galleryPhotos.disabled = !profile.photos.length;
+  ui.galleryVideos.disabled = !profile.videos.length;
   if (!ui.photoViewer.open) ui.photoViewer.showModal();
   renderGallery();
 }
@@ -319,12 +350,16 @@ async function renderGallery(continuePlaying = false) {
   const isVideo = section === 'videos';
   ui.galleryVideos.setAttribute('aria-pressed', String(isVideo));
   ui.galleryPhotos.setAttribute('aria-pressed', String(!isVideo));
-  ui.viewerCaption.textContent = item.description || '';
+  ui.viewerCaption.textContent = item?.description || '';
   ui.galleryPrevious.disabled = items.length < 2 || (isVideo && index === 0);
   ui.galleryNext.disabled = items.length < 2 || (isVideo && index === items.length - 1);
-  ui.galleryPosition.value = (index + 1) + ' / ' + items.length;
+  ui.galleryPosition.value = items.length ? (index + 1) + ' / ' + items.length : '';
   ui.galleryStop.hidden = !isVideo;
   ui.galleryStop.disabled = !continuePlaying;
+  if (!item) {
+    setViewerStatus('No media is available for this profile.');
+    return;
+  }
 
   if (isVideo) {
     const video = currentVideo || document.createElement('video');
@@ -530,6 +565,9 @@ ui.photoViewer.addEventListener('click', event => {
   if (event.target === ui.photoViewer || event.target === ui.viewerStage) ui.photoViewer.close();
 });
 ui.photoViewer.addEventListener('close', () => { if (!ui.photoViewer.open) resetViewer(); });
+ui.profilePurchase.addEventListener('close', () => {
+  if (!ui.profilePurchase.open) ui.profilePurchase.replaceChildren(ui.profilePurchaseHeading);
+});
 ui.galleryPhotos.addEventListener('click', () => selectGallerySection('photos'));
 ui.galleryVideos.addEventListener('click', () => selectGallerySection('videos'));
 ui.galleryPrevious.addEventListener('click', () => moveGallery(-1));
@@ -548,10 +586,12 @@ ui.galleryStop.addEventListener('click', () => {
 window.addEventListener('resize', fitViewer);
 if (document.body.classList.contains('tablet-embedded')) {
   window.addEventListener('message', event => {
-    if (event.origin === location.origin && event.source === window.parent &&
-        event.data?.type === 'eggbot-tablet-visibility' && !event.data.active && ui.photoViewer.open) {
-      ui.photoViewer.close();
-    }
+    if (event.origin !== location.origin || event.source !== window.parent ||
+        event.data?.type !== 'eggbot-tablet-visibility') return;
+    state.tabletPremium = event.data.premium === true;
+    if (event.data.active) return;
+    if (ui.photoViewer.open) ui.photoViewer.close();
+    if (ui.profilePurchase.open) ui.profilePurchase.close();
   });
 }
 if ('ResizeObserver' in window) new ResizeObserver(fitViewer).observe(ui.viewerStage);
@@ -580,7 +620,8 @@ window.addEventListener('pagehide', event => {
   if (!event.persisted) { window.clearTimeout(state.timer); pictures.dispose(); imageObserver?.disconnect(); }
 });
 
-async function start() {
+export async function start(tabletPremium) {
+  state.tabletPremium = tabletPremium;
   try {
     const catalogue = await fetchFile(new URL('./catalogue.json', import.meta.url));
     if (catalogue.schemaVersion !== 1 || !Array.isArray(catalogue.profiles)) throw new Error('The preview catalogue is invalid.');
@@ -605,5 +646,3 @@ async function start() {
     ui.feedStatus.setAttribute('role', 'alert');
   }
 }
-
-start();

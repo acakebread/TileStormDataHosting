@@ -9,18 +9,25 @@
   <meta name="referrer" content="no-referrer">
   <meta name="theme-color" content="#090e14">
   <title>OnlyBots · Preview</title>
-  <link rel="stylesheet" href="./onlybots.css?v=tablet">
+  <link rel="stylesheet" href="./onlybots.css?v=onlybots-shop">
 </head>
 <body>
-  <main id="passwordGate" class="password-gate">
-    <form id="passwordForm" class="password-form" method="post" aria-labelledby="passwordHeading">
-      <h1 id="passwordHeading">OnlyBots preview</h1>
-      <label for="previewPassword">Password</label>
-      <input id="previewPassword" type="password" autocomplete="off" required aria-describedby="passwordMessage">
-      <p id="passwordMessage" role="status"></p>
-      <button id="unlockPreview" type="submit" disabled>Open preview</button>
-    </form>
+  <main id="accessGate" class="access-gate">
+    <p role="status">Loading OnlyBots…</p>
   </main>
+  <template id="purchaseFormTemplate">
+    <form class="purchase-form" method="post">
+      <p class="purchase-instructions">Enter the code from your Buy Me a Coffee purchase confirmation.</p>
+      <label>Purchase code
+        <input type="password" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="128" aria-describedby="purchaseStatus" required>
+      </label>
+      <p id="purchaseStatus" class="purchase-status" role="status"></p>
+      <div class="purchase-actions">
+        <a class="shop-link" target="_blank" rel="noopener noreferrer"></a>
+        <button class="purchase-unlock" type="submit">Unlock</button>
+      </div>
+    </form>
+  </template>
   <template id="previewContent">
   <div class="app">
     <header class="app-header">
@@ -63,87 +70,12 @@
       </div>
     </div>
   </dialog>
+  <dialog id="profilePurchase" class="profile-purchase" aria-labelledby="profilePurchaseHeading">
+    <h2 id="profilePurchaseHeading"></h2>
+  </dialog>
   <div id="notice" class="notice" role="status" hidden></div>
   </template>
   <noscript><p class="noscript">Enable JavaScript to open this preview.</p></noscript>
-  <script type="module">
-    const embedded = window.parent !== window && new URLSearchParams(location.search).has('tablet');
-    const expectedPassword = 'ADMIN-ONLYBOTS';
-    const storageKey = 'TileStormOnlyBotsPreviewPassword';
-    const gate = document.getElementById('passwordGate');
-    const form = document.getElementById('passwordForm');
-    const password = document.getElementById('previewPassword');
-    const message = document.getElementById('passwordMessage');
-    const unlock = document.getElementById('unlockPreview');
-    const preview = document.getElementById('previewContent');
-
-    function openPreview(focus = true) {
-      password.value = '';
-      gate.replaceWith(preview.content);
-      preview.remove();
-      if (focus) document.getElementById('feedScroller').focus();
-      import('./onlybots.js?v=tablet').catch(() => {
-        const status = document.getElementById('feedStatus');
-        status.textContent = 'The preview could not load. Reload the page to try again.';
-        status.setAttribute('role', 'alert');
-      });
-    }
-
-    function startTablet() {
-      document.body.classList.add('tablet-embedded');
-      form.hidden = true;
-      const status = document.createElement('p');
-      status.setAttribute('role', 'status');
-      status.textContent = 'OnlyBots premium access required.';
-      gate.append(status);
-      function onAccess(event) {
-        if (event.origin !== location.origin || event.source !== window.parent ||
-            event.data?.type !== 'eggbot-tablet-visibility' || event.data.premium !== true) return;
-        window.removeEventListener('message', onAccess);
-        openPreview(event.data.active === true);
-      }
-      window.addEventListener('message', onAccess);
-    }
-
-    function startStandalonePreview() {
-      password.addEventListener('input', () => {
-        password.removeAttribute('aria-invalid');
-        message.textContent = '';
-      });
-
-      form.addEventListener('submit', event => {
-        event.preventDefault();
-        if (password.value !== expectedPassword) {
-          password.setAttribute('aria-invalid', 'true');
-          message.textContent = 'Incorrect password.';
-          password.focus();
-          password.select();
-          return;
-        }
-
-        try {
-          localStorage.setItem(storageKey, password.value);
-        } catch {
-          // Storage may be disabled in this browser.
-        }
-        openPreview();
-      });
-
-      let savedPassword = null;
-      try {
-        savedPassword = localStorage.getItem(storageKey);
-      } catch {
-        // The form still works when storage is unavailable.
-      }
-      if (savedPassword === expectedPassword) {
-        openPreview();
-      } else {
-        unlock.disabled = false;
-      }
-    }
-
-    if (embedded) startTablet();
-    else startStandalonePreview();
-  </script>
+  <script type="module" src="./access.js?v=onlybots-shop"></script>
 </body>
 </html>

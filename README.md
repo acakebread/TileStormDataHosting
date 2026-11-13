@@ -22,9 +22,10 @@ playground using the original Eggbot art and animations. See
 
 [Eggbot’s tablet](eggbotstablet/) runs as a standalone browser app. The tablet
 reads the hosted Eggbot catalogue for character and app content and embeds the
-existing OnlyBots and Instabot feeds. BotStore requires the game's Buy Me a Coffee
-premium code to install or open OnlyBots. The browser stores the premium unlock
-separately from the installation, so uninstalling preserves the unlock. Scratch
+existing OnlyBots and Instabot feeds. BotStore accepts the US$30 OnlyBots code or
+the existing premium code. Goldibot's gallery accepts her US$20 profile code
+and remains open to existing premium buyers. The tablet and standalone OnlyBots
+page share browser unlocks, which survive uninstalling the tablet app. Scratch
 Bling coins and LoveBot credits also use browser storage. The tablet directory
 publishes with the rest of this GitHub Pages site.
 

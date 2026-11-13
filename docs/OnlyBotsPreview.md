@@ -7,21 +7,18 @@ under the portal's **Admin tools** after a non-empty admin token is entered or
 restored in that browser. Clearing the token hides the link. The token is never
 passed to the preview, included in its URL or needed by its JavaScript.
 
-The unlisted page has its own password. After accepting it, the preview stores
-it in the browser's local storage for that site and checks it again on future
-visits. Clearing the site's data prompts for the password again. The browser
-loads the feed only after accepting the entered or saved password. The password
-is checked in the page source. The source, JSON, images and videos remain
-readable from the public repository.
+The standalone page and BotStore accept the same Buy Me a Coffee codes as Unity.
+The US$30 OnlyBots code opens the feed and its preview posts. **View profile** on
+Goldibot's posts accepts her US$20 code and opens the photo and video gallery.
+Existing premium codes and saved web premium unlocks open both. The standalone
+page uses purchase codes in place of its old preview password.
 
-The tablet embeds this feed after BotStore accepts the game's Buy Me a Coffee
-premium code. The tablet saves that unlock in the browser and checks it when
-installing or opening OnlyBots. The standalone preview retains its own password.
-The tablet gate checks the shared code in the browser. The media files and
-catalogue are still public, and the gate does not verify individual transactions.
-When the game's premium code changes, update the SHA-256 digest in
-`eggbotstablet/premium.js` using the new code with punctuation removed and letters
-uppercased.
+Both pages save and read unlocks on the same site and browser. The tablet saves
+installation separately, shows the home icon after installation, and keeps unlocks
+when the app is uninstalled. The browser checks shared codes locally. The public
+catalogue and media URLs remain directly accessible. If a code changes, update
+its SHA-256 digest in `eggbotstablet/premium.js` using the code with punctuation
+removed and letters uppercased.
 
 The preview contains six creators, 19 photographs and Goldibot's videos. Five creators use copies
 of the tablet app's OnlyBots profiles. Kelly Bot has a web-only profile that
@@ -37,8 +34,8 @@ to the first clip. **Stop** returns to the current video's poster. Switching med
 or closing the gallery ends playback. Creators without video keep the subscription
 preview message. Share opens
 the browser's file sharing support when available, otherwise downloads the
-displayed crop and mirror as a JPEG. It never shares the unlisted preview URL
-or connects to the game's Facebook/sharing, premium or installation systems.
+displayed crop and mirror as a JPEG. It shares the media file without attaching
+the unlisted preview URL.
 
 Photos are resized in the browser, preserving their aspect ratio and never
 upscaling. The default maximum dimension is 512. The copied OnlyBots profiles
@@ -62,12 +59,10 @@ does not run Unity, compile, test, preview, commit or publish. Refreshing replac
 the copied JSON, so retain any website-only edits before doing that. Publish the
 page with the data-hosting repository's existing GitHub Pages workflow.
 
-No tests, builds, compilation checks or browser previews were run. Andrew owns
-validation: check that entering/clearing the portal token shows/hides the link.
-Open the preview directly and through Admin tools. Confirm that an incorrect
-password leaves the feed hidden and the correct password opens it. Reload in
-the same browser to check that the saved password opens the feed. Then review
-creator filters, image framing and mirrors, opening/closing photos,
-likes, sharing/download, the subscription notice and timed arrivals while
-scrolled down. Open Goldibot's profile, play through a loop, try Stop, switch to
-Photos and close the gallery during playback. Review the layout on narrow screens.
+For browser validation, use a fresh browser profile and enter the app code in
+BotStore. Check that the page-two icon appears after installation. Open Goldibot's
+profile, check that the app code is rejected there, then enter her profile code.
+Open the standalone page on the same origin and check that both unlocks carry
+over. With a separate browser profile, check the existing premium code opens
+both the feed and gallery. After uninstalling, check that the icon disappears
+and reinstalling from BotStore uses the saved app unlock.
