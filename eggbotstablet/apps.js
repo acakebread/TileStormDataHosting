@@ -1,7 +1,8 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {element, button, image, tabs, watchSwipe, money, countdown, loadSetting, saveSetting} from './ui.js';
-import {hasOnlyBotsAccess, onlyBotsPriceUsd, onlyBotsShop, redeemOnlyBotsCode} from './premium.js?v=creator-access-2';
+import {hasOnlyBotsAccess, onlyBotsPriceUsd, redeemOnlyBotsCode} from './premium.js?v=linked-purchases';
+import {buyPurchase} from './purchases.js?v=linked-purchases';
 import {createSlideGesture} from './slide.js';
 
 export function createPhotos({data}) {
@@ -276,12 +277,33 @@ export function createStore(tablet) {
   const view = element('section', '', content);
   const free = () => tablet.onlyBotsInstalled ? 8 : 12;
 
+  function checkoutHint() {
+    return element('p', '', 'After paying, click ', element('strong', '', 'View content'), ' to register your purchase.');
+  }
+
   function buyOnlyBots() {
-    const link = element('a', 'action-link', `Buy OnlyBots · US$${onlyBotsPriceUsd}`);
-    link.href = onlyBotsShop;
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
-    return link;
+    return button(`Buy OnlyBots · US$${onlyBotsPriceUsd}`, event => {
+      const control = event.currentTarget;
+      const dialog = control.closest('dialog');
+      if (!buyPurchase('app')) {
+        tablet.toast('Check your open checkout tab or allow popups to start checkout.');
+        return;
+      }
+      const controller = new AbortController();
+      const stillOpen = () => dialog.open && control.isConnected;
+      dialog.addEventListener('close', () => { if (!stillOpen()) controller.abort(); }, {signal: controller.signal});
+      window.addEventListener('tilestorm-purchases-changed', () => {
+        if (!stillOpen() || hasOnlyBotsAccess()) {
+          controller.abort();
+          if (stillOpen()) continueOnlyBots();
+        }
+      }, {signal: controller.signal});
+      window.addEventListener('tilestorm-checkout-error', event => {
+        if (event.detail === 'app' && stillOpen()) tablet.toast('Checkout could not open. Try again.');
+      }, {signal: controller.signal});
+      setTimeout(() => controller.abort(), 35 * 60 * 1000);
+      tablet.toast('After paying, click View content in the checkout tab.');
+    }, 'action-link');
   }
 
   function continueOnlyBots() {
@@ -318,7 +340,8 @@ export function createStore(tablet) {
     status.setAttribute('role', 'status');
     code.setAttribute('aria-describedby', status.id);
     const entry = element('div', 'premium-entry',
-      element('p', '', 'Enter the OnlyBots code from your Buy Me a Coffee purchase confirmation.'),
+      checkoutHint(),
+      element('p', '', 'Enter an existing OnlyBots or premium code.'),
       label, code, status);
     const unlock = button('Unlock', async () => {
       const dialog = entry.closest('dialog');
@@ -362,11 +385,9 @@ export function createStore(tablet) {
   function requestOnlyBots() {
     const registered = hasOnlyBotsAccess();
     const action = button('Continue', registered ? continueOnlyBots : askForOnlyBotsCode, 'primary');
-    const purpose = tablet.onlyBotsInstalled ? 'open' : 'install';
-    tablet.prompt('OnlyBots access required', 'You need OnlyBots access to ' + purpose + ' it. ' +
-      (registered ? 'Your access is registered on this browser.' :
-        'Buy OnlyBots through Buy Me a Coffee, or continue to enter your purchase code.'),
-    registered ? [action] : [buyOnlyBots(), action]);
+    const description = registered ? 'Your access is registered on this browser.' :
+      element('div', '', checkoutHint(), element('p', '', 'Already have a code? Choose Continue.'));
+    tablet.prompt('OnlyBots access required', description, registered ? [action] : [buyOnlyBots(), action]);
   }
 
   function request(id, size) {

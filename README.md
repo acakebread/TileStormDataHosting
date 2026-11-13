@@ -25,7 +25,9 @@ reads the hosted Eggbot catalogue for character and app content and embeds the
 existing OnlyBots and Instabot feeds. BotStore accepts the US$30 OnlyBots code or
 the existing premium code. Goldibot's gallery accepts her US$20 profile code
 and remains open to existing premium buyers. The tablet and standalone OnlyBots
-page share browser unlocks, which survive uninstalling the tablet app. Scratch
+page share browser unlocks, which survive uninstalling the tablet app. To share
+new Buy Me a Coffee purchases with Unity, choose **Help → Link Web Tablet** in
+the game and use the browser where you play. Scratch
 Bling coins and LoveBot credits also use browser storage. The tablet directory
 publishes with the rest of this GitHub Pages site.
 

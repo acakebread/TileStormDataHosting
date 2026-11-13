@@ -1,8 +1,8 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {loadSetting, saveSetting} from './ui.js';
+import {hasPurchase} from './purchases.js?v=linked-purchases';
 
-export const onlyBotsShop = 'https://buymeacoffee.com/acakebread/extras';
 export const onlyBotsPriceUsd = 30;
 
 // SHA-256 of the shared codes after removing punctuation and converting to uppercase.
@@ -32,7 +32,7 @@ export function hasPremiumAccess() {
 }
 
 export function hasOnlyBotsAccess() {
-  return hasReceipt(appReceipt) || hasPremiumAccess();
+  return hasPurchase('app') || hasReceipt(appReceipt) || hasPremiumAccess();
 }
 
 export function creatorPriceUsd(id) {
@@ -45,7 +45,7 @@ export function hasCreatorProduct(id) {
 
 export function hasCreatorAccess(id, tabletPremium = false) {
   const product = creatorProducts.get(id);
-  return !product || hasReceipt(creatorReceipt(id)) ||
+  return !product || hasPurchase(id) || hasReceipt(creatorReceipt(id)) ||
     (product.includedWithPremium && (tabletPremium || hasPremiumAccess()));
 }
 

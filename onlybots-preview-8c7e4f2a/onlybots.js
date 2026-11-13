@@ -1,8 +1,8 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {blobFromCanvas, fetchFile, pictures, shuffle} from '../tablet-preview/shared.js';
-import {creatorPriceUsd, hasCreatorAccess, hasCreatorProduct, redeemCreatorCode} from '../eggbotstablet/premium.js?v=creator-access-2';
-import {createPurchaseForm} from './purchase-form.js?v=creator-access-2';
+import {creatorPriceUsd, hasCreatorAccess, hasCreatorProduct, redeemCreatorCode} from '../eggbotstablet/premium.js?v=linked-purchases';
+import {createPurchaseForm} from './purchase-form.js?v=linked-purchases';
 
 const ui = Object.fromEntries([
   'latest', 'creators', 'creatorHeading', 'feedScroller', 'feedStatus', 'feed',
@@ -306,6 +306,7 @@ function openCreatorProfile(profile) {
   const dialog = ui.profilePurchase;
   const price = creatorPriceUsd(profile.id);
   const form = createPurchaseForm({
+    product: profile.id,
     buyLabel: price === undefined ? 'Buy profile' : `Buy profile · US$${price}`,
     redeem: code => redeemCreatorCode(profile.id, code),
     onAccepted: () => {
@@ -585,6 +586,9 @@ ui.galleryStop.addEventListener('click', () => {
   setViewerStatus('');
 });
 window.addEventListener('resize', fitViewer);
+window.addEventListener('tilestorm-purchases-changed', () => {
+  if (state.gallery && !hasCreatorAccess(state.gallery.profile.id, state.tabletPremium)) ui.photoViewer.close();
+});
 if (document.body.classList.contains('tablet-embedded')) {
   window.addEventListener('message', event => {
     if (event.origin !== location.origin || event.source !== window.parent ||
