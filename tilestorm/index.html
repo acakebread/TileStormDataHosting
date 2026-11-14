@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<!-- Copyright 2026 massivehadron.com ltd. -->
+
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Unity Web Player | TileStormEvolution</title>
+    <link rel="shortcut icon" href="TemplateData/favicon.ico">
+    <link rel="stylesheet" href="TemplateData/style.css?v=mobile-fullscreen-6">
+    <link rel="manifest" href="manifest.webmanifest">
+    <script>
+      window.TileStormAnalytics = (() => {
+        const pending = [];
+        let retryCount = 0;
+        let retryTimer = null;
+
+        function flush() {
+          retryTimer = null;
+          if (window.goatcounter && typeof window.goatcounter.count === "function") {
+            while (pending.length > 0) {
+              window.goatcounter.count(pending.shift());
+            }
+            return;
+          }
+
+          if (pending.length > 0 && retryCount++ < 120) {
+            retryTimer = window.setTimeout(flush, 250);
+          }
+        }
+
+        return {
+          track(path, title, alwaysCount = true) {
+            if (!path) {
+              return;
+            }
+
+            pending.push({
+              path: String(path),
+              title: String(title || path),
+              event: true,
+              no_session: Boolean(alwaysCount)
+            });
+
+            if (!retryTimer) {
+              flush();
+            }
+          }
+        };
+      })();
+    </script>
+    <script data-goatcounter="https://acakebread.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+    <style>
+      #unity-fullscreen-button {
+        position: absolute;
+        right: max(12px, env(safe-area-inset-right));
+        bottom: max(12px, env(safe-area-inset-bottom));
+        z-index: 30;
+        min-width: 44px;
+        min-height: 44px;
+        padding: 8px 12px;
+        border: 0;
+        border-radius: 4px;
+        background: rgba(0,0,0,.65);
+        color: white;
+        font-size: 18px;
+        cursor: pointer;
+        touch-action: manipulation;
+      }
+      @media (pointer: coarse) {
+        #unity-fullscreen-button {
+          right: max(16px, env(safe-area-inset-right));
+          bottom: max(16px, env(safe-area-inset-bottom));
+          min-width: 56px;
+          min-height: 56px;
+          font-size: 22px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="unity-container">
+      <canvas id="unity-canvas" width=1200 height=800 tabindex="-1"></canvas>
+      <div id="unity-loading-bar">
+        <div id="unity-logo"></div>
+        <div id="unity-progress-bar-empty">
+          <div id="unity-progress-bar-full"></div>
+        </div>
+      </div>
+      <div id="unity-warning"> </div>
+      <button id="unity-fullscreen-button" type="button">[ ]</button>
+    </div>
+    <div id="mobile-fullscreen-spacer" aria-hidden="true"></div>
+    <div id="mobile-fullscreen-guide" hidden>
+      <button id="mobile-fullscreen-cancel" type="button" aria-label="Exit full screen">X</button>
+      <p role="status" aria-live="polite"></p>
+    </div>
+    <script>
+      window.addEventListener("load", function () {
+        if ("serviceWorker" in navigator) {
+          navigator.serviceWorker.register("ServiceWorker.js").catch((error) => {
+            console.warn("Service worker registration failed; continuing without offline cache.", error);
+          });
+        }
+      });
+
+      var container = document.querySelector("#unity-container");
+      var canvas = document.querySelector("#unity-canvas");
+      var loadingBar = document.querySelector("#unity-loading-bar");
+      var progressBarFull = document.querySelector("#unity-progress-bar-full");
+      var warningBanner = document.querySelector("#unity-warning");
+      var unityInstance = null;
+      var fullscreenButton = document.querySelector("#unity-fullscreen-button");
+      var mobileExpanded = false;
+      var mobileFullscreenStage = 0;
+      var fullscreenAttempt = 0;
+      var fullscreenGuide = document.querySelector("#mobile-fullscreen-guide");
+      var fullscreenCancel = document.querySelector("#mobile-fullscreen-cancel");
+      var fullscreenHint = fullscreenGuide.querySelector("p");
+      var mobileMeasureTimer = null;
+      var swipeInProgress = false;
+
+      function isIOS() {
+        return /iPhone|iPad|iPod/i.test(navigator.userAgent)
+          || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+      }
+
+      function fullscreenElement() {
+        return document.fullscreenElement || document.webkitFullscreenElement || null;
+      }
+
+      function updateFullscreenButton() {
+        var active = Boolean(fullscreenElement()) || mobileFullscreenStage > 1;
+        fullscreenButton.textContent = active ? "X" : "[ ]";
+        fullscreenButton.setAttribute("aria-label", active ? "Exit full screen" : "Full screen");
+      }
+
+      function setMobileExpanded(expanded, stage) {
+        mobileExpanded = expanded;
+        mobileFullscreenStage = expanded ? stage || 1 : 0;
+        swipeInProgress = false;
+        document.documentElement.classList.toggle("mobile-expanded", expanded);
+        document.documentElement.classList.toggle("mobile-fullscreen-proper", mobileFullscreenStage > 1);
+        document.documentElement.classList.remove("mobile-scroll-pending", "mobile-scroll-locked");
+        fullscreenGuide.hidden = true;
+        window.clearTimeout(mobileMeasureTimer);
+        if (expanded) measureMobileViewport();
+        else window.scrollTo(0, 0);
+        updateFullscreenButton();
+      }
+
+      function measureMobileViewport() {
+        if (!mobileExpanded) return;
+        var standalone = navigator.standalone || window.matchMedia("(display-mode: standalone)").matches
+          || window.matchMedia("(display-mode: fullscreen)").matches;
+        var landscape = window.matchMedia("(orientation: landscape)").matches;
+        var viewport = window.visualViewport;
+        // Landscape Safari can leave the home-indicator inset visible. Do not
+        // mistake that inset for an expanded toolbar. Zoom is not fullscreen.
+        var visibleHeight = viewport ? viewport.height + viewport.offsetTop : window.innerHeight;
+        var screenHeight = Math.min(window.screen.width, window.screen.height);
+        var barsCollapsed = standalone || (landscape && screenHeight > 0
+          && visibleHeight >= screenHeight - 24 && (!viewport || Math.abs(viewport.scale - 1) < 0.02));
+        if (barsCollapsed && swipeInProgress) return;
+        document.documentElement.classList.toggle("mobile-scroll-pending", !barsCollapsed);
+        document.documentElement.classList.toggle("mobile-scroll-locked", barsCollapsed);
+        fullscreenGuide.hidden = barsCollapsed;
+        fullscreenHint.textContent = landscape
+          ? "Swipe up here to hide the browser bars. Tap X to cancel."
+          : "Turn your phone sideways, then swipe up here to hide the browser bars. Tap X to cancel.";
+      }
+
+      function scheduleMobileMeasure() {
+        if (!mobileExpanded) return;
+        window.clearTimeout(mobileMeasureTimer);
+        mobileMeasureTimer = window.setTimeout(measureMobileViewport, 180);
+      }
+
+      // This overlay deliberately allows native document scrolling. A swipe on
+      // Unity's canvas is consumed by the game and cannot collapse Safari's UI.
+      fullscreenGuide.addEventListener("touchstart", function () { swipeInProgress = true; }, { passive: true });
+      function finishSwipe() { swipeInProgress = false; scheduleMobileMeasure(); }
+      fullscreenGuide.addEventListener("touchend", finishSwipe, { passive: true });
+      fullscreenGuide.addEventListener("touchcancel", finishSwipe, { passive: true });
+      fullscreenCancel.addEventListener("click", function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        exitFullscreen();
+      });
+      fullscreenCancel.addEventListener("touchstart", function (event) {
+        event.stopPropagation();
+      }, { passive: true });
+
+      window.addEventListener("resize", scheduleMobileMeasure, { passive: true });
+      window.addEventListener("orientationchange", scheduleMobileMeasure, { passive: true });
+      window.addEventListener("scroll", scheduleMobileMeasure, { passive: true });
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener("resize", scheduleMobileMeasure, { passive: true });
+        window.visualViewport.addEventListener("scroll", scheduleMobileMeasure, { passive: true });
+      }
+
+      function enterFullscreen() {
+        var attempt = ++fullscreenAttempt;
+        function fallback() {
+          if (attempt === fullscreenAttempt && !fullscreenElement()) setMobileExpanded(true);
+        }
+        var request = container.requestFullscreen || container.webkitRequestFullscreen;
+        if (!request) {
+          fallback();
+          return;
+        }
+
+        try {
+          Promise.resolve(request.call(container)).catch(fallback);
+          // Some prefixed implementations return without entering fullscreen.
+          window.setTimeout(fallback, 1200);
+        } catch (_) { fallback(); }
+      }
+
+      function enterMobileProperFullscreen() {
+        mobileFullscreenStage = 2;
+        document.documentElement.classList.add("mobile-fullscreen-proper");
+        measureMobileViewport();
+        updateFullscreenButton();
+      }
+
+      function exitFullscreen() {
+        ++fullscreenAttempt;
+        var exit = document.exitFullscreen || document.webkitExitFullscreen;
+        if (fullscreenElement() && exit) {
+          Promise.resolve(exit.call(document)).catch(function () {});
+        }
+        setMobileExpanded(false);
+      }
+
+      fullscreenButton.onclick = function () {
+        var active = Boolean(fullscreenElement()) || mobileFullscreenStage > 1;
+        if (unityInstance && !isIOS()) {
+          unityInstance.SetFullscreen(active ? 0 : 1);
+          return;
+        }
+
+        if (active) exitFullscreen();
+        else if (mobileExpanded) enterMobileProperFullscreen();
+        else enterFullscreen();
+      };
+
+      function onFullscreenChange() {
+        ++fullscreenAttempt;
+        if (fullscreenElement()) setMobileExpanded(false);
+        updateFullscreenButton();
+      }
+      document.addEventListener("fullscreenchange", onFullscreenChange);
+      document.addEventListener("webkitfullscreenchange", onFullscreenChange);
+      document.addEventListener("keydown", function (event) {
+        // Let Unity handle level reloads while retaining modified browser refresh shortcuts.
+        if (event.key === "F5" && unityInstance && !event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey)
+          event.preventDefault();
+        if (event.key === "Escape" && mobileExpanded) exitFullscreen();
+      });
+      updateFullscreenButton();
+
+      var version = "0.1.327";
+      var buildUrl = "Build";
+      var loaderUrl = buildUrl + "/5f6c33f52fe72d2e44108d5ca5203000.loader.js?v=" + version;
+      var config = {
+        arguments: [],
+        dataUrl: buildUrl + "/318cd1e61a049e02687a24386e20ef88.data.unityweb?v=" + version,
+        frameworkUrl: buildUrl + "/fff2231b2183cf8ee9f00512eec2b040.framework.js.unityweb?v=" + version,
+        codeUrl: buildUrl + "/ce3d668dc2fea42d9961125059b10ded.wasm.unityweb?v=" + version,
+        streamingAssetsUrl: "StreamingAssets",
+        companyName: "MassiveHadron",
+        productName: "TileStormEvolution",
+        productVersion: "0.1.327",
+      };
+
+      loadingBar.style.display = "block";
+
+      var script = document.createElement("script");
+      script.src = loaderUrl;
+      script.onload = () => {
+        createUnityInstance(canvas, config, (progress) => {
+          progressBarFull.style.width = 100 * progress + "%";
+        }).then((instance) => {
+          unityInstance = instance;
+          loadingBar.style.display = "none";
+          window.TileStormAnalytics.track("webgl-ready", "TileStorm WebGL runtime ready", true);
+        }).catch((message) => {
+          window.TileStormAnalytics.track("webgl-load-failed", "TileStorm WebGL runtime failed", true);
+          alert(message);
+        });
+      };
+      document.body.appendChild(script);
+    </script>
+  </body>
+</html>

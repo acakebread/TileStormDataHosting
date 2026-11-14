@@ -1,0 +1,149 @@
+/* Copyright 2026 massivehadron.com ltd. */
+
+html, body {
+    padding: 0;
+    margin: 0;
+    touch-action: manipulation;
+}
+
+html.mobile-expanded,
+html.mobile-expanded body {
+    width: 100%;
+}
+
+html.mobile-scroll-pending,
+html.mobile-scroll-pending body {
+    height: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
+    touch-action: pan-y;
+}
+
+html.mobile-scroll-locked,
+html.mobile-scroll-locked body {
+    height: 100dvh;
+    overflow: hidden;
+    overscroll-behavior: none;
+}
+
+#mobile-fullscreen-spacer { display: none; }
+html.mobile-scroll-pending #mobile-fullscreen-spacer {
+    display: block;
+    height: 300vh;
+    width: 1px;
+    pointer-events: none;
+}
+
+#mobile-fullscreen-guide {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    touch-action: pan-y;
+    background: rgba(0, 0, 0, .45);
+    color: white;
+    font: 18px/1.5 system-ui, sans-serif;
+}
+#mobile-fullscreen-guide[hidden] { display: none; }
+#mobile-fullscreen-cancel {
+    position: fixed;
+    right: max(16px, env(safe-area-inset-right));
+    bottom: max(16px, env(safe-area-inset-bottom));
+    z-index: 51;
+    min-width: 56px;
+    min-height: 56px;
+    padding: 8px 12px;
+    border: 0;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, .72);
+    color: white;
+    font: 700 22px/1 system-ui, sans-serif;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+#mobile-fullscreen-guide p {
+    max-width: 28em;
+    margin: 24px;
+    padding: 16px;
+    border-radius: 8px;
+    background: #181d22;
+    text-align: center;
+}
+
+#unity-container {
+    position: fixed;
+    width: 100%;
+    height: 100%;
+}
+
+html.mobile-expanded #unity-container {
+    inset: 0;
+    width: 100vw;
+    height: 100dvh;
+}
+
+/* iPhone Safari owns the extreme top edge even after its bars collapse. Keep
+   Unity's top menu below that activation strip so opening a game menu does not
+   summon the browser chrome. */
+@media (orientation: landscape) and (pointer: coarse) {
+    html.mobile-expanded.mobile-scroll-locked:not(.mobile-fullscreen-proper) #unity-container {
+        top: max(48px, env(safe-area-inset-top));
+        bottom: 0;
+        height: auto;
+    }
+}
+
+html.mobile-scroll-locked #unity-canvas { touch-action: none; }
+
+#unity-canvas {
+    width: 100%;
+    height: 100%;
+
+    background: #181d22;
+}
+
+#unity-loading-bar {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    display: none
+}
+
+#unity-logo {
+    width: 256px;
+    height: 256px;
+    background-size: 256px;
+    background: url('custom-logo.png') no-repeat center
+}
+
+#unity-progress-bar-empty {
+    margin-left: auto;
+    margin-right: auto;
+    width: 141px;
+    height: 18px;
+    margin-top: 10px;
+    padding: 2px;
+    box-sizing: border-box;
+    overflow: hidden;
+    background: url('progress-bar-empty.png') no-repeat center
+}
+
+#unity-progress-bar-full {
+    width: 0%;
+    height: 100%;
+    background: url('progress-bar-full.png') no-repeat left center;
+    background-size: 137px 14px
+}
+
+#unity-warning {
+    position: absolute;
+    left: 50%;
+    top: 5%;
+    transform: translate(-50%);
+    background: white;
+    padding: 10px;
+    display: none
+}
