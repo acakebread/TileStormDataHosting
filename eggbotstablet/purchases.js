@@ -4,7 +4,7 @@ import {loadSetting, saveSetting} from './ui.js';
 
 const root = 'https://tilestorm-coffee-checkout.qrh.workers.dev';
 const keyPattern = /^[a-f0-9]{64}$/;
-const shopItems = new Set(['app', 'goldibot', 'kelly_and_lucy']);
+const shopItems = new Set(['app', 'goldibot', 'kelly_and_lucy', 'lovebot']);
 const keySetting = 'purchaseProfile';
 const hex = bytes => Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
 const randomKey = () => hex(crypto.getRandomValues(new Uint8Array(32)));
@@ -15,6 +15,10 @@ let inFlight, inFlightProfile;
 let linking;
 const cachedPurchases = new Map();
 const watching = new Map();
+let lovebotBalance = 0;
+let balanceProfile;
+let swipePending = false;
+let swipeRevision = 0;
 
 export function hasPurchase(product) {
   return purchaseStatus(product) === true;
@@ -32,13 +36,55 @@ function savedPurchases(profile) {
 async function post(route, body) {
   const response = await fetch(root + route, {method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify(body), signal: AbortSignal.timeout(12000)});
-  if (!response.ok) throw new Error('Purchase service unavailable.');
-  return await response.json();
+  const reply = await response.json();
+  if (!response.ok) throw Object.assign(new Error(reply.message || 'Purchase service unavailable.'), {status: response.status});
+  return reply;
+}
+
+export function paidLoveBotSwipes() {
+  return balanceProfile === key ? lovebotBalance : 0;
+}
+
+function updateLoveBotBalance(profile, balance) {
+  if (profile !== key) return;
+  const previous = paidLoveBotSwipes();
+  balanceProfile = profile;
+  lovebotBalance = Number.isSafeInteger(balance) && balance > 0 ? balance : 0;
+  if (previous !== lovebotBalance) window.dispatchEvent(new Event('tilestorm-lovebot-credits-changed'));
+}
+
+export async function spendLoveBotSwipe() {
+  if (swipePending) return false;
+  const profile = key;
+  const swipe = randomKey();
+  swipePending = true;
+  swipeRevision++;
+  try {
+    let result;
+    try { result = await post('/api/lovebot', {key: profile, swipe}); }
+    catch (error) {
+      if (error.status && error.status < 500) throw error;
+      result = await post('/api/lovebot', {key: profile, swipe});
+    }
+    updateLoveBotBalance(profile, result.balance);
+    return profile === key && result.spent;
+  } finally {
+    swipePending = false;
+    swipeRevision++;
+  }
+}
+
+export async function claimLoveBotPurchase(reference) {
+  await retryLink();
+  await post('/api/lovebot/claim', {key, reference});
+  await refreshPurchases();
 }
 
 async function refresh(profile) {
-  const {receipts} = await post('/api/purchases', {key: profile});
+  const revision = swipeRevision;
+  const {receipts, lovebotBalance: balance} = await post('/api/purchases', {key: profile});
   if (profile !== key) return;
+  if (!swipePending && revision === swipeRevision) updateLoveBotBalance(profile, balance);
   const unlocked = receipts.map(receipt => receipt.payload.split('|')[2]).sort();
   const saved = savedPurchases(profile);
   cachedPurchases.set(profile, unlocked);
@@ -91,13 +137,14 @@ export function buyPurchase(product) {
   if (!checkout) return false;
   checkout.opener = null;
   const profile = key;
+  const before = paidLoveBotSwipes();
   watching.set(product, null);
   crypto.subtle.digest('SHA-256', new TextEncoder().encode(profile)).then(digest => {
     const args = new URLSearchParams({token: randomKey(), player: hex(new Uint8Array(digest)), product});
     checkout.location.replace(`${root}/#${args}`);
     const expires = Date.now() + 35 * 60 * 1000;
     watching.set(product, setInterval(() => {
-      if (Date.now() >= expires || hasPurchase(product) || key !== profile) {
+      if (Date.now() >= expires || (product === 'lovebot' ? paidLoveBotSwipes() > before : hasPurchase(product)) || key !== profile) {
         clearInterval(watching.get(product));
         watching.delete(product);
       }

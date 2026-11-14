@@ -1,8 +1,8 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {element, button, image, tabs, watchSwipe, money, countdown, loadSetting, saveSetting} from './ui.js';
-import {hasOnlyBotsAccess, onlyBotsPriceUsd, redeemOnlyBotsCode} from './premium.js?v=linked-purchases';
-import {buyPurchase} from './purchases.js?v=linked-purchases';
+import {hasOnlyBotsAccess, onlyBotsPriceUsd, redeemOnlyBotsCode} from './premium.js?v=lovebot-credits';
+import {buyPurchase, paidLoveBotSwipes, refreshPurchases, spendLoveBotSwipe} from './purchases.js?v=lovebot-credits';
 import {createSlideGesture} from './slide.js';
 
 export function createPhotos({data}) {
@@ -150,8 +150,14 @@ export function createLove(tablet) {
   let refill = Number(saved?.refill) || 0;
   let index = 0;
   let photoIndex = 0;
+  let spendingSwipe = false;
+  let nextBalanceCheck = 0;
 
   function tick(now) {
+    if (now >= nextBalanceCheck) {
+      nextBalanceCheck = now + 45000;
+      refreshPurchases();
+    }
     if (swipes === 0 && refill <= now) {
       swipes = 5;
       refill = 0;
@@ -159,16 +165,33 @@ export function createLove(tablet) {
       render();
       return;
     }
-    credits.textContent = swipes ? swipes + ' free ' + (swipes === 1 ? 'swipe' : 'swipes') :
+    const paid = paidLoveBotSwipes();
+    credits.textContent = paid ? `${paid.toLocaleString()} paid ${paid === 1 ? 'swipe' : 'swipes'}` :
+      swipes ? swipes + ' free ' + (swipes === 1 ? 'swipe' : 'swipes') :
       'Free swipes in ' + countdown(refill - now);
   }
 
-  function swipe(like) {
+  async function swipe(like) {
     const profile = profiles[index];
-    if (!profile || swipes === 0) return;
-    swipes--;
-    if (swipes === 0) refill = Date.now() + refillDelay;
-    saveSetting('loveCredits', {swipes, refill});
+    if (!profile || spendingSwipe) return;
+    if (swipes > 0) {
+      swipes--;
+      if (swipes === 0) refill = Date.now() + refillDelay;
+      saveSetting('loveCredits', {swipes, refill});
+    } else {
+      if (!paidLoveBotSwipes()) return;
+      spendingSwipe = true;
+      render();
+      try {
+        if (!await spendLoveBotSwipe()) return;
+      } catch {
+        tablet.toast('Could not use that swipe. Please try again.');
+        return;
+      } finally {
+        spendingSwipe = false;
+        render();
+      }
+    }
     if (like && Math.random() < .35) tablet.toast('It’s a match with ' + profile.displayName + '!');
     index = (index + 1) % profiles.length;
     photoIndex = 0;
@@ -183,10 +206,13 @@ export function createLove(tablet) {
       return;
     }
     tick(now);
-    if (swipes === 0 || !profile) {
+    if ((!swipes && !paidLoveBotSwipes()) || !profile) {
       card.replaceChildren(element('p', 'row-copy', profile ? 'You’re out of free swipes.' : 'There are no profiles nearby.'));
       actions.replaceChildren();
-      if (profile) actions.append(button('Add credits', () => tablet.toast('Payment declined by Droid Bank.'), 'primary'));
+      if (profile) actions.append(button('Add credits', () => {
+        if (buyPurchase('lovebot')) tablet.toast('Checkout opened in a new tab.');
+        else tablet.toast('Check your open checkout tab or allow popups to start checkout.');
+      }, 'primary'));
       return;
     }
     const {loveBot} = profile;
@@ -197,6 +223,7 @@ export function createLove(tablet) {
     card.replaceChildren(photo ? image(photo, profile.displayName) : element('div', 'placeholder', data.avatar(profile, profile.displayName)), copy);
     const pass = button('Pass', () => swipe(false));
     const like = button('Like', () => swipe(true), 'primary');
+    pass.disabled = like.disabled = spendingSwipe;
     actions.replaceChildren(pass);
     if (ids.length > 1) actions.append(button('Next photo', () => {
       photoIndex = (photoIndex + 1) % ids.length;
@@ -206,7 +233,12 @@ export function createLove(tablet) {
   }
 
   watchSwipe(card, direction => swipe(direction < 0));
-  return {view, open: render, tick};
+  window.addEventListener('tilestorm-lovebot-credits-changed', render);
+  window.addEventListener('tilestorm-purchases-changed', render);
+  window.addEventListener('tilestorm-checkout-error', event => {
+    if (event.detail === 'lovebot') tablet.toast('Checkout could not open. Try again.');
+  });
+  return {view, open: () => { nextBalanceCheck = 0; render(); }, tick};
 }
 
 export function createMarket(tablet) {

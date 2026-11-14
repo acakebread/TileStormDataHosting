@@ -1,7 +1,7 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {loadSetting, saveSetting} from './ui.js';
-import {hasPurchase} from './purchases.js?v=linked-purchases';
+import {hasPurchase} from './purchases.js?v=lovebot-credits';
 
 export const onlyBotsPriceUsd = 30;
 

@@ -1,6 +1,6 @@
 // Copyright 2026 massivehadron.com ltd.
 
-import {buyPurchase, hasPurchase} from '../eggbotstablet/purchases.js?v=linked-purchases';
+import {buyPurchase, hasPurchase} from '../eggbotstablet/purchases.js?v=lovebot-credits';
 
 export function createPurchaseForm({product, buyLabel, redeem, onAccepted, invalidMessage}) {
   const form = document.getElementById('purchaseFormTemplate').content.firstElementChild.cloneNode(true);
