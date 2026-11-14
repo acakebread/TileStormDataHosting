@@ -18,7 +18,7 @@ export function createPurchaseForm({product, buyLabel, redeem, onAccepted, inval
       status.textContent = 'Check your open checkout tab or allow popups to start checkout.';
       return;
     }
-    status.textContent = 'After paying, click View content in the checkout tab.';
+    status.textContent = 'Checkout opened in a new tab.';
     const controller = new AbortController();
     form.closest('dialog')?.addEventListener('close', () => controller.abort(), {once: true});
     window.addEventListener('tilestorm-purchases-changed', () => {

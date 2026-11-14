@@ -277,10 +277,6 @@ export function createStore(tablet) {
   const view = element('section', '', content);
   const free = () => tablet.onlyBotsInstalled ? 8 : 12;
 
-  function checkoutHint() {
-    return element('p', '', 'After paying, click ', element('strong', '', 'View content'), ' to register your purchase.');
-  }
-
   function buyOnlyBots() {
     return button(`Buy OnlyBots · US$${onlyBotsPriceUsd}`, event => {
       const control = event.currentTarget;
@@ -302,7 +298,7 @@ export function createStore(tablet) {
         if (event.detail === 'app' && stillOpen()) tablet.toast('Checkout could not open. Try again.');
       }, {signal: controller.signal});
       setTimeout(() => controller.abort(), 35 * 60 * 1000);
-      tablet.toast('After paying, click View content in the checkout tab.');
+      tablet.toast('Checkout opened in a new tab.');
     }, 'action-link');
   }
 
@@ -340,7 +336,6 @@ export function createStore(tablet) {
     status.setAttribute('role', 'status');
     code.setAttribute('aria-describedby', status.id);
     const entry = element('div', 'premium-entry',
-      checkoutHint(),
       element('p', '', 'Enter an existing OnlyBots or premium code.'),
       label, code, status);
     const unlock = button('Unlock', async () => {
@@ -386,7 +381,7 @@ export function createStore(tablet) {
     const registered = hasOnlyBotsAccess();
     const action = button('Continue', registered ? continueOnlyBots : askForOnlyBotsCode, 'primary');
     const description = registered ? 'Your access is registered on this browser.' :
-      element('div', '', checkoutHint(), element('p', '', 'Already have a code? Choose Continue.'));
+      'Buy OnlyBots to unlock it automatically. Already have a code? Choose Continue.';
     tablet.prompt('OnlyBots access required', description, registered ? [action] : [buyOnlyBots(), action]);
   }
 
