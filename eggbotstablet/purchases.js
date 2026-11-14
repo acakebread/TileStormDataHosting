@@ -13,6 +13,9 @@ if (!keyPattern.test(key)) key = randomKey();
 saveSetting(keySetting, key);
 let inFlight, inFlightProfile;
 let linking;
+let catalogue = new Map();
+let catalogueRequest;
+let catalogueExpires = 0;
 const cachedPurchases = new Map();
 const watching = new Map();
 let lovebotBalance = 0;
@@ -39,6 +42,29 @@ async function post(route, body) {
   const reply = await response.json();
   if (!response.ok) throw Object.assign(new Error(reply.message || 'Purchase service unavailable.'), {status: response.status});
   return reply;
+}
+
+export function catalogueProduct(product) {
+  return catalogue.get(product);
+}
+
+export function refreshCatalogue() {
+  if (catalogueRequest) return catalogueRequest;
+  if (Date.now() < catalogueExpires) return Promise.resolve();
+  catalogueRequest = fetch(root + '/api/catalogue', {signal: AbortSignal.timeout(12000)})
+    .then(async response => {
+      if (!response.ok) return;
+      const {products} = await response.json();
+      if (!Array.isArray(products)) return;
+      catalogue = new Map(products.map(item => [item.product, item]));
+      catalogueExpires = Date.now() + 60000;
+    }).catch(() => {}).finally(() => { catalogueRequest = null; });
+  return catalogueRequest;
+}
+
+export async function verifyProductCode(product, code) {
+  const {valid} = await post('/api/redeem-code', {product, code});
+  return valid === true;
 }
 
 export function paidLoveBotSwipes() {

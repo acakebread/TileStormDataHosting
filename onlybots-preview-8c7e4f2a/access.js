@@ -1,8 +1,8 @@
 // Copyright 2026 massivehadron.com ltd.
 
-import {hasOnlyBotsAccess, onlyBotsPriceUsd, redeemOnlyBotsCode} from '../eggbotstablet/premium.js?v=lovebot-credits';
-import {refreshPurchases} from '../eggbotstablet/purchases.js?v=lovebot-credits';
-import {createPurchaseForm} from './purchase-form.js?v=lovebot-credits';
+import {hasOnlyBotsAccess, redeemOnlyBotsCode} from '../eggbotstablet/premium.js?v=shop-catalogue';
+import {refreshCatalogue, refreshPurchases} from '../eggbotstablet/purchases.js?v=shop-catalogue';
+import {createPurchaseForm} from './purchase-form.js?v=shop-catalogue';
 
 const embedded = window.parent !== window && new URLSearchParams(location.search).has('tablet');
 const gate = document.getElementById('accessGate');
@@ -12,7 +12,7 @@ function openPreview(focus, tabletPremium = false) {
   gate.replaceWith(preview.content);
   preview.remove();
   if (focus) document.getElementById('feedScroller').focus();
-  import('./onlybots.js?v=lovebot-credits').then(feed => feed.start(tabletPremium)).catch(() => {
+  Promise.all([import('./onlybots.js?v=shop-catalogue'), refreshCatalogue()]).then(([feed]) => feed.start(tabletPremium)).catch(() => {
     const status = document.getElementById('feedStatus');
     status.textContent = 'The preview could not load. Reload the page to try again.';
     status.setAttribute('role', 'alert');
@@ -34,7 +34,7 @@ if (embedded) {
 } else {
   const form = createPurchaseForm({
     product: 'app',
-    buyLabel: `Buy OnlyBots · US$${onlyBotsPriceUsd}`,
+    buyLabel: 'Buy OnlyBots',
     redeem: redeemOnlyBotsCode,
     onAccepted: () => openPreview(true),
     invalidMessage: 'That OnlyBots code was not recognised. Check your purchase confirmation.'

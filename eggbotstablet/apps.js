@@ -1,8 +1,8 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {element, button, image, tabs, watchSwipe, money, countdown, loadSetting, saveSetting} from './ui.js';
-import {hasOnlyBotsAccess, onlyBotsPriceUsd, redeemOnlyBotsCode} from './premium.js?v=lovebot-credits';
-import {buyPurchase, paidLoveBotSwipes, refreshPurchases, spendLoveBotSwipe} from './purchases.js?v=lovebot-credits';
+import {hasOnlyBotsAccess, redeemOnlyBotsCode} from './premium.js?v=shop-catalogue';
+import {buyPurchase, catalogueProduct, paidLoveBotSwipes, refreshCatalogue, refreshPurchases, spendLoveBotSwipe} from './purchases.js?v=shop-catalogue';
 import {createSlideGesture} from './slide.js';
 
 export function createPhotos({data}) {
@@ -310,7 +310,7 @@ export function createStore(tablet) {
   const view = element('section', '', content);
 
   function buyOnlyBots() {
-    return button(`Buy OnlyBots · US$${onlyBotsPriceUsd}`, event => {
+    const buy = button('Buy OnlyBots', event => {
       const control = event.currentTarget;
       const dialog = control.closest('dialog');
       if (!buyPurchase('app')) {
@@ -332,6 +332,11 @@ export function createStore(tablet) {
       setTimeout(() => controller.abort(), 35 * 60 * 1000);
       tablet.toast('Checkout opened in a new tab.');
     }, 'action-link');
+    refreshCatalogue().then(() => {
+      const price = catalogueProduct('app')?.priceLabel;
+      if (price) buy.textContent += ` · ${price}`;
+    });
+    return buy;
   }
 
   function download(name, size, install) {

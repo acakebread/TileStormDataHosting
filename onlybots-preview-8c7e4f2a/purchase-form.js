@@ -1,6 +1,6 @@
 // Copyright 2026 massivehadron.com ltd.
 
-import {buyPurchase, hasPurchase} from '../eggbotstablet/purchases.js?v=lovebot-credits';
+import {buyPurchase, catalogueProduct, hasPurchase, refreshCatalogue} from '../eggbotstablet/purchases.js?v=shop-catalogue';
 
 export function createPurchaseForm({product, buyLabel, redeem, onAccepted, invalidMessage}) {
   const form = document.getElementById('purchaseFormTemplate').content.firstElementChild.cloneNode(true);
@@ -9,6 +9,10 @@ export function createPurchaseForm({product, buyLabel, redeem, onAccepted, inval
   const unlock = form.querySelector('[type="submit"]');
   const buy = form.querySelector('.shop-link');
   buy.textContent = buyLabel;
+  refreshCatalogue().then(() => {
+    const price = catalogueProduct(product)?.priceLabel;
+    if (price) buy.textContent = `${buyLabel} · ${price}`;
+  });
   const isOpen = () => {
     const dialog = form.closest('dialog');
     return form.isConnected && (!dialog || dialog.open);

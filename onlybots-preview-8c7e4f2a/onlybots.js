@@ -1,8 +1,8 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {blobFromCanvas, fetchFile, pictures, shuffle} from '../tablet-preview/shared.js';
-import {creatorPriceUsd, hasCreatorAccess, hasCreatorProduct, redeemCreatorCode} from '../eggbotstablet/premium.js?v=lovebot-credits';
-import {createPurchaseForm} from './purchase-form.js?v=lovebot-credits';
+import {hasCreatorAccess, hasCreatorProduct, redeemCreatorCode} from '../eggbotstablet/premium.js?v=shop-catalogue';
+import {createPurchaseForm} from './purchase-form.js?v=shop-catalogue';
 
 const ui = Object.fromEntries([
   'latest', 'creators', 'creatorHeading', 'feedScroller', 'feedStatus', 'feed',
@@ -304,10 +304,9 @@ function openCreatorProfile(profile) {
   }
 
   const dialog = ui.profilePurchase;
-  const price = creatorPriceUsd(profile.id);
   const form = createPurchaseForm({
     product: profile.id,
-    buyLabel: price === undefined ? 'Buy profile' : `Buy profile · US$${price}`,
+    buyLabel: 'Buy profile',
     redeem: code => redeemCreatorCode(profile.id, code),
     onAccepted: () => {
       dialog.close();

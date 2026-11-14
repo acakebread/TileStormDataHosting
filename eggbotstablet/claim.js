@@ -1,13 +1,13 @@
 // Copyright 2026 massivehadron.com ltd.
 
-import {claimShopPurchase, matchShopReturn} from './purchases.js?v=shop-return';
+import {catalogueProduct, claimShopPurchase, matchShopReturn, refreshCatalogue} from './purchases.js?v=shop-catalogue';
 
 const items = new Map([
-  ['basic', {name: 'TileStorm Evolution Basic Access', result: 'Return to TileStorm to use Basic Access.'}],
-  ['onlybots', {name: 'OnlyBots', result: 'Open BotStore to install or open OnlyBots.'}],
-  ['goldibot', {name: 'Goldibot', result: 'Open Goldibot in OnlyBots. OnlyBots access is required.'}],
-  ['kelly_and_lucy', {name: 'Kelly and Lucy', result: 'Open Kelly and Lucy in OnlyBots. OnlyBots access is required.'}],
-  ['lovebot', {name: '1,000 LoveBot swipes', result: 'Open LoveBot to use your swipes.'}]
+  ['basic', 'Return to TileStorm to use Basic Access.'],
+  ['onlybots', 'Open BotStore to install or open OnlyBots.'],
+  ['goldibot', 'Open the profile in OnlyBots. OnlyBots access is required.'],
+  ['kelly_and_lucy', 'Open the profile in OnlyBots. OnlyBots access is required.'],
+  ['lovebot', 'Open LoveBot to use your swipes.']
 ]);
 const product = new URLSearchParams(location.search).get('product') ?? 'lovebot';
 const item = items.get(product);
@@ -22,12 +22,16 @@ const links = document.getElementById('app-links');
 function showLinked() {
   section.hidden = true;
   links.hidden = false;
-  status.textContent = `Purchase linked. ${item.result}`;
+  status.textContent = `Purchase linked. ${item}`;
 }
 
 if (item) {
-  document.getElementById('product-title').textContent = item.name;
-  document.title = `${item.name} · TileStorm Evolution`;
+  refreshCatalogue().then(() => {
+    const title = catalogueProduct(product === 'onlybots' ? 'app' : product)?.title;
+    if (!title) return;
+    document.getElementById('product-title').textContent = title;
+    document.title = `${title} · TileStorm Evolution`;
+  });
   form.hidden = false;
   const tabletLink = document.getElementById('tablet-link');
   const gameHelp = document.getElementById('game-help');
