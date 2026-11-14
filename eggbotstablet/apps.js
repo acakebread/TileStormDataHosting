@@ -297,6 +297,7 @@ const storeListings = [
   ['onlybots', 'Premium polish. Requires OnlyBots access.', 4],
   ['market', 'Impossible gadgets. Dubious parts. Optimistic sellers.'],
   ['botflix', 'Your watchlist is waiting in the cloud.', 64],
+  ['firebot', 'Browse the BotWeb. Free download.'],
   ['snapbot', 'Send snaps that vanish before your shift ends.', 32],
   ['FartBot Pro', 'Premium exhaust notes. Now with unnecessary surround sound.', 128, 'FB'],
   ['Silent But Botly', 'Stealth exhaust for bots who blame the charging station.', 256, 'SBD'],
@@ -307,7 +308,6 @@ const storeListings = [
 export function createStore(tablet) {
   const content = element('div', 'app-content');
   const view = element('section', '', content);
-  const free = () => tablet.onlyBotsInstalled ? 8 : 12;
 
   function buyOnlyBots() {
     return button(`Buy OnlyBots · US$${onlyBotsPriceUsd}`, event => {
@@ -334,23 +334,29 @@ export function createStore(tablet) {
     }, 'action-link');
   }
 
-  function continueOnlyBots() {
-    if (tablet.onlyBotsInstalled) {
-      tablet.open('onlybots');
-      return;
-    }
-
-    const progress = element('p', '', 'Downloading 4 MB…');
+  function download(name, size, install) {
+    const progress = element('p', '', 'Downloading ' + size + ' MB…');
     progress.setAttribute('role', 'status');
-    tablet.prompt('Installing OnlyBots', progress, [], 'Cancel');
+    tablet.prompt('Installing ' + name, progress, [], 'Cancel');
     const dialog = progress.closest('dialog');
     setTimeout(() => {
       if (!dialog.open || !progress.isConnected) return;
-      tablet.installOnlyBots(true);
+      install();
       dialog.close();
       render();
-      tablet.toast('OnlyBots installed. Find it on page two.');
+      tablet.toast(name + ' installed. Find it on page two.');
     }, 3000);
+  }
+
+  function continueOnlyBots() {
+    if (tablet.onlyBotsInstalled) tablet.open('onlybots');
+    else download('OnlyBots', 4, () => tablet.installOnlyBots(true));
+  }
+
+  function requestFirebot() {
+    const {name, downloadMb} = tablet.apps.firebot;
+    const install = button('Install', () => download(name, downloadMb, tablet.installFirebot), 'primary');
+    tablet.prompt('Download Firebot', 'Free · ' + downloadMb + ' MB', [install]);
   }
 
   function askForOnlyBotsCode() {
@@ -422,18 +428,23 @@ export function createStore(tablet) {
       requestOnlyBots();
       return;
     }
+    if (id === 'firebot') {
+      requestFirebot();
+      return;
+    }
     const name = tablet.apps[id]?.name ?? id;
-    tablet.prompt('Insufficient memory', name + ' needs ' + size + ' MB. The tablet has ' + free() + ' MB free.',
+    tablet.prompt('Insufficient memory', name + ' needs ' + size + ' MB. The tablet has ' + tablet.freeSpaceMb + ' MB free.',
       [button('Try again', () => request(id, size), 'primary')]);
   }
 
   function render() {
     const installed = tablet.onlyBotsInstalled;
+    const installedCount = 8 + Number(installed) + Number(tablet.firebotInstalled);
     const header = element('header', 'app-heading', element('h2', '', 'BotStore'),
-      element('p', 'store-capacity muted', (installed ? 9 : 8) + ' installed · ' + free() + ' MB free'));
+      element('p', 'store-capacity muted', installedCount + ' installed · ' + tablet.freeSpaceMb + ' MB free'));
     const rows = storeListings.map(([id, description, size, monogram]) => {
       const name = tablet.apps[id]?.name ?? id;
-      const available = !size || (id === 'onlybots' && installed);
+      const available = id === 'firebot' ? tablet.firebotInstalled : !size || (id === 'onlybots' && installed);
       const action = available ? button('Open', () => tablet.open(id), 'primary') :
         button(id === 'botflix' ? 'Reinstall' : 'Install', () => request(id, size));
       const controls = element('div', 'actions', action);

@@ -2,7 +2,8 @@
 
 import {loadCatalogue} from './catalogue.js';
 import {createChat, createMail} from './messages.js?v=mail-layout';
-import {createPhotos, createBank, createLove, createMarket, createStore} from './apps.js?v=lovebot-credits';
+import {createPhotos, createBank, createLove, createMarket, createStore} from './apps.js?v=firebot';
+import {createFirebot} from './firebot.js';
 import {createScratch, createFruit} from './games.js';
 import {hasOnlyBotsAccess, hasPremiumAccess} from './premium.js?v=lovebot-credits';
 import {linkPurchaseProfile, purchaseStatus, refreshPurchases} from './purchases.js?v=lovebot-credits';
@@ -11,7 +12,7 @@ import {element, button, image, shortTime, loadSetting, saveSetting} from './ui.
 
 const pages = [
   ['store', 'photos', 'scratch', 'fruit', 'bank', 'mail', 'chat', 'instabot'],
-  ['love', 'onlybots', 'market', 'botflix']
+  ['love', 'onlybots', 'market', 'botflix', 'firebot']
 ];
 const apps = {
   store: {name: 'BotStore', art: './art/store.png', mount: createStore},
@@ -28,6 +29,7 @@ const apps = {
     frame: '../onlybots-preview-8c7e4f2a/?tablet=1&v=lovebot-credits'},
   market: {name: 'eBot', art: './art/market.jpg', needsContent: true, mount: createMarket},
   botflix: {name: 'BOTFLIX', art: './art/botflix.png'},
+  firebot: {name: 'Firebot', art: './art/firebot.jpg', downloadMb: 2, mount: createFirebot},
   snapbot: {name: 'SnapBot', art: './art/snapbot.jpg'},
   update: {name: 'Software update'}
 };
@@ -44,6 +46,7 @@ let data;
 let loading;
 let current = 'home';
 let onlyBotsInstalled = loadSetting('onlyBotsInstalled', false) === true;
+let firebotInstalled = loadSetting('firebotInstalled', false) === true;
 let storeRequest;
 let toastTimer;
 let notificationTimer;
@@ -54,6 +57,12 @@ const tablet = {
   get data() { return data; },
   get current() { return current; },
   get onlyBotsInstalled() { return onlyBotsInstalled; },
+  get firebotInstalled() { return firebotInstalled; },
+  get freeSpaceMb() { return 12 - (onlyBotsInstalled ? 4 : 0) - (firebotInstalled ? apps.firebot.downloadMb : 0); },
+  installFirebot() {
+    firebotInstalled = true;
+    saveSetting('firebotInstalled', true);
+  },
   installOnlyBots(installed) {
     if (installed && !hasOnlyBotsAccess()) return;
     onlyBotsInstalled = installed;
@@ -85,12 +94,12 @@ function art(id, fallback = '', loading = 'lazy') {
 function renderHome() {
   homePager.render(id => {
     if (id === 'onlybots' && !onlyBotsInstalled) return null;
-    const offloaded = id === 'botflix';
+    const offloaded = id === 'botflix' || (id === 'firebot' && !firebotInstalled);
     const icon = button('', () => open(id), 'app-icon' + (offloaded ? ' offloaded' : ''));
     const tile = art(id, '', 'eager');
     if (offloaded) {
       const cloud = element('span', 'cloud', '↓');
-      cloud.title = 'Offloaded';
+      cloud.title = id === 'firebot' ? 'Free download' : 'Offloaded';
       cloud.setAttribute('aria-hidden', 'true');
       tile.append(cloud);
     }
@@ -100,7 +109,8 @@ function renderHome() {
     tile.append(badge);
     icon.append(tile, element('span', 'icon-label', apps[id].name));
     const locked = id === 'onlybots' && !hasOnlyBotsAccess();
-    icon.setAttribute('aria-label', apps[id].name + (offloaded ? ', offloaded' : '') +
+    const download = id === 'firebot' ? ', free download' : ', offloaded';
+    icon.setAttribute('aria-label', apps[id].name + (offloaded ? download : '') +
       (locked ? ', OnlyBots access required' : ''));
     return icon;
   });
@@ -169,7 +179,7 @@ function offerUpdate(release) {
         requestAnimationFrame(advance);
         return;
       }
-      const free = Math.max(1, (onlyBotsInstalled ? 8 : 12) - (release - 1));
+      const free = Math.max(1, tablet.freeSpaceMb - (release - 1));
       prompt('Not Enough Memory', version + ' needs ' + size + '. This tablet has ' + free + ' MB free.',
         [button('Try again', install, 'primary')], 'OK');
     }
@@ -237,7 +247,8 @@ function showCurrent() {
 }
 
 function open(id, replace = false) {
-  if (id === 'botflix' || (id === 'onlybots' && (!onlyBotsInstalled || !hasOnlyBotsAccess()))) {
+  if (id === 'botflix' || (id === 'firebot' && !firebotInstalled) ||
+      (id === 'onlybots' && (!onlyBotsInstalled || !hasOnlyBotsAccess()))) {
     storeRequest = id;
     id = 'store';
   }
