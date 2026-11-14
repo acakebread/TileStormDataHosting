@@ -1,6 +1,6 @@
 // Copyright 2026 massivehadron.com ltd.
 
-import {catalogueProduct, claimShopPurchase, matchShopReturn, refreshCatalogue} from './purchases.js?v=shop-catalogue';
+import {catalogueProduct, claimShopPurchase, matchShopReturn, refreshCatalogue} from './purchases.js?v=game-code-pin';
 
 const items = new Map([
   ['basic', 'Return to TileStorm to use Basic Access.'],

@@ -1,8 +1,8 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {element, button, image, tabs, watchSwipe, money, countdown, loadSetting, saveSetting} from './ui.js';
-import {hasOnlyBotsAccess, redeemOnlyBotsCode} from './premium.js?v=shop-catalogue';
-import {buyPurchase, catalogueProduct, paidLoveBotSwipes, refreshCatalogue, refreshPurchases, spendLoveBotSwipe} from './purchases.js?v=shop-catalogue';
+import {hasOnlyBotsAccess, redeemOnlyBotsCode} from './premium.js?v=game-code-pin';
+import {buyPurchase, catalogueProduct, paidLoveBotSwipes, refreshCatalogue, refreshPurchases, spendLoveBotSwipe} from './purchases.js?v=game-code-pin';
 import {createSlideGesture} from './slide.js';
 
 export function createPhotos({data}) {
@@ -371,7 +371,7 @@ export function createStore(tablet) {
     code.autocomplete = 'off';
     code.autocapitalize = 'off';
     code.spellcheck = false;
-    code.maxLength = 128;
+    code.maxLength = 260;
     const label = element('label', '', 'OnlyBots code');
     label.htmlFor = code.id;
     const status = element('p', 'muted');
@@ -379,7 +379,7 @@ export function createStore(tablet) {
     status.setAttribute('role', 'status');
     code.setAttribute('aria-describedby', status.id);
     const entry = element('div', 'premium-entry',
-      element('p', '', 'Enter an existing OnlyBots or premium code.'),
+      element('p', '', 'Enter the four-digit PIN followed by the OnlyBots or premium code.'),
       label, code, status);
     const unlock = button('Unlock', async () => {
       const dialog = entry.closest('dialog');
@@ -396,10 +396,11 @@ export function createStore(tablet) {
           return;
         }
         code.setAttribute('aria-invalid', 'true');
-        status.textContent = 'That OnlyBots code was not recognised. Check your purchase confirmation.';
-      } catch {
+        status.textContent = 'That OnlyBots code was not recognised. Check the PIN and code.';
+      } catch (error) {
         if (!dialog.open || !entry.isConnected) return;
-        status.textContent = 'Could not check the code. Reload the tablet and try again.';
+        status.textContent = error.status === 429 ? 'Too many code attempts. Try again later.' :
+          'Could not check the code. Try again later.';
       } finally {
         unlock.disabled = false;
         code.readOnly = false;

@@ -1,10 +1,8 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {loadSetting, saveSetting} from './ui.js';
-import {catalogueProduct, hasPurchase, verifyProductCode} from './purchases.js?v=shop-catalogue';
+import {catalogueProduct, hasPurchase, verifyProductCode} from './purchases.js?v=game-code-pin';
 
-// SHA-256 of the shared codes after removing punctuation and converting to uppercase.
-const premiumDigest = '7a5630c3b47a2c6e0f59990dc0f50788a81392749d6209413c68fdfd9076ce32';
 const creatorProducts = new Set(['goldibot', 'kelly_and_lucy']);
 const appReceipt = 'onlyBotsAccess';
 const premiumReceipt = 'onlyBotsPremium';
@@ -38,20 +36,13 @@ export function hasCreatorAccess(id, tabletPremium = false) {
     Boolean(catalogueProduct(id)?.includedWithPremium && (tabletPremium || hasPremiumAccess()));
 }
 
-async function digestCode(code) {
-  const normalized = code.replace(/[^\p{L}\p{Nd}]/gu, '').toUpperCase();
-  if (!normalized) return null;
-  const bytes = new TextEncoder().encode(normalized);
-  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
-  return Array.from(digest, byte => byte.toString(16).padStart(2, '0')).join('');
-}
-
 export async function redeemOnlyBotsCode(code) {
-  const digest = await digestCode(code);
-  if (digest === premiumDigest) return register(premiumReceipt);
-  return Boolean(digest && await verifyProductCode('app', code) && register(appReceipt));
+  const {valid, premium} = await verifyProductCode('app', code);
+  return valid === true && register(premium === true ? premiumReceipt : appReceipt);
 }
 
 export async function redeemCreatorCode(id, code) {
-  return hasCreatorProduct(id) && await verifyProductCode(id, code) && register(creatorReceipt(id));
+  if (!hasCreatorProduct(id)) return false;
+  const {valid} = await verifyProductCode(id, code);
+  return valid === true && register(creatorReceipt(id));
 }

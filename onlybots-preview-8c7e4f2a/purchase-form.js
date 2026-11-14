@@ -1,6 +1,6 @@
 // Copyright 2026 massivehadron.com ltd.
 
-import {buyPurchase, catalogueProduct, hasPurchase, refreshCatalogue} from '../eggbotstablet/purchases.js?v=shop-catalogue';
+import {buyPurchase, catalogueProduct, hasPurchase, refreshCatalogue} from '../eggbotstablet/purchases.js?v=game-code-pin';
 
 export function createPurchaseForm({product, buyLabel, redeem, onAccepted, invalidMessage}) {
   const form = document.getElementById('purchaseFormTemplate').content.firstElementChild.cloneNode(true);
@@ -49,8 +49,9 @@ export function createPurchaseForm({product, buyLabel, redeem, onAccepted, inval
     let accepted;
     try {
       accepted = await redeem(code.value);
-    } catch {
-      if (isOpen()) status.textContent = 'Could not check the code. Reload the page and try again.';
+    } catch (error) {
+      if (isOpen()) status.textContent = error.status === 429 ? 'Too many code attempts. Try again later.' :
+        'Could not check the code. Try again later.';
       return;
     } finally {
       unlock.disabled = code.readOnly = false;

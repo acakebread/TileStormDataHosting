@@ -2,11 +2,11 @@
 
 import {loadCatalogue} from './catalogue.js';
 import {createChat, createMail} from './messages.js?v=mail-layout';
-import {createPhotos, createBank, createLove, createMarket, createStore} from './apps.js?v=shop-catalogue';
+import {createPhotos, createBank, createLove, createMarket, createStore} from './apps.js?v=game-code-pin';
 import {createFirebot} from './firebot.js?v=hosted';
 import {createScratch, createFruit} from './games.js';
-import {hasOnlyBotsAccess, hasPremiumAccess} from './premium.js?v=shop-catalogue';
-import {linkPurchaseProfile, purchaseStatus, refreshPurchases} from './purchases.js?v=shop-catalogue';
+import {hasOnlyBotsAccess, hasPremiumAccess} from './premium.js?v=game-code-pin';
+import {linkPurchaseProfile, purchaseStatus, refreshPurchases} from './purchases.js?v=game-code-pin';
 import {createHomePager} from './home.js?v=onlybots-shop';
 import {element, button, image, shortTime, loadSetting, saveSetting} from './ui.js';
 
@@ -26,7 +26,7 @@ const apps = {
     frame: '../instabot-preview-d31b7e4c/?tablet=1'},
   love: {name: 'LoveBot', art: './art/love.png', needsContent: true, mount: createLove},
   onlybots: {name: 'OnlyBots', art: '../onlybots-preview-8c7e4f2a/icon.jpg',
-    frame: '../onlybots-preview-8c7e4f2a/?tablet=1&v=shop-catalogue'},
+    frame: '../onlybots-preview-8c7e4f2a/?tablet=1&v=game-code-pin'},
   market: {name: 'eBot', art: './art/market.jpg', needsContent: true, mount: createMarket},
   botflix: {name: 'BOTFLIX', art: './art/botflix.png'},
   firebot: {name: 'Firebot', art: './art/firebot.jpg', downloadMb: 2, needsContent: true, mount: createFirebot},

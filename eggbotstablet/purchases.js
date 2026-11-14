@@ -62,9 +62,8 @@ export function refreshCatalogue() {
   return catalogueRequest;
 }
 
-export async function verifyProductCode(product, code) {
-  const {valid} = await post('/api/redeem-code', {product, code});
-  return valid === true;
+export function verifyProductCode(product, code) {
+  return post('/api/redeem-code', {product, code});
 }
 
 export function paidLoveBotSwipes() {

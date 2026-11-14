@@ -1,8 +1,8 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {blobFromCanvas, fetchFile, pictures, shuffle} from '../tablet-preview/shared.js';
-import {hasCreatorAccess, hasCreatorProduct, redeemCreatorCode} from '../eggbotstablet/premium.js?v=shop-catalogue';
-import {createPurchaseForm} from './purchase-form.js?v=shop-catalogue';
+import {hasCreatorAccess, hasCreatorProduct, redeemCreatorCode} from '../eggbotstablet/premium.js?v=game-code-pin';
+import {createPurchaseForm} from './purchase-form.js?v=game-code-pin';
 
 const ui = Object.fromEntries([
   'latest', 'creators', 'creatorHeading', 'feedScroller', 'feedStatus', 'feed',
@@ -312,7 +312,7 @@ function openCreatorProfile(profile) {
       dialog.close();
       openGallery(profile);
     },
-    invalidMessage: 'That code does not match this profile. Check your purchase confirmation.'
+    invalidMessage: 'That code does not match this profile. Check the PIN and code.'
   });
   const cancel = document.createElement('button');
   cancel.type = 'button';
