@@ -82,6 +82,14 @@ export async function claimShopPurchase(product, reference) {
   await refreshPurchases();
 }
 
+export async function matchShopReturn(product, token) {
+  const profile = key;
+  await retryLink();
+  if (profile !== key) return 'manual';
+  const {state} = await post('/api/shop-return', {key: profile, product, token});
+  return profile === key ? state : 'manual';
+}
+
 export function claimLoveBotPurchase(reference) {
   return claimShopPurchase('lovebot', reference);
 }
