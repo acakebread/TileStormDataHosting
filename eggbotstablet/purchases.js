@@ -74,10 +74,16 @@ export async function spendLoveBotSwipe() {
   }
 }
 
-export async function claimLoveBotPurchase(reference) {
+export async function claimShopPurchase(product, reference) {
+  const profile = key;
   await retryLink();
-  await post('/api/lovebot/claim', {key, reference});
+  if (key !== profile) throw Object.assign(new Error('Your purchase profile changed. Confirm the profile and try again.'), {status: 409});
+  await post('/api/claim', {key: profile, product, reference});
   await refreshPurchases();
+}
+
+export function claimLoveBotPurchase(reference) {
+  return claimShopPurchase('lovebot', reference);
 }
 
 async function refresh(profile) {

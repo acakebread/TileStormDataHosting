@@ -5,7 +5,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
-<title>LoveBot purchases · TileStorm Evolution</title>
+<title>Claim a purchase · TileStorm Evolution</title>
 <style>
   body { background: #101820; color: #eef7fa; font: 1rem/1.55 system-ui; padding: 1.5rem; margin: 0; }
   main { max-width: 38rem; margin: 8vh auto; }
@@ -20,22 +20,22 @@
   a { color: #8ce4d0; }
 </style>
 <main>
-  <h1>1,000 LoveBot swipes</h1>
-  <p>If you started checkout in TileStorm or Eggbot’s tablet, return to the app you came from. It will pick up your swipes automatically.</p>
+  <h1 id="product-title">Claim a purchase</h1>
+  <p>If you started checkout in TileStorm or Eggbot’s tablet, return to the app you came from. It will pick up your purchase automatically.</p>
   <section aria-labelledby="claim-title">
     <h2>Bought directly from the Shop?</h2>
-    <p>Open this page in the browser profile you use for Eggbot’s tablet. To use a TileStorm player profile, first choose <strong>Help → Link Web Tablet</strong> in the game, then return here.</p>
-    <form id="claim">
+    <p id="profile-help">Open this page in the browser profile you use for Eggbot’s tablet. To use a TileStorm player profile, first choose <strong>Help → Link Web Tablet</strong> in the game, then return here.</p>
+    <form id="claim" hidden>
       <label for="reference">Shop transaction ID</label>
       <input id="reference" required maxlength="100" autocomplete="off" autocapitalize="none" spellcheck="false">
-      <button type="submit">Claim swipes</button>
-      <p id="status" role="status"></p>
+      <button type="submit">Claim purchase</button>
     </form>
+    <p id="status" role="status"></p>
   </section>
   <ul>
-    <li><a href="./#love">Open LoveBot on Eggbot’s tablet</a></li>
-    <li><a href="https://acakebread.github.io/TileStormEvo/WebGL/">Open TileStorm Evolution</a>, then open LoveBot on Eggbot’s tablet when he’s home.</li>
+    <li id="tablet-option" hidden><a id="tablet-link" href="./">Open Eggbot’s tablet</a></li>
+    <li><a href="https://acakebread.github.io/TileStormEvo/WebGL/">Open TileStorm Evolution</a><span id="game-help"></span></li>
   </ul>
 </main>
-<script type="module" src="./claim.js?v=lovebot-credits"></script>
+<script type="module" src="./claim.js?v=shop-claims"></script>
 </html>
