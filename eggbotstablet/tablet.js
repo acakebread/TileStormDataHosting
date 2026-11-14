@@ -3,7 +3,7 @@
 import {loadCatalogue} from './catalogue.js';
 import {createChat, createMail} from './messages.js?v=mail-layout';
 import {createPhotos, createBank, createLove, createMarket, createStore} from './apps.js?v=firebot';
-import {createFirebot} from './firebot.js';
+import {createFirebot} from './firebot.js?v=hosted';
 import {createScratch, createFruit} from './games.js';
 import {hasOnlyBotsAccess, hasPremiumAccess} from './premium.js?v=lovebot-credits';
 import {linkPurchaseProfile, purchaseStatus, refreshPurchases} from './purchases.js?v=lovebot-credits';
@@ -29,7 +29,7 @@ const apps = {
     frame: '../onlybots-preview-8c7e4f2a/?tablet=1&v=lovebot-credits'},
   market: {name: 'eBot', art: './art/market.jpg', needsContent: true, mount: createMarket},
   botflix: {name: 'BOTFLIX', art: './art/botflix.png'},
-  firebot: {name: 'Firebot', art: './art/firebot.jpg', downloadMb: 2, mount: createFirebot},
+  firebot: {name: 'Firebot', art: './art/firebot.jpg', downloadMb: 2, needsContent: true, mount: createFirebot},
   snapbot: {name: 'SnapBot', art: './art/snapbot.jpg'},
   update: {name: 'Software update'}
 };
