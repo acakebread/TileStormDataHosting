@@ -4,7 +4,7 @@ import {loadCatalogue} from './catalogue.js';
 import {createChat, createMail} from './messages.js?v=mail-layout';
 import {createPhotos, createBank, createLove, createMarket, createStore} from './apps.js?v=checkout-continue';
 import {createFirebot} from './firebot.js?v=hosted';
-import {createScratch} from './games.js?v=scratch-bling';
+import {createScratch} from './games.js?v=scratch-prize-size';
 import {createFruit} from './fruit-burst.js?v=unity';
 import {hasOnlyBotsAccess, hasPremiumAccess} from './premium.js?v=checkout-continue';
 import {linkPurchaseProfile, linkWebGLProfiles, membershipRegistered, refreshPurchases} from './purchases.js?v=checkout-continue';

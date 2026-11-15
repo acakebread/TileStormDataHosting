@@ -71,14 +71,15 @@ function sliced(context, image, {x, y, width, height}, horizontal, vertical = ho
 function print(context, text, area, color, verticalScale = 1) {
   context.save();
   context.translate(area.x + area.width / 2, area.y + area.height / 2);
-  context.scale(1, verticalScale);
-  const size = area.height / verticalScale;
+  const size = area.height;
   context.font = `bold ${size}px Arial, sans-serif`;
   const fitted = Math.min(size, size * area.width / context.measureText(text).width);
   context.font = `bold ${fitted}px Arial, sans-serif`;
   context.fillStyle = color;
   context.textAlign = 'center';
   context.textBaseline = 'middle';
+  // Unity fits the amount before doubling the glyph height.
+  context.scale(1, verticalScale);
   context.fillText(text, 0, 0);
   context.restore();
 }

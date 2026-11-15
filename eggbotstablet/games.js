@@ -2,7 +2,7 @@
 // Based on Scratch Bling, copyright 2016 massivehadron.com ltd. created 29/09/2016 by Andrew Cakebread
 
 import {shuffle} from '../tablet-preview/shared.js';
-import {dollars, loadScratchCard} from './scratch-card.js';
+import {dollars, loadScratchCard} from './scratch-card.js?v=scratch-prize-size';
 import {button, countdown, element, loadSetting, saveSetting, weighted} from './ui.js';
 
 const cost = 100;
