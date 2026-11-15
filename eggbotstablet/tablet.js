@@ -2,20 +2,22 @@
 
 import {loadCatalogue} from './catalogue.js';
 import {createChat, createMail} from './messages.js?v=mail-layout';
-import {createPhotos, createBank, createLove, createMarket, createStore} from './apps.js?v=game-code-pin';
+import {createPhotos, createBank, createLove, createMarket, createStore} from './apps.js?v=tablet-settings';
 import {createFirebot} from './firebot.js?v=hosted';
 import {createScratch} from './games.js?v=scratch-bling';
 import {createFruit} from './fruit-burst.js?v=unity';
 import {hasOnlyBotsAccess, hasPremiumAccess} from './premium.js?v=game-code-pin';
 import {linkPurchaseProfile, purchaseStatus, refreshPurchases} from './purchases.js?v=game-code-pin';
 import {createHomePager} from './home.js?v=onlybots-shop';
+import {createSettings, createTabletPreferences, offloadSizeMb, osVersion} from './settings.js?v=tablet-settings';
 import {element, button, image, shortTime, loadSetting, saveSetting} from './ui.js';
 
 const pages = [
-  ['store', 'photos', 'scratch', 'fruit', 'bank', 'mail', 'chat', 'instabot'],
-  ['love', 'onlybots', 'market', 'botflix', 'firebot']
+  ['settings', 'store', 'photos', 'fruit', 'bank', 'mail', 'chat', 'instabot'],
+  ['scratch', 'love', 'onlybots', 'market', 'botflix', 'firebot']
 ];
 const apps = {
+  settings: {name: 'Settings', art: './art/settings.png', mount: createSettings},
   store: {name: 'BotStore', art: './art/store.png', mount: createStore},
   photos: {name: 'Photos', needsContent: true, mount: createPhotos},
   scratch: {name: 'Scratch Bling', art: './art/scratch.png', needsContent: true, mount: createScratch},
@@ -43,6 +45,8 @@ const ui = Object.fromEntries([
 
 const mounted = new Map();
 const homePager = createHomePager(ui['home-pages'], ui['page-dots'], pages);
+const preferences = createTabletPreferences();
+const playChime = createNotificationChime();
 let data;
 let loading;
 let current = 'home';
@@ -54,12 +58,15 @@ let notificationTimer;
 let notificationAction;
 
 const tablet = {
-  apps, open, art, prompt, toast, notify, refreshBadges,
+  apps, preferences, open, art, prompt, toast, notify, refreshBadges,
   get data() { return data; },
   get current() { return current; },
   get onlyBotsInstalled() { return onlyBotsInstalled; },
   get firebotInstalled() { return firebotInstalled; },
-  get freeSpaceMb() { return 12 - (onlyBotsInstalled ? 4 : 0) - (firebotInstalled ? apps.firebot.downloadMb : 0); },
+  get freeSpaceMb() {
+    return 12 - (onlyBotsInstalled ? 4 : 0) - (firebotInstalled ? apps.firebot.downloadMb : 0) +
+      (preferences.contentOffloaded ? offloadSizeMb : 0);
+  },
   installFirebot() {
     firebotInstalled = true;
     saveSetting('firebotInstalled', true);
@@ -76,6 +83,10 @@ const tablet = {
     }
     if (current === 'home') renderHome();
   },
+  openStoreListing(id) {
+    storeRequest = id;
+    open('store');
+  },
   takeStoreRequest() {
     const request = storeRequest;
     storeRequest = null;
@@ -87,7 +98,7 @@ function art(id, fallback = '', loading = 'lazy') {
   const app = apps[id];
   const src = id === 'photos' ? data?.photo(data.owner, data.owner?.photos?.[0]?.id) : app?.art;
   if (!src) return element('span', 'icon-art', fallback || (id === 'photos' ? '▧' : '?'));
-  const photo = image(src, '', ['botflix', 'snapbot'].includes(id) ? id : '');
+  const photo = image(src, '', ['botflix', 'snapbot', 'settings'].includes(id) ? id : '');
   photo.loading = loading;
   return element('span', 'icon-art', element('span', 'icon-image', photo));
 }
@@ -139,6 +150,36 @@ function dismissNotification() {
   notificationAction = null;
 }
 
+function createNotificationChime() {
+  const Audio = window.AudioContext || window.webkitAudioContext;
+  if (!Audio) return () => {};
+  let audio, clip, output;
+
+  document.addEventListener('click', () => {
+    if (!audio) {
+      try { audio = new Audio(); }
+      catch { return; }
+      output = audio.createGain();
+      output.gain.value = .7;
+      output.connect(audio.destination);
+      fetch(new URL('./art/notification.wav', import.meta.url))
+        .then(response => response.ok ? response.arrayBuffer() : null)
+        .then(bytes => bytes && audio.decodeAudioData(bytes))
+        .then(decoded => { clip = decoded; })
+        .catch(() => {});
+    }
+    if (audio.state !== 'running') audio.resume().catch(() => {});
+  }, {capture: true});
+
+  return () => {
+    if (audio?.state !== 'running' || !clip) return;
+    const source = audio.createBufferSource();
+    source.buffer = clip;
+    source.connect(output);
+    source.start();
+  };
+}
+
 function notify(id, message, select) {
   if (current === id) return;
   clearTimeout(notificationTimer);
@@ -147,7 +188,9 @@ function notify(id, message, select) {
     select?.();
   };
   ui['open-notification'].textContent = apps[id].name + '\n' + message;
+  ui.notification.dataset.position = preferences.bannerPosition;
   ui.notification.hidden = false;
+  if (!preferences.pauseUntil) playChime();
   notificationTimer = setTimeout(dismissNotification, 5800);
 }
 
@@ -163,7 +206,7 @@ function prompt(title, description, controls = [], dismissLabel = controls.lengt
 }
 
 function offerUpdate(release) {
-  const version = 'BotOS 9.0.' + release;
+  const version = 'BotOS ' + osVersion + '.' + release;
   const size = (6.4 + (release - 1) * .3).toFixed(1) + ' GB';
 
   function install() {
@@ -180,7 +223,7 @@ function offerUpdate(release) {
         requestAnimationFrame(advance);
         return;
       }
-      const free = Math.max(1, tablet.freeSpaceMb - (release - 1));
+      const free = tablet.freeSpaceMb;
       prompt('Not Enough Memory', version + ' needs ' + size + '. This tablet has ' + free + ' MB free.',
         [button('Try again', install, 'primary')], 'OK');
     }
@@ -195,7 +238,7 @@ let updateRelease = 0;
 function announceUpdate() {
   if (!ui.prompt.open && ui.notification.hidden) {
     const release = ++updateRelease;
-    notify('update', 'BotOS 9.0.' + release + ' is available', () => offerUpdate(release));
+    notify('update', 'BotOS ' + osVersion + '.' + release + ' is available', () => offerUpdate(release));
   }
   setTimeout(announceUpdate, (150 + Math.random() * 150) * 1000);
 }

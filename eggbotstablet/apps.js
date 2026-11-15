@@ -1,9 +1,10 @@
 // Copyright 2026 massivehadron.com ltd.
 
-import {element, button, image, tabs, watchSwipe, money, countdown, loadSetting, saveSetting} from './ui.js';
+import {element, button, image, tabs, watchSwipe, money, number, countdown, loadSetting, saveSetting} from './ui.js';
 import {hasOnlyBotsAccess, redeemOnlyBotsCode} from './premium.js?v=game-code-pin';
 import {buyPurchase, catalogueProduct, paidLoveBotSwipes, refreshCatalogue, refreshPurchases, spendLoveBotSwipe} from './purchases.js?v=game-code-pin';
 import {createSlideGesture} from './slide.js';
+import {tabletProducts} from './settings.js?v=tablet-settings';
 
 export function createPhotos({data}) {
   const photos = (data.owner?.photos ?? []).map(photo => ({
@@ -439,15 +440,25 @@ export function createStore(tablet) {
       return;
     }
     const name = tablet.apps[id]?.name ?? id;
-    tablet.prompt('Insufficient memory', name + ' needs ' + size + ' MB. The tablet has ' + tablet.freeSpaceMb + ' MB free.',
+    if (size <= tablet.freeSpaceMb) {
+      tablet.prompt('Download unavailable', name + ' is currently unavailable for download.');
+      return;
+    }
+    tablet.prompt('Insufficient memory',
+      name + ' needs ' + number.format(size) + ' MB. The tablet has ' + number.format(tablet.freeSpaceMb) + ' MB free.',
       [button('Try again', () => request(id, size), 'primary')]);
+  }
+
+  function showProduct(product, fromSettings = false) {
+    const controls = fromSettings ? [button('Back to Settings', () => tablet.open('settings'), 'primary')] : [];
+    tablet.prompt(product.name, product.description + '\n\nComing soon to BotStore.', controls, 'Close');
   }
 
   function render() {
     const installed = tablet.onlyBotsInstalled;
     const installedCount = 8 + Number(installed) + Number(tablet.firebotInstalled);
     const header = element('header', 'app-heading', element('h2', '', 'BotStore'),
-      element('p', 'store-capacity muted', installedCount + ' installed · ' + tablet.freeSpaceMb + ' MB free'));
+      element('p', 'store-capacity muted', installedCount + ' installed · ' + number.format(tablet.freeSpaceMb) + ' MB free'));
     const rows = storeListings.map(([id, description, size, monogram]) => {
       const name = tablet.apps[id]?.name ?? id;
       const available = id === 'firebot' ? tablet.firebotInstalled : !size || (id === 'onlybots' && installed);
@@ -467,12 +478,20 @@ export function createStore(tablet) {
       return element('article', 'row', tablet.art(id, monogram),
         element('div', 'row-copy', element('h3', '', name), element('p', 'muted', description)), controls);
     });
-    content.replaceChildren(header, element('div', 'rows', ...rows));
+    const products = Object.values(tabletProducts).map(product =>
+      element('article', 'row', tablet.art(product.icon, product.monogram),
+        element('div', 'row-copy', element('h3', '', product.name),
+          element('p', 'muted', product.description), element('small', '', 'Coming soon')),
+        element('div', 'actions', button('Details', () => showProduct(product)))));
+    content.replaceChildren(header, element('div', 'rows', ...rows, ...products));
   }
 
   return {view, open() {
     render();
     const id = tablet.takeStoreRequest();
-    if (id) request(id, storeListings.find(item => item[0] === id)[2]);
+    if (!id) return;
+    const product = tabletProducts[id];
+    if (product) showProduct(product, true);
+    else request(id, storeListings.find(item => item[0] === id)[2]);
   }};
 }

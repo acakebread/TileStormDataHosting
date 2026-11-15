@@ -115,6 +115,7 @@ img { display: block; max-width: 100%; }
 .icon-image { width: 100%; height: 100%; border-radius: inherit; overflow: hidden; }
 .icon-art img.botflix { transform: scale(1.28); }
 .icon-art img.snapbot { transform: scale(1.4); }
+.icon-art img.settings { object-position: 32% center; }
 .offloaded .icon-art img { filter: grayscale(1) brightness(.73); }
 .offloaded .icon-label { color: #bfd0d6; }
 .cloud, .badge {
@@ -251,6 +252,30 @@ img { display: block; max-width: 100%; }
 .love-card .row-copy { padding: 14px; }
 .love-actions { justify-content: center; margin-top: 12px; }
 .store-capacity { font: .8rem var(--mono); }
+.settings-app .app-content { width: min(100%, 1040px); }
+.settings-app .app-heading .icon-art { width: 48px; }
+.settings-grid {
+  display: grid; align-items: start; gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 350px), 1fr));
+}
+.settings-column, .settings-panel { display: grid; gap: 12px; min-width: 0; }
+.settings-panel {
+  padding: clamp(14px, 2.3vw, 22px); border: 1px solid var(--border);
+  border-radius: 12px; background: var(--panel);
+}
+.settings-panel h3 { font-size: 1.25rem; }
+.settings-panel h4 { margin: 6px 0 0; font-size: 1rem; }
+.settings-panel > button { justify-self: start; }
+.settings-panel-heading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 14px; }
+.settings-details {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 7px clamp(10px, 2vw, 24px); margin: 0;
+}
+.settings-details dt { color: var(--muted); }
+.settings-details dd { margin: 0; }
+.settings-meter { display: block; width: 100%; height: 14px; accent-color: var(--accent); }
+.settings-usage { font: 500 .82rem var(--mono); }
+.settings-positions button { min-width: min(100px, 100%); }
+.settings-positions button[aria-pressed="true"] { color: var(--accent); border-color: #599a89; background: #1e3a3a; }
 .market .price { display: block; margin-block: 5px; font: 500 1rem var(--mono); color: var(--accent); }
 .toast, .notification {
   position: absolute; z-index: 2; box-shadow: 0 4px 20px #0008;
@@ -258,6 +283,7 @@ img { display: block; max-width: 100%; }
 }
 .toast { left: 50%; bottom: 12px; translate: -50% 0; width: max-content; max-width: calc(100% - 24px); padding: 10px 14px; }
 .notification { top: 42px; right: 8px; display: flex; width: min(380px, calc(100% - 16px)); }
+.notification[data-position="bottom"] { top: auto; bottom: 12px; }
 .notification button { border: 0; background: transparent; text-align: left; }
 .notification #open-notification { flex: 1; white-space: pre-line; }
 dialog { width: min(445px, calc(100% - 28px)); max-height: 85dvh; border: 1px solid #4e6876; border-radius: 15px; color: var(--text); background: #17262f; padding: 20px; }
