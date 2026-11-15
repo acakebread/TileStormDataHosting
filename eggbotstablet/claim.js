@@ -1,12 +1,13 @@
 // Copyright 2026 massivehadron.com ltd.
 
-import {catalogueProduct, claimShopPurchase, matchShopReturn, refreshCatalogue} from './purchases.js?v=game-code-pin';
+import {catalogueProduct, claimShopPurchase, matchShopReturn, refreshCatalogue} from './purchases.js?v=botos-plus';
 
 const items = new Map([
   ['basic', 'Return to TileStorm to use Basic Access.'],
   ['onlybots', 'Open BotStore to install or open OnlyBots.'],
   ['goldibot', 'Open the profile in OnlyBots. OnlyBots access is required.'],
   ['kelly_and_lucy', 'Open the profile in OnlyBots. OnlyBots access is required.'],
+  ['botosplus', 'Open Settings on Eggbot’s tablet to use BotOS Plus.'],
   ['lovebot', 'Open LoveBot to use your swipes.']
 ]);
 const product = new URLSearchParams(location.search).get('product') ?? 'lovebot';
@@ -45,6 +46,10 @@ if (item) {
       tabletLink.href = './#love';
       tabletLink.textContent = 'Open LoveBot on Eggbot’s tablet';
       gameHelp.textContent = ', then open LoveBot on Eggbot’s tablet when he’s home.';
+    } else if (product === 'botosplus') {
+      tabletLink.href = './#settings';
+      tabletLink.textContent = 'Open Settings on Eggbot’s tablet';
+      gameHelp.textContent = ', then choose Help → Link Web Tablet to sync BotOS Plus to your game profile.';
     } else {
       tabletLink.href = './#store';
       tabletLink.textContent = 'Open BotStore on Eggbot’s tablet';

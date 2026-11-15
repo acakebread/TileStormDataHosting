@@ -1,12 +1,14 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {button, element, loadSetting, number, saveSetting, shortTime} from './ui.js';
+import {hasPurchase} from './purchases.js?v=botos-plus';
 
 export const osVersion = '9.0';
 export const storageCapacityMb = 16000;
 export const offloadSizeMb = 4000;
+export const botOsPlusProduct = 'botosplus';
 export const tabletProducts = {
-  botos_plus: {
+  [botOsPlusProduct]: {
     name: 'BotOS Plus',
     description: 'One-time upgrade for timed pauses on notification sounds.',
     icon: 'settings'
@@ -21,18 +23,18 @@ export const tabletProducts = {
 export function createTabletPreferences() {
   const localPreview = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
   const params = new URLSearchParams(location.search);
-  const hasOsUpgrade = localPreview && params.get('preview-botos-plus') === '1';
+  const previewOsUpgrade = localPreview && params.get('preview-botos-plus') === '1';
   const hasCloudSubscription = localPreview && params.get('preview-botcloud') === '1';
   let bannerPosition = loadSetting('notificationPosition', 'top') === 'bottom' ? 'bottom' : 'top';
   let pauseUntil = loadSetting('notificationSoundsPausedUntil', 0);
   let contentOffloaded = loadSetting('contentOffloaded', false) === true;
 
   return {
-    hasOsUpgrade,
+    get hasOsUpgrade() { return previewOsUpgrade || hasPurchase(botOsPlusProduct); },
     hasCloudSubscription,
     get bannerPosition() { return bannerPosition; },
     get pauseUntil() {
-      return hasOsUpgrade && Number.isSafeInteger(pauseUntil) && pauseUntil <= 8.64e15 && pauseUntil > Date.now()
+      return this.hasOsUpgrade && Number.isSafeInteger(pauseUntil) && pauseUntil <= 8.64e15 && pauseUntil > Date.now()
         ? pauseUntil : 0;
     },
     get contentOffloaded() { return contentOffloaded; },
@@ -41,7 +43,7 @@ export function createTabletPreferences() {
       saveSetting('notificationPosition', position);
     },
     pauseSounds(minutes) {
-      if (!hasOsUpgrade) return;
+      if (!this.hasOsUpgrade) return;
       pauseUntil = Date.now() + minutes * 60000;
       saveSetting('notificationSoundsPausedUntil', pauseUntil);
     },
@@ -59,14 +61,14 @@ export function createTabletPreferences() {
 
 export function createSettings(tablet) {
   const preferences = tablet.preferences;
-  const {hasOsUpgrade, hasCloudSubscription} = preferences;
-  const software = 'BotOS ' + osVersion + (hasOsUpgrade ? ' Plus' : '');
+  const {hasCloudSubscription} = preferences;
+  const software = element('dd');
   const size = number.format(offloadSizeMb) + ' MB';
   const about = element('section', 'settings-panel', element('h3', '', 'About'),
     element('dl', 'settings-details',
       element('dt', '', 'Device name'), element('dd', '', 'Eggbot’s tablet'),
       element('dt', '', 'Model number'), element('dd', '', 'BotTab 16 · BT-T16'),
-      element('dt', '', 'Software'), element('dd', '', software)));
+      element('dt', '', 'Software'), software));
 
   const usage = element('p', 'settings-usage');
   usage.setAttribute('role', 'status');
@@ -106,15 +108,14 @@ export function createSettings(tablet) {
     preferences.pauseSounds(minutes);
     refreshSounds();
   })), resume);
-  pauseControls.hidden = !hasOsUpgrade;
   const notifications = element('section', 'settings-panel', element('h3', '', 'Notifications'),
     element('h4', '', 'Banner position'), placement,
     element('h4', '', 'Notification sounds'), soundStatus, pauseControls);
 
-  const upgrade = element('section', 'settings-panel', element('h3', '', tabletProducts.botos_plus.name),
-    element('p', 'muted', hasOsUpgrade ? 'Installed. You can pause notification chimes.' :
-      'Pause notification chimes while banners and unread counts keep coming.'),
-    hasOsUpgrade ? null : button('View upgrade', () => tablet.openStoreListing('botos_plus'), 'primary'));
+  const upgradeStatus = element('p', 'muted');
+  const upgradeAction = button('View upgrade', () => tablet.openStoreListing(botOsPlusProduct), 'primary');
+  const upgrade = element('section', 'settings-panel', element('h3', '', tabletProducts[botOsPlusProduct].name),
+    upgradeStatus, upgradeAction);
 
   const view = element('section', 'settings-app', element('div', 'app-content',
     element('header', 'app-heading', tablet.art('settings'), element('h2', '', 'Settings')),
@@ -142,12 +143,21 @@ export function createSettings(tablet) {
   }
 
   function refreshSounds() {
+    const {hasOsUpgrade} = preferences;
     const expiry = preferences.pauseUntil;
     const status = expiry ? 'Paused until ' + shortTime.format(expiry) :
       hasOsUpgrade ? 'Chimes are on.' : 'Timed pauses require BotOS Plus.';
     if (soundStatus.textContent !== status) soundStatus.textContent = status;
     if (!expiry && document.activeElement === resume) pauseControls.firstElementChild.focus();
     resume.hidden = !expiry;
+    pauseControls.hidden = !hasOsUpgrade;
+    upgradeAction.hidden = hasOsUpgrade;
+    const version = 'BotOS ' + osVersion + (hasOsUpgrade ? ' Plus' : '');
+    if (software.textContent !== version) {
+      software.textContent = version;
+      upgradeStatus.textContent = hasOsUpgrade ? 'Installed. You can pause notification chimes.' :
+        'Pause notification chimes while banners and unread counts keep coming.';
+    }
   }
 
   return {

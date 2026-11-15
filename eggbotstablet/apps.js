@@ -1,10 +1,10 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {element, button, image, tabs, watchSwipe, money, number, countdown, loadSetting, saveSetting} from './ui.js';
-import {hasOnlyBotsAccess, redeemOnlyBotsCode} from './premium.js?v=game-code-pin';
-import {buyPurchase, catalogueProduct, paidLoveBotSwipes, refreshCatalogue, refreshPurchases, spendLoveBotSwipe} from './purchases.js?v=game-code-pin';
+import {hasOnlyBotsAccess, redeemOnlyBotsCode} from './premium.js?v=botos-plus';
+import {buyPurchase, catalogueProduct, paidLoveBotSwipes, refreshCatalogue, refreshPurchases, spendLoveBotSwipe} from './purchases.js?v=botos-plus';
 import {createSlideGesture} from './slide.js';
-import {tabletProducts} from './settings.js?v=tablet-settings';
+import {botOsPlusProduct, tabletProducts} from './settings.js?v=botos-plus';
 
 export function createPhotos({data}) {
   const photos = (data.owner?.photos ?? []).map(photo => ({
@@ -449,9 +449,39 @@ export function createStore(tablet) {
       [button('Try again', () => request(id, size), 'primary')]);
   }
 
-  function showProduct(product, fromSettings = false) {
+  function showProduct(id, fromSettings = false) {
+    const product = tabletProducts[id];
     const controls = fromSettings ? [button('Back to Settings', () => tablet.open('settings'), 'primary')] : [];
-    tablet.prompt(product.name, product.description + '\n\nComing soon to BotStore.', controls, 'Close');
+    if (id !== botOsPlusProduct) {
+      tablet.prompt(product.name, product.description + '\n\nComing soon to BotStore.', controls, 'Close');
+      return;
+    }
+    const status = element('p', 'muted');
+    const details = element('div', '', element('p', '', product.description), status);
+    tablet.prompt(product.name, details, controls, 'Close');
+    if (tablet.preferences.hasOsUpgrade) {
+      status.textContent = 'Installed. Open Settings to pause notification chimes.';
+      return;
+    }
+    status.textContent = 'Loading the Shop listing…';
+    refreshCatalogue().then(() => {
+      const offer = catalogueProduct(id);
+      if (!offer?.shopUrl) {
+        status.textContent = 'The Shop listing is unavailable. Try again later.';
+        return;
+      }
+      const buy = button('Buy BotOS Plus · ' + offer.priceLabel, () => {
+        if (tablet.preferences.hasOsUpgrade) {
+          buy.remove();
+          status.textContent = 'Installed. Open Settings to pause notification chimes.';
+          return;
+        }
+        status.textContent = buyPurchase(id) ? 'Checkout opened in a new tab.' :
+          'Check your open checkout tab or allow popups to start checkout.';
+      }, 'primary');
+      status.textContent = '';
+      details.insertBefore(buy, status);
+    });
   }
 
   function render() {
@@ -478,11 +508,12 @@ export function createStore(tablet) {
       return element('article', 'row', tablet.art(id, monogram),
         element('div', 'row-copy', element('h3', '', name), element('p', 'muted', description)), controls);
     });
-    const products = Object.values(tabletProducts).map(product =>
+    const products = Object.entries(tabletProducts).map(([id, product]) =>
       element('article', 'row', tablet.art(product.icon, product.monogram),
         element('div', 'row-copy', element('h3', '', product.name),
-          element('p', 'muted', product.description), element('small', '', 'Coming soon')),
-        element('div', 'actions', button('Details', () => showProduct(product)))));
+          element('p', 'muted', product.description),
+          id !== botOsPlusProduct ? element('small', '', 'Coming soon') : null),
+        element('div', 'actions', button('Details', () => showProduct(id)))));
     content.replaceChildren(header, element('div', 'rows', ...rows, ...products));
   }
 
@@ -491,7 +522,7 @@ export function createStore(tablet) {
     const id = tablet.takeStoreRequest();
     if (!id) return;
     const product = tabletProducts[id];
-    if (product) showProduct(product, true);
+    if (product) showProduct(id, true);
     else request(id, storeListings.find(item => item[0] === id)[2]);
   }};
 }
