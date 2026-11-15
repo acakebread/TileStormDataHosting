@@ -16,7 +16,7 @@ export const tabletProducts = {
   },
   [botCloudProduct]: {
     name: 'BotCloud',
-    description: 'One-time upgrade to offload cached media and free up ' + number.format(offloadSizeMb) + ' MB.',
+    description: 'Offload cached media and free up ' + number.format(offloadSizeMb) + ' MB.',
     art: './art/botcloud.jpg'
   }
 };
@@ -166,7 +166,7 @@ export function createSettings(tablet) {
     meter.value = used;
     usage.textContent = number.format(used) + ' MB used · ' + number.format(available) + ' MB available';
     cloudStatus.textContent = contentOffloaded ? size + ' reclaimed.' : hasCloudAccess
-      ? 'Offload cached media to reclaim ' + size + '.' : 'Free up ' + size + ' with a one-time BotCloud upgrade.';
+      ? 'Offload cached media to reclaim ' + size + '.' : 'Free up ' + size + ' with BotCloud.';
     cloudAction.textContent = hasCloudAccess ? 'Offload content' : 'View BotCloud';
     if (contentOffloaded && document.activeElement === cloudAction) {
       usage.tabIndex = -1;

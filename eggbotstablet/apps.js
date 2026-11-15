@@ -570,17 +570,27 @@ export function createStore(tablet) {
       'Activated. Open Settings to offload cached media.';
     const status = element('p', 'muted');
     status.setAttribute('role', 'status');
-    const details = element('div', 'product-details upgrade-details', element('p', '', product.description), status);
+    const membershipInfo = isOsUpgrade ? null : element('p', '', 'A Silver subscription includes BotCloud.');
+    const details = element('div', `product-details upgrade-details${isOsUpgrade ? '' : ' botcloud-details'}`,
+      element('p', '', product.description), membershipInfo, status);
+    const join = isOsUpgrade ? null : button('Become a member', () => {
+      if (!showOwned()) location.assign('../membership.html?offer=botcloud');
+    });
     const buy = button('Continue to Shop', () => {
-      if (owned()) {
-        buy.hidden = true;
-        status.textContent = installedMessage;
-        return;
-      }
+      if (showOwned()) return;
       status.textContent = buyPurchase(id) ? 'Continue in the checkout tab when ready.' :
         'Allow popups to open checkout.';
     }, 'primary');
+    function showOwned() {
+      if (!owned()) return false;
+      buy.hidden = true;
+      if (join) join.hidden = membershipInfo.hidden = true;
+      status.textContent = installedMessage;
+      return true;
+    }
+
     buy.hidden = true;
+    if (join) controls.push(join);
     controls.push(buy);
     tablet.prompt(product.name, details, controls, 'Close');
     const dialog = details.closest('dialog');
@@ -589,12 +599,11 @@ export function createStore(tablet) {
     window.addEventListener('tilestorm-checkout-cancelled', event => {
       if (event.detail === id && details.isConnected) status.textContent = 'Checkout cancelled.';
     }, {signal: controller.signal});
-    if (owned()) {
-      status.textContent = installedMessage;
-      return;
-    }
+    window.addEventListener('tilestorm-purchases-changed', showOwned, {signal: controller.signal});
+    if (showOwned()) return;
     status.textContent = 'Loading the Shop listing…';
     refreshCatalogue().then(() => {
+      if (!dialog.open || !details.isConnected || showOwned()) return;
       const offer = catalogueProduct(id);
       if (!offer?.shopUrl) {
         status.textContent = 'The Shop listing is unavailable.';
@@ -605,11 +614,6 @@ export function createStore(tablet) {
       buy.textContent = membership ? 'Continue to Shop' : `Buy ${product.name} · ${offer.priceLabel}`;
       status.textContent = '';
       if (priceDetails) details.insertBefore(priceDetails, status);
-      if (!isOsUpgrade) {
-        const register = element('a', '', 'Verify your email for BotCloud with Silver');
-        register.href = '../membership.html';
-        details.insertBefore(register, status);
-      }
       buy.hidden = false;
     });
   }

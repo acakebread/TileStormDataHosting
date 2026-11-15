@@ -395,6 +395,7 @@ dialog::backdrop { background: #02070bc7; }
 dialog .actions { justify-content: end; }
 dialog:has(.upgrade-details) { width: min(510px, calc(100% - 28px)); }
 dialog:has(.upgrade-details) .actions { align-items: stretch; }
+dialog:has(.botcloud-details) .actions button { flex: 1 1 45%; }
 @media (max-width: 500px) {
   dialog:has(.upgrade-details) .actions { flex-direction: column; }
 }
