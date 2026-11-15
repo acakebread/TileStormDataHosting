@@ -30,7 +30,7 @@ function showRegistration(reply) {
   verify.hidden = true;
   code.value = '';
   sentTo = undefined;
-  status.textContent = reply.silverUntil * 1000 > Date.now() ? 'Silver membership linked. BotCloud is available.' :
+  status.textContent = reply.silverUntil * 1000 > Date.now() ? `${reply.botCloudTier ?? 'Silver'} membership linked. BotCloud is available.` :
     reply.activeMemberships?.length ? 'Active membership linked.' :
       reply.registered ? 'Profile linked. No active membership is on record yet.' :
         reply.available ? 'Enter your Buy Me a Coffee email to get a verification code.' : 'Email verification is temporarily unavailable.';
