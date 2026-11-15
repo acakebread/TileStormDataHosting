@@ -1,6 +1,6 @@
 // Copyright 2026 massivehadron.com ltd.
 
-import {buyPurchase, catalogueProduct, hasPurchase, refreshCatalogue} from '../eggbotstablet/purchases.js?v=game-code-pin';
+import {buyPurchase, catalogueProduct, hasPurchase, refreshCatalogue} from '../eggbotstablet/purchases.js?v=shared-profile';
 
 export function createPurchaseForm({product, buyLabel, redeem, onAccepted, invalidMessage}) {
   const form = document.getElementById('purchaseFormTemplate').content.firstElementChild.cloneNode(true);

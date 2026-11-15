@@ -1,7 +1,7 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {loadSetting, saveSetting} from './ui.js';
-import {catalogueProduct, hasPurchase, verifyProductCode} from './purchases.js?v=silver-membership';
+import {catalogueProduct, hasPurchase, verifyProductCode} from './purchases.js?v=shared-profile';
 
 const creatorProducts = new Set(['goldibot', 'kelly_and_lucy']);
 const appReceipt = 'onlyBotsAccess';

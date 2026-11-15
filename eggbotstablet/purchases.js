@@ -6,6 +6,9 @@ const root = 'https://tilestorm-coffee-checkout.qrh.workers.dev';
 const keyPattern = /^[a-f0-9]{64}$/;
 const shopItems = new Set(['app', 'goldibot', 'kelly_and_lucy', 'lovebot', 'botosplus', 'botcloud']);
 const keySetting = 'purchaseProfile';
+const webglSetting = 'webglPurchaseProfile';
+const appliedWebglSetting = 'appliedWebglPurchaseProfile';
+const pendingLinkSetting = 'unlinkedPurchaseProfile';
 const hex = bytes => Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
 const randomKey = () => hex(crypto.getRandomValues(new Uint8Array(32)));
 let key = loadSetting(keySetting, '');
@@ -53,8 +56,9 @@ export function hasSilverBotCloud() {
   return membershipRegistered() && Date.now() < Math.min(memberCheckedUntil, memberStatus.silverUntil * 1000);
 }
 
-export function membershipRequest(data, profile = key) {
+export async function membershipRequest(data, profile = key) {
   if (!keyPattern.test(profile)) throw new Error('Open email registration from the intended player profile.');
+  await retryLink();
   return post('/api/membership', {...data, key: profile});
 }
 
@@ -160,32 +164,60 @@ export function refreshPurchases() {
 
 export async function linkPurchaseProfile(target) {
   if (!target || !keyPattern.test(target)) return;
-  if (target === key) {
-    await retryLink();
-    await refreshPurchases();
-    return;
+  saveSetting(appliedWebglSetting, webglProfile());
+  if (target !== key) {
+    const pending = pendingLink();
+    // Merge this browser's independent purchases once. Changing game profiles only switches the view.
+    if (!loadSetting('linkedPurchaseProfile', false))
+      saveSetting(pendingLinkSetting, pending || {source: key, target});
+    saveSetting('linkedPurchaseProfile', true);
+    key = target;
+    saveSetting(keySetting, key);
+    window.dispatchEvent(new Event('tilestorm-purchases-changed'));
   }
-  const source = key;
-  const previousLink = loadSetting('unlinkedPurchaseProfile', '');
-  key = target;
-  saveSetting(keySetting, key);
-  // Move only purchases from this browser's generated identity. Switching Unity
-  // identities should never transfer purchases between two Unity players.
-  if (!loadSetting('linkedPurchaseProfile', false)) saveSetting('unlinkedPurchaseProfile', previousLink || source);
-  saveSetting('linkedPurchaseProfile', true);
-  window.dispatchEvent(new Event('tilestorm-purchases-changed'));
-  await retryLink();
+  const linked = await retryLink();
   await refreshPurchases();
+  return linked;
+}
+
+function webglProfile() {
+  const profile = loadSetting(webglSetting, null);
+  return typeof profile === 'string' && keyPattern.test(profile) ? profile : null;
+}
+
+export async function linkWebGLProfiles() {
+  const profile = webglProfile();
+  if (!profile) return 'missing';
+  return await linkPurchaseProfile(profile) ? 'linked' : 'pending';
+}
+
+function followWebGLProfile() {
+  const profile = webglProfile();
+  return profile && profile !== loadSetting(appliedWebglSetting, null) ? linkPurchaseProfile(profile) : null;
+}
+
+function pendingLink() {
+  const saved = loadSetting(pendingLinkSetting, null);
+  if (typeof saved !== 'string') {
+    return saved && typeof saved.source === 'string' && typeof saved.target === 'string' &&
+      keyPattern.test(saved.source) && keyPattern.test(saved.target) ? saved : null;
+  }
+  if (!keyPattern.test(saved)) return null;
+  // An older client stored only the origin. Capture the existing destination before changing profiles.
+  const migrated = {source: saved, target: key};
+  saveSetting(pendingLinkSetting, migrated);
+  return migrated;
 }
 
 async function retryLink() {
   if (linking) return linking;
-  const source = loadSetting('unlinkedPurchaseProfile', '');
-  if (!source) return;
-  const target = key;
-  linking = post('/api/link', {source, target}).then(() => {
-    if (source === loadSetting('unlinkedPurchaseProfile', '')) saveSetting('unlinkedPurchaseProfile', '');
-  }).catch(() => {}).finally(() => { linking = null; });
+  const pending = pendingLink();
+  if (!pending) return true;
+  linking = post('/api/link', pending).then(() => {
+    const latest = pendingLink();
+    if (latest?.source === pending.source && latest?.target === pending.target) saveSetting(pendingLinkSetting, null);
+    return true;
+  }).catch(() => false).finally(() => { linking = null; });
   return linking;
 }
 
@@ -217,9 +249,14 @@ export function buyPurchase(product) {
   return true;
 }
 
-window.addEventListener('focus', () => retryLink().then(refreshPurchases));
+if (!new URLSearchParams(location.hash.slice(1)).has('purchase-profile')) followWebGLProfile();
+window.addEventListener('focus', () => followWebGLProfile() || retryLink().then(refreshPurchases));
 window.addEventListener('storage', event => {
-  if (event.key === 'eggbot-tablet.' + keySetting) key = loadSetting(keySetting, key);
+  if (event.key === 'eggbot-tablet.' + webglSetting) followWebGLProfile();
+  if (event.key === 'eggbot-tablet.' + keySetting) {
+    key = loadSetting(keySetting, key);
+    refreshPurchases();
+  }
   if (event.key === 'eggbot-tablet.purchases.' + key) cachedPurchases.delete(key);
   if (event.key === 'eggbot-tablet.' + keySetting || event.key === 'eggbot-tablet.purchases.' + key)
     window.dispatchEvent(new Event('tilestorm-purchases-changed'));

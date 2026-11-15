@@ -313,6 +313,39 @@
 
       loadingBar.style.display = "block";
 
+      // Bridge the purchase sync in this published build. Future builds publish their profile directly.
+      (() => {
+        const purchaseUrl = 'https://tilestorm-coffee-checkout.qrh.workers.dev/api/purchases';
+        const fetchOriginal = window.fetch;
+        let lastRequest = 0;
+        let profile;
+
+        function publish() {
+          if (!profile || document.hidden) return;
+          try { localStorage.setItem('eggbot-tablet.webglPurchaseProfile', JSON.stringify(profile)); }
+          catch { /* The game can continue without shared browser storage. */ }
+        }
+
+        window.fetch = function (url, options) {
+          const response = fetchOriginal.apply(this, arguments);
+          if (url !== purchaseUrl || options?.method !== 'POST' || !(options.body instanceof Blob)) return response;
+          const sequence = ++lastRequest;
+          options.body.text().then(JSON.parse).then(({key}) => {
+            if (typeof key !== 'string' || !/^[a-f0-9]{64}$/.test(key)) return;
+            return response.then(result => {
+              if (result.ok && sequence === lastRequest) {
+                profile = key;
+                publish();
+              }
+            });
+          }).catch(() => {});
+          return response;
+        };
+
+        window.addEventListener('focus', publish);
+        document.addEventListener('visibilitychange', publish);
+      })();
+
       var script = document.createElement("script");
       script.src = loaderUrl;
       script.onload = () => {

@@ -1,6 +1,6 @@
 // Copyright 2026 massivehadron.com ltd.
 
-import {catalogueProduct, claimShopPurchase, matchShopReturn, refreshCatalogue} from './purchases.js?v=silver-membership';
+import {catalogueProduct, claimShopPurchase, matchShopReturn, refreshCatalogue} from './purchases.js?v=shared-profile';
 
 const items = new Map([
   ['basic', 'Return to TileStorm to use Basic Access.'],
@@ -38,8 +38,7 @@ if (item) {
   const tabletLink = document.getElementById('tablet-link');
   const gameHelp = document.getElementById('game-help');
   if (product === 'basic') {
-    document.getElementById('profile-help').textContent = 'Before claiming, choose Help → Link Web Tablet from the TileStorm player profile that should receive Basic Access. Then return here in the same browser profile.';
-    gameHelp.textContent = ', then choose Help → Link Web Tablet to sync Basic Access to your game profile.';
+    document.getElementById('profile-help').textContent = 'Before claiming Basic Access, open TileStorm Evolution in this browser and wait for your player to load, then return here.';
   } else {
     document.getElementById('tablet-option').hidden = false;
     if (product === 'lovebot') {
@@ -50,7 +49,7 @@ if (item) {
     } else if (product === 'botosplus' || product === 'botcloud') {
       tabletLink.href = './#settings';
       tabletLink.textContent = 'Open Settings on Eggbot’s tablet';
-      gameHelp.textContent = ', then choose Help → Link Web Tablet to sync this upgrade to your game profile.';
+      gameHelp.textContent = ', then open Settings on Eggbot’s tablet when he’s home.';
     } else {
       tabletLink.href = './#store';
       tabletLink.textContent = 'Open BotStore on Eggbot’s tablet';

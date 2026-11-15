@@ -295,6 +295,11 @@ dialog::backdrop { background: #02070bc7; }
 .contact-card { display: flex; gap: 13px; align-items: center; }
 .contact-card .avatar { width: 74px; }
 dialog .actions { justify-content: end; }
+dialog:has(.upgrade-details) { width: min(510px, calc(100% - 28px)); }
+dialog:has(.upgrade-details) .actions { align-items: stretch; }
+@media (max-width: 500px) {
+  dialog:has(.upgrade-details) .actions { flex-direction: column; }
+}
 .action-link { text-decoration: none; }
 .premium-entry { display: grid; gap: 8px; }
 .premium-entry input {

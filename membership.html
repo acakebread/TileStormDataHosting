@@ -1,0 +1,41 @@
+<!doctype html>
+<!-- Copyright 2026 massivehadron.com ltd. -->
+
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Register with Massive Hadron</title>
+<style>
+  body { margin: 0; padding: 1.5rem; background: #101820; color: #eef7fa; font: 1rem/1.5 system-ui; }
+  main { max-width: 36rem; margin: 6vh auto; }
+  h1 { line-height: 1.2; }
+  form { display: grid; gap: .65rem; margin: 1rem 0; padding: 1rem; border: 1px solid #44616e; border-radius: .8rem; }
+  input, button { font: inherit; padding: .5rem .75rem; border: 1px solid #668490; border-radius: .4rem; }
+  input { min-width: 0; color: inherit; background: #17262f; }
+  button { justify-self: start; cursor: pointer; background: #8ce4d0; color: #102521; }
+  button:disabled { opacity: .6; cursor: wait; }
+  a { color: #8ce4d0; }
+  [hidden] { display: none !important; }
+</style>
+<main>
+  <h1>Register with Massive Hadron</h1>
+  <p>Verify your email to use membership benefits in TileStorm Evolution and Eggbot’s tablet. Use your Buy Me a Coffee email for BotCloud with an active Silver membership.</p>
+  <p>On another browser or device, verify the same address to get your membership benefits there.</p>
+  <p id="status" role="status">Checking registration…</p>
+  <form id="send" hidden>
+    <label for="email">Email address</label>
+    <input id="email" type="email" autocomplete="email" maxlength="254" required>
+    <button>Send verification code</button>
+  </form>
+  <form id="verify" hidden>
+    <label for="code">Eight-digit verification code</label>
+    <input id="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="8" pattern="[0-9]{8}" required>
+    <button>Verify email</button>
+  </form>
+  <p><button id="unregister" type="button" hidden>Remove registered email</button></p>
+  <p><a href="https://buymeacoffee.com/massivehadron/membership">View memberships</a></p>
+  <p><a id="return" href="./eggbotstablet/#settings">Open Eggbot’s tablet</a> · <a href="./">Massive Hadron home</a></p>
+</main>
+<script type="module" src="./membership.js?v=shared-profile"></script>
+</html>

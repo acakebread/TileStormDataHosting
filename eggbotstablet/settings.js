@@ -1,7 +1,7 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {button, element, loadSetting, number, saveSetting, shortTime} from './ui.js';
-import {hasPurchase, hasSilverBotCloud} from './purchases.js?v=silver-membership';
+import {hasPurchase, hasSilverBotCloud} from './purchases.js?v=shared-profile';
 
 export const osVersion = '9.0';
 export const storageCapacityMb = 16000;
@@ -83,7 +83,7 @@ export function createSettings(tablet) {
   meter.setAttribute('aria-label', 'Storage used');
   const cloudStatus = element('p', 'muted');
   const registration = element('a', '', 'Register or manage your email');
-  registration.href = './membership.html';
+  registration.href = '../membership.html';
   let displayedCloudAccess;
   const cloudAction = button('View BotCloud', () => {
     if (!preferences.hasCloudAccess) {
@@ -134,7 +134,8 @@ export function createSettings(tablet) {
 
   const upgradeStatus = element('p', 'muted');
   const upgradeAction = button('View upgrade', () => tablet.openStoreListing(botOsPlusProduct), 'primary');
-  const upgradeLinkHelp = element('p', 'muted', 'Already bought BotOS Plus in TileStorm? Choose Help → Link Web Tablet in the game.');
+  const upgradeLinkHelp = element('a', '', 'Already bought BotOS Plus? Link all profiles');
+  upgradeLinkHelp.href = './?link-profiles=1#settings';
   const upgrade = element('section', 'settings-panel', element('h3', '', tabletProducts[botOsPlusProduct].name),
     upgradeStatus, upgradeAction, upgradeLinkHelp);
 

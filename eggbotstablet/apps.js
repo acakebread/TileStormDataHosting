@@ -1,10 +1,10 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {element, button, image, tabs, watchSwipe, money, number, countdown, loadSetting, saveSetting} from './ui.js';
-import {hasOnlyBotsAccess, redeemOnlyBotsCode} from './premium.js?v=silver-membership';
-import {buyPurchase, catalogueProduct, paidLoveBotSwipes, refreshCatalogue, refreshPurchases, spendLoveBotSwipe} from './purchases.js?v=silver-membership';
+import {hasOnlyBotsAccess, redeemOnlyBotsCode} from './premium.js?v=shared-profile';
+import {buyPurchase, catalogueProduct, paidLoveBotSwipes, refreshCatalogue, refreshPurchases, spendLoveBotSwipe} from './purchases.js?v=shared-profile';
 import {createSlideGesture} from './slide.js';
-import {botOsPlusProduct, tabletProducts} from './settings.js?v=silver-membership';
+import {botOsPlusProduct, tabletProducts} from './settings.js?v=shared-profile';
 
 export function createPhotos({data}) {
   const photos = (data.owner?.photos ?? []).map(photo => ({
@@ -451,14 +451,14 @@ export function createStore(tablet) {
 
   function showProduct(id, fromSettings = false) {
     const product = tabletProducts[id];
-    const controls = fromSettings ? [button('Back to Settings', () => tablet.open('settings'), 'primary')] : [];
+    const controls = fromSettings ? [button('Back to Settings', () => tablet.open('settings'))] : [];
     const isOsUpgrade = id === botOsPlusProduct;
     const owned = () => isOsUpgrade ? tablet.preferences.hasOsUpgrade : tablet.preferences.hasCloudAccess;
     const installedMessage = isOsUpgrade ? 'Installed. Open Settings to pause notifications.' :
       'Activated. Open Settings to offload cached media.';
     const status = element('p', 'muted');
     status.setAttribute('role', 'status');
-    const details = element('div', 'product-details', element('p', '', product.description), status);
+    const details = element('div', 'product-details upgrade-details', element('p', '', product.description), status);
     const buy = button('Continue to Shop', () => {
       if (owned()) {
         buy.hidden = true;
@@ -489,7 +489,7 @@ export function createStore(tablet) {
       if (priceDetails) details.insertBefore(priceDetails, status);
       if (!isOsUpgrade) {
         const register = element('a', '', 'Verify your email for BotCloud with Silver');
-        register.href = './membership.html';
+        register.href = '../membership.html';
         details.insertBefore(register, status);
       }
       buy.hidden = false;

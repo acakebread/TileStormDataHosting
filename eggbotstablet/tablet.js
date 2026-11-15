@@ -2,14 +2,14 @@
 
 import {loadCatalogue} from './catalogue.js';
 import {createChat, createMail} from './messages.js?v=mail-layout';
-import {createPhotos, createBank, createLove, createMarket, createStore} from './apps.js?v=silver-membership';
+import {createPhotos, createBank, createLove, createMarket, createStore} from './apps.js?v=shared-profile';
 import {createFirebot} from './firebot.js?v=hosted';
 import {createScratch} from './games.js?v=scratch-bling';
 import {createFruit} from './fruit-burst.js?v=unity';
-import {hasOnlyBotsAccess, hasPremiumAccess} from './premium.js?v=silver-membership';
-import {linkPurchaseProfile, membershipRegistered, refreshPurchases} from './purchases.js?v=silver-membership';
+import {hasOnlyBotsAccess, hasPremiumAccess} from './premium.js?v=shared-profile';
+import {linkPurchaseProfile, linkWebGLProfiles, membershipRegistered, refreshPurchases} from './purchases.js?v=shared-profile';
 import {createHomePager} from './home.js?v=onlybots-shop';
-import {createSettings, createTabletPreferences, offloadSizeMb, osVersion} from './settings.js?v=silver-membership';
+import {createSettings, createTabletPreferences, offloadSizeMb, osVersion} from './settings.js?v=shared-profile';
 import {element, button, image, shortTime, loadSetting, saveSetting} from './ui.js';
 
 const pages = [
@@ -29,7 +29,7 @@ const apps = {
     frame: '../instabot-preview-d31b7e4c/?tablet=1'},
   love: {name: 'LoveBot', art: './art/love.png', needsContent: true, mount: createLove},
   onlybots: {name: 'OnlyBots', art: '../onlybots-preview-8c7e4f2a/icon.jpg',
-    frame: '../onlybots-preview-8c7e4f2a/?tablet=1&v=game-code-pin'},
+    frame: '../onlybots-preview-8c7e4f2a/?tablet=1&v=shared-profile'},
   market: {name: 'eBot', art: './art/market.jpg', needsContent: true, mount: createMarket},
   botflix: {name: 'BOTFLIX', art: './art/botflix.png'},
   firebot: {name: 'Firebot', art: './art/firebot.jpg', downloadMb: 2, needsContent: true, mount: createFirebot},
@@ -313,6 +313,20 @@ function open(id, replace = false) {
 }
 
 function handleLocation() {
+  const url = new URL(location.href);
+  const linkAll = url.searchParams.has('link-profiles');
+  if (linkAll) {
+    url.searchParams.delete('link-profiles');
+    history.replaceState(null, '', url);
+    linkWebGLProfiles().then(state => {
+      if (state === 'missing') {
+        const game = element('a', '', 'Open TileStorm Evolution');
+        game.href = '../tilestorm/';
+        prompt('Link all profiles', element('div', 'product-details',
+          element('p', '', 'Open the WebGL game in this browser and wait for your player to load. The tablet will pick up that profile.'), game));
+      } else toast(state === 'linked' ? 'WebGL and tablet are using the same profile.' : 'The profile link is pending. Try again shortly.');
+    });
+  }
   const profile = new URLSearchParams(location.hash.slice(1)).get('purchase-profile');
   if (profile !== null) {
     history.replaceState(null, '', location.pathname + location.search);
@@ -320,7 +334,7 @@ function handleLocation() {
   }
   const id = location.hash.slice(1) || 'home';
   if (id !== current) open(id, true);
-  return profile !== null;
+  return profile !== null || linkAll;
 }
 
 async function startContent() {
