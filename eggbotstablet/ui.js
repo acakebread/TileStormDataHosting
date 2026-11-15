@@ -30,31 +30,84 @@ export function tabs(labels, selected, choose) {
   }));
 }
 
-export function watchSwipe(node, step) {
-  let start;
-  let suppress = false;
+export function watchSwipe(node, step, {canDrag = () => true, move = () => {}, settle = () => {}} = {}) {
+  let gesture;
+  let suppressClick = false;
+
+  function release() {
+    const drag = gesture;
+    gesture = null;
+    if (drag && node.hasPointerCapture(drag.id)) node.releasePointerCapture(drag.id);
+    return drag;
+  }
+
+  function cancel() {
+    if (release()?.axis === 'x') settle();
+  }
+
   node.addEventListener('pointerdown', event => {
-    if (!event.isPrimary || event.button !== 0) return;
-    suppress = false;
-    start = {x: event.clientX, y: event.clientY, id: event.pointerId};
+    if (gesture || !event.isPrimary || event.button !== 0) return;
+    suppressClick = false;
+    if (!canDrag()) return;
+    const bounds = node.getBoundingClientRect();
+    gesture = {
+      id: event.pointerId, x: event.clientX, y: event.clientY, width: node.offsetWidth,
+      tilt: event.clientY < bounds.top + bounds.height / 2 ? 1 : -1,
+      lastX: event.clientX, lastMove: event.timeStamp, velocity: 0
+    };
   });
-  node.addEventListener('pointercancel', () => { start = null; });
-  node.addEventListener('pointerup', event => {
-    if (start?.id !== event.pointerId) return;
-    const dx = event.clientX - start.x;
-    const dy = event.clientY - start.y;
-    start = null;
-    if (Math.abs(dx) < 45 || Math.abs(dx) < Math.abs(dy) * 1.3) return;
-    suppress = true;
-    step(dx < 0 ? 1 : -1);
-  });
-  node.addEventListener('click', event => {
-    if (suppress && event.detail) {
-      event.preventDefault();
-      event.stopPropagation();
-      suppress = false;
+
+  window.addEventListener('pointermove', event => {
+    const drag = gesture;
+    if (drag?.id !== event.pointerId) return;
+    if (event.pointerType === 'mouse' && !(event.buttons & 1)) {
+      cancel();
+      return;
     }
+    const dx = event.clientX - drag.x;
+    const dy = event.clientY - drag.y;
+    if (!drag.axis) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < 8) return;
+      drag.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+      suppressClick = true;
+      if (drag.axis === 'x') node.setPointerCapture(drag.id);
+    }
+    if (drag.axis !== 'x') return;
+    if (event.clientX !== drag.lastX && event.timeStamp > drag.lastMove) {
+      const speed = (event.clientX - drag.lastX) / (event.timeStamp - drag.lastMove);
+      drag.velocity = .4 * drag.velocity + .6 * speed;
+      drag.lastX = event.clientX;
+      drag.lastMove = event.timeStamp;
+    }
+    move(dx, dy, drag.tilt);
+  });
+
+  window.addEventListener('pointerup', event => {
+    if (gesture?.id !== event.pointerId) return;
+    const drag = release();
+    if (drag.axis !== 'x') return;
+    const dx = event.clientX - drag.x;
+    const distance = Math.abs(dx);
+    const flick = distance >= 20 && event.timeStamp - drag.lastMove <= 100 &&
+      Math.sign(drag.velocity) === Math.sign(dx) && Math.abs(drag.velocity) > drag.width * .0018;
+    if (distance >= Math.max(45, drag.width * .32) || flick) step(-Math.sign(dx));
+    else settle();
+  });
+  window.addEventListener('pointercancel', event => {
+    if (gesture?.id === event.pointerId) cancel();
+  });
+  node.addEventListener('lostpointercapture', event => {
+    if (event.target === node && gesture?.id === event.pointerId) cancel();
+  });
+  window.addEventListener('blur', cancel);
+
+  node.addEventListener('click', event => {
+    if (!suppressClick || !event.detail) return;
+    suppressClick = false;
+    event.preventDefault();
+    event.stopImmediatePropagation();
   }, true);
+  return cancel;
 }
 
 export const money = new Intl.NumberFormat('en-US', {style: 'currency', currency: 'USD'});

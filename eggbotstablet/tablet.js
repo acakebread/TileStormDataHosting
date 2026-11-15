@@ -2,7 +2,7 @@
 
 import {loadCatalogue} from './catalogue.js';
 import {createChat, createMail} from './messages.js?v=mail-layout';
-import {createPhotos, createBank, createLove, createMarket, createStore} from './apps.js?v=shared-profile';
+import {createPhotos, createBank, createLove, createMarket, createStore} from './apps.js?v=lovebot-swipe';
 import {createFirebot} from './firebot.js?v=hosted';
 import {createScratch} from './games.js?v=scratch-bling';
 import {createFruit} from './fruit-burst.js?v=unity';

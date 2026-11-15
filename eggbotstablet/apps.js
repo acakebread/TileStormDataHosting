@@ -1,6 +1,6 @@
 // Copyright 2026 massivehadron.com ltd.
 
-import {element, button, image, tabs, watchSwipe, money, number, countdown, loadSetting, saveSetting} from './ui.js';
+import {element, button, image, tabs, watchSwipe, money, number, countdown, loadSetting, saveSetting} from './ui.js?v=lovebot-swipe';
 import {hasOnlyBotsAccess, redeemOnlyBotsCode} from './premium.js?v=shared-profile';
 import {buyPurchase, catalogueProduct, paidLoveBotSwipes, refreshCatalogue, refreshPurchases, spendLoveBotSwipe} from './purchases.js?v=shared-profile';
 import {createSlideGesture} from './slide.js';
@@ -140,19 +140,54 @@ export function createLove(tablet) {
   const {data} = tablet;
   const profiles = data.profiles.filter(profile => profile.loveBot?.enabled)
     .sort((a, b) => (a.loveBot.order ?? 0) - (b.loveBot.order ?? 0));
-  const card = element('article', 'love-card');
+  const likeStamp = element('span', 'love-stamp like', 'Like');
+  const passStamp = element('span', 'love-stamp pass', 'Nope');
+  const stamps = element('div', 'love-stamps', likeStamp, passStamp);
+  stamps.setAttribute('aria-hidden', 'true');
+  const card = element('article', 'love-card love-front');
+  const nextCard = element('article', 'love-card love-behind');
+  nextCard.setAttribute('aria-hidden', 'true');
+  const stage = element('div', 'love-stage', nextCard, card);
+
+  function choice(label, kind, direction) {
+    const control = button('', () => swipe(direction), 'love-choice ' + kind);
+    control.append(element('span', 'love-choice-icon'));
+    control.setAttribute('aria-label', label);
+    control.title = label;
+    return control;
+  }
+
+  const pass = choice('Pass', 'pass', -1);
+  const like = choice('Like', 'like', 1);
+  const deck = element('div', 'love-deck', pass, stage, like);
   const credits = element('output', 'muted');
-  const actions = element('div', 'actions love-actions');
-  const view = element('section', '', element('div', 'app-content',
-    element('header', 'app-heading', element('h2', '', 'LoveBot'), credits), card, actions));
+  const previousPhoto = button('Previous photo', () => stepPhoto(-1));
+  const nextPhoto = button('Next photo', () => stepPhoto(1));
+  const photoControls = element('div', 'love-photo-controls', previousPhoto, nextPhoto);
+  const emptyText = element('p');
+  const buy = button('Add credits', () => {
+    if (buyPurchase('lovebot')) tablet.toast('Checkout opened in a new tab.');
+    else tablet.toast('Check your open checkout tab or allow popups to start checkout.');
+  }, 'primary');
+  const empty = element('div', 'love-empty', emptyText, buy);
+  const view = element('section', 'love-app', element('div', 'app-content',
+    element('header', 'app-heading love-heading', image('./art/love.png'), element('h2', '', 'LoveBot'), credits),
+    deck, photoControls, empty));
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
   const refillDelay = 10 * 60 * 1000;
   const saved = loadSetting('loveCredits', {});
   let swipes = Number.isInteger(saved?.swipes) ? Math.min(5, Math.max(0, saved.swipes)) : 5;
   let refill = Number(saved?.refill) || 0;
   let index = 0;
   let photoIndex = 0;
-  let spendingSwipe = false;
+  let displayedIndex = -1;
+  let displayedPhoto = -1;
+  let busy = false;
+  let motion;
+  let tilt = 1;
   let nextBalanceCheck = 0;
+  const photoIds = profile => profile.loveBot.photoIds?.length ? profile.loveBot.photoIds : [profile.portrait?.photoId];
+  const canSwipe = () => !view.hidden && !busy && !deck.hidden;
 
   function tick(now) {
     if (now >= nextBalanceCheck) {
@@ -164,7 +199,6 @@ export function createLove(tablet) {
       refill = 0;
       saveSetting('loveCredits', {swipes, refill});
       render();
-      return;
     }
     const paid = paidLoveBotSwipes();
     credits.textContent = paid ? `${paid.toLocaleString()} paid ${paid === 1 ? 'swipe' : 'swipes'}` :
@@ -172,74 +206,154 @@ export function createLove(tablet) {
       'Free swipes in ' + countdown(refill - now);
   }
 
-  async function swipe(like) {
-    const profile = profiles[index];
-    if (!profile || spendingSwipe) return;
-    if (swipes > 0) {
-      swipes--;
-      if (swipes === 0) refill = Date.now() + refillDelay;
-      saveSetting('loveCredits', {swipes, refill});
-    } else {
-      if (!paidLoveBotSwipes()) return;
-      spendingSwipe = true;
-      render();
-      try {
-        if (!await spendLoveBotSwipe()) return;
-      } catch {
-        tablet.toast('Could not use that swipe. Please try again.');
-        return;
-      } finally {
-        spendingSwipe = false;
-        render();
-      }
+  function positionCard(x, y) {
+    const pull = x / Math.max(1, stage.clientWidth);
+    const angle = Math.max(-32, Math.min(32, pull * 36 * tilt));
+    card.style.transform = `translate(${x}px, ${y}px) rotate(${angle}deg)`;
+    likeStamp.style.opacity = Math.min(1, Math.max(0, pull * 4));
+    passStamp.style.opacity = Math.min(1, Math.max(0, -pull * 4));
+  }
+
+  async function animateCard(x, y, duration, leaving) {
+    const from = getComputedStyle(card).transform;
+    motion?.cancel();
+    positionCard(x, y);
+    if (reduceMotion.matches || view.hidden || typeof card.animate !== 'function') return;
+    const animation = card.animate([
+      {transform: from, opacity: 1},
+      {transform: card.style.transform, opacity: leaving ? 0 : 1}
+    ], {duration, easing: leaving ? 'cubic-bezier(.3,.65,.65,1)' : 'ease-out', fill: 'forwards'});
+    motion = animation;
+    try { await animation.finished; }
+    catch { /* A new drag can interrupt the return animation. */ }
+    finally {
+      if (motion === animation) motion = null;
+      animation.cancel();
     }
-    if (like && Math.random() < .35) tablet.toast('It’s a match with ' + profile.displayName + '!');
-    index = (index + 1) % profiles.length;
-    photoIndex = 0;
-    render();
+  }
+
+  function settle() {
+    if (!busy) animateCard(0, 0, 200, false);
+  }
+
+  async function swipe(direction) {
+    const profile = profiles[index];
+    if (!profile || !canSwipe()) return;
+    busy = true;
+    cancelDrag();
+    setControlsBusy(true);
+    let accepted = false;
+    try {
+      if (swipes > 0) {
+        swipes--;
+        if (swipes === 0) refill = Date.now() + refillDelay;
+        saveSetting('loveCredits', {swipes, refill});
+      } else if (!paidLoveBotSwipes() || !await spendLoveBotSwipe()) {
+        return;
+      }
+      accepted = true;
+      tick(Date.now());
+      const distance = view.clientWidth / 2 + stage.clientWidth;
+      await animateCard(direction * distance, -22, 320, true);
+    } catch {
+      if (!accepted && !view.hidden) tablet.toast('Could not use that swipe. Please try again.');
+    } finally {
+      busy = false;
+      if (accepted) {
+        index = (index + 1) % profiles.length;
+        photoIndex = 0;
+        displayedIndex = -1;
+        positionCard(0, 0);
+        if (!view.hidden && direction > 0 && Math.random() < .35)
+          tablet.toast('It’s a match with ' + profile.displayName + '!');
+      } else settle();
+      setControlsBusy(false);
+      render();
+    }
+  }
+
+  function setControlsBusy(value) {
+    for (const control of [pass, like, previousPhoto, nextPhoto]) control.setAttribute('aria-disabled', String(value));
+  }
+
+  function showCard(target, profile, selectedPhoto) {
+    const {loveBot} = profile;
+    const ids = photoIds(profile);
+    const photo = data.photo(profile, ids[selectedPhoto]);
+    const distance = loveBot.tilesAway > 0 ? loveBot.tilesAway + (loveBot.tilesAway === 1 ? ' tile away' : ' tiles away') : '';
+    const copy = element('div', 'love-copy',
+      element('h3', '', profile.displayName, profile.age > 0 ? element('span', '', ' ' + profile.age) : null),
+      element('p', 'love-profile-detail', [profile.occupation, distance].filter(Boolean).join(', ')),
+      element('p', '', loveBot.bio ?? ''));
+    const bars = element('div', 'love-photo-bars', ...ids.map((_, slot) =>
+      element('span', slot === selectedPhoto ? 'current' : '')));
+    bars.hidden = ids.length < 2;
+    bars.setAttribute('aria-hidden', 'true');
+    target.replaceChildren(
+      element('div', 'love-photo', photo ? image(photo, profile.displayName) : data.avatar(profile, profile.displayName)),
+      bars, copy, ...(target === card ? [stamps] : []));
   }
 
   function render() {
+    if (busy) return;
     const profile = profiles[index];
-    const now = Date.now();
-    if (swipes === 0 && refill <= now) {
-      tick(now);
+    deck.hidden = !profile || (!swipes && !paidLoveBotSwipes());
+    empty.hidden = !deck.hidden;
+    buy.hidden = !profile;
+    emptyText.textContent = profile ? 'You’re out of swipes.' : 'There are no profiles nearby.';
+    photoControls.hidden = deck.hidden || photoIds(profile).length < 2;
+    if (deck.hidden) {
+      cancelDrag();
+      positionCard(0, 0);
       return;
     }
-    tick(now);
-    if ((!swipes && !paidLoveBotSwipes()) || !profile) {
-      card.replaceChildren(element('p', 'row-copy', profile ? 'You’re out of free swipes.' : 'There are no profiles nearby.'));
-      actions.replaceChildren();
-      if (profile) actions.append(button('Add credits', () => {
-        if (buyPurchase('lovebot')) tablet.toast('Checkout opened in a new tab.');
-        else tablet.toast('Check your open checkout tab or allow popups to start checkout.');
-      }, 'primary'));
-      return;
+    if (index !== displayedIndex) {
+      nextCard.hidden = profiles.length < 2;
+      if (!nextCard.hidden) showCard(nextCard, profiles[(index + 1) % profiles.length], 0);
     }
-    const {loveBot} = profile;
-    const ids = loveBot.photoIds?.length ? loveBot.photoIds : [profile.portrait?.photoId];
-    const photo = data.photo(profile, ids[photoIndex]);
-    const copy = element('div', 'row-copy', element('h3', '', profile.displayName),
-      element('small', '', String(loveBot.tilesAway ?? 0) + ' tiles away'), element('p', '', loveBot.bio ?? ''));
-    card.replaceChildren(photo ? image(photo, profile.displayName) : element('div', 'placeholder', data.avatar(profile, profile.displayName)), copy);
-    const pass = button('Pass', () => swipe(false));
-    const like = button('Like', () => swipe(true), 'primary');
-    pass.disabled = like.disabled = spendingSwipe;
-    actions.replaceChildren(pass);
-    if (ids.length > 1) actions.append(button('Next photo', () => {
-      photoIndex = (photoIndex + 1) % ids.length;
-      render();
-    }));
-    actions.append(like);
+    if (index !== displayedIndex || photoIndex !== displayedPhoto) showCard(card, profile, photoIndex);
+    displayedIndex = index;
+    displayedPhoto = photoIndex;
   }
 
-  watchSwipe(card, direction => swipe(direction < 0));
-  window.addEventListener('tilestorm-lovebot-credits-changed', render);
-  window.addEventListener('tilestorm-purchases-changed', render);
+  function stepPhoto(direction) {
+    if (!canSwipe()) return;
+    const count = photoIds(profiles[index]).length;
+    if (count < 2) return;
+    photoIndex = (photoIndex + direction + count) % count;
+    render();
+  }
+
+  const cancelDrag = watchSwipe(card, direction => swipe(-direction), {
+    canDrag: canSwipe,
+    move(x, y, grip) {
+      motion?.cancel();
+      tilt = grip;
+      positionCard(x, y);
+    },
+    settle
+  });
+  card.addEventListener('click', event => {
+    const bounds = card.getBoundingClientRect();
+    stepPhoto(event.clientX < bounds.left + bounds.width / 2 ? -1 : 1);
+  });
+  function update() {
+    tick(Date.now());
+    render();
+  }
+  window.addEventListener('tilestorm-lovebot-credits-changed', update);
+  window.addEventListener('tilestorm-purchases-changed', update);
   window.addEventListener('tilestorm-checkout-error', event => {
     if (event.detail === 'lovebot') tablet.toast('Checkout could not open. Try again.');
   });
-  return {view, open: () => { nextBalanceCheck = 0; render(); }, tick};
+  return {
+    view, tick,
+    open() { nextBalanceCheck = 0; update(); },
+    close() {
+      cancelDrag();
+      motion?.finish();
+    }
+  };
 }
 
 export function createMarket(tablet) {
