@@ -1,350 +1,331 @@
 // Copyright 2026 massivehadron.com ltd.
-// Game rules based on Scratch Bling and FruitBurst by massivehadron.com ltd.
+// Based on Scratch Bling, copyright 2016 massivehadron.com ltd. created 29/09/2016 by Andrew Cakebread
 
 import {shuffle} from '../tablet-preview/shared.js';
-import {element, button, countdown, number, loadSetting, saveSetting, weighted} from './ui.js';
+import {dollars, loadScratchCard} from './scratch-card.js';
+import {button, countdown, element, loadSetting, saveSetting, weighted} from './ui.js';
 
-export function createScratch({data}) {
-  const cost = 100;
-  const refillDelay = 10 * 60 * 1000;
-  const prizes = [1, 2, 3, 5, 8, 10, 20, 50].map((multiplier, index) => ({
-    amount: multiplier * cost, odds: 1 / [1, 2, 5, 10, 20, 50, 100, 200][index]
-  }));
-  const chance = .55 * prizes.reduce((total, prize) => total + prize.odds, 0) /
-    prizes.reduce((total, prize) => total + prize.amount / cost * prize.odds, 0);
+const cost = 100;
+const startingCash = 1000;
+const refillDelay = 10 * 60 * 1000;
+const prizes = [1, 2, 3, 5, 8, 10, 20, 50].map((multiplier, index) => ({
+  amount: multiplier * cost, odds: 1 / [1, 2, 5, 10, 20, 50, 100, 200][index]
+}));
+const winChance = .55 * prizes.reduce((sum, prize) => sum + prize.odds, 0) /
+  prizes.reduce((sum, prize) => sum + prize.amount / cost * prize.odds, 0);
+
+function dealPrizes(winner) {
+  const deck = shuffle(prizes.filter(prize => prize !== winner).flatMap(prize => [prize, prize]));
+  // Inserting within the first seven positions keeps all three matches on the nine-cell card.
+  if (winner) {
+    for (let copy = 0; copy < 3; copy++) deck.splice(Math.floor(Math.random() * 7), 0, winner);
+  }
+  return deck.slice(0, 9);
+}
+
+function scratchAudio() {
+  const Audio = window.AudioContext || window.webkitAudioContext;
+  const clips = ['scratch', 'match', 'win_0', 'lose_0'];
+  const downloads = Audio ? clips.map(clip => fetch(new URL('./art/scratch/' + clip + '.mp3', import.meta.url))
+    .then(response => response.ok ? response.arrayBuffer() : null).catch(() => null)) : [];
+  const playing = new Map();
+  let context;
+  let buffers;
+
+  function unlock() {
+    if (!Audio) return;
+    try {
+      context ??= new Audio();
+      if (context.state !== 'running') context.resume().catch(() => {});
+      buffers ??= Object.fromEntries(clips.map((clip, index) => [clip,
+        downloads[index].then(bytes => bytes && context.decodeAudioData(bytes)).catch(() => null)
+      ]));
+    } catch {
+      // The card stays playable when audio is unavailable.
+    }
+  }
+
+  function stop(clip) {
+    playing.get(clip)?.source?.stop();
+    playing.delete(clip);
+  }
+
+  function play(clip, loop = false) {
+    if (!buffers || (loop && playing.has(clip))) return;
+    stop(clip);
+    const request = {source: null};
+    playing.set(clip, request);
+    buffers[clip].then(buffer => {
+      if (playing.get(clip) !== request) return;
+      if (!buffer || context.state !== 'running') {
+        playing.delete(clip);
+        return;
+      }
+      const source = context.createBufferSource();
+      request.source = source;
+      source.buffer = buffer;
+      source.loop = loop;
+      source.connect(context.destination);
+      source.onended = () => {
+        if (playing.get(clip) === request) playing.delete(clip);
+      };
+      source.start();
+    });
+  }
+
+  return {unlock, play, stop, stopAll() { for (const clip of playing.keys()) stop(clip); }};
+}
+
+export function createScratch({data, open: openApp}) {
   const saved = loadSetting('scratchWallet', {});
-  let cash = Number.isInteger(saved?.cash) && saved.cash >= 0 ? saved.cash : 1000;
+  let cash = Number.isInteger(saved?.cash) && saved.cash >= 0 ? saved.cash : startingCash;
   let refill = Number(saved?.refill) || 0;
-  let cells;
-  let winning;
-  let remaining;
-  let paid;
-  let pointer;
+  let card;
+  let round;
+  let panelMode;
+  let active = false;
+  let loading = false;
+  let press;
+  let holdTimer;
+  let raspTimer;
+  let revealTimer;
+  const audio = scratchAudio();
 
-  const wallet = element('output', 'muted');
-  const status = element('p', '', 'Match three prizes to win. First scratch costs 100 coins.');
-  status.setAttribute('role', 'status');
-  const grid = element('div', 'scratch-grid');
-  grid.setAttribute('aria-label', 'Scratch card prizes');
-  const card = element('div', 'scratch-card', grid);
-  const artwork = data.media('MHScratch/Textures/cards/card01');
-  if (artwork) card.style.backgroundImage = 'url("' + artwork + '")';
-  const again = button('New card · 100 coins', deal, 'primary');
-  again.hidden = true;
-  const view = element('section', '', element('div', 'app-content',
-    element('header', 'app-heading', element('h2', '', 'Scratch Bling'), wallet), status, card, again));
+  const cardButton = button('', event => {
+    if (event.detail !== 0 || !beginScratch()) return;
+    reveal();
+  }, 'scratch-card');
+  cardButton.hidden = true;
+  cardButton.setAttribute('aria-label', 'Mega Rich. Match three prizes to win. A card costs $100. ' +
+    'Drag to scratch the foil or hold for one second to reveal the card. Press Enter to reveal with the keyboard.');
+  const cashAmount = element('output', '', dollars(cash));
+  const cashBar = element('div', 'scratch-cash', element('span', '', 'CASH'), cashAmount);
+  cashBar.hidden = true;
+
+  const title = element('h2', 'scratch-headline');
+  const detail = element('p', 'scratch-detail');
+  const retry = button('RETRY', load, 'scratch-play');
+  const again = button('PLAY AGAIN', () => { deal(); cardButton.focus(); }, 'scratch-play');
+  const moreCoins = element('p', 'scratch-countdown');
+  const quit = button('QUIT', () => {
+    if (card) deal();
+    openApp('home');
+  }, 'scratch-quit');
+  const panel = element('div', 'scratch-panel',
+    element('div', 'scratch-message', title, detail), retry, again, moreCoins, quit);
+  panel.firstElementChild.setAttribute('role', 'status');
+  const view = element('section', 'scratch-app', element('div', 'scratch-card-area', cardButton), panel, cashBar);
+  view.setAttribute('aria-label', 'Scratch Bling');
+
+  function saveWallet() {
+    saveSetting('scratchWallet', {cash, refill});
+  }
+
+  function walletWait(now) {
+    const oldCash = cash;
+    const oldRefill = refill;
+    if (cash >= cost) {
+      refill = 0;
+    } else if (!refill || refill - now > refillDelay) {
+      refill = now + refillDelay;
+    } else if (now >= refill) {
+      cash = startingCash;
+      refill = 0;
+    }
+    if (cash !== oldCash || refill !== oldRefill) saveWallet();
+    return refill ? refill - now : 0;
+  }
+
+  function showWait(wait) {
+    moreCoins.hidden = !wait;
+    again.hidden = !!wait;
+    if (wait) {
+      const text = 'MORE COINS\nIN ' + countdown(wait);
+      if (moreCoins.textContent !== text) moreCoins.textContent = text;
+    }
+  }
+
+  function showPanel(mode, message, text = '', wait = 0) {
+    const restoreFocus = active && view.contains(document.activeElement);
+    panelMode = mode;
+    const shaded = mode === 'result' || mode === 'out-of-cash';
+    panel.classList.toggle('shaded', shaded);
+    title.textContent = message;
+    title.classList.toggle('gold', mode === 'result' && !!round.winner);
+    detail.textContent = text;
+    retry.hidden = mode !== 'error';
+    if (shaded) showWait(wait);
+    else moreCoins.hidden = again.hidden = true;
+    panel.hidden = false;
+    cardButton.inert = true;
+    if (restoreFocus) {
+      const action = [retry, again, quit].find(control => !control.hidden);
+      action.focus();
+    }
+  }
+
+  function hidePanel() {
+    panelMode = null;
+    panel.hidden = true;
+    cardButton.inert = false;
+  }
 
   function tick(now) {
-    if (refill && now >= refill) {
-      cash = Math.max(cash, 1000);
-      refill = 0;
-      saveSetting('scratchWallet', {cash, refill});
+    if (!round) return;
+    if (!round.paid || round.phase === 'done') {
+      const wait = walletWait(now);
+      if (panelMode === 'out-of-cash' && !wait) {
+        const restoreFocus = panel.contains(document.activeElement);
+        hidePanel();
+        if (restoreFocus) cardButton.focus();
+      } else if (panelMode === 'result' || panelMode === 'out-of-cash') {
+        showWait(wait);
+      } else if (wait) {
+        showPanel('out-of-cash', 'OUT OF CASH', 'Cards cost ' + dollars(cost), wait);
+      }
     }
-    wallet.textContent = number.format(cash) + ' coins' + (refill ? ' · Refill in ' + countdown(refill - now) : '');
-    for (const [index, control] of Array.from(grid.children).entries()) {
-      control.disabled = !paid && cash < cost && cells[index] != null;
-    }
-    again.disabled = cash < cost;
+    const amount = dollars(cash);
+    if (cashAmount.value !== amount) cashAmount.value = amount;
   }
 
   function deal() {
-    winning = Math.random() < chance ? weighted(prizes, prize => prize.odds) : null;
-    const matches = winning ? [winning, winning, winning] : [];
-    const fillers = shuffle(prizes.filter(prize => prize !== winning).flatMap(prize => [prize, prize]));
-    cells = shuffle([...matches, ...fillers.slice(0, 9 - matches.length)]);
-    paid = false;
-    remaining = cells.length;
-    again.hidden = true;
-    status.textContent = 'Match three prizes to win. First scratch costs 100 coins.';
-    grid.replaceChildren(...cells.map((_, index) => {
-      const control = button('PRIZE', () => reveal(index));
-      control.dataset.cell = index;
-      control.setAttribute('aria-label', 'Scratch prize ' + (index + 1));
-      return control;
-    }));
-    tick(Date.now());
-  }
-
-  function reveal(index) {
-    const prize = cells[index];
-    if (!prize || (!paid && cash < cost)) return;
-    if (!paid) {
-      paid = true;
-      cash -= cost;
-      if (cash < cost) refill = Date.now() + refillDelay;
-      saveSetting('scratchWallet', {cash, refill});
-    }
-    cells[index] = null;
-    remaining--;
-    const control = grid.children[index];
-    control.textContent = '$' + number.format(prize.amount);
-    control.setAttribute('aria-label', 'Prize ' + (index + 1) + ', ' + control.textContent);
-    control.setAttribute('aria-disabled', 'true');
-    control.classList.add('revealed');
-    if (prize === winning) control.dataset.match = '';
-    if (remaining === 0) {
-      if (winning) {
-        cash += winning.amount;
-        if (cash >= cost) refill = 0;
-        saveSetting('scratchWallet', {cash, refill});
-        for (const match of grid.querySelectorAll('[data-match]')) match.classList.add('winner');
-      }
-      status.textContent = winning ? 'You won ' + number.format(winning.amount) + ' coins!' : 'No win. One day.';
-      again.hidden = false;
-    }
-    tick(Date.now());
-  }
-
-  grid.addEventListener('pointerdown', event => {
-    if (!event.isPrimary || event.button !== 0) return;
-    const control = event.target.closest('[data-cell]');
-    if (!control) return;
-    pointer = event.pointerId;
-    grid.setPointerCapture(pointer);
-    reveal(Number(control.dataset.cell));
-  });
-  grid.addEventListener('pointermove', event => {
-    if (event.pointerId !== pointer) return;
-    const control = document.elementFromPoint(event.clientX, event.clientY)?.closest('[data-cell]');
-    if (control && grid.contains(control)) reveal(Number(control.dataset.cell));
-  });
-  grid.addEventListener('lostpointercapture', () => { pointer = undefined; });
-  deal();
-  return {view, open() { tick(Date.now()); }, tick};
-}
-
-const columns = 10;
-const rows = 8;
-const fruitTypes = 7;
-const runScores = [0, 0, 0, 10, 30, 80, 200, 500, 1000, 2000, 4000];
-
-function scan(board) {
-  const matched = new Set();
-  let points = 0;
-
-  function line(start, length, step) {
-    let runStart = 0;
-    while (runStart < length) {
-      const fruit = board[start + runStart * step];
-      let end = runStart + 1;
-      while (end < length && board[start + end * step] === fruit) end++;
-      if (end - runStart >= 3) {
-        points += runScores[end - runStart];
-        for (let i = runStart; i < end; i++) matched.add(start + i * step);
-      }
-      runStart = end;
-    }
-  }
-
-  for (let row = 0; row < rows; row++) line(row * columns, columns, 1);
-  for (let col = 0; col < columns; col++) line(col, rows, columns);
-  return {matched, points};
-}
-
-function swap(board, a, b) {
-  [board[a], board[b]] = [board[b], board[a]];
-}
-
-function hasMove(board) {
-  function trySwap(a, b) {
-    swap(board, a, b);
-    const result = scan(board).points > 0;
-    swap(board, a, b);
-    return result;
-  }
-  for (let i = 0; i < board.length; i++) {
-    if (i % columns < columns - 1 && trySwap(i, i + 1)) return true;
-    if (i < board.length - columns && trySwap(i, i + columns)) return true;
-  }
-  return false;
-}
-
-function randomFruit(board, index) {
-  const neighbours = [board[index - columns], board[index + columns]];
-  if (index % columns > 0) neighbours.push(board[index - 1]);
-  if (index % columns < columns - 1) neighbours.push(board[index + 1]);
-  const options = Array.from({length: fruitTypes}, (_, fruit) => fruit).filter(fruit => !neighbours.includes(fruit));
-  return options[Math.floor(Math.random() * options.length)];
-}
-
-function refillBoard(board) {
-  for (let i = board.length - 1; i >= 0; i--) {
-    if (board[i] == null) board[i] = randomFruit(board, i);
-  }
-}
-
-function settleBoard(board, matched) {
-  for (let col = 0; col < columns; col++) {
-    let write = (rows - 1) * columns + col;
-    for (let read = write; read >= 0; read -= columns) {
-      if (matched.has(read)) continue;
-      board[write] = board[read];
-      write -= columns;
-    }
-    for (; write >= 0; write -= columns) board[write] = null;
-  }
-  refillBoard(board);
-}
-
-export function createFruit() {
-  let board;
-  let first;
-  let score = 0;
-  let deadline = 0;
-  let remaining = 120000;
-  let busy = false;
-  let active = false;
-  let playing = false;
-  let drag;
-  let dragged = false;
-  let resolution;
-
-  const time = element('output', 'muted');
-  const points = element('output', 'muted');
-  const status = element('p', 'fruit-status', 'Swap adjacent fruit to match three or more.');
-  status.setAttribute('role', 'status');
-  const grid = element('div', 'fruit-board');
-  grid.setAttribute('aria-label', 'Fruit Burst board');
-  grid.hidden = true;
-  const controls = Array.from({length: rows * columns}, (_, index) => {
-    const control = button('', event => {
-      if (dragged && event.detail) return;
-      select(index);
+    const winner = Math.random() < winChance ? weighted(prizes, prize => prize.odds) : null;
+    const cells = dealPrizes(winner);
+    const next = {winner, cells, paid: false, phase: 'playing', highlights: []};
+    round = next;
+    card.deal(cells.map(prize => prize.amount));
+    // Restart the idle finger prompt for each fresh card.
+    card.finger.hidden = true;
+    requestAnimationFrame(() => {
+      if (round === next && !next.paid) card.finger.hidden = false;
     });
-    control.dataset.cell = index;
-    control.append(element('span'));
-    return control;
-  });
-  grid.append(...controls);
-  const again = button('Play', start, 'primary');
-  const view = element('section', '', element('div', 'app-content',
-    element('header', 'app-heading', element('h2', '', 'Fruit Burst'), points, time),
-    grid, status, element('div', 'actions love-actions', again)));
-
-  function draw(matched = new Set()) {
-    for (const [index, control] of controls.entries()) {
-      const fruit = board[index];
-      control.style.setProperty('--fruit-position', fruit / 7 * 100 + '%');
-      control.setAttribute('aria-label', 'Fruit ' + (fruit + 1) + ', row ' + (Math.floor(index / columns) + 1) +
-        ', column ' + (index % columns + 1));
-      control.setAttribute('aria-pressed', String(first === index));
-      control.classList.toggle('matched', matched.has(index));
-    }
-    points.textContent = 'Score ' + number.format(score);
-  }
-
-  function tick(now) {
-    if (playing && active) {
-      remaining = Math.max(0, deadline - now);
-      if (remaining === 0) end('Time’s up.');
-    }
-    time.textContent = countdown(remaining);
-  }
-
-  function end(message) {
-    playing = false;
-    busy = false;
-    first = null;
-    clearTimeout(resolution);
-    draw();
-    for (const control of controls) control.disabled = true;
-    again.hidden = false;
-    again.textContent = 'Play again';
-    status.textContent = message;
-  }
-
-  function start() {
-    do {
-      board = Array(rows * columns).fill(null);
-      refillBoard(board);
-    } while (!hasMove(board));
-    first = null;
-    score = 0;
-    remaining = 120000;
-    deadline = Date.now() + remaining;
-    playing = true;
-    busy = false;
-    for (const control of controls) control.disabled = false;
-    grid.hidden = false;
-    again.hidden = true;
-    status.textContent = 'Swap adjacent fruit to match three or more.';
-    draw();
+    hidePanel();
     tick(Date.now());
   }
 
-  function adjacent(a, b) {
-    return Math.abs(a - b) === columns || (Math.abs(a - b) === 1 && Math.floor(a / columns) === Math.floor(b / columns));
-  }
-
-  function resolve(combo = 0) {
-    const {matched, points: earned} = scan(board);
-    if (!earned) {
-      busy = false;
-      draw();
-      if (!hasMove(board)) end('No moves left.');
-      return;
+  async function load() {
+    if (loading || card) return;
+    loading = true;
+    showPanel('loading', 'Loading scratch card…');
+    try {
+      card = await loadScratchCard(data);
+      const restoreFocus = active && panel.contains(document.activeElement);
+      cardButton.append(...card.layers);
+      cardButton.hidden = cashBar.hidden = false;
+      deal();
+      if (restoreFocus) (panel.hidden ? cardButton : quit).focus();
+    } catch {
+      card = round = null;
+      cardButton.replaceChildren();
+      cardButton.hidden = cashBar.hidden = true;
+      showPanel('error', 'Couldn’t load the scratch card.');
+    } finally {
+      loading = false;
     }
-    score += earned + combo * 10;
-    draw(matched);
-    resolution = setTimeout(() => {
-      settleBoard(board, matched);
-      resolve(combo + 1);
-    }, 190);
   }
 
-  function move(from, to) {
-    if (!playing || busy || !adjacent(from, to)) return;
-    tick(Date.now());
-    if (!playing) return;
-    first = null;
-    swap(board, from, to);
-    if (!scan(board).points) {
-      swap(board, from, to);
-      status.textContent = 'That swap didn’t make a match.';
-      draw();
-      return;
+  function beginScratch() {
+    if (!active || panelMode || press || round?.phase !== 'playing') return false;
+    if (!round.paid) {
+      tick(Date.now());
+      if (cash < cost) return false;
+      cash -= cost;
+      round.paid = true;
+      saveWallet();
+      tick(Date.now());
     }
-    status.textContent = '';
-    busy = true;
-    resolve();
+    card.finger.hidden = true;
+    audio.unlock();
+    return true;
   }
 
-  function select(index) {
-    if (!playing || busy) return;
-    if (first != null && adjacent(first, index)) {
-      move(first, index);
-      return;
+  function scratch(from, to) {
+    if (!card.stroke(from, to)) return;
+    clearTimeout(raspTimer);
+    audio.play('scratch', true);
+    raspTimer = setTimeout(() => audio.stop('scratch'), 120);
+  }
+
+  function endPress() {
+    const id = press?.id;
+    press = null;
+    clearTimeout(holdTimer);
+    clearTimeout(raspTimer);
+    audio.stop('scratch');
+    if (id !== undefined && cardButton.hasPointerCapture(id)) cardButton.releasePointerCapture(id);
+  }
+
+  function reveal() {
+    endPress();
+    card.clear();
+    round.phase = 'revealing';
+    round.highlights = round.cells.flatMap((prize, index) => prize === round.winner ? [index] : []);
+    showNextHighlight();
+  }
+
+  function showNextHighlight() {
+    if (round.highlights.length) {
+      revealTimer = setTimeout(() => {
+        card.highlight(round.highlights.shift());
+        audio.play('match');
+        showNextHighlight();
+      }, 200);
+    } else {
+      revealTimer = setTimeout(showResult, 500);
     }
-    first = first === index ? null : index;
-    draw();
   }
 
-  grid.addEventListener('pointerdown', event => {
-    dragged = false;
-    const cell = event.target.closest('[data-cell]');
-    if (!cell || event.button !== 0 || !event.isPrimary) return;
-    drag = {index: Number(cell.dataset.cell), x: event.clientX, y: event.clientY, id: event.pointerId};
+  function showResult() {
+    const prize = round.winner;
+    if (prize) {
+      cash += prize.amount;
+      saveWallet();
+    }
+    round.phase = 'done';
+    audio.play(prize ? 'win_0' : 'lose_0');
+    const now = Date.now();
+    showPanel('result', prize ? 'WINNER' : 'NO WIN', prize ? dollars(prize.amount) : 'One day.', walletWait(now));
+    tick(now);
+  }
+
+  function move(event) {
+    if (press?.id !== event.pointerId) return;
+    const point = card.point(event);
+    if (Math.hypot(point.x - press.last.x, point.y - press.last.y) < .5 * card.moveTexel) return;
+    scratch(press.last, point);
+    press.last = point;
+    if (Math.hypot(point.x - press.start.x, point.y - press.start.y) > 2 * card.moveTexel) clearTimeout(holdTimer);
+  }
+
+  cardButton.addEventListener('pointerdown', event => {
+    if (!event.isPrimary || event.button !== 0 || !beginScratch()) return;
+    event.preventDefault();
+    const point = card.point(event);
+    press = {id: event.pointerId, start: point, last: point};
+    cardButton.setPointerCapture(event.pointerId);
+    scratch(point, point);
+    holdTimer = setTimeout(reveal, 1000);
   });
-  grid.addEventListener('pointercancel', () => { drag = null; });
-  grid.addEventListener('pointerup', event => {
-    if (drag?.id !== event.pointerId) return;
-    const {index, x, y} = drag;
-    drag = null;
-    const dx = event.clientX - x;
-    const dy = event.clientY - y;
-    if (Math.max(Math.abs(dx), Math.abs(dy)) < 15) return;
-    const to = index + (Math.abs(dx) > Math.abs(dy) ? Math.sign(dx) : Math.sign(dy) * columns);
-    dragged = true;
-    if (to >= 0 && to < controls.length) move(index, to);
+  cardButton.addEventListener('pointermove', move);
+  cardButton.addEventListener('pointerup', event => {
+    if (press?.id !== event.pointerId) return;
+    move(event);
+    endPress();
+    if (card.isBare()) reveal();
   });
+  for (const type of ['pointercancel', 'lostpointercapture']) {
+    cardButton.addEventListener(type, event => { if (press?.id === event.pointerId) endPress(); });
+  }
 
   return {view, tick, open() {
-    if (!active) deadline = Date.now() + remaining;
+    if (!active && round?.phase === 'revealing') showNextHighlight();
     active = true;
+    if (!card && !panelMode) load();
     tick(Date.now());
   }, close() {
-    tick(Date.now());
     active = false;
-    drag = null;
+    clearTimeout(revealTimer);
+    endPress();
+    audio.stopAll();
   }};
 }
