@@ -1,7 +1,7 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {button, element, loadSetting, number, saveSetting, shortTime} from './ui.js';
-import {hasPurchase} from './purchases.js?v=botcloud';
+import {hasPurchase, hasSilverBotCloud} from './purchases.js?v=silver-membership';
 
 export const osVersion = '9.0';
 export const storageCapacityMb = 16000;
@@ -33,7 +33,7 @@ export function createTabletPreferences() {
 
   return {
     get hasOsUpgrade() { return previewOsUpgrade || hasPurchase(botOsPlusProduct); },
-    get hasCloudAccess() { return previewBotCloud || hasPurchase(botCloudProduct); },
+    get hasCloudAccess() { return previewBotCloud || hasPurchase(botCloudProduct) || hasSilverBotCloud(); },
     get bannerPosition() { return bannerPosition; },
     get soundsEnabled() { return soundsEnabled; },
     get notificationsPausedUntil() {
@@ -82,6 +82,9 @@ export function createSettings(tablet) {
   meter.max = storageCapacityMb;
   meter.setAttribute('aria-label', 'Storage used');
   const cloudStatus = element('p', 'muted');
+  const registration = element('a', '', 'Register or manage your email');
+  registration.href = './membership.html';
+  let displayedCloudAccess;
   const cloudAction = button('View BotCloud', () => {
     if (!preferences.hasCloudAccess) {
       tablet.openStoreListing(botCloudProduct);
@@ -93,7 +96,7 @@ export function createSettings(tablet) {
   const storage = element('section', 'settings-panel',
     element('div', 'settings-panel-heading', element('h3', '', 'Storage'),
       element('p', 'muted', number.format(storageCapacityMb) + ' MB total')),
-    meter, usage, element('h4', '', 'Offload content to the cloud'), cloudStatus, cloudAction);
+    meter, usage, element('h4', '', 'Offload content to the cloud'), cloudStatus, cloudAction, registration);
 
   const positions = ['top', 'bottom'].map(position =>
     button(position === 'top' ? 'Top' : 'Bottom', () => {
@@ -131,8 +134,9 @@ export function createSettings(tablet) {
 
   const upgradeStatus = element('p', 'muted');
   const upgradeAction = button('View upgrade', () => tablet.openStoreListing(botOsPlusProduct), 'primary');
+  const upgradeLinkHelp = element('p', 'muted', 'Already bought BotOS Plus in TileStorm? Choose Help → Link Web Tablet in the game.');
   const upgrade = element('section', 'settings-panel', element('h3', '', tabletProducts[botOsPlusProduct].name),
-    upgradeStatus, upgradeAction);
+    upgradeStatus, upgradeAction, upgradeLinkHelp);
 
   const view = element('section', 'settings-app', element('div', 'app-content',
     element('header', 'app-heading', tablet.art('settings'), element('h2', '', 'Settings')),
@@ -141,6 +145,7 @@ export function createSettings(tablet) {
 
   function refreshStorage() {
     const {contentOffloaded, hasCloudAccess} = preferences;
+    displayedCloudAccess = hasCloudAccess;
     const available = tablet.freeSpaceMb;
     const used = storageCapacityMb - available;
     meter.value = used;
@@ -180,6 +185,7 @@ export function createSettings(tablet) {
     resume.hidden = !expiry;
     pauseControls.hidden = !hasOsUpgrade;
     upgradeAction.hidden = hasOsUpgrade;
+    upgradeLinkHelp.hidden = hasOsUpgrade;
     const version = 'BotOS ' + osVersion + (hasOsUpgrade ? ' Plus' : '');
     if (software.textContent !== version) {
       software.textContent = version;
@@ -197,6 +203,9 @@ export function createSettings(tablet) {
       refreshSoundButtons();
       refreshPause();
     },
-    tick: refreshPause
+    tick() {
+      refreshPause();
+      if (displayedCloudAccess !== preferences.hasCloudAccess) refreshStorage();
+    }
   };
 }

@@ -22,6 +22,7 @@ let lovebotBalance = 0;
 let balanceProfile;
 let swipePending = false;
 let swipeRevision = 0;
+let memberStatus, memberProfile, memberCheckedUntil = 0;
 
 export function hasPurchase(product) {
   return purchaseStatus(product) === true;
@@ -42,6 +43,19 @@ async function post(route, body) {
   const reply = await response.json();
   if (!response.ok) throw Object.assign(new Error(reply.message || 'Purchase service unavailable.'), {status: response.status});
   return reply;
+}
+
+export function membershipRegistered() {
+  return memberProfile === key && memberStatus?.registered === true;
+}
+
+export function hasSilverBotCloud() {
+  return membershipRegistered() && Date.now() < Math.min(memberCheckedUntil, memberStatus.silverUntil * 1000);
+}
+
+export function membershipRequest(data, profile = key) {
+  if (!keyPattern.test(profile)) throw new Error('Open email registration from the intended player profile.');
+  return post('/api/membership', {...data, key: profile});
 }
 
 export function catalogueProduct(product) {
@@ -121,14 +135,20 @@ export function claimLoveBotPurchase(reference) {
 
 async function refresh(profile) {
   const revision = swipeRevision;
-  const {receipts, lovebotBalance: balance} = await post('/api/purchases', {key: profile});
+  const {receipts, lovebotBalance: balance, membership} = await post('/api/purchases', {key: profile});
   if (profile !== key) return;
+  const hadSilver = hasSilverBotCloud();
+  const wasRegistered = membershipRegistered();
+  memberProfile = profile;
+  memberStatus = membership;
+  memberCheckedUntil = Date.now() + 150000;
   if (!swipePending && revision === swipeRevision) updateLoveBotBalance(profile, balance);
   const unlocked = receipts.map(receipt => receipt.payload.split('|')[2]).sort();
   const saved = savedPurchases(profile);
   cachedPurchases.set(profile, unlocked);
   saveSetting('purchases.' + profile, unlocked);
-  if (unlocked.join('|') !== saved?.join('|')) window.dispatchEvent(new Event('tilestorm-purchases-changed'));
+  if (unlocked.join('|') !== saved?.join('|') || hadSilver !== hasSilverBotCloud() || wasRegistered !== membershipRegistered())
+    window.dispatchEvent(new Event('tilestorm-purchases-changed'));
 }
 
 export function refreshPurchases() {

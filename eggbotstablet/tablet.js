@@ -2,14 +2,14 @@
 
 import {loadCatalogue} from './catalogue.js';
 import {createChat, createMail} from './messages.js?v=mail-layout';
-import {createPhotos, createBank, createLove, createMarket, createStore} from './apps.js?v=botcloud';
+import {createPhotos, createBank, createLove, createMarket, createStore} from './apps.js?v=silver-membership';
 import {createFirebot} from './firebot.js?v=hosted';
 import {createScratch} from './games.js?v=scratch-bling';
 import {createFruit} from './fruit-burst.js?v=unity';
-import {hasOnlyBotsAccess, hasPremiumAccess} from './premium.js?v=botcloud';
-import {linkPurchaseProfile, refreshPurchases} from './purchases.js?v=botcloud';
+import {hasOnlyBotsAccess, hasPremiumAccess} from './premium.js?v=silver-membership';
+import {linkPurchaseProfile, membershipRegistered, refreshPurchases} from './purchases.js?v=silver-membership';
 import {createHomePager} from './home.js?v=onlybots-shop';
-import {createSettings, createTabletPreferences, offloadSizeMb, osVersion} from './settings.js?v=botcloud';
+import {createSettings, createTabletPreferences, offloadSizeMb, osVersion} from './settings.js?v=silver-membership';
 import {element, button, image, shortTime, loadSetting, saveSetting} from './ui.js';
 
 const pages = [
@@ -386,5 +386,8 @@ if (!handleLocation()) refreshPurchases();
 if (onlyBotsInstalled && hasOnlyBotsAccess()) mount('onlybots');
 tick();
 setInterval(tick, 1000);
+setInterval(() => {
+  if (!document.hidden && membershipRegistered()) refreshPurchases();
+}, 60000);
 setTimeout(announceUpdate, 50000);
 startContent();

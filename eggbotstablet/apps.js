@@ -1,10 +1,10 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {element, button, image, tabs, watchSwipe, money, number, countdown, loadSetting, saveSetting} from './ui.js';
-import {hasOnlyBotsAccess, redeemOnlyBotsCode} from './premium.js?v=botcloud';
-import {buyPurchase, catalogueProduct, paidLoveBotSwipes, refreshCatalogue, refreshPurchases, spendLoveBotSwipe} from './purchases.js?v=botcloud';
+import {hasOnlyBotsAccess, redeemOnlyBotsCode} from './premium.js?v=silver-membership';
+import {buyPurchase, catalogueProduct, paidLoveBotSwipes, refreshCatalogue, refreshPurchases, spendLoveBotSwipe} from './purchases.js?v=silver-membership';
 import {createSlideGesture} from './slide.js';
-import {botOsPlusProduct, tabletProducts} from './settings.js?v=botcloud';
+import {botOsPlusProduct, tabletProducts} from './settings.js?v=silver-membership';
 
 export function createPhotos({data}) {
   const photos = (data.owner?.photos ?? []).map(photo => ({
@@ -457,7 +457,19 @@ export function createStore(tablet) {
     const installedMessage = isOsUpgrade ? 'Installed. Open Settings to pause notifications.' :
       'Activated. Open Settings to offload cached media.';
     const status = element('p', 'muted');
-    const details = element('div', '', element('p', '', product.description), status);
+    status.setAttribute('role', 'status');
+    const details = element('div', 'product-details', element('p', '', product.description), status);
+    const buy = button('Continue to Shop', () => {
+      if (owned()) {
+        buy.hidden = true;
+        status.textContent = installedMessage;
+        return;
+      }
+      status.textContent = buyPurchase(id) ? 'Checkout opened in a new tab.' :
+        'Check your open checkout tab or allow popups to start checkout.';
+    }, 'primary');
+    buy.hidden = true;
+    controls.push(buy);
     tablet.prompt(product.name, details, controls, 'Close');
     if (owned()) {
       status.textContent = installedMessage;
@@ -472,19 +484,15 @@ export function createStore(tablet) {
       }
       const membership = offer.membership;
       const priceDetails = membership ? element('p', '', `${offer.priceLabel} regular. ${membership.tier} members save ${membership.savingsPercent}% and pay ${membership.priceLabel}.`) : null;
-      const buy = button(membership ? 'Continue to Shop' : `Buy ${product.name} · ${offer.priceLabel}`, () => {
-        if (owned()) {
-          buy.remove();
-          priceDetails?.remove();
-          status.textContent = installedMessage;
-          return;
-        }
-        status.textContent = buyPurchase(id) ? 'Checkout opened in a new tab.' :
-          'Check your open checkout tab or allow popups to start checkout.';
-      }, 'primary');
+      buy.textContent = membership ? 'Continue to Shop' : `Buy ${product.name} · ${offer.priceLabel}`;
       status.textContent = '';
       if (priceDetails) details.insertBefore(priceDetails, status);
-      details.insertBefore(buy, status);
+      if (!isOsUpgrade) {
+        const register = element('a', '', 'Verify your email for BotCloud with Silver');
+        register.href = './membership.html';
+        details.insertBefore(register, status);
+      }
+      buy.hidden = false;
     });
   }
 
