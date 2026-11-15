@@ -9,8 +9,8 @@
 			"mapHash": "9Ww5GH",
 			"name": "test editable map",
 			"sizeBytes": 866,
-			"updatedUtc": "2026-11-15T16:17:42.4793473Z",
-			"utc": "5nTPt5",
+			"updatedUtc": "2026-11-15T16:21:30.5105948Z",
+			"utc": "5M0fmc",
 			"visibility": "private"
 		},
 		{
@@ -181,6 +181,6 @@
 			"visibility": "public"
 		}
 	],
-	"generatedUtc": "2026-11-15T16:17:42.4793473Z",
+	"generatedUtc": "2026-11-15T16:21:30.5105948Z",
 	"repositoryName": "TileStorm Shared Maps"
 }
