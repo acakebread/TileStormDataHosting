@@ -20,9 +20,12 @@
 </style>
 <main>
   <h1>Register with Massive Hadron</h1>
-  <p>Verify your email to use membership benefits in TileStorm Evolution and Eggbot’s tablet. Use your Buy Me a Coffee email for BotCloud with an active Silver membership.</p>
+  <p>Link your Buy Me a Coffee membership to use its benefits in TileStorm Evolution and Eggbot’s tablet. Active Silver members get BotCloud.</p>
   <p>On another browser or device, verify the same address to get your membership benefits there.</p>
   <p id="status" role="status">Checking registration…</p>
+  <form id="activate" hidden>
+    <button>Link this membership</button>
+  </form>
   <form id="send" hidden>
     <label for="email">Email address</label>
     <input id="email" type="email" autocomplete="email" maxlength="254" required>
@@ -33,9 +36,9 @@
     <input id="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="8" pattern="[0-9]{8}" required>
     <button>Verify email</button>
   </form>
-  <p><button id="unregister" type="button" hidden>Remove registered email</button></p>
+  <p><button id="unregister" type="button" hidden>Unlink this profile</button></p>
   <p><a href="https://buymeacoffee.com/massivehadron/membership">View memberships</a></p>
   <p><a id="return" href="./eggbotstablet/#settings">Open Eggbot’s tablet</a> · <a href="./">Massive Hadron home</a></p>
 </main>
-<script type="module" src="./membership.js?v=purchase-sync"></script>
+<script type="module" src="./membership.js?v=membership-activation"></script>
 </html>

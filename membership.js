@@ -2,10 +2,12 @@
 
 import {membershipRequest} from './eggbotstablet/purchases.js?v=purchase-sync';
 
-const suppliedProfile = new URLSearchParams(location.hash.slice(1)).get('purchase-profile');
+const parameters = new URLSearchParams(location.hash.slice(1));
+const suppliedProfile = parameters.get('purchase-profile');
+let activationToken = parameters.get('activation');
 const profile = suppliedProfile ?? history.state?.membershipProfile ?? undefined;
-if (suppliedProfile !== null)
-  history.replaceState({membershipProfile: suppliedProfile}, '', location.pathname + location.search);
+if (suppliedProfile !== null || activationToken !== null)
+  history.replaceState(profile === undefined ? null : {membershipProfile: profile}, '', location.pathname + location.search);
 if (profile !== undefined) {
   const back = document.getElementById('return');
   back.href = '/tilestorm/';
@@ -13,6 +15,7 @@ if (profile !== undefined) {
 }
 
 const status = document.getElementById('status');
+const activate = document.getElementById('activate');
 const send = document.getElementById('send');
 const verify = document.getElementById('verify');
 const unregister = document.getElementById('unregister');
@@ -27,9 +30,10 @@ function showRegistration(reply) {
   verify.hidden = true;
   code.value = '';
   sentTo = undefined;
-  status.textContent = reply.silverUntil * 1000 > Date.now() ? 'Email verified. Silver membership includes BotCloud.' :
-    reply.registered ? 'Email verified. No active Silver membership is on record yet.' :
-      reply.available ? 'Enter your email to get a verification code.' : 'Email registration is temporarily unavailable.';
+  status.textContent = reply.silverUntil * 1000 > Date.now() ? 'Silver membership linked. BotCloud is available.' :
+    reply.activeMemberships?.length ? 'Active membership linked.' :
+      reply.registered ? 'Profile linked. No active membership is on record yet.' :
+        reply.available ? 'Enter your Buy Me a Coffee email to get a verification code.' : 'Email verification is temporarily unavailable.';
 }
 
 async function perform(message, action) {
@@ -62,8 +66,23 @@ verify.addEventListener('submit', event => {
   });
 });
 
-unregister.addEventListener('click', () => perform('Removing your email…', async () => {
+unregister.addEventListener('click', () => perform('Unlinking this profile…', async () => {
   showRegistration(await membershipRequest({action: 'unregister'}, profile));
 }));
 
-perform('Checking registration…', async () => showRegistration(await membershipRequest({action: 'status'}, profile)));
+activate.addEventListener('submit', event => {
+  event.preventDefault();
+  perform('Linking your membership…', async () => {
+    const reply = await membershipRequest({action: 'activate', token: activationToken}, profile);
+    activationToken = null;
+    activate.hidden = true;
+    showRegistration(reply);
+  });
+});
+
+if (activationToken !== null) {
+  if (/^[a-f0-9]{32}$/.test(activationToken)) {
+    status.textContent = 'Open this link in the browser you use for TileStorm, then link your membership.';
+    activate.hidden = false;
+  } else status.textContent = 'This membership activation link is invalid.';
+} else perform('Checking registration…', async () => showRegistration(await membershipRequest({action: 'status'}, profile)));
