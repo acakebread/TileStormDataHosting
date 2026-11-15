@@ -570,7 +570,7 @@ export function createStore(tablet) {
       'Activated. Open Settings to offload cached media.';
     const status = element('p', 'muted');
     status.setAttribute('role', 'status');
-    const membershipInfo = isOsUpgrade ? null : element('p', '', 'A Silver subscription includes BotCloud.');
+    const membershipInfo = isOsUpgrade ? null : element('p', '', 'Silver includes BotCloud. Verify your email to unlock it.');
     const details = element('div', `product-details upgrade-details${isOsUpgrade ? '' : ' botcloud-details'}`,
       element('p', '', product.description), membershipInfo, status);
     const join = isOsUpgrade ? null : button('Become a member', () => {
@@ -611,7 +611,8 @@ export function createStore(tablet) {
       }
       const membership = offer.membership;
       const priceDetails = membership ? element('p', '', `${offer.priceLabel} regular. ${membership.tier} members save ${membership.savingsPercent}% and pay ${membership.priceLabel}.`) : null;
-      buy.textContent = membership ? 'Continue to Shop' : `Buy ${product.name} · ${offer.priceLabel}`;
+      const buyLabel = isOsUpgrade ? `Buy ${product.name}` : 'Buy once';
+      buy.textContent = membership ? (isOsUpgrade ? 'Continue to Shop' : buyLabel) : `${buyLabel} · ${offer.priceLabel}`;
       status.textContent = '';
       if (priceDetails) details.insertBefore(priceDetails, status);
       buy.hidden = false;
