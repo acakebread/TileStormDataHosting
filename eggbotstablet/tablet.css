@@ -274,8 +274,8 @@ img { display: block; max-width: 100%; }
 .settings-details dd { margin: 0; }
 .settings-meter { display: block; width: 100%; height: 14px; accent-color: var(--accent); }
 .settings-usage { font: 500 .82rem var(--mono); }
-.settings-positions button { min-width: min(100px, 100%); }
-.settings-positions button[aria-pressed="true"] { color: var(--accent); border-color: #599a89; background: #1e3a3a; }
+.settings-toggle button { min-width: min(100px, 100%); }
+.settings-toggle button[aria-pressed="true"] { color: var(--accent); border-color: #599a89; background: #1e3a3a; }
 .market .price { display: block; margin-block: 5px; font: 500 1rem var(--mono); color: var(--accent); }
 .toast, .notification {
   position: absolute; z-index: 2; box-shadow: 0 4px 20px #0008;

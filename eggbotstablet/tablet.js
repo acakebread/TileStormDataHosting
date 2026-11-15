@@ -2,14 +2,14 @@
 
 import {loadCatalogue} from './catalogue.js';
 import {createChat, createMail} from './messages.js?v=mail-layout';
-import {createPhotos, createBank, createLove, createMarket, createStore} from './apps.js?v=botos-plus';
+import {createPhotos, createBank, createLove, createMarket, createStore} from './apps.js?v=notification-controls';
 import {createFirebot} from './firebot.js?v=hosted';
 import {createScratch} from './games.js?v=scratch-bling';
 import {createFruit} from './fruit-burst.js?v=unity';
 import {hasOnlyBotsAccess, hasPremiumAccess} from './premium.js?v=botos-plus';
 import {linkPurchaseProfile, refreshPurchases} from './purchases.js?v=botos-plus';
 import {createHomePager} from './home.js?v=onlybots-shop';
-import {createSettings, createTabletPreferences, offloadSizeMb, osVersion} from './settings.js?v=botos-plus';
+import {createSettings, createTabletPreferences, offloadSizeMb, osVersion} from './settings.js?v=notification-controls';
 import {element, button, image, shortTime, loadSetting, saveSetting} from './ui.js';
 
 const pages = [
@@ -58,7 +58,7 @@ let notificationTimer;
 let notificationAction;
 
 const tablet = {
-  apps, preferences, open, art, prompt, toast, notify, refreshBadges,
+  apps, preferences, open, art, prompt, toast, notify, dismissNotification, refreshBadges,
   get data() { return data; },
   get current() { return current; },
   get onlyBotsInstalled() { return onlyBotsInstalled; },
@@ -146,6 +146,7 @@ function toast(message) {
 }
 
 function dismissNotification() {
+  clearTimeout(notificationTimer);
   ui.notification.hidden = true;
   notificationAction = null;
 }
@@ -181,7 +182,7 @@ function createNotificationChime() {
 }
 
 function notify(id, message, select) {
-  if (current === id) return;
+  if (current === id || preferences.notificationsPausedUntil) return;
   clearTimeout(notificationTimer);
   notificationAction = () => {
     if (apps[id].frame || apps[id].mount) open(id);
@@ -190,7 +191,7 @@ function notify(id, message, select) {
   ui['open-notification'].textContent = apps[id].name + '\n' + message;
   ui.notification.dataset.position = preferences.bannerPosition;
   ui.notification.hidden = false;
-  if (!preferences.pauseUntil) playChime();
+  if (preferences.soundsEnabled) playChime();
   notificationTimer = setTimeout(dismissNotification, 5800);
 }
 

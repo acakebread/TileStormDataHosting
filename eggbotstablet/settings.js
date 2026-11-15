@@ -10,7 +10,7 @@ export const botOsPlusProduct = 'botosplus';
 export const tabletProducts = {
   [botOsPlusProduct]: {
     name: 'BotOS Plus',
-    description: 'One-time upgrade for timed pauses on notification sounds.',
+    description: 'One-time upgrade for timed notification pauses.',
     icon: 'settings'
   },
   botcloud: {
@@ -26,14 +26,16 @@ export function createTabletPreferences() {
   const previewOsUpgrade = localPreview && params.get('preview-botos-plus') === '1';
   const hasCloudSubscription = localPreview && params.get('preview-botcloud') === '1';
   let bannerPosition = loadSetting('notificationPosition', 'top') === 'bottom' ? 'bottom' : 'top';
-  let pauseUntil = loadSetting('notificationSoundsPausedUntil', 0);
+  let soundsEnabled = loadSetting('notificationSoundsEnabled', true) !== false;
+  let pauseUntil = loadSetting('notificationsPausedUntil', 0);
   let contentOffloaded = loadSetting('contentOffloaded', false) === true;
 
   return {
     get hasOsUpgrade() { return previewOsUpgrade || hasPurchase(botOsPlusProduct); },
     hasCloudSubscription,
     get bannerPosition() { return bannerPosition; },
-    get pauseUntil() {
+    get soundsEnabled() { return soundsEnabled; },
+    get notificationsPausedUntil() {
       return this.hasOsUpgrade && Number.isSafeInteger(pauseUntil) && pauseUntil <= 8.64e15 && pauseUntil > Date.now()
         ? pauseUntil : 0;
     },
@@ -42,14 +44,18 @@ export function createTabletPreferences() {
       bannerPosition = position;
       saveSetting('notificationPosition', position);
     },
-    pauseSounds(minutes) {
+    setSoundsEnabled(enabled) {
+      soundsEnabled = enabled;
+      saveSetting('notificationSoundsEnabled', enabled);
+    },
+    pauseNotifications(minutes) {
       if (!this.hasOsUpgrade) return;
       pauseUntil = Date.now() + minutes * 60000;
-      saveSetting('notificationSoundsPausedUntil', pauseUntil);
+      saveSetting('notificationsPausedUntil', pauseUntil);
     },
-    resumeSounds() {
+    resumeNotifications() {
       pauseUntil = 0;
-      saveSetting('notificationSoundsPausedUntil', 0);
+      saveSetting('notificationsPausedUntil', 0);
     },
     offloadContent() {
       if (!hasCloudSubscription || contentOffloaded) return;
@@ -94,23 +100,34 @@ export function createSettings(tablet) {
       preferences.setBannerPosition(position);
       refreshPosition();
     }));
-  const placement = element('div', 'settings-positions actions', ...positions);
+  const placement = element('div', 'settings-toggle actions', ...positions);
   placement.setAttribute('role', 'group');
   placement.setAttribute('aria-label', 'Banner position');
-  const soundStatus = element('p', 'muted');
-  soundStatus.setAttribute('role', 'status');
-  const resume = button('Resume sounds', () => {
-    preferences.resumeSounds();
-    refreshSounds();
+  const soundButtons = [true, false].map(enabled => button(enabled ? 'On' : 'Off', () => {
+    preferences.setSoundsEnabled(enabled);
+    refreshSoundButtons();
+  }));
+  const sounds = element('div', 'settings-toggle actions', ...soundButtons);
+  sounds.setAttribute('role', 'group');
+  sounds.setAttribute('aria-label', 'Notification sounds');
+  const pauseStatus = element('p', 'muted');
+  pauseStatus.setAttribute('role', 'status');
+  const resume = button('Resume notifications', () => {
+    preferences.resumeNotifications();
+    refreshPause();
   });
   const durations = [[15, '15 min'], [60, '1 hour'], [480, '8 hours']];
   const pauseControls = element('div', 'actions', ...durations.map(([minutes, label]) => button(label, () => {
-    preferences.pauseSounds(minutes);
-    refreshSounds();
-  })), resume);
+    preferences.pauseNotifications(minutes);
+    tablet.dismissNotification();
+    refreshPause();
+  })));
+  pauseControls.setAttribute('role', 'group');
+  pauseControls.setAttribute('aria-label', 'Pause duration');
   const notifications = element('section', 'settings-panel', element('h3', '', 'Notifications'),
     element('h4', '', 'Banner position'), placement,
-    element('h4', '', 'Notification sounds'), soundStatus, pauseControls);
+    element('h4', '', 'Notification sounds'), sounds,
+    element('h4', '', 'Pause notifications'), pauseControls, pauseStatus, resume);
 
   const upgradeStatus = element('p', 'muted');
   const upgradeAction = button('View upgrade', () => tablet.openStoreListing(botOsPlusProduct), 'primary');
@@ -142,21 +159,30 @@ export function createSettings(tablet) {
     });
   }
 
-  function refreshSounds() {
+  function refreshSoundButtons() {
+    soundButtons[0].setAttribute('aria-pressed', String(preferences.soundsEnabled));
+    soundButtons[1].setAttribute('aria-pressed', String(!preferences.soundsEnabled));
+  }
+
+  function refreshPause() {
     const {hasOsUpgrade} = preferences;
-    const expiry = preferences.pauseUntil;
+    const expiry = preferences.notificationsPausedUntil;
     const status = expiry ? 'Paused until ' + shortTime.format(expiry) :
-      hasOsUpgrade ? 'Chimes are on.' : 'Timed pauses require BotOS Plus.';
-    if (soundStatus.textContent !== status) soundStatus.textContent = status;
-    if (!expiry && document.activeElement === resume) pauseControls.firstElementChild.focus();
+      hasOsUpgrade ? '' : 'Requires BotOS Plus.';
+    if (pauseStatus.textContent !== status) pauseStatus.textContent = status;
+    pauseStatus.hidden = !status;
+    if (!expiry && document.activeElement === resume) {
+      const next = hasOsUpgrade ? pauseControls.firstElementChild : soundButtons[0];
+      next.focus();
+    }
     resume.hidden = !expiry;
     pauseControls.hidden = !hasOsUpgrade;
     upgradeAction.hidden = hasOsUpgrade;
     const version = 'BotOS ' + osVersion + (hasOsUpgrade ? ' Plus' : '');
     if (software.textContent !== version) {
       software.textContent = version;
-      upgradeStatus.textContent = hasOsUpgrade ? 'Installed. You can pause notification chimes.' :
-        'Pause notification chimes while banners and unread counts keep coming.';
+      upgradeStatus.textContent = hasOsUpgrade ? 'Installed. You can pause notifications.' :
+        'Pause banners and chimes for a set time.';
     }
   }
 
@@ -165,8 +191,9 @@ export function createSettings(tablet) {
     open() {
       refreshStorage();
       refreshPosition();
-      refreshSounds();
+      refreshSoundButtons();
+      refreshPause();
     },
-    tick: refreshSounds
+    tick: refreshPause
   };
 }

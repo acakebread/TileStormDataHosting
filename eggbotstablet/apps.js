@@ -4,7 +4,7 @@ import {element, button, image, tabs, watchSwipe, money, number, countdown, load
 import {hasOnlyBotsAccess, redeemOnlyBotsCode} from './premium.js?v=botos-plus';
 import {buyPurchase, catalogueProduct, paidLoveBotSwipes, refreshCatalogue, refreshPurchases, spendLoveBotSwipe} from './purchases.js?v=botos-plus';
 import {createSlideGesture} from './slide.js';
-import {botOsPlusProduct, tabletProducts} from './settings.js?v=botos-plus';
+import {botOsPlusProduct, tabletProducts} from './settings.js?v=notification-controls';
 
 export function createPhotos({data}) {
   const photos = (data.owner?.photos ?? []).map(photo => ({
@@ -460,7 +460,7 @@ export function createStore(tablet) {
     const details = element('div', '', element('p', '', product.description), status);
     tablet.prompt(product.name, details, controls, 'Close');
     if (tablet.preferences.hasOsUpgrade) {
-      status.textContent = 'Installed. Open Settings to pause notification chimes.';
+      status.textContent = 'Installed. Open Settings to pause notifications.';
       return;
     }
     status.textContent = 'Loading the Shop listing…';
@@ -473,7 +473,7 @@ export function createStore(tablet) {
       const buy = button('Buy BotOS Plus · ' + offer.priceLabel, () => {
         if (tablet.preferences.hasOsUpgrade) {
           buy.remove();
-          status.textContent = 'Installed. Open Settings to pause notification chimes.';
+          status.textContent = 'Installed. Open Settings to pause notifications.';
           return;
         }
         status.textContent = buyPurchase(id) ? 'Checkout opened in a new tab.' :
