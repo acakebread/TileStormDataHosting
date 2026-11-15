@@ -4,7 +4,7 @@ import {loadSetting, saveSetting} from './ui.js';
 
 const root = 'https://tilestorm-coffee-checkout.qrh.workers.dev';
 const keyPattern = /^[a-f0-9]{64}$/;
-const shopItems = new Set(['app', 'goldibot', 'kelly_and_lucy', 'lovebot', 'botosplus']);
+const shopItems = new Set(['app', 'goldibot', 'kelly_and_lucy', 'lovebot', 'botosplus', 'botcloud']);
 const keySetting = 'purchaseProfile';
 const hex = bytes => Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
 const randomKey = () => hex(crypto.getRandomValues(new Uint8Array(32)));

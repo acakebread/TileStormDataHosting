@@ -1,10 +1,10 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {element, button, image, tabs, watchSwipe, money, number, countdown, loadSetting, saveSetting} from './ui.js';
-import {hasOnlyBotsAccess, redeemOnlyBotsCode} from './premium.js?v=botos-plus';
-import {buyPurchase, catalogueProduct, paidLoveBotSwipes, refreshCatalogue, refreshPurchases, spendLoveBotSwipe} from './purchases.js?v=botos-plus';
+import {hasOnlyBotsAccess, redeemOnlyBotsCode} from './premium.js?v=botcloud';
+import {buyPurchase, catalogueProduct, paidLoveBotSwipes, refreshCatalogue, refreshPurchases, spendLoveBotSwipe} from './purchases.js?v=botcloud';
 import {createSlideGesture} from './slide.js';
-import {botOsPlusProduct, tabletProducts} from './settings.js?v=notification-controls';
+import {botOsPlusProduct, tabletProducts} from './settings.js?v=botcloud';
 
 export function createPhotos({data}) {
   const photos = (data.owner?.photos ?? []).map(photo => ({
@@ -452,34 +452,38 @@ export function createStore(tablet) {
   function showProduct(id, fromSettings = false) {
     const product = tabletProducts[id];
     const controls = fromSettings ? [button('Back to Settings', () => tablet.open('settings'), 'primary')] : [];
-    if (id !== botOsPlusProduct) {
-      tablet.prompt(product.name, product.description + '\n\nComing soon to BotStore.', controls, 'Close');
-      return;
-    }
+    const isOsUpgrade = id === botOsPlusProduct;
+    const owned = () => isOsUpgrade ? tablet.preferences.hasOsUpgrade : tablet.preferences.hasCloudAccess;
+    const installedMessage = isOsUpgrade ? 'Installed. Open Settings to pause notifications.' :
+      'Activated. Open Settings to offload cached media.';
     const status = element('p', 'muted');
     const details = element('div', '', element('p', '', product.description), status);
     tablet.prompt(product.name, details, controls, 'Close');
-    if (tablet.preferences.hasOsUpgrade) {
-      status.textContent = 'Installed. Open Settings to pause notifications.';
+    if (owned()) {
+      status.textContent = installedMessage;
       return;
     }
     status.textContent = 'Loading the Shop listing…';
     refreshCatalogue().then(() => {
       const offer = catalogueProduct(id);
       if (!offer?.shopUrl) {
-        status.textContent = 'The Shop listing is unavailable. Try again later.';
+        status.textContent = 'The Shop listing is unavailable.';
         return;
       }
-      const buy = button('Buy BotOS Plus · ' + offer.priceLabel, () => {
-        if (tablet.preferences.hasOsUpgrade) {
+      const membership = offer.membership;
+      const priceDetails = membership ? element('p', '', `${offer.priceLabel} regular. ${membership.tier} members save ${membership.savingsPercent}% and pay ${membership.priceLabel}.`) : null;
+      const buy = button(membership ? 'Continue to Shop' : `Buy ${product.name} · ${offer.priceLabel}`, () => {
+        if (owned()) {
           buy.remove();
-          status.textContent = 'Installed. Open Settings to pause notifications.';
+          priceDetails?.remove();
+          status.textContent = installedMessage;
           return;
         }
         status.textContent = buyPurchase(id) ? 'Checkout opened in a new tab.' :
           'Check your open checkout tab or allow popups to start checkout.';
       }, 'primary');
       status.textContent = '';
+      if (priceDetails) details.insertBefore(priceDetails, status);
       details.insertBefore(buy, status);
     });
   }
@@ -509,10 +513,9 @@ export function createStore(tablet) {
         element('div', 'row-copy', element('h3', '', name), element('p', 'muted', description)), controls);
     });
     const products = Object.entries(tabletProducts).map(([id, product]) =>
-      element('article', 'row', tablet.art(product.icon, product.monogram),
+      element('article', 'row', product.art ? element('span', 'icon-art', image(product.art)) : tablet.art(product.icon),
         element('div', 'row-copy', element('h3', '', product.name),
-          element('p', 'muted', product.description),
-          id !== botOsPlusProduct ? element('small', '', 'Coming soon') : null),
+          element('p', 'muted', product.description)),
         element('div', 'actions', button('Details', () => showProduct(id)))));
     content.replaceChildren(header, element('div', 'rows', ...rows, ...products));
   }

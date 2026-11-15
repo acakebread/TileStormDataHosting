@@ -1,22 +1,23 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {button, element, loadSetting, number, saveSetting, shortTime} from './ui.js';
-import {hasPurchase} from './purchases.js?v=botos-plus';
+import {hasPurchase} from './purchases.js?v=botcloud';
 
 export const osVersion = '9.0';
 export const storageCapacityMb = 16000;
 export const offloadSizeMb = 4000;
 export const botOsPlusProduct = 'botosplus';
+export const botCloudProduct = 'botcloud';
 export const tabletProducts = {
   [botOsPlusProduct]: {
     name: 'BotOS Plus',
     description: 'One-time upgrade for timed notification pauses.',
     icon: 'settings'
   },
-  botcloud: {
+  [botCloudProduct]: {
     name: 'BotCloud',
-    description: 'Subscription to offload cached media and free up ' + number.format(offloadSizeMb) + ' MB.',
-    monogram: 'Cloud'
+    description: 'One-time upgrade to offload cached media and free up ' + number.format(offloadSizeMb) + ' MB.',
+    art: './art/botcloud.jpg'
   }
 };
 
@@ -24,7 +25,7 @@ export function createTabletPreferences() {
   const localPreview = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
   const params = new URLSearchParams(location.search);
   const previewOsUpgrade = localPreview && params.get('preview-botos-plus') === '1';
-  const hasCloudSubscription = localPreview && params.get('preview-botcloud') === '1';
+  const previewBotCloud = localPreview && params.get('preview-botcloud') === '1';
   let bannerPosition = loadSetting('notificationPosition', 'top') === 'bottom' ? 'bottom' : 'top';
   let soundsEnabled = loadSetting('notificationSoundsEnabled', true) !== false;
   let pauseUntil = loadSetting('notificationsPausedUntil', 0);
@@ -32,7 +33,7 @@ export function createTabletPreferences() {
 
   return {
     get hasOsUpgrade() { return previewOsUpgrade || hasPurchase(botOsPlusProduct); },
-    hasCloudSubscription,
+    get hasCloudAccess() { return previewBotCloud || hasPurchase(botCloudProduct); },
     get bannerPosition() { return bannerPosition; },
     get soundsEnabled() { return soundsEnabled; },
     get notificationsPausedUntil() {
@@ -58,7 +59,7 @@ export function createTabletPreferences() {
       saveSetting('notificationsPausedUntil', 0);
     },
     offloadContent() {
-      if (!hasCloudSubscription || contentOffloaded) return;
+      if (!this.hasCloudAccess || contentOffloaded) return;
       contentOffloaded = true;
       saveSetting('contentOffloaded', true);
     }
@@ -67,7 +68,6 @@ export function createTabletPreferences() {
 
 export function createSettings(tablet) {
   const preferences = tablet.preferences;
-  const {hasCloudSubscription} = preferences;
   const software = element('dd');
   const size = number.format(offloadSizeMb) + ' MB';
   const about = element('section', 'settings-panel', element('h3', '', 'About'),
@@ -82,9 +82,9 @@ export function createSettings(tablet) {
   meter.max = storageCapacityMb;
   meter.setAttribute('aria-label', 'Storage used');
   const cloudStatus = element('p', 'muted');
-  const cloudAction = button(hasCloudSubscription ? 'Offload content' : 'View subscription', () => {
-    if (!hasCloudSubscription) {
-      tablet.openStoreListing('botcloud');
+  const cloudAction = button('View BotCloud', () => {
+    if (!preferences.hasCloudAccess) {
+      tablet.openStoreListing(botCloudProduct);
       return;
     }
     preferences.offloadContent();
@@ -140,17 +140,19 @@ export function createSettings(tablet) {
       element('div', 'settings-column', notifications, upgrade))));
 
   function refreshStorage() {
+    const {contentOffloaded, hasCloudAccess} = preferences;
     const available = tablet.freeSpaceMb;
     const used = storageCapacityMb - available;
     meter.value = used;
     usage.textContent = number.format(used) + ' MB used · ' + number.format(available) + ' MB available';
-    cloudStatus.textContent = preferences.contentOffloaded ? size + ' reclaimed.' : hasCloudSubscription
-      ? 'Offload cached media to reclaim ' + size + '.' : 'Free up ' + size + ' with a BotCloud subscription.';
-    if (preferences.contentOffloaded && document.activeElement === cloudAction) {
+    cloudStatus.textContent = contentOffloaded ? size + ' reclaimed.' : hasCloudAccess
+      ? 'Offload cached media to reclaim ' + size + '.' : 'Free up ' + size + ' with a one-time BotCloud upgrade.';
+    cloudAction.textContent = hasCloudAccess ? 'Offload content' : 'View BotCloud';
+    if (contentOffloaded && document.activeElement === cloudAction) {
       usage.tabIndex = -1;
       usage.focus();
     }
-    cloudAction.hidden = preferences.contentOffloaded;
+    cloudAction.hidden = contentOffloaded;
   }
 
   function refreshPosition() {
@@ -186,6 +188,7 @@ export function createSettings(tablet) {
     }
   }
 
+  window.addEventListener('tilestorm-purchases-changed', refreshStorage);
   return {
     view,
     open() {
