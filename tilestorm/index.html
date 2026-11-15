@@ -77,6 +77,33 @@
           font-size: 22px;
         }
       }
+      #purchase-link-dialog {
+        box-sizing: border-box;
+        width: min(24rem, calc(100% - 2rem));
+        padding: 1.25rem;
+        border: 1px solid #456676;
+        border-radius: 8px;
+        background: #181d22;
+        color: white;
+        font: 16px/1.45 system-ui, sans-serif;
+      }
+      #purchase-link-dialog:not([open]) { display: none; }
+      #purchase-link-dialog::backdrop { background: rgba(0, 0, 0, .65); }
+      #purchase-link-dialog h2 { margin: 0; font-size: 20px; }
+      #purchase-link-dialog p { margin: .5rem 0 1rem; }
+      #purchase-link-dialog form { display: flex; flex-wrap: wrap; gap: .5rem; }
+      #purchase-link-dialog a,
+      #purchase-link-dialog button {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+        padding: 0 .875rem;
+        border-radius: 4px;
+        font: inherit;
+        cursor: pointer;
+      }
+      #purchase-link-dialog a { background: #a5e8ea; color: #181d22; text-decoration: none; }
+      #purchase-link-dialog button { border: 1px solid #456676; background: #262f38; color: white; }
     </style>
   </head>
   <body>
@@ -90,6 +117,14 @@
       </div>
       <div id="unity-warning"> </div>
       <button id="unity-fullscreen-button" type="button">[ ]</button>
+      <dialog id="purchase-link-dialog" aria-labelledby="purchase-link-title" aria-describedby="purchase-link-description">
+        <h2 id="purchase-link-title">TileStorm purchase</h2>
+        <p id="purchase-link-description">Checkout opens in a new tab. Return to TileStorm when you’re done.</p>
+        <form method="dialog">
+          <a target="_blank" rel="noopener noreferrer" autofocus>Continue to checkout</a>
+          <button type="submit">Cancel</button>
+        </form>
+      </dialog>
     </div>
     <div id="mobile-fullscreen-spacer" aria-hidden="true"></div>
     <div id="mobile-fullscreen-guide" hidden>
@@ -112,6 +147,7 @@
       var warningBanner = document.querySelector("#unity-warning");
       var unityInstance = null;
       var fullscreenButton = document.querySelector("#unity-fullscreen-button");
+      var purchaseDialog = document.querySelector("#purchase-link-dialog");
       var mobileExpanded = false;
       var mobileFullscreenStage = 0;
       var fullscreenAttempt = 0;
@@ -257,22 +293,22 @@
         // Let Unity handle level reloads while retaining modified browser refresh shortcuts.
         if (event.key === "F5" && unityInstance && !event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey)
           event.preventDefault();
-        if (event.key === "Escape" && mobileExpanded) exitFullscreen();
+        if (event.key === "Escape" && mobileExpanded && !purchaseDialog.open) exitFullscreen();
       });
       updateFullscreenButton();
 
-      var version = "0.1.333";
+      var version = "0.1.334";
       var buildUrl = "Build";
-      var loaderUrl = buildUrl + "/ea430e3db9576aa289ee6932fc35c457.loader.js?v=" + version;
+      var loaderUrl = buildUrl + "/90f51d5d8b948266b1d1df81ef5d4ddb.loader.js?v=" + version;
       var config = {
         arguments: [],
-        dataUrl: buildUrl + "/97aad4834498e2ea99bd30407f04cd06.data.unityweb?v=" + version,
-        frameworkUrl: buildUrl + "/add1d54fb403cb35114aa1d9c157041c.framework.js.unityweb?v=" + version,
-        codeUrl: buildUrl + "/6040616b4514a5f512b8c5e21f3dfcc6.wasm.unityweb?v=" + version,
+        dataUrl: buildUrl + "/d02c4e5cd8c43fc8a74a2ec876306d5a.data.unityweb?v=" + version,
+        frameworkUrl: buildUrl + "/452600799ac61343786df9c6f6ba904e.framework.js.unityweb?v=" + version,
+        codeUrl: buildUrl + "/57b88403a8df9219600ab5b1e00148ee.wasm.unityweb?v=" + version,
         streamingAssetsUrl: "StreamingAssets",
         companyName: "MassiveHadron",
         productName: "TileStormEvolution",
-        productVersion: "0.1.333",
+        productVersion: "0.1.334",
       };
 
       loadingBar.style.display = "block";
