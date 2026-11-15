@@ -1,10 +1,10 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {element, button, image, tabs, watchSwipe, money, number, countdown, loadSetting, saveSetting} from './ui.js?v=lovebot-swipe';
-import {hasOnlyBotsAccess, redeemOnlyBotsCode} from './premium.js?v=shared-profile';
-import {buyPurchase, catalogueProduct, paidLoveBotSwipes, refreshCatalogue, refreshPurchases, spendLoveBotSwipe} from './purchases.js?v=shared-profile';
+import {hasOnlyBotsAccess, redeemOnlyBotsCode} from './premium.js?v=checkout-continue';
+import {buyPurchase, catalogueProduct, paidLoveBotSwipes, refreshCatalogue, refreshPurchases, spendLoveBotSwipe} from './purchases.js?v=checkout-continue';
 import {createSlideGesture} from './slide.js';
-import {botOsPlusProduct, tabletProducts} from './settings.js?v=shared-profile';
+import {botOsPlusProduct, tabletProducts} from './settings.js?v=checkout-continue';
 
 export function createPhotos({data}) {
   const photos = (data.owner?.photos ?? []).map(photo => ({
@@ -166,8 +166,8 @@ export function createLove(tablet) {
   const photoControls = element('div', 'love-photo-controls', previousPhoto, nextPhoto);
   const emptyText = element('p');
   const buy = button('Add credits', () => {
-    if (buyPurchase('lovebot')) tablet.toast('Checkout opened in a new tab.');
-    else tablet.toast('Check your open checkout tab or allow popups to start checkout.');
+    if (buyPurchase('lovebot')) tablet.toast('Continue in the checkout tab when ready.');
+    else tablet.toast('Allow popups to open checkout.');
   }, 'primary');
   const empty = element('div', 'love-empty', emptyText, buy);
   const view = element('section', 'love-app', element('div', 'app-content',
@@ -429,7 +429,7 @@ export function createStore(tablet) {
       const control = event.currentTarget;
       const dialog = control.closest('dialog');
       if (!buyPurchase('app')) {
-        tablet.toast('Check your open checkout tab or allow popups to start checkout.');
+        tablet.toast('Allow popups to open checkout.');
         return;
       }
       const controller = new AbortController();
@@ -444,8 +444,11 @@ export function createStore(tablet) {
       window.addEventListener('tilestorm-checkout-error', event => {
         if (event.detail === 'app' && stillOpen()) tablet.toast('Checkout could not open. Try again.');
       }, {signal: controller.signal});
+      window.addEventListener('tilestorm-checkout-cancelled', event => {
+        if (event.detail === 'app') controller.abort();
+      }, {signal: controller.signal});
       setTimeout(() => controller.abort(), 35 * 60 * 1000);
-      tablet.toast('Checkout opened in a new tab.');
+      tablet.toast('Continue in the checkout tab when ready.');
     }, 'action-link');
     refreshCatalogue().then(() => {
       const price = catalogueProduct('app')?.priceLabel;
@@ -579,12 +582,18 @@ export function createStore(tablet) {
         status.textContent = installedMessage;
         return;
       }
-      status.textContent = buyPurchase(id) ? 'Checkout opened in a new tab.' :
-        'Check your open checkout tab or allow popups to start checkout.';
+      status.textContent = buyPurchase(id) ? 'Continue in the checkout tab when ready.' :
+        'Allow popups to open checkout.';
     }, 'primary');
     buy.hidden = true;
     controls.push(buy);
     tablet.prompt(product.name, details, controls, 'Close');
+    const dialog = details.closest('dialog');
+    const controller = new AbortController();
+    dialog.addEventListener('close', () => controller.abort(), {once: true});
+    window.addEventListener('tilestorm-checkout-cancelled', event => {
+      if (event.detail === id && details.isConnected) status.textContent = 'Checkout cancelled.';
+    }, {signal: controller.signal});
     if (owned()) {
       status.textContent = installedMessage;
       return;

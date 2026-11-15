@@ -1,7 +1,7 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {button, element, loadSetting, number, saveSetting, shortTime} from './ui.js';
-import {hasPurchase, hasSilverBotCloud} from './purchases.js?v=shared-profile';
+import {hasPurchase, hasSilverBotCloud} from './purchases.js?v=checkout-continue';
 
 export const osVersion = '9.0';
 export const storageCapacityMb = 16000;

@@ -1,6 +1,6 @@
 // Copyright 2026 massivehadron.com ltd.
 
-import {buyPurchase, catalogueProduct, hasPurchase, refreshCatalogue} from '../eggbotstablet/purchases.js?v=shared-profile';
+import {buyPurchase, catalogueProduct, hasPurchase, refreshCatalogue} from '../eggbotstablet/purchases.js?v=checkout-continue';
 
 export function createPurchaseForm({product, buyLabel, redeem, onAccepted, invalidMessage}) {
   const form = document.getElementById('purchaseFormTemplate').content.firstElementChild.cloneNode(true);
@@ -19,10 +19,10 @@ export function createPurchaseForm({product, buyLabel, redeem, onAccepted, inval
   };
   buy.addEventListener('click', () => {
     if (!buyPurchase(product)) {
-      status.textContent = 'Check your open checkout tab or allow popups to start checkout.';
+      status.textContent = 'Allow popups to open checkout.';
       return;
     }
-    status.textContent = 'Checkout opened in a new tab.';
+    status.textContent = 'Continue in the checkout tab when ready.';
     const controller = new AbortController();
     form.closest('dialog')?.addEventListener('close', () => controller.abort(), {once: true});
     window.addEventListener('tilestorm-purchases-changed', () => {
@@ -33,6 +33,11 @@ export function createPurchaseForm({product, buyLabel, redeem, onAccepted, inval
     }, {signal: controller.signal});
     window.addEventListener('tilestorm-checkout-error', event => {
       if (event.detail === product && isOpen()) status.textContent = 'Checkout could not open. Try again.';
+    }, {signal: controller.signal});
+    window.addEventListener('tilestorm-checkout-cancelled', event => {
+      if (event.detail !== product) return;
+      if (isOpen()) status.textContent = 'Checkout cancelled.';
+      controller.abort();
     }, {signal: controller.signal});
     setTimeout(() => controller.abort(), 35 * 60 * 1000);
   });

@@ -20,7 +20,7 @@ let catalogue = new Map();
 let catalogueRequest;
 let catalogueExpires = 0;
 const cachedPurchases = new Map();
-const watching = new Map();
+const checkouts = new Map();
 let lovebotBalance = 0;
 let balanceProfile;
 let swipePending = false;
@@ -44,7 +44,9 @@ async function post(route, body) {
   const response = await fetch(root + route, {method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify(body), signal: AbortSignal.timeout(12000)});
   const reply = await response.json();
-  if (!response.ok) throw Object.assign(new Error(reply.message || 'Purchase service unavailable.'), {status: response.status});
+  if (!response.ok) throw Object.assign(new Error(reply.message || 'Purchase service unavailable.'), {
+    status: response.status, state: reply.state
+  });
   return reply;
 }
 
@@ -223,34 +225,94 @@ async function retryLink() {
 
 export function buyPurchase(product) {
   if (!shopItems.has(product)) return false;
-  if (watching.has(product)) return false;
-  const checkout = window.open('about:blank', '_blank');
-  if (!checkout) return false;
-  checkout.opener = null;
-  const profile = key;
-  const before = paidLoveBotSwipes();
-  watching.set(product, null);
-  crypto.subtle.digest('SHA-256', new TextEncoder().encode(profile)).then(digest => {
-    const args = new URLSearchParams({token: randomKey(), player: hex(new Uint8Array(digest)), product});
-    checkout.location.replace(`${root}/#${args}`);
-    const expires = Date.now() + 35 * 60 * 1000;
-    watching.set(product, setInterval(() => {
-      if (Date.now() >= expires || (product === 'lovebot' ? paidLoveBotSwipes() > before : hasPurchase(product)) || key !== profile) {
-        clearInterval(watching.get(product));
-        watching.delete(product);
-      }
-      refreshPurchases();
-    }, 5000));
+  const existing = checkouts.get(product);
+  if (existing?.profile === key && !existing.tab.closed) {
+    existing.tab.focus();
+    return true;
+  }
+  if (existing?.profile === key && existing.active) {
+    const tab = window.open(checkoutUrl(existing, true), '_blank');
+    if (!tab) return false;
+    existing.tab = tab;
+    return true;
+  }
+  const tab = window.open('about:blank', '_blank');
+  if (!tab) return false;
+  if (existing) stopCheckout(existing);
+  const attempt = {tab, product, profile: key, token: randomKey()};
+  checkouts.set(product, attempt);
+  crypto.subtle.digest('SHA-256', new TextEncoder().encode(attempt.profile)).then(digest => {
+    if (attempt.tab.closed || checkouts.get(product) !== attempt) {
+      stopCheckout(attempt);
+      return;
+    }
+    attempt.player = hex(new Uint8Array(digest));
+    attempt.tab.location.replace(checkoutUrl(attempt));
   }).catch(() => {
-    watching.delete(product);
-    checkout.close();
+    stopCheckout(attempt);
+    attempt.tab.close();
     window.dispatchEvent(new CustomEvent('tilestorm-checkout-error', {detail: product}));
   });
   return true;
 }
 
+function checkoutUrl({token, player, product}, resume = false) {
+  const args = new URLSearchParams({token, player, product, source: location.origin});
+  if (resume) args.set('resume', '1');
+  return `${root}/#${args}`;
+}
+
+function stopCheckout(attempt, cancelled = false) {
+  clearTimeout(attempt.timer);
+  if (checkouts.get(attempt.product) !== attempt) return;
+  checkouts.delete(attempt.product);
+  if (cancelled) window.dispatchEvent(new CustomEvent('tilestorm-checkout-cancelled', {detail: attempt.product}));
+}
+
+async function watchCheckout(attempt) {
+  const {product, profile, token, expires} = attempt;
+  if (checkouts.get(product) !== attempt) return;
+  if (key !== profile || Date.now() >= expires) {
+    stopCheckout(attempt);
+    return;
+  }
+  try {
+    const receipt = await post('/api/status', {token});
+    if (receipt.payload) {
+      stopCheckout(attempt);
+      await refreshPurchases();
+      return;
+    }
+  } catch (error) {
+    if (error.status >= 400 && error.status < 500 && error.status !== 429) {
+      stopCheckout(attempt, error.state === 'cancelled');
+      return;
+    }
+  }
+  if (checkouts.get(product) === attempt)
+    attempt.timer = setTimeout(() => watchCheckout(attempt), 5000);
+}
+
+window.addEventListener('message', event => {
+  if (event.origin !== root || event.data?.type !== 'tilestorm-checkout') return;
+  const {product, token, state} = event.data;
+  const attempt = checkouts.get(product);
+  if (!attempt || event.source !== attempt.tab || token !== attempt.token) return;
+  if (state === 'cancelled') stopCheckout(attempt, true);
+  if (state === 'active' && !attempt.active) {
+    attempt.active = true;
+    attempt.expires = Date.now() + 35 * 60 * 1000;
+    watchCheckout(attempt);
+  }
+});
+
 if (!new URLSearchParams(location.hash.slice(1)).has('purchase-profile')) followWebGLProfile();
-window.addEventListener('focus', () => followWebGLProfile() || retryLink().then(refreshPurchases));
+window.addEventListener('focus', () => {
+  for (const attempt of checkouts.values()) {
+    if (attempt.tab.closed && !attempt.active) stopCheckout(attempt, true);
+  }
+  return followWebGLProfile() || retryLink().then(refreshPurchases);
+});
 window.addEventListener('storage', event => {
   if (event.key === 'eggbot-tablet.' + webglSetting) followWebGLProfile();
   if (event.key === 'eggbot-tablet.' + keySetting) {
