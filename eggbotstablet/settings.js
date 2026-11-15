@@ -1,7 +1,7 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {button, element, loadSetting, number, saveSetting, shortTime} from './ui.js';
-import {hasPurchase, hasSilverBotCloud} from './purchases.js?v=checkout-continue';
+import {hasPurchase, hasSilverBotCloud, syncPurchases} from './purchases.js?v=purchase-sync';
 
 export const osVersion = '9.0';
 export const storageCapacityMb = 16000;
@@ -134,14 +134,28 @@ export function createSettings(tablet) {
 
   const upgradeStatus = element('p', 'muted');
   const upgradeAction = button('View upgrade', () => tablet.openStoreListing(botOsPlusProduct), 'primary');
-  const upgradeLinkHelp = element('a', '', 'Already bought BotOS Plus? Link all profiles');
-  upgradeLinkHelp.href = './?link-profiles=1#settings';
   const upgrade = element('section', 'settings-panel', element('h3', '', tabletProducts[botOsPlusProduct].name),
-    upgradeStatus, upgradeAction, upgradeLinkHelp);
+    upgradeStatus, upgradeAction);
+
+  const syncStatus = element('p', 'muted');
+  syncStatus.setAttribute('role', 'status');
+  const sync = button('Sync purchases', async () => {
+    sync.disabled = true;
+    syncStatus.hidden = false;
+    syncStatus.textContent = 'Syncing purchases…';
+    try {
+      syncStatus.textContent = await syncPurchases({preferWebGL: true})
+        ? 'Purchases are up to date.' : 'Couldn’t finish syncing purchases. Try again shortly.';
+    } finally {
+      sync.disabled = false;
+    }
+  });
+  syncStatus.hidden = true;
+  const purchases = element('section', 'settings-panel', element('h3', '', 'Purchases'), sync, syncStatus);
 
   const view = element('section', 'settings-app', element('div', 'app-content',
     element('header', 'app-heading', tablet.art('settings'), element('h2', '', 'Settings')),
-    element('div', 'settings-grid', element('div', 'settings-column', about, storage),
+    element('div', 'settings-grid', element('div', 'settings-column', about, storage, purchases),
       element('div', 'settings-column', notifications, upgrade))));
 
   function refreshStorage() {
@@ -186,7 +200,6 @@ export function createSettings(tablet) {
     resume.hidden = !expiry;
     pauseControls.hidden = !hasOsUpgrade;
     upgradeAction.hidden = hasOsUpgrade;
-    upgradeLinkHelp.hidden = hasOsUpgrade;
     const version = 'BotOS ' + osVersion + (hasOsUpgrade ? ' Plus' : '');
     if (software.textContent !== version) {
       software.textContent = version;
@@ -203,6 +216,7 @@ export function createSettings(tablet) {
       refreshPosition();
       refreshSoundButtons();
       refreshPause();
+      syncPurchases();
     },
     tick() {
       refreshPause();

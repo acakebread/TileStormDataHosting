@@ -1,6 +1,6 @@
 // Copyright 2026 massivehadron.com ltd.
 
-import {membershipRequest} from './eggbotstablet/purchases.js?v=checkout-continue';
+import {membershipRequest} from './eggbotstablet/purchases.js?v=purchase-sync';
 
 const suppliedProfile = new URLSearchParams(location.hash.slice(1)).get('purchase-profile');
 const profile = suppliedProfile ?? history.state?.membershipProfile ?? undefined;

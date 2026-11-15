@@ -2,14 +2,14 @@
 
 import {loadCatalogue} from './catalogue.js';
 import {createChat, createMail} from './messages.js?v=mail-layout';
-import {createPhotos, createBank, createLove, createMarket, createStore} from './apps.js?v=checkout-continue';
+import {createPhotos, createBank, createLove, createMarket, createStore} from './apps.js?v=purchase-sync';
 import {createFirebot} from './firebot.js?v=hosted';
 import {createScratch} from './games.js?v=scratch-prize-size';
 import {createFruit} from './fruit-burst.js?v=unity';
-import {hasOnlyBotsAccess, hasPremiumAccess} from './premium.js?v=checkout-continue';
-import {linkPurchaseProfile, linkWebGLProfiles, membershipRegistered, refreshPurchases} from './purchases.js?v=checkout-continue';
+import {hasOnlyBotsAccess, hasPremiumAccess} from './premium.js?v=purchase-sync';
+import {linkPurchaseProfile, linkWebGLProfiles, syncPurchases} from './purchases.js?v=purchase-sync';
 import {createHomePager} from './home.js?v=onlybots-shop';
-import {createSettings, createTabletPreferences, offloadSizeMb, osVersion} from './settings.js?v=checkout-continue';
+import {createSettings, createTabletPreferences, offloadSizeMb, osVersion} from './settings.js?v=purchase-sync';
 import {element, button, image, shortTime, loadSetting, saveSetting} from './ui.js';
 
 const pages = [
@@ -29,7 +29,7 @@ const apps = {
     frame: '../instabot-preview-d31b7e4c/?tablet=1'},
   love: {name: 'LoveBot', art: './art/love.png', needsContent: true, mount: createLove},
   onlybots: {name: 'OnlyBots', art: '../onlybots-preview-8c7e4f2a/icon.jpg',
-    frame: '../onlybots-preview-8c7e4f2a/?tablet=1&v=checkout-continue'},
+    frame: '../onlybots-preview-8c7e4f2a/?tablet=1&v=purchase-sync'},
   market: {name: 'eBot', art: './art/market.jpg', needsContent: true, mount: createMarket},
   botflix: {name: 'BOTFLIX', art: './art/botflix.png'},
   firebot: {name: 'Firebot', art: './art/firebot.jpg', downloadMb: 2, needsContent: true, mount: createFirebot},
@@ -396,12 +396,12 @@ window.addEventListener('tilestorm-purchases-changed', () => {
   if (current === 'onlybots' && !hasOnlyBotsAccess()) open('onlybots');
 });
 showCurrent();
-if (!handleLocation()) refreshPurchases();
+if (!handleLocation()) syncPurchases();
 if (onlyBotsInstalled && hasOnlyBotsAccess()) mount('onlybots');
 tick();
 setInterval(tick, 1000);
 setInterval(() => {
-  if (!document.hidden && membershipRegistered()) refreshPurchases();
-}, 60000);
+  if (!document.hidden) syncPurchases();
+}, 20000);
 setTimeout(announceUpdate, 50000);
 startContent();

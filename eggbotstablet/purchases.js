@@ -7,7 +7,7 @@ const keyPattern = /^[a-f0-9]{64}$/;
 const shopItems = new Set(['app', 'goldibot', 'kelly_and_lucy', 'lovebot', 'botosplus', 'botcloud']);
 const keySetting = 'purchaseProfile';
 const webglSetting = 'webglPurchaseProfile';
-const appliedWebglSetting = 'appliedWebglPurchaseProfile';
+const explicitProfileSetting = 'explicitPurchaseProfile';
 const pendingLinkSetting = 'unlinkedPurchaseProfile';
 const hex = bytes => Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
 const randomKey = () => hex(crypto.getRandomValues(new Uint8Array(32)));
@@ -120,6 +120,7 @@ export async function spendLoveBotSwipe() {
 }
 
 export async function claimShopPurchase(product, reference) {
+  followWebGLProfile();
   const profile = key;
   await retryLink();
   if (key !== profile) throw Object.assign(new Error('Your purchase profile changed. Confirm the profile and try again.'), {status: 409});
@@ -128,6 +129,7 @@ export async function claimShopPurchase(product, reference) {
 }
 
 export async function matchShopReturn(product, token) {
+  followWebGLProfile();
   const profile = key;
   await retryLink();
   if (profile !== key) return 'manual';
@@ -142,7 +144,7 @@ export function claimLoveBotPurchase(reference) {
 async function refresh(profile) {
   const revision = swipeRevision;
   const {receipts, lovebotBalance: balance, membership} = await post('/api/purchases', {key: profile});
-  if (profile !== key) return;
+  if (profile !== key) return false;
   const hadSilver = hasSilverBotCloud();
   const wasRegistered = membershipRegistered();
   memberProfile = profile;
@@ -155,18 +157,24 @@ async function refresh(profile) {
   saveSetting('purchases.' + profile, unlocked);
   if (unlocked.join('|') !== saved?.join('|') || hadSilver !== hasSilverBotCloud() || wasRegistered !== membershipRegistered())
     window.dispatchEvent(new Event('tilestorm-purchases-changed'));
+  return true;
 }
 
 export function refreshPurchases() {
   if (inFlight && inFlightProfile === key) return inFlight;
   inFlightProfile = key;
-  const request = refresh(key).catch(() => {}).finally(() => { if (inFlight === request) inFlight = null; });
+  const request = refresh(key).catch(() => false).finally(() => { if (inFlight === request) inFlight = null; });
   return inFlight = request;
 }
 
-export async function linkPurchaseProfile(target) {
-  if (!target || !keyPattern.test(target)) return;
-  saveSetting(appliedWebglSetting, webglProfile());
+export function linkPurchaseProfile(target) {
+  if (typeof target !== 'string' || !keyPattern.test(target)) return Promise.resolve(false);
+  const published = webglProfile();
+  saveSetting(explicitProfileSetting, published && published !== target ? {published, target} : null);
+  return usePurchaseProfile(target);
+}
+
+function usePurchaseProfile(target) {
   if (target !== key) {
     const pending = pendingLink();
     // Merge this browser's independent purchases once. Changing game profiles only switches the view.
@@ -177,9 +185,7 @@ export async function linkPurchaseProfile(target) {
     saveSetting(keySetting, key);
     window.dispatchEvent(new Event('tilestorm-purchases-changed'));
   }
-  const linked = await retryLink();
-  await refreshPurchases();
-  return linked;
+  return refreshLinkedPurchases();
 }
 
 function webglProfile() {
@@ -190,12 +196,27 @@ function webglProfile() {
 export async function linkWebGLProfiles() {
   const profile = webglProfile();
   if (!profile) return 'missing';
-  return await linkPurchaseProfile(profile) ? 'linked' : 'pending';
+  return await syncPurchases({preferWebGL: true}) ? 'linked' : 'pending';
 }
 
 function followWebGLProfile() {
   const profile = webglProfile();
-  return profile && profile !== loadSetting(appliedWebglSetting, null) ? linkPurchaseProfile(profile) : null;
+  if (!profile || profile === key) return null;
+  const explicit = loadSetting(explicitProfileSetting, null);
+  if (explicit?.published === profile && explicit.target === key) return null;
+  saveSetting(explicitProfileSetting, null);
+  return usePurchaseProfile(profile);
+}
+
+async function refreshLinkedPurchases() {
+  const linked = await retryLink();
+  const refreshed = await refreshPurchases();
+  return linked && refreshed;
+}
+
+export function syncPurchases({preferWebGL = false} = {}) {
+  if (preferWebGL && webglProfile()) saveSetting(explicitProfileSetting, null);
+  return followWebGLProfile() ?? refreshLinkedPurchases();
 }
 
 function pendingLink() {
@@ -225,6 +246,7 @@ async function retryLink() {
 
 export function buyPurchase(product) {
   if (!shopItems.has(product)) return false;
+  followWebGLProfile();
   const existing = checkouts.get(product);
   if (existing?.profile === key && !existing.tab.closed) {
     existing.tab.focus();
@@ -311,13 +333,18 @@ window.addEventListener('focus', () => {
   for (const attempt of checkouts.values()) {
     if (attempt.tab.closed && !attempt.active) stopCheckout(attempt, true);
   }
-  return followWebGLProfile() || retryLink().then(refreshPurchases);
+  syncPurchases();
+});
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) syncPurchases();
 });
 window.addEventListener('storage', event => {
   if (event.key === 'eggbot-tablet.' + webglSetting) followWebGLProfile();
   if (event.key === 'eggbot-tablet.' + keySetting) {
-    key = loadSetting(keySetting, key);
-    refreshPurchases();
+    const profile = loadSetting(keySetting, key);
+    if (typeof profile !== 'string' || !keyPattern.test(profile)) return;
+    key = profile;
+    syncPurchases();
   }
   if (event.key === 'eggbot-tablet.purchases.' + key) cachedPurchases.delete(key);
   if (event.key === 'eggbot-tablet.' + keySetting || event.key === 'eggbot-tablet.purchases.' + key)

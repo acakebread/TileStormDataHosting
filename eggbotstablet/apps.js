@@ -1,10 +1,10 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {element, button, image, tabs, watchSwipe, money, number, countdown, loadSetting, saveSetting} from './ui.js?v=lovebot-swipe';
-import {hasOnlyBotsAccess, redeemOnlyBotsCode} from './premium.js?v=checkout-continue';
-import {buyPurchase, catalogueProduct, paidLoveBotSwipes, refreshCatalogue, refreshPurchases, spendLoveBotSwipe} from './purchases.js?v=checkout-continue';
+import {hasOnlyBotsAccess, redeemOnlyBotsCode} from './premium.js?v=purchase-sync';
+import {buyPurchase, catalogueProduct, paidLoveBotSwipes, refreshCatalogue, spendLoveBotSwipe} from './purchases.js?v=purchase-sync';
 import {createSlideGesture} from './slide.js';
-import {botOsPlusProduct, tabletProducts} from './settings.js?v=checkout-continue';
+import {botOsPlusProduct, tabletProducts} from './settings.js?v=purchase-sync';
 
 export function createPhotos({data}) {
   const photos = (data.owner?.photos ?? []).map(photo => ({
@@ -185,15 +185,10 @@ export function createLove(tablet) {
   let busy = false;
   let motion;
   let tilt = 1;
-  let nextBalanceCheck = 0;
   const photoIds = profile => profile.loveBot.photoIds?.length ? profile.loveBot.photoIds : [profile.portrait?.photoId];
   const canSwipe = () => !view.hidden && !busy && !deck.hidden;
 
   function tick(now) {
-    if (now >= nextBalanceCheck) {
-      nextBalanceCheck = now + 45000;
-      refreshPurchases();
-    }
     if (swipes === 0 && refill <= now) {
       swipes = 5;
       refill = 0;
@@ -348,7 +343,7 @@ export function createLove(tablet) {
   });
   return {
     view, tick,
-    open() { nextBalanceCheck = 0; update(); },
+    open: update,
     close() {
       cancelDrag();
       motion?.finish();

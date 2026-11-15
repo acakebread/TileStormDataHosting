@@ -1,8 +1,8 @@
 // Copyright 2026 massivehadron.com ltd.
 
-import {hasOnlyBotsAccess, redeemOnlyBotsCode} from '../eggbotstablet/premium.js?v=checkout-continue';
-import {refreshCatalogue, refreshPurchases} from '../eggbotstablet/purchases.js?v=checkout-continue';
-import {createPurchaseForm} from './purchase-form.js?v=checkout-continue';
+import {hasOnlyBotsAccess, redeemOnlyBotsCode} from '../eggbotstablet/premium.js?v=purchase-sync';
+import {refreshCatalogue, refreshPurchases} from '../eggbotstablet/purchases.js?v=purchase-sync';
+import {createPurchaseForm} from './purchase-form.js?v=purchase-sync';
 
 const embedded = window.parent !== window && new URLSearchParams(location.search).has('tablet');
 const gate = document.getElementById('accessGate');
@@ -12,7 +12,7 @@ function openPreview(focus, tabletPremium = false) {
   gate.replaceWith(preview.content);
   preview.remove();
   if (focus) document.getElementById('feedScroller').focus();
-  Promise.all([import('./onlybots.js?v=checkout-continue'), refreshCatalogue()]).then(([feed]) => feed.start(tabletPremium)).catch(() => {
+  Promise.all([import('./onlybots.js?v=purchase-sync'), refreshCatalogue()]).then(([feed]) => feed.start(tabletPremium)).catch(() => {
     const status = document.getElementById('feedStatus');
     status.textContent = 'The preview could not load. Reload the page to try again.';
     status.setAttribute('role', 'alert');
