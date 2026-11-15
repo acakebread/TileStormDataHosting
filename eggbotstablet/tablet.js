@@ -7,7 +7,7 @@ import {createFirebot} from './firebot.js?v=hosted';
 import {createScratch} from './games.js?v=scratch-bling';
 import {createFruit} from './fruit-burst.js?v=unity';
 import {hasOnlyBotsAccess, hasPremiumAccess} from './premium.js?v=game-code-pin';
-import {linkPurchaseProfile, purchaseStatus, refreshPurchases} from './purchases.js?v=game-code-pin';
+import {linkPurchaseProfile, refreshPurchases} from './purchases.js?v=game-code-pin';
 import {createHomePager} from './home.js?v=onlybots-shop';
 import {createSettings, createTabletPreferences, offloadSizeMb, osVersion} from './settings.js?v=tablet-settings';
 import {element, button, image, shortTime, loadSetting, saveSetting} from './ui.js';
@@ -38,7 +38,7 @@ const apps = {
 };
 
 const ui = Object.fromEntries([
-  'display', 'home', 'home-pages', 'page-dots', 'loading', 'loading-status', 'retry', 'clock', 'app-name', 'tip-status',
+  'display', 'home', 'home-pages', 'page-dots', 'loading', 'loading-status', 'retry', 'clock', 'app-name',
   'home-button', 'notification', 'open-notification', 'dismiss-notification', 'toast',
   'prompt', 'prompt-title', 'prompt-text', 'prompt-actions'
 ].map(id => [id, document.getElementById(id)]));
@@ -376,19 +376,12 @@ function tick() {
   mounted.get(current)?.tick?.(now);
 }
 
-function renderTipStatus() {
-  const tipped = purchaseStatus('dollar_tip');
-  ui['tip-status'].textContent = tipped === undefined ? '' : tipped ? 'Tip given' : 'No tip';
-}
-
 window.addEventListener('tilestorm-purchases-changed', () => {
-  renderTipStatus();
   if (current === 'home') renderHome();
   if (current === 'onlybots' && !hasOnlyBotsAccess()) open('onlybots');
 });
 showCurrent();
 if (!handleLocation()) refreshPurchases();
-renderTipStatus();
 if (onlyBotsInstalled && hasOnlyBotsAccess()) mount('onlybots');
 tick();
 setInterval(tick, 1000);
