@@ -297,54 +297,21 @@
       });
       updateFullscreenButton();
 
-      var version = "0.1.336";
+      var version = "0.1.337";
       var buildUrl = "Build";
-      var loaderUrl = buildUrl + "/2c7872af9ba8ed1906ee258f3891292d.loader.js?v=" + version;
+      var loaderUrl = buildUrl + "/5b4b7c75999db811a150f8f2424d9dbd.loader.js?v=" + version;
       var config = {
         arguments: [],
-        dataUrl: buildUrl + "/d720a92c9c9f7d5c177e5a6afe969876.data.unityweb?v=" + version,
-        frameworkUrl: buildUrl + "/cde5b266599749b86c8c92ec571fb770.framework.js.unityweb?v=" + version,
-        codeUrl: buildUrl + "/ea88ebd51713f0dfbd05aac69e3d1f31.wasm.unityweb?v=" + version,
+        dataUrl: buildUrl + "/4f13b05d67e9fc06ff4160a1def9de51.data.unityweb?v=" + version,
+        frameworkUrl: buildUrl + "/06d90d89f9525fdc532c2b4e42c63530.framework.js.unityweb?v=" + version,
+        codeUrl: buildUrl + "/bd69141706ef7d18438b10248222a7b2.wasm.unityweb?v=" + version,
         streamingAssetsUrl: "StreamingAssets",
         companyName: "MassiveHadron",
         productName: "TileStormEvolution",
-        productVersion: "0.1.336",
+        productVersion: "0.1.337",
       };
 
       loadingBar.style.display = "block";
-
-      // Bridge the purchase sync in this published build. Future builds publish their profile directly.
-      (() => {
-        const purchaseUrl = 'https://tilestorm-coffee-checkout.qrh.workers.dev/api/purchases';
-        const fetchOriginal = window.fetch;
-        let lastRequest = 0;
-        let profile;
-
-        function publish() {
-          if (!profile || document.hidden) return;
-          try { localStorage.setItem('eggbot-tablet.webglPurchaseProfile', JSON.stringify(profile)); }
-          catch { /* The game can continue without shared browser storage. */ }
-        }
-
-        window.fetch = function (url, options) {
-          const response = fetchOriginal.apply(this, arguments);
-          if (url !== purchaseUrl || options?.method !== 'POST' || !(options.body instanceof Blob)) return response;
-          const sequence = ++lastRequest;
-          options.body.text().then(JSON.parse).then(({key}) => {
-            if (typeof key !== 'string' || !/^[a-f0-9]{64}$/.test(key)) return;
-            return response.then(result => {
-              if (result.ok && sequence === lastRequest) {
-                profile = key;
-                publish();
-              }
-            });
-          }).catch(() => {});
-          return response;
-        };
-
-        window.addEventListener('focus', publish);
-        document.addEventListener('visibilitychange', publish);
-      })();
 
       var script = document.createElement("script");
       script.src = loaderUrl;
