@@ -68,10 +68,10 @@ function sliced(context, image, {x, y, width, height}, horizontal, vertical = ho
   }
 }
 
-function print(context, text, area, color, verticalScale = 1) {
+function print(context, text, area, color, {fontScale = 1, verticalScale = 1} = {}) {
   context.save();
   context.translate(area.x + area.width / 2, area.y + area.height / 2);
-  const size = area.height;
+  const size = area.height * fontScale;
   context.font = `bold ${size}px Arial, sans-serif`;
   const fitted = Math.min(size, size * area.width / context.measureText(text).width);
   context.font = `bold ${fitted}px Arial, sans-serif`;
@@ -123,7 +123,8 @@ export async function loadScratchCard(data) {
     for (const [index, prize] of prizes.entries()) {
       const amount = String(amounts[index]);
       sliced(paper.context, symbol, prize, 32);
-      print(paper.context, dollars(amounts[index]), inside(prize, .04, .1685, .96, .635), '#000', 2);
+      print(paper.context, dollars(amounts[index]), inside(prize, .04, .1685, .96, .635), '#000',
+        {fontScale: .8, verticalScale: 2});
       print(paper.context, leading[Number(amount[0]) - 1] + magnitude[amount.length - 2],
         inside(prize, 0, .7798, 1, .98005), '#000');
       const cover = inside(prize, .06063, .1222, .9394, .8778);
