@@ -754,23 +754,6 @@
       text-decoration: none;
     }
 
-    button.danger {
-      background: linear-gradient(180deg, #6d2631, #451822);
-      border-color: #9d4a55;
-      color: #ffe5e5;
-    }
-
-    #adminToken {
-      box-sizing: border-box;
-      width: min(460px, 100%);
-      background: #071018;
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      color: var(--text);
-      padding: 10px 12px;
-      font: inherit;
-    }
-
     details {
       margin-top: 18px;
       background: rgba(8, 15, 22, 0.48);
@@ -964,18 +947,14 @@
 
       <details>
         <summary>Admin tools</summary>
-        <p class="note"><a href="https://tilestorm-stock-admin.qrh.workers.dev/" target="_blank" rel="noopener noreferrer">Manage stock units ↗</a></p>
-        <p class="note">Publisher controls. Paste a GitHub token with read/write access to remove maps while the community library is being curated.</p>
-        <div class="toolbar">
-          <input id="adminToken" type="password" autocomplete="off" placeholder="GitHub personal access token">
-          <button id="saveToken">Use token</button>
-          <button id="clearToken">Clear</button>
+        <p class="note"><a href="https://tilestorm-stock-admin.qrh.workers.dev/">TileStorm Admin</a> ·
+          <a href="https://tilestorm-stock-admin.qrh.workers.dev/maps">Manage shared maps</a></p>
+        <div id="adminTokenMigration" hidden>
+          <p class="note">Move this browser’s saved GitHub token to Admin settings once. After saving it there, remove the browser copy.</p>
+          <button id="copySavedToken" type="button">Copy saved GitHub token</button>
+          <button id="clearSavedToken" type="button">Remove browser copy</button>
         </div>
-        <div id="adminStatus" class="note"></div>
-        <div id="tabletPreviewLinks" class="note" hidden>
-          <a href="./onlybots-preview-8c7e4f2a/" target="_blank" rel="noopener noreferrer">Open OnlyBots preview ↗</a>
-          · <a href="./instabot-preview-d31b7e4c/" target="_blank" rel="noopener noreferrer">Open Instabot preview ↗</a>
-        </div>
+        <div id="migrationStatus" class="note" role="status"></div>
       </details>
     </section>
   </main>
@@ -990,7 +969,6 @@
       <div class="news-strip" aria-label="Latest update">
         <span class="news-strip-text" id="newsStripText">Eggbot has news... community catalogue online.</span>
       </div>
-      <div class="launch-count" id="appLaunchCount" hidden></div>
     </div>
   </footer>
 
@@ -1027,17 +1005,11 @@
     const sortByEl = document.getElementById("sortBy");
     const accessFilterEls = [...document.querySelectorAll('input[name="accessFilter"]')];
     const sortStatusEl = document.getElementById("sortStatus");
-    const adminTokenInput = document.getElementById("adminToken");
-    const saveTokenBtn = document.getElementById("saveToken");
-    const clearTokenBtn = document.getElementById("clearToken");
-    const adminStatusEl = document.getElementById("adminStatus");
-    const tabletPreviewLinksEl = document.getElementById("tabletPreviewLinks");
-    const appLaunchCountEl = document.getElementById("appLaunchCount");
+    const adminTokenMigration = document.getElementById("adminTokenMigration");
+    const migrationStatus = document.getElementById("migrationStatus");
     const newsStripTextEl = document.getElementById("newsStripText");
 
     let currentManifest = null;
-    let adminToken = "";
-    let appLaunchCount = null;
     let mapLaunchCounts = new Map();
     let mapDetails = new Map();
     let loadingMapLaunchCounts = false;
@@ -1073,36 +1045,17 @@
       }[ch]));
     }
 
-    function setAdminStatus(message, className = "") {
-      adminStatusEl.className = `note ${className}`.trim();
-      adminStatusEl.textContent = message || "";
-    }
-
     function setFreshnessStatus(message, className = "") {
       freshnessEl.className = `note ${className}`.trim();
       freshnessEl.textContent = message || "";
     }
 
-    function renderAppLaunchCount() {
-      tabletPreviewLinksEl.hidden = !adminToken;
-      if (!adminToken || appLaunchCount == null) {
-        appLaunchCountEl.hidden = true;
-        return;
-      }
-
-      appLaunchCountEl.textContent = `${appLaunchCount.toLocaleString("en-GB")} recorded app ${appLaunchCount === 1 ? "launch" : "launches"}`;
-      appLaunchCountEl.hidden = false;
-    }
-
-    function loadSavedToken() {
+    function showTokenMigration() {
       try {
-        adminToken = localStorage.getItem(tokenStorageKey) || "";
-        adminTokenInput.value = adminToken;
-      } catch (error) {
-        adminToken = "";
+        adminTokenMigration.hidden = !localStorage.getItem(tokenStorageKey);
+      } catch {
+        adminTokenMigration.hidden = true;
       }
-      setAdminStatus(adminToken ? "Admin token is active in this browser." : "No admin token is active.");
-      renderAppLaunchCount();
     }
 
     function normaliseFileUrl(fileName, downloadUrl) {
@@ -1409,16 +1362,6 @@
       }
     }
 
-    async function loadAppLaunchCount() {
-      try {
-        appLaunchCount = await readPublicCount("app-started");
-        renderAppLaunchCount();
-      } catch (error) {
-        appLaunchCount = null;
-        appLaunchCountEl.hidden = true;
-      }
-    }
-
     async function loadMapLaunchCounts(entries, loadId) {
       const hashes = [...new Set(entries.map(getMapHash).filter(Boolean))];
       const counts = await Promise.all(hashes.map(async mapHash => {
@@ -1511,7 +1454,6 @@
                   <h2>${escapeHtml(entry.name || fileName || entry.id || "Untitled")}</h2>
                   ${launchId ? `<span class="entry-key">[${escapeHtml(launchId)}]</span>` : ""}
                   ${playText ? `<span class="launch-count" data-map-launch-count="${escapeHtml(launchId)}">${escapeHtml(playText)}</span>` : ""}
-                  ${adminToken && fileName ? `<button class="danger" data-delete-map="${escapeHtml(fileName)}" data-delete-hash="${escapeHtml(launchId)}">Delete</button>` : ""}
                 </div>
                 <div class="meta">${fileName ? `<div class="file-row"><a class="download-icon-link" href="${escapeHtml(pagesUrl)}" download="${escapeHtml(fileName)}" aria-label="Download ${escapeHtml(fileName)}" title="Download ${escapeHtml(fileName)}"><span class="download-icon" aria-hidden="true"></span></a><a class="file-link" href="${escapeHtml(previewUrl)}">${escapeHtml(fileName)}</a></div>` : ""}</div>
                 <div class="meta entry-meta-line">
@@ -1615,101 +1557,6 @@
       }
     }
 
-    async function githubRequest(path, options = {}) {
-      if (!adminToken) {
-        throw new Error("Paste an admin token first.");
-      }
-
-      const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}`, {
-        ...options,
-        headers: {
-          "Accept": "application/vnd.github+json",
-          "Authorization": `Bearer ${adminToken}`,
-          "X-GitHub-Api-Version": "2022-11-28",
-          ...(options.headers || {})
-        }
-      });
-
-      const text = await response.text();
-      const body = text ? JSON.parse(text) : null;
-      if (!response.ok) {
-        throw new Error(body?.message || `GitHub API request failed: HTTP ${response.status}`);
-      }
-
-      return body;
-    }
-
-    function toBase64Utf8(value) {
-      return btoa(unescape(encodeURIComponent(value)));
-    }
-
-    async function deleteMap(fileName, mapHash = "") {
-      if (!fileName) {
-        return;
-      }
-
-      const confirmed = window.confirm(`Delete ${fileName} from the shared map repository?`);
-      if (!confirmed) {
-        return;
-      }
-
-      setAdminStatus(`Deleting ${fileName}...`);
-      const mapPath = `maps/${fileName}`;
-      const thumbPath = mapHash ? `thumbs/${mapHash}.png` : "";
-      const manifestPath = "manifest.json";
-
-      const requests = [
-        githubRequest(mapPath),
-        githubRequest(manifestPath)
-      ];
-      if (thumbPath) {
-        requests.splice(1, 0, githubRequest(thumbPath).catch(() => null));
-      }
-      const [mapFile, thumbFile, manifestFile] = await Promise.all(requests);
-
-      await githubRequest(mapPath, {
-        method: "DELETE",
-        body: JSON.stringify({
-          message: `Delete TileStorm shared map ${fileName}`,
-          sha: mapFile.sha,
-          branch
-        })
-      });
-
-      if (thumbFile?.sha) {
-        await githubRequest(thumbPath, {
-          method: "DELETE",
-          body: JSON.stringify({
-            message: `Delete TileStorm shared map thumbnail ${mapHash}`,
-            sha: thumbFile.sha,
-            branch
-          })
-        });
-      }
-
-      const latestManifest = JSON.parse(decodeURIComponent(escape(atob((manifestFile.content || "").replace(/\s/g, "")))));
-      latestManifest.entries = (latestManifest.entries || []).filter(entry =>
-        entry &&
-        entry.fileName !== fileName &&
-        entry.id !== fileName &&
-        (!mapHash || entry.mapHash !== mapHash)
-      );
-      latestManifest.generatedUtc = new Date().toISOString();
-
-      await githubRequest(manifestPath, {
-        method: "PUT",
-        body: JSON.stringify({
-          message: `Update TileStorm shared map manifest after deleting ${fileName}`,
-          content: toBase64Utf8(JSON.stringify(latestManifest, null, 2)),
-          sha: manifestFile.sha,
-          branch
-        })
-      });
-
-      setAdminStatus(`Deleted ${fileName}. GitHub Pages may take a minute to show the change.`, "success");
-      await loadManifest();
-    }
-
     refreshBtn.addEventListener("click", loadManifest);
     sortByEl.addEventListener("change", () => {
       if (currentManifest) {
@@ -1736,36 +1583,27 @@
       });
     });
 
-    saveTokenBtn.addEventListener("click", () => {
-      adminToken = adminTokenInput.value.trim();
+    document.getElementById("copySavedToken").addEventListener("click", async () => {
       try {
-        if (adminToken) {
-          localStorage.setItem(tokenStorageKey, adminToken);
-        } else {
-          localStorage.removeItem(tokenStorageKey);
+        const value = localStorage.getItem(tokenStorageKey);
+        if (!value) {
+          showTokenMigration();
+          return;
         }
-      } catch (error) {
-        // Token still works for this page session if localStorage is blocked.
-      }
-      setAdminStatus(adminToken ? "Admin token is active in this browser." : "No admin token is active.");
-      renderAppLaunchCount();
-      if (currentManifest) {
-        render(currentManifest.entries || [], currentManifest.repositoryName, currentManifest.generatedUtc);
+        await navigator.clipboard.writeText(value);
+        migrationStatus.textContent = "Token copied. Paste it into GitHub token in Admin settings.";
+      } catch {
+        migrationStatus.textContent = "Copying was unavailable. Use the token from your password manager or create one on GitHub.";
       }
     });
 
-    clearTokenBtn.addEventListener("click", () => {
-      adminToken = "";
-      adminTokenInput.value = "";
+    document.getElementById("clearSavedToken").addEventListener("click", () => {
       try {
         localStorage.removeItem(tokenStorageKey);
-      } catch (error) {
-        // Nothing else needed.
-      }
-      setAdminStatus("Admin token cleared.");
-      renderAppLaunchCount();
-      if (currentManifest) {
-        render(currentManifest.entries || [], currentManifest.repositoryName, currentManifest.generatedUtc);
+        showTokenMigration();
+        migrationStatus.textContent = "Browser copy removed.";
+      } catch {
+        migrationStatus.textContent = "Could not remove the browser copy.";
       }
     });
 
@@ -1780,19 +1618,6 @@
     }
 
     document.addEventListener("click", async event => {
-      const deleteButton = event.target.closest("[data-delete-map]");
-      if (deleteButton) {
-        try {
-          await deleteMap(
-            deleteButton.getAttribute("data-delete-map"),
-            deleteButton.getAttribute("data-delete-hash") || ""
-          );
-        } catch (error) {
-          setAdminStatus(error.message || String(error), "error");
-        }
-        return;
-      }
-
       const launchLink = event.target.closest("a[data-launch-map]");
       if (launchLink) {
         primeMapLaunch(launchLink.getAttribute("data-launch-map") || "");
@@ -1826,9 +1651,8 @@
     });
 
     sortByEl.value = "popular";
-    loadSavedToken();
+    showTokenMigration();
     loadManifest();
-    loadAppLaunchCount();
   </script>
 </body>
 </html>
