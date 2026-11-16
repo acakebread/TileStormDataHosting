@@ -1,6 +1,6 @@
 // Copyright 2026 massivehadron.com ltd.
 
-import {membershipRequest} from './eggbotstablet/purchases.js?v=subscription-promo';
+import {membershipRequest} from './eggbotstablet/purchases.js?v=membership-codes';
 
 const parameters = new URLSearchParams(location.hash.slice(1));
 const offer = new URLSearchParams(location.search).get('offer');
@@ -42,8 +42,8 @@ if (selectedTier) {
 
 function showRegistration(reply) {
   const hasBotCloud = reply.silverUntil * 1000 > Date.now();
-  const chosenTierActive = botCloudOffer ? hasBotCloud : Boolean(selectedTier &&
-    reply.subscriptionTier === selectedTier && reply.subscriptionUntil * 1000 > Date.now());
+  const activeTier = reply.subscriptionUntil * 1000 > Date.now() ? reply.subscriptionTier : null;
+  const chosenTierActive = botCloudOffer ? hasBotCloud : Boolean(selectedTier && activeTier === selectedTier);
   send.hidden = !reply.available;
   unregister.hidden = !reply.registered;
   verify.hidden = true;
@@ -58,7 +58,8 @@ function showRegistration(reply) {
   } else if (selectedTier && reply.registered) {
     status.textContent = `Email linked. Choose ${selectedTier} using the same email, then return here to check membership.`;
   } else {
-    status.textContent = reply.activeMemberships?.length ? 'Active membership linked.' :
+    status.textContent = activeTier ? `${activeTier} membership is active on this profile.` :
+      reply.activeMemberships?.length ? 'Active membership linked.' :
       reply.registered ? 'Profile linked. No active membership is on record yet.' :
         reply.available ? 'Enter your Buy Me a Coffee email to get a verification code.' : 'Email verification is temporarily unavailable.';
   }

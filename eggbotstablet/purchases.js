@@ -54,13 +54,16 @@ export function membershipRegistered() {
   return memberProfile === key && memberStatus?.registered === true;
 }
 
+function hasMembershipUntil(expiry) {
+  return memberProfile === key && Date.now() < Math.min(memberCheckedUntil, expiry * 1000);
+}
+
 export function hasSilverBotCloud() {
-  return membershipRegistered() && Date.now() < Math.min(memberCheckedUntil, memberStatus.silverUntil * 1000);
+  return hasMembershipUntil(memberStatus?.silverUntil);
 }
 
 export function subscriptionTier() {
-  return membershipRegistered() && Date.now() < Math.min(memberCheckedUntil, memberStatus.subscriptionUntil * 1000)
-    ? memberStatus.subscriptionTier : 'Basic';
+  return hasMembershipUntil(memberStatus?.subscriptionUntil) ? memberStatus.subscriptionTier : 'Basic';
 }
 
 export async function membershipRequest(data, profile = key) {

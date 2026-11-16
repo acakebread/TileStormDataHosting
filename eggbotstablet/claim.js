@@ -1,6 +1,6 @@
 // Copyright 2026 massivehadron.com ltd.
 
-import {catalogueProduct, claimShopPurchase, matchShopReturn, refreshCatalogue} from './purchases.js?v=subscription-promo';
+import {catalogueProduct, claimShopPurchase, matchShopReturn, refreshCatalogue} from './purchases.js?v=membership-codes';
 
 const items = new Map([
   ['basic', 'Return to TileStorm to use Basic Access.'],

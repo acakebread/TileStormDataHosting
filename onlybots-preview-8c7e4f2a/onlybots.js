@@ -1,8 +1,8 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {blobFromCanvas, fetchFile, pictures, shuffle} from '../tablet-preview/shared.js';
-import {hasCreatorAccess, hasCreatorProduct, redeemCreatorCode} from '../eggbotstablet/premium.js?v=subscription-promo';
-import {createPurchaseForm} from './purchase-form.js?v=subscription-promo';
+import {hasCreatorAccess, hasCreatorProduct, redeemCreatorCode} from '../eggbotstablet/premium.js?v=membership-codes';
+import {createPurchaseForm} from './purchase-form.js?v=membership-codes';
 
 const ui = Object.fromEntries([
   'latest', 'creators', 'creatorHeading', 'feedScroller', 'feedStatus', 'feed',

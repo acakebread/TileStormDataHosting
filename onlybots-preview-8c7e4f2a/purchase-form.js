@@ -1,6 +1,6 @@
 // Copyright 2026 massivehadron.com ltd.
 
-import {buyPurchase, catalogueProduct, hasPurchase, refreshCatalogue} from '../eggbotstablet/purchases.js?v=subscription-promo';
+import {buyPurchase, catalogueProduct, hasPurchase, refreshCatalogue} from '../eggbotstablet/purchases.js?v=membership-codes';
 
 export function createPurchaseForm({product, buyLabel, redeem, onAccepted, invalidMessage}) {
   const form = document.getElementById('purchaseFormTemplate').content.firstElementChild.cloneNode(true);
