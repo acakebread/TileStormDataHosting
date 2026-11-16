@@ -8,9 +8,9 @@
 			"id": "5YXeyP.json",
 			"mapHash": "5YXeyP",
 			"name": "small public map",
-			"sizeBytes": 2175,
-			"updatedUtc": "2026-11-16T14:02:21.2728746Z",
-			"utc": "7wr7r0",
+			"sizeBytes": 2237,
+			"updatedUtc": "2026-11-16T14:30:49.9155345Z",
+			"utc": "44YT2V",
 			"visibility": "private"
 		},
 		{
@@ -181,6 +181,6 @@
 			"visibility": "public"
 		}
 	],
-	"generatedUtc": "2026-11-16T14:02:21.2728746Z",
+	"generatedUtc": "2026-11-16T14:30:49.9145223Z",
 	"repositoryName": "TileStorm Shared Maps"
 }
