@@ -2,14 +2,14 @@
 
 import {loadCatalogue} from './catalogue.js';
 import {createChat, createMail} from './messages.js?v=mail-layout';
-import {createPhotos, createBank, createLove, createMarket, createStore} from './apps.js?v=botcloud-options';
+import {createPhotos, createBank, createLove, createMarket, createStore} from './apps.js?v=subscription-promo';
 import {createFirebot} from './firebot.js?v=hosted';
 import {createScratch} from './games.js?v=scratch-prize-size';
 import {createFruit} from './fruit-burst.js?v=unity';
-import {hasOnlyBotsAccess, hasPremiumAccess} from './premium.js?v=purchase-sync';
-import {linkPurchaseProfile, linkWebGLProfiles, syncPurchases} from './purchases.js?v=purchase-sync';
+import {hasOnlyBotsAccess, hasPremiumAccess} from './premium.js?v=subscription-promo';
+import {linkPurchaseProfile, linkWebGLProfiles, syncPurchases} from './purchases.js?v=subscription-promo';
 import {createHomePager} from './home.js?v=onlybots-shop';
-import {createSettings, createTabletPreferences, offloadSizeMb, osVersion} from './settings.js?v=botcloud-membership';
+import {createSettings, createTabletPreferences, offloadSizeMb, osVersion} from './settings.js?v=subscription-promo';
 import {element, button, image, shortTime, loadSetting, saveSetting} from './ui.js';
 
 const pages = [

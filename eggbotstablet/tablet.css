@@ -374,6 +374,21 @@ img { display: block; max-width: 100%; }
 .settings-usage { font: 500 .82rem var(--mono); }
 .settings-toggle button { min-width: min(100px, 100%); }
 .settings-toggle button[aria-pressed="true"] { color: var(--accent); border-color: #599a89; background: #1e3a3a; }
+.settings-app { overscroll-behavior-y: contain; }
+.subscription-level { display: flex; align-items: center; gap: 12px; }
+.subscription-certificate {
+  width: 50px; height: 50px; background: #656a72;
+  mask: url('./art/subscription-certificate.png') center / contain no-repeat;
+}
+.subscription-certificate[data-tier="Bronze"] { background: #c88a42; }
+.subscription-certificate[data-tier="Silver"] { background: #c2cbd3; }
+.subscription-certificate[data-tier="Gold"] { background: #ffda32; }
+.subscription-certificate[data-tier="Platinum"] { background: #fff; }
+.promotion-entry { display: flex; gap: 8px; flex-wrap: wrap; }
+.promotion-entry input {
+  flex: 1 1 12rem; min-width: 0; border: 1px solid #4e6876; border-radius: 8px;
+  padding: 8px 10px; font: inherit; color: inherit; background: #111c22;
+}
 .market .price { display: block; margin-block: 5px; font: 500 1rem var(--mono); color: var(--accent); }
 .toast, .notification {
   position: absolute; z-index: 2; box-shadow: 0 4px 20px #0008;

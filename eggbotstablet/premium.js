@@ -1,7 +1,7 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {loadSetting, saveSetting} from './ui.js';
-import {catalogueProduct, hasPurchase, verifyProductCode} from './purchases.js?v=purchase-sync';
+import {catalogueProduct, hasPurchase, verifyProductCode} from './purchases.js?v=subscription-promo';
 
 const creatorProducts = new Set(['goldibot', 'kelly_and_lucy']);
 const appReceipt = 'onlyBotsAccess';
@@ -20,7 +20,7 @@ function register(key) {
 }
 
 export function hasPremiumAccess() {
-  return hasReceipt(premiumReceipt);
+  return hasPurchase('premium') || hasReceipt(premiumReceipt);
 }
 
 export function hasOnlyBotsAccess() {

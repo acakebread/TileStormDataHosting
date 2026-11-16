@@ -58,6 +58,11 @@ export function hasSilverBotCloud() {
   return membershipRegistered() && Date.now() < Math.min(memberCheckedUntil, memberStatus.silverUntil * 1000);
 }
 
+export function subscriptionTier() {
+  return membershipRegistered() && Date.now() < Math.min(memberCheckedUntil, memberStatus.subscriptionUntil * 1000)
+    ? memberStatus.subscriptionTier : 'Basic';
+}
+
 export async function membershipRequest(data, profile = key) {
   if (!keyPattern.test(profile)) throw new Error('Open email registration from the intended player profile.');
   await retryLink();
@@ -84,6 +89,16 @@ export function refreshCatalogue() {
 
 export function verifyProductCode(product, code) {
   return post('/api/redeem-code', {product, code});
+}
+
+export async function redeemPromotionCode(code) {
+  followWebGLProfile();
+  const profile = key;
+  if (!await retryLink() || key !== profile) throw new Error('Sync purchases for this profile and try again.');
+  const {message} = await post('/api/redeem-promotion', {key: profile, code});
+  await inFlight;
+  if (key === profile && await refreshPurchases()) return message;
+  return 'Code saved. Sync purchases to apply it.';
 }
 
 export function paidLoveBotSwipes() {
@@ -147,6 +162,7 @@ async function refresh(profile) {
   if (profile !== key) return false;
   const hadSilver = hasSilverBotCloud();
   const wasRegistered = membershipRegistered();
+  const previousTier = subscriptionTier();
   memberProfile = profile;
   memberStatus = membership;
   memberCheckedUntil = Date.now() + 150000;
@@ -155,7 +171,8 @@ async function refresh(profile) {
   const saved = savedPurchases(profile);
   cachedPurchases.set(profile, unlocked);
   saveSetting('purchases.' + profile, unlocked);
-  if (unlocked.join('|') !== saved?.join('|') || hadSilver !== hasSilverBotCloud() || wasRegistered !== membershipRegistered())
+  if (unlocked.join('|') !== saved?.join('|') || hadSilver !== hasSilverBotCloud() ||
+      wasRegistered !== membershipRegistered() || previousTier !== subscriptionTier())
     window.dispatchEvent(new Event('tilestorm-purchases-changed'));
   return true;
 }

@@ -1,7 +1,7 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {button, element, loadSetting, number, saveSetting, shortTime} from './ui.js';
-import {hasPurchase, hasSilverBotCloud, syncPurchases} from './purchases.js?v=purchase-sync';
+import {hasPurchase, hasSilverBotCloud, redeemPromotionCode, subscriptionTier, syncPurchases} from './purchases.js?v=subscription-promo';
 
 export const osVersion = '9.0';
 export const storageCapacityMb = 16000;
@@ -153,10 +153,62 @@ export function createSettings(tablet) {
   syncStatus.hidden = true;
   const purchases = element('section', 'settings-panel', element('h3', '', 'Purchases'), sync, syncStatus);
 
+  const certificate = element('span', 'subscription-certificate');
+  certificate.setAttribute('aria-hidden', 'true');
+  const tierName = element('strong');
+  const tiers = ['Bronze', 'Silver', 'Gold', 'Platinum'];
+  const tierButtons = tiers.map(tier => {
+    const control = button(tier, () => location.assign('../membership.html?offer=' + tier.toLowerCase()));
+    control.disabled = tier === 'Gold' || tier === 'Platinum';
+    return control;
+  });
+  const subscription = element('section', 'settings-panel', element('h3', '', 'Subscription'),
+    element('div', 'subscription-level', certificate, tierName), element('h4', '', 'Upgrade subscription'),
+    element('div', 'actions', ...tierButtons));
+
+  const promotionCode = element('input');
+  promotionCode.type = 'text';
+  promotionCode.required = true;
+  promotionCode.maxLength = 260;
+  promotionCode.autocomplete = 'off';
+  promotionCode.spellcheck = false;
+  promotionCode.setAttribute('aria-label', 'Promotion code');
+  const redeem = element('button', 'primary', 'Redeem');
+  redeem.type = 'submit';
+  const promotionStatus = element('p', 'muted');
+  promotionStatus.setAttribute('role', 'status');
+  const promotionForm = element('form', 'promotion-entry', promotionCode, redeem);
+  promotionForm.addEventListener('submit', async event => {
+    event.preventDefault();
+    const code = promotionCode.value.trim();
+    if (!code || redeem.disabled) return;
+    redeem.disabled = promotionCode.readOnly = true;
+    promotionStatus.textContent = 'Checking code…';
+    try {
+      promotionStatus.textContent = await redeemPromotionCode(code);
+      promotionCode.value = '';
+    } catch (error) {
+      promotionStatus.textContent = error.status ? error.message : 'Could not check the code. Try again.';
+    } finally {
+      redeem.disabled = promotionCode.readOnly = false;
+    }
+  });
+  const promotion = element('section', 'settings-panel', element('h3', '', 'Promotion code'),
+    promotionForm, promotionStatus);
+
   const view = element('section', 'settings-app', element('div', 'app-content',
     element('header', 'app-heading', tablet.art('settings'), element('h2', '', 'Settings')),
-    element('div', 'settings-grid', element('div', 'settings-column', about, storage, purchases),
-      element('div', 'settings-column', notifications, upgrade))));
+    element('div', 'settings-grid', element('div', 'settings-column', about, storage, purchases, subscription),
+      element('div', 'settings-column', notifications, upgrade, promotion))));
+
+  function refreshSubscription() {
+    const tier = subscriptionTier();
+    if (tierName.textContent === tier) return;
+    certificate.dataset.tier = tier;
+    tierName.textContent = tier;
+    tierButtons[0].disabled = tier !== 'Basic';
+    tierButtons[1].disabled = tier !== 'Basic' && tier !== 'Bronze';
+  }
 
   function refreshStorage() {
     const {contentOffloaded, hasCloudAccess} = preferences;
@@ -216,10 +268,12 @@ export function createSettings(tablet) {
       refreshPosition();
       refreshSoundButtons();
       refreshPause();
+      refreshSubscription();
       syncPurchases();
     },
     tick() {
       refreshPause();
+      refreshSubscription();
       if (displayedCloudAccess !== preferences.hasCloudAccess) refreshStorage();
     }
   };

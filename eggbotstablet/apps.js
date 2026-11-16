@@ -1,10 +1,10 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {element, button, image, tabs, watchSwipe, money, number, countdown, loadSetting, saveSetting} from './ui.js?v=lovebot-swipe';
-import {hasOnlyBotsAccess, redeemOnlyBotsCode} from './premium.js?v=purchase-sync';
-import {buyPurchase, catalogueProduct, paidLoveBotSwipes, refreshCatalogue, spendLoveBotSwipe} from './purchases.js?v=purchase-sync';
+import {hasOnlyBotsAccess, redeemOnlyBotsCode} from './premium.js?v=subscription-promo';
+import {buyPurchase, catalogueProduct, paidLoveBotSwipes, refreshCatalogue, spendLoveBotSwipe} from './purchases.js?v=subscription-promo';
 import {createSlideGesture} from './slide.js';
-import {botOsPlusProduct, tabletProducts} from './settings.js?v=purchase-sync';
+import {botOsPlusProduct, tabletProducts} from './settings.js?v=subscription-promo';
 
 export function createPhotos({data}) {
   const photos = (data.owner?.photos ?? []).map(photo => ({

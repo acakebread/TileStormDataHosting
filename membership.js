@@ -1,9 +1,11 @@
 // Copyright 2026 massivehadron.com ltd.
 
-import {membershipRequest} from './eggbotstablet/purchases.js?v=purchase-sync';
+import {membershipRequest} from './eggbotstablet/purchases.js?v=subscription-promo';
 
 const parameters = new URLSearchParams(location.hash.slice(1));
-const botCloudOffer = new URLSearchParams(location.search).get('offer') === 'botcloud';
+const offer = new URLSearchParams(location.search).get('offer');
+const botCloudOffer = offer === 'botcloud';
+const selectedTier = offer === 'bronze' ? 'Bronze' : offer === 'silver' || botCloudOffer ? 'Silver' : null;
 const suppliedProfile = parameters.get('purchase-profile');
 let activationToken = parameters.get('activation');
 const profile = suppliedProfile ?? history.state?.membershipProfile ?? undefined;
@@ -28,27 +30,33 @@ const buttons = [...document.querySelectorAll('button')];
 let sentTo;
 let busy = false;
 
-if (botCloudOffer) {
-  document.title = document.getElementById('title').textContent = 'Unlock BotCloud with Silver';
-  document.getElementById('introduction').textContent = 'Subscribe to Silver on Buy Me a Coffee to include BotCloud. Verify the same email here to link your subscription to TileStorm and Eggbot’s tablet.';
-  chooseMembership.textContent = 'Choose a membership subscription';
+if (selectedTier) {
+  document.title = document.getElementById('title').textContent = botCloudOffer
+    ? 'Unlock BotCloud with Silver' : `Subscribe to ${selectedTier}`;
+  document.getElementById('introduction').textContent =
+    `Choose ${selectedTier} on Buy Me a Coffee. Verify the same email here to link your subscription to TileStorm and Eggbot’s tablet.`;
+  chooseMembership.textContent = 'Open Buy Me a Coffee memberships';
   chooseMembership.target = '_blank';
   chooseMembership.rel = 'noopener noreferrer';
 }
 
 function showRegistration(reply) {
   const hasBotCloud = reply.silverUntil * 1000 > Date.now();
+  const chosenTierActive = botCloudOffer ? hasBotCloud : Boolean(selectedTier &&
+    reply.subscriptionTier === selectedTier && reply.subscriptionUntil * 1000 > Date.now());
   send.hidden = !reply.available;
   unregister.hidden = !reply.registered;
   verify.hidden = true;
   code.value = '';
   sentTo = undefined;
-  checkMembership.hidden = !botCloudOffer || !reply.registered || hasBotCloud;
-  chooseMembership.hidden = botCloudOffer && hasBotCloud;
-  if (hasBotCloud) {
+  checkMembership.hidden = !selectedTier || !reply.registered || chosenTierActive;
+  chooseMembership.hidden = chosenTierActive;
+  if (hasBotCloud && (!selectedTier || chosenTierActive)) {
     status.textContent = `${reply.botCloudTier ?? 'Silver'} membership linked. BotCloud is available.`;
-  } else if (botCloudOffer && reply.registered) {
-    status.textContent = 'Email linked. Choose Silver using the same email, then return here to check membership.';
+  } else if (chosenTierActive) {
+    status.textContent = `${selectedTier} membership linked.`;
+  } else if (selectedTier && reply.registered) {
+    status.textContent = `Email linked. Choose ${selectedTier} using the same email, then return here to check membership.`;
   } else {
     status.textContent = reply.activeMemberships?.length ? 'Active membership linked.' :
       reply.registered ? 'Profile linked. No active membership is on record yet.' :
