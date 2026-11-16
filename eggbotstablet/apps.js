@@ -4,7 +4,7 @@ import {element, button, image, tabs, watchSwipe, money, number, countdown, load
 import {hasOnlyBotsAccess, redeemOnlyBotsCode} from './premium.js?v=subscription-promo';
 import {buyPurchase, catalogueProduct, paidLoveBotSwipes, refreshCatalogue, spendLoveBotSwipe} from './purchases.js?v=subscription-promo';
 import {createSlideGesture} from './slide.js';
-import {botOsPlusProduct, tabletProducts} from './settings.js?v=subscription-promo';
+import {botOsPlusProduct, tabletProducts} from './settings.js?v=subscription-benefits';
 
 export function createPhotos({data}) {
   const photos = (data.owner?.photos ?? []).map(photo => ({

@@ -163,7 +163,9 @@ export function createSettings(tablet) {
     return control;
   });
   const subscription = element('section', 'settings-panel', element('h3', '', 'Subscription'),
-    element('div', 'subscription-level', certificate, tierName), element('h4', '', 'Upgrade subscription'),
+    element('div', 'subscription-level', certificate, tierName),
+    element('p', 'muted', 'Subscriptions unlock features and apps. See BotStore for details.'),
+    element('h4', '', 'Upgrade subscription'),
     element('div', 'actions', ...tierButtons));
 
   const promotionCode = element('input');
