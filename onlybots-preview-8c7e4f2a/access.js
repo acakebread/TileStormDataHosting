@@ -12,7 +12,7 @@ function openPreview(focus, tabletPremium = false) {
   gate.replaceWith(preview.content);
   preview.remove();
   if (focus) document.getElementById('feedScroller').focus();
-  Promise.all([import('./onlybots.js?v=membership-codes'), refreshCatalogue()]).then(([feed]) => feed.start(tabletPremium)).catch(() => {
+  Promise.all([import('./onlybots.js?v=promotion-copy'), refreshCatalogue()]).then(([feed]) => feed.start(tabletPremium)).catch(() => {
     const status = document.getElementById('feedStatus');
     status.textContent = 'The preview could not load. Reload the page to try again.';
     status.setAttribute('role', 'alert');
@@ -37,7 +37,7 @@ if (embedded) {
     buyLabel: 'Buy OnlyBots',
     redeem: redeemOnlyBotsCode,
     onAccepted: () => openPreview(true),
-    invalidMessage: 'That OnlyBots code was not recognised. Check the PIN and code.'
+    invalidMessage: 'That OnlyBots code was not recognised. Check the code and try again.'
   });
   const heading = document.createElement('h1');
   heading.textContent = 'Unlock OnlyBots';

@@ -312,7 +312,7 @@ function openCreatorProfile(profile) {
       dialog.close();
       openGallery(profile);
     },
-    invalidMessage: 'That code does not match this profile. Check the PIN and code.'
+    invalidMessage: 'That code does not match this profile.'
   });
   const cancel = document.createElement('button');
   cancel.type = 'button';
@@ -320,7 +320,10 @@ function openCreatorProfile(profile) {
   cancel.addEventListener('click', () => dialog.close());
   form.querySelector('.purchase-actions').prepend(cancel);
   ui.profilePurchaseHeading.textContent = 'Unlock ' + profile.displayName;
-  dialog.replaceChildren(ui.profilePurchaseHeading, form);
+  const instructions = document.createElement('p');
+  instructions.className = 'purchase-instructions';
+  instructions.textContent = 'Buy this profile in the shop or enter a promotion code below.';
+  dialog.replaceChildren(ui.profilePurchaseHeading, instructions, form);
   dialog.showModal();
   form.querySelector('input').focus();
 }

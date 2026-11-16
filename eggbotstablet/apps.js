@@ -492,7 +492,7 @@ export function createStore(tablet) {
     status.setAttribute('role', 'status');
     code.setAttribute('aria-describedby', status.id);
     const entry = element('div', 'premium-entry',
-      element('p', '', 'Enter the four-digit PIN followed by the OnlyBots or premium code.'),
+      element('p', '', 'Enter your promotion code below.'),
       label, code, status);
     const unlock = button('Unlock', async () => {
       const dialog = entry.closest('dialog');
@@ -509,7 +509,7 @@ export function createStore(tablet) {
           return;
         }
         code.setAttribute('aria-invalid', 'true');
-        status.textContent = 'That OnlyBots code was not recognised. Check the PIN and code.';
+        status.textContent = 'That OnlyBots code was not recognised. Check the code and try again.';
       } catch (error) {
         if (!dialog.open || !entry.isConnected) return;
         status.textContent = error.status === 429 ? 'Too many code attempts. Try again later.' :
