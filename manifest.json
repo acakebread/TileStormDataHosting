@@ -3,6 +3,19 @@
 		{
 			"contentType": "application/json;charset=utf-8",
 			"description": "",
+			"downloadUrl": "maps/2Yh1Qe.json",
+			"fileName": "2Yh1Qe.json",
+			"id": "2Yh1Qe.json",
+			"mapHash": "2Yh1Qe",
+			"name": "XOR puzzle test 2",
+			"sizeBytes": 976,
+			"updatedUtc": "2026-11-23T09:15:07.1199116Z",
+			"utc": "4wW26w",
+			"visibility": "private"
+		},
+		{
+			"contentType": "application/json;charset=utf-8",
+			"description": "",
 			"downloadUrl": "maps/5YXeyP.json",
 			"fileName": "5YXeyP.json",
 			"id": "5YXeyP.json",
@@ -181,6 +194,6 @@
 			"visibility": "public"
 		}
 	],
-	"generatedUtc": "2026-11-16T14:30:49.9145223Z",
+	"generatedUtc": "2026-11-23T09:15:07.1193988Z",
 	"repositoryName": "TileStorm Shared Maps"
 }
