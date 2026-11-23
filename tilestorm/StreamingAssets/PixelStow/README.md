@@ -1,5 +1,25 @@
 # PixelStow V6 browser recovery snapshot
 
+## Why this folder ships with TileStorm
+
+The WebGL player uses this bundle for **Import Social Image**, including file,
+paste and camera input. When the importer opens, `PixelStowBrowserImport` asks
+the browser to load `PixelStow/import.html` from `Application.streamingAssetsPath`
+in a same-origin iframe. The scripts and Web Workers decode the level payload
+and handle automatic marker acquisition for photographed cards.
+
+Unity copies `StreamingAssets` into the build as loose files. This gives the
+iframe a URL and preserves the relative paths from the page to its scripts and
+from workers to their dependencies. The browser requests the page when the
+importer opens. Moving the source to a regular Unity folder would require a
+build step to publish the same file layout.
+
+TileStorm generates media cards with its C# codec. Native builds and Editor
+play mode use their C# import path as well. Native builds still receive this
+folder because Unity copies the shared `StreamingAssets` directory.
+
+## Snapshot and compatibility
+
 The codec, transform and markertracker JavaScript files are copied unchanged
 from TileStormDataHosting commit `28657b8` (V6 gentle source conditioning,
 native colour-detail recovery, square/optional edge midpoint targets,
