@@ -6,7 +6,7 @@ import {createPhotos, createBank, createLove, createMarket, createStore} from '.
 import {createFirebot} from './firebot.js?v=hosted';
 import {createScratch} from './games.js?v=scratch-prize-size';
 import {createFruit} from './fruit-burst.js?v=unity';
-import {createTurtleTime} from './turtle-time.js?v=unity';
+import {createTurtleTime} from './turtle-time.js?v=crunch-pcm';
 import {hasOnlyBotsAccess, hasPremiumAccess} from './premium.js?v=membership-codes';
 import {linkPurchaseProfile, linkWebGLProfiles, syncPurchases} from './purchases.js?v=membership-codes';
 import {createHomePager} from './home.js?v=onlybots-shop';

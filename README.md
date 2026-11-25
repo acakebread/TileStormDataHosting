@@ -33,9 +33,11 @@ publishes with the rest of this GitHub Pages site.
 
 Turtle Time is a free BotStore install. Its rules and portrait playfield follow
 the Unity tablet version. The browser remembers the installation and high
-score locally, and fetches the game's two atlases and six sounds from the Eggbot
-Cloudflare Worker when the app opens. The game uses WebGL. Browsers that block
-autoplay start the surf loop after the first interaction with the game.
+score locally and fetches the game's atlases and sounds from the Eggbot
+Cloudflare Worker when the app opens. The web tablet uses a PCM WAV copy of
+the original crunch sound for Safari compatibility, with the hosted MP3 as
+a fallback. The game uses WebGL. Browsers that block autoplay start the surf
+loop after the first interaction with the game.
 
 When Unity's Turtle Time artwork changes, update `eggbotstablet/turtle-time-media.json`
 with the `media` entries from Unity's `TurtleTime/Media.json` and the `letters`

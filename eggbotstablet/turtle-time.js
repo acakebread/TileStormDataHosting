@@ -4,6 +4,7 @@ import {button, element, loadSetting, saveSetting} from './ui.js';
 
 const contentHost = 'https://eggbot-content.qrh.workers.dev/';
 const index = new URL('./turtle-time-media.json?v=unity', import.meta.url);
+const crunch = new URL('./art/turtle-time-crunch.wav?v=pcm', import.meta.url);
 const boards = {
   rescues: [4, 328, 250, 72], timer: [260, 328, 250, 72], start: [4, 406, 250, 76],
   instructions: [260, 406, 250, 76], dialog: [532, 4, 330, 504]
@@ -72,18 +73,32 @@ function createAudio(signal) {
 
   function surf() { ambient ??= play('surf', .18, 0, 1, true); }
 
+  async function decode(url) {
+    const response = await fetch(url, {signal});
+    if (!response.ok) throw new Error(`Audio download failed (${response.status})`);
+    const bytes = await response.arrayBuffer();
+    signal.throwIfAborted();
+    const buffer = await context.decodeAudioData(bytes);
+    if (!buffer.length) throw new Error('Decoded audio is empty');
+    return buffer;
+  }
+
   function download() {
     if (!context || !files || downloading) return;
     downloading = true;
     for (const name of ['surf', 'hatch', 'rescue', 'lost', 'pickup', 'tsunami']) {
-      fetch(files.get(`${name}.mp3`), {signal}).then(response => {
-        if (!response.ok) return;
-        return response.arrayBuffer();
-      }).then(bytes => bytes && !signal.aborted && context.decodeAudioData(bytes)).then(buffer => {
+      const original = files.get(`${name}.mp3`);
+      // Use the original crunch as PCM to preserve the attack in Safari's Web Audio decoder.
+      const clip = name === 'lost' ? decode(crunch).catch(() => {
+        if (!signal.aborted) return decode(original);
+      }) : decode(original);
+      clip.then(buffer => {
         if (!buffer || signal.aborted) return;
         buffers.set(name, buffer);
         if (name === 'surf') surf();
-      }).catch(() => {});
+      }).catch(error => {
+        if (!signal.aborted) console.warn(`Turtle Time could not load the ${name} sound.`, error);
+      });
     }
   }
 
