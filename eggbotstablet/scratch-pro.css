@@ -1,0 +1,154 @@
+/* Copyright 2026 massivehadron.com ltd. */
+
+.app-view.scratch-pro-app {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #121217;
+}
+.sp-launch {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  text-align: center;
+}
+
+.sp-stage {
+  --sp-scale: 0;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 1300px;
+  height: 975px;
+  overflow: hidden;
+  transform: translate(-50%, -50%) scale(var(--sp-scale));
+  background: #17171b;
+  color: #fff;
+  font: 28px Arial, sans-serif;
+  user-select: none;
+}
+
+.sp-stage button {
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  color: inherit;
+  font-family: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.sp-stage button:disabled { cursor: default; }
+.sp-stage button:focus-visible, .sp-gallery:focus-visible { outline: 4px solid #fc0; outline-offset: -4px; }
+.sp-stage button:not(:disabled):active { filter: brightness(.83); }
+.sp-art-button { background-color: transparent; }
+.sp-wallpaper { transform: rotate(-20deg); background-size: 40.625px 40.625px; }
+.sp-header { background: rgb(0 0 0 / .41); pointer-events: none; }
+.sp-sidebar { background: rgb(0 0 0 / .67); }
+.sp-decor, .sp-price, .sp-lock { pointer-events: none; }
+.sp-label { display: grid; place-items: center; text-align: center; }
+.sp-free-time { font-size: 28px; font-weight: bold; white-space: pre; }
+.sp-level, .sp-stage .sp-balance { font-size: 61px; color: #fc0; }
+.sp-stage .sp-balance { background: transparent; text-align: left; }
+.sp-progress { border-radius: 50%; background: conic-gradient(#fc0 var(--sp-progress, 0deg), transparent 0); }
+.sp-art-button:disabled { opacity: .3; }
+.sp-wait, .sp-status { font-size: 40px; text-align: center; }
+.sp-status { pointer-events: none; }
+.sp-status button { width: 280px; height: 60px; pointer-events: auto; }
+.sp-status p { margin: 0 0 18px; }
+.sp-gallery {
+  overflow: auto hidden;
+  scrollbar-width: none;
+  scroll-snap-type: x proximity;
+  touch-action: pan-x;
+}
+.sp-gallery::-webkit-scrollbar { display: none; }
+.sp-card-strip {
+  display: flex;
+  gap: 182px;
+  width: max-content;
+  padding: 237px 229px 0 197px;
+}
+.sp-stage .sp-card-preview {
+  position: relative;
+  flex: 0 0 600px;
+  height: 348px;
+  background-color: #29292e;
+  scroll-snap-align: center;
+  touch-action: pan-x;
+}
+.sp-card-face, .sp-ticket canvas, .sp-loss img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.sp-price {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: grid;
+  place-items: center;
+  height: 29px;
+  border-radius: 0 0 0 8px;
+  background: #fff;
+  color: #000;
+  font: bold 24px Arial, sans-serif;
+}
+.sp-price-large { height: 63px; font-size: 50px; }
+.sp-lock { position: absolute; inset: 0; background: rgb(0 0 0 / .66); }
+.sp-padlock { transform: rotate(-13deg); }
+.sp-lock-level { font-weight: bold; font-size: 30px; }
+.sp-stage .sp-ticket { touch-action: none; isolation: isolate; background: transparent; }
+.sp-stage .sp-ticket:active, .sp-stage .sp-card-preview:active { filter: none; }
+.sp-scratch-hint {
+  position: absolute;
+  width: 24%;
+  height: 33%;
+  object-fit: contain;
+  pointer-events: none;
+  opacity: 0;
+  animation: sp-hint 10s 10s infinite;
+}
+.sp-scratched .sp-scratch-hint { display: none; }
+.sp-loss { text-align: center; font-size: 65px; font-weight: bold; pointer-events: none; animation: sp-fade .25s ease-out; }
+.sp-shade { z-index: 1; background: rgb(0 0 0 / .804); }
+.sp-winner-panel { animation: sp-fade .25s linear; }
+.sp-winner-fallback { background: #ffd61d; border: 28px solid #ff3000; border-radius: 24%; }
+.sp-winner-text { color: #f10; font-size: 122px; font-weight: bold; text-shadow: 0 5px #23190a; }
+.sp-winner-amount { font-size: 142px; font-weight: bold; text-shadow: 0 5px #23190a; }
+.sp-winner-panel .sp-win-gamble { font-size: 62px; font-weight: bold; }
+.sp-win-collect { animation: sp-fade .2s .45s both; }
+.sp-winner-fallback .sp-win-gamble { background-color: #d60800; }
+.sp-popup { background: #26262e; }
+.sp-popup-title { font-size: 46px; font-weight: bold; color: #fc0; }
+.sp-popup-body { font-size: 29px; font-weight: bold; padding: 0 12px; }
+.sp-stage .sp-command, .sp-stage .sp-option, .sp-stage .sp-tap, .sp-stage .sp-spin, .sp-stage .sp-collect { font-size: 31px; font-weight: bold; }
+.sp-stage .sp-command { background: #207a38; }
+.sp-stage .sp-option { background: #121217; }
+.sp-stage .sp-tap { background: #172945; font-size: 43px; overflow: hidden; }
+.sp-tap-fill, .sp-tap-peak { position: absolute; left: 0; right: 0; bottom: 0; background: #3b7acf; }
+.sp-tap-peak { height: 2%; background: #80bfff; }
+.sp-tap-text { position: relative; }
+.sp-bonus-panel { background-color: #363636; border-radius: 13px; }
+.sp-tab { color: #dfff00; background-color: #303030; font-size: 33px; font-weight: bold; }
+.sp-bonus-title, .sp-bonus-amount { display: flex; align-items: center; font-size: 48px; text-shadow: 2px 3px #161616; }
+.sp-bonus-amount { justify-content: flex-end; padding-right: 14px; font-size: 61px; background-color: #272727; }
+.sp-stage .sp-collect { background-color: #078000; font-size: 63px; font-weight: normal; text-shadow: 2px 2px #171717; }
+.sp-slot-board { background: #090909; border-radius: 7px; }
+.sp-reel-window { overflow: hidden; border-radius: 12px; background: #ececec; }
+.sp-reel-symbol, .sp-playing-card, .sp-bonus-tag { display: grid; place-items: center; font-size: 35px; font-weight: bold; }
+.sp-reel-symbol { color: #121212; }
+.sp-reel-strip { background-size: 100% 800%; background-repeat: repeat-y; animation: sp-spin .42s linear infinite; }
+.sp-stage .sp-spin { background-color: #e20c02; font-size: 62px; }
+.sp-stage .sp-spin:disabled, .sp-stage .sp-command:disabled { opacity: .55; }
+.sp-link-cell { display: grid; place-items: center; background: #15151a; border-radius: 7px; }
+.sp-link-cell.sp-lit { background: #fc0; }
+@keyframes sp-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sp-hint {
+  0%, 30%, 100% { opacity: 0; }
+  4%, 24% { opacity: 1; transform: rotate(-6deg); }
+  14% { opacity: 1; transform: rotate(6deg); }
+}
+@keyframes sp-spin { from { background-position: 0 0; } to { background-position: 0 114.2857%; } }

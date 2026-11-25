@@ -398,6 +398,7 @@ export function createMarket(tablet) {
 
 const storeListings = [
   ['scratch', 'Scratch away your savings. Win enough to try again.'],
+  ['scratchpro', 'Twenty scratch tickets, poker and four bonus games. Free to install and play.'],
   ['fruit', 'Two minutes of matching fruit and ignoring your problems.'],
   ['turtletime', 'Guide hatchlings to the sea before time runs out. Free to install and play.'],
   ['love', 'Meet local bots. Run out of swipes. Try again later.'],
@@ -415,6 +416,7 @@ const storeListings = [
   ['Whoopee Firmware', 'Turn any seat into a terrible workplace incident.', 512, 'WF'],
   ['Toot Tuner 9000', 'Tune your exhaust to concert pitch. Orchestra not included.', 1024, 'TT']
 ];
+const optionalGames = new Set(['turtletime', 'scratchpro']);
 
 export function createStore(tablet) {
   const content = element('div', 'app-content');
@@ -559,8 +561,8 @@ export function createStore(tablet) {
       requestFree(id, tablet.installFirebot);
       return;
     }
-    if (id === 'turtletime') {
-      requestFree(id, () => tablet.installTurtleTime(true));
+    if (optionalGames.has(id)) {
+      requestFree(id, () => tablet.installGame(id, true));
       return;
     }
     const name = tablet.apps[id]?.name ?? id;
@@ -633,8 +635,9 @@ export function createStore(tablet) {
 
   function render() {
     const installed = tablet.onlyBotsInstalled;
-    const optionalInstalled = {onlybots: installed, firebot: tablet.firebotInstalled, turtletime: tablet.turtleTimeInstalled};
-    const installedCount = 8 + Number(installed) + Number(tablet.firebotInstalled) + Number(tablet.turtleTimeInstalled);
+    const optionalInstalled = {onlybots: installed, firebot: tablet.firebotInstalled};
+    for (const id of optionalGames) optionalInstalled[id] = tablet.gameInstalled(id);
+    const installedCount = 8 + Object.values(optionalInstalled).filter(Boolean).length;
     const header = element('header', 'app-heading', element('h2', '', 'BotStore'),
       element('p', 'store-capacity muted', installedCount + ' installed · ' + number.format(tablet.freeSpaceMb) + ' MB free'));
     const rows = storeListings.map(([id, description, size, monogram]) => {
@@ -644,11 +647,11 @@ export function createStore(tablet) {
       const action = available ? button('Open', () => tablet.open(id), 'primary') :
         button(id === 'botflix' ? 'Reinstall' : 'Install', () => request(id, size));
       const controls = element('div', 'actions', action);
-      if (available && (id === 'onlybots' || id === 'turtletime')) {
+      if (available && (id === 'onlybots' || optionalGames.has(id))) {
         const uninstall = button('Uninstall', () => tablet.prompt('Uninstall ' + name + '?', `This frees ${download ?? size} MB on the tablet.`, [
           button('Uninstall', event => {
             if (id === 'onlybots') tablet.installOnlyBots(false);
-            else tablet.installTurtleTime(false);
+            else tablet.installGame(id, false);
             event.currentTarget.closest('dialog').close();
             render();
           }, 'danger')

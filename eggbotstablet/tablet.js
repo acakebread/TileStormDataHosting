@@ -2,7 +2,7 @@
 
 import {loadCatalogue} from './catalogue.js';
 import {createChat, createMail} from './messages.js?v=mail-layout';
-import {createPhotos, createBank, createLove, createMarket, createStore} from './apps.js?v=turtle-time';
+import {createPhotos, createBank, createLove, createMarket, createStore} from './apps.js?v=scratch-pro';
 import {createFirebot} from './firebot.js?v=hosted';
 import {createScratch} from './games.js?v=scratch-prize-size';
 import {createFruit} from './fruit-burst.js?v=unity';
@@ -15,13 +15,15 @@ import {element, button, image, shortTime, loadSetting, saveSetting} from './ui.
 
 const pages = [
   ['settings', 'store', 'photos', 'fruit', 'bank', 'mail', 'chat', 'instabot'],
-  ['scratch', 'love', 'onlybots', 'market', 'botflix', 'firebot', 'turtletime']
+  ['scratch', 'love', 'onlybots', 'market', 'botflix', 'firebot', 'turtletime', 'scratchpro']
 ];
 const apps = {
   settings: {name: 'Settings', art: './art/settings.png', mount: createSettings},
   store: {name: 'BotStore', art: './art/store.png', mount: createStore},
   photos: {name: 'Photos', needsContent: true, mount: createPhotos},
   scratch: {name: 'Scratch Bling', art: './art/scratch.png', needsContent: true, mount: createScratch},
+  scratchpro: {name: 'Scratch Pro', downloadMb: 2, mount: mountScratchPro,
+    art: 'https://eggbot-content.qrh.workers.dev/media/0925f4b1259091edb6ce5669df6cd480cda2a91c44f97175ec76d3f6f68f64ec.png'},
   fruit: {name: 'Fruit Burst', art: './art/fruit.png', mount: createFruit},
   bank: {name: 'Droid Bank', art: './art/bank.png', needsContent: true, mount: createBank},
   mail: {name: 'BotMail', art: './art/mail.png', needsContent: true, mount: createMail},
@@ -54,7 +56,8 @@ let loading;
 let current = 'home';
 let onlyBotsInstalled = loadSetting('onlyBotsInstalled', false) === true;
 let firebotInstalled = loadSetting('firebotInstalled', false) === true;
-let turtleTimeInstalled = loadSetting('turtleTimeInstalled', false) === true;
+const gameInstallKeys = {turtletime: 'turtleTimeInstalled', scratchpro: 'scratchProInstalled'};
+const gameInstalls = Object.fromEntries(Object.entries(gameInstallKeys).map(([id, key]) => [id, loadSetting(key, false) === true]));
 let storeRequest;
 let toastTimer;
 let notificationTimer;
@@ -66,24 +69,26 @@ const tablet = {
   get current() { return current; },
   get onlyBotsInstalled() { return onlyBotsInstalled; },
   get firebotInstalled() { return firebotInstalled; },
-  get turtleTimeInstalled() { return turtleTimeInstalled; },
+  gameInstalled(id) { return gameInstalls[id] === true; },
   get freeSpaceMb() {
     return 12 - (onlyBotsInstalled ? 4 : 0) - (firebotInstalled ? apps.firebot.downloadMb : 0) +
-      (preferences.contentOffloaded ? offloadSizeMb : 0) - (turtleTimeInstalled ? apps.turtletime.downloadMb : 0);
+      (preferences.contentOffloaded ? offloadSizeMb : 0) -
+      Object.keys(gameInstalls).reduce((total, id) => total + (gameInstalls[id] ? apps[id].downloadMb : 0), 0);
   },
   installFirebot() {
     firebotInstalled = true;
     saveSetting('firebotInstalled', true);
   },
-  installTurtleTime(installed) {
-    if (installed === turtleTimeInstalled) return true;
-    if (installed && tablet.freeSpaceMb < apps.turtletime.downloadMb) return false;
-    turtleTimeInstalled = installed;
-    saveSetting('turtleTimeInstalled', installed);
+  installGame(id, installed) {
+    if (!Object.hasOwn(gameInstalls, id)) return false;
+    if (installed === gameInstalls[id]) return true;
+    if (installed && tablet.freeSpaceMb < apps[id].downloadMb) return false;
+    gameInstalls[id] = installed;
+    saveSetting(gameInstallKeys[id], installed);
     if (!installed) {
-      if (current === 'turtletime') open('home');
-      mounted.get('turtletime')?.view.remove();
-      mounted.delete('turtletime');
+      if (current === id) open('home');
+      mounted.get(id)?.view.remove();
+      mounted.delete(id);
     }
     if (current === 'home') renderHome();
     return true;
@@ -123,7 +128,7 @@ function art(id, fallback = '', loading = 'lazy') {
 function renderHome() {
   homePager.render(id => {
     if (id === 'onlybots' && !onlyBotsInstalled) return null;
-    if (id === 'turtletime' && !turtleTimeInstalled) return null;
+    if (Object.hasOwn(gameInstalls, id) && !gameInstalls[id]) return null;
     const offloaded = id === 'botflix' || (id === 'firebot' && !firebotInstalled);
     const icon = button('', () => open(id), 'app-icon' + (offloaded ? ' offloaded' : ''));
     const tile = art(id, '', 'eager');
@@ -262,6 +267,29 @@ function announceUpdate() {
   setTimeout(announceUpdate, (150 + Math.random() * 150) * 1000);
 }
 
+function mountScratchPro(tablet) {
+  const view = element('section', 'scratch-pro-app');
+  let app, opening, active = false;
+  return {view, open() {
+    active = true;
+    if (app) { app.open(); return; }
+    if (opening) return;
+    view.replaceChildren(element('p', 'sp-launch', 'Loading Scratch Pro…'));
+    opening = import('./scratch-pro.js?v=1').then(({createScratchPro}) => {
+      if (!active) return;
+      view.replaceChildren();
+      app = createScratchPro(tablet, view);
+      app.open();
+    }).catch(() => {
+      if (active) view.replaceChildren(element('div', 'sp-launch', element('p', '', 'Could not open Scratch Pro.'),
+        button('Reload tablet', () => location.reload())));
+    }).finally(() => { opening = null; });
+  }, close() {
+    active = false;
+    app?.close();
+  }};
+}
+
 function mount(id) {
   if (mounted.has(id)) return mounted.get(id);
   const config = apps[id];
@@ -311,7 +339,7 @@ function showCurrent() {
 
 function open(id, replace = false) {
   if (id === 'botflix' || (id === 'firebot' && !firebotInstalled) ||
-      (id === 'turtletime' && !turtleTimeInstalled) ||
+      (Object.hasOwn(gameInstalls, id) && !gameInstalls[id]) ||
       (id === 'onlybots' && (!onlyBotsInstalled || !hasOnlyBotsAccess()))) {
     storeRequest = id;
     id = 'store';
