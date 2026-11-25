@@ -2,10 +2,11 @@
 
 import {loadCatalogue} from './catalogue.js';
 import {createChat, createMail} from './messages.js?v=mail-layout';
-import {createPhotos, createBank, createLove, createMarket, createStore} from './apps.js?v=promotion-copy';
+import {createPhotos, createBank, createLove, createMarket, createStore} from './apps.js?v=turtle-time';
 import {createFirebot} from './firebot.js?v=hosted';
 import {createScratch} from './games.js?v=scratch-prize-size';
 import {createFruit} from './fruit-burst.js?v=unity';
+import {createTurtleTime} from './turtle-time.js?v=unity';
 import {hasOnlyBotsAccess, hasPremiumAccess} from './premium.js?v=membership-codes';
 import {linkPurchaseProfile, linkWebGLProfiles, syncPurchases} from './purchases.js?v=membership-codes';
 import {createHomePager} from './home.js?v=onlybots-shop';
@@ -14,7 +15,7 @@ import {element, button, image, shortTime, loadSetting, saveSetting} from './ui.
 
 const pages = [
   ['settings', 'store', 'photos', 'fruit', 'bank', 'mail', 'chat', 'instabot'],
-  ['scratch', 'love', 'onlybots', 'market', 'botflix', 'firebot']
+  ['scratch', 'love', 'onlybots', 'market', 'botflix', 'firebot', 'turtletime']
 ];
 const apps = {
   settings: {name: 'Settings', art: './art/settings.png', mount: createSettings},
@@ -33,6 +34,7 @@ const apps = {
   market: {name: 'eBot', art: './art/market.jpg', needsContent: true, mount: createMarket},
   botflix: {name: 'BOTFLIX', art: './art/botflix.png'},
   firebot: {name: 'Firebot', art: './art/firebot.jpg', downloadMb: 2, needsContent: true, mount: createFirebot},
+  turtletime: {name: 'Turtle Time', art: './art/turtle-time.png', downloadMb: 2, mount: createTurtleTime},
   snapbot: {name: 'SnapBot', art: './art/snapbot.jpg'},
   update: {name: 'Software update'}
 };
@@ -52,6 +54,7 @@ let loading;
 let current = 'home';
 let onlyBotsInstalled = loadSetting('onlyBotsInstalled', false) === true;
 let firebotInstalled = loadSetting('firebotInstalled', false) === true;
+let turtleTimeInstalled = loadSetting('turtleTimeInstalled', false) === true;
 let storeRequest;
 let toastTimer;
 let notificationTimer;
@@ -63,13 +66,27 @@ const tablet = {
   get current() { return current; },
   get onlyBotsInstalled() { return onlyBotsInstalled; },
   get firebotInstalled() { return firebotInstalled; },
+  get turtleTimeInstalled() { return turtleTimeInstalled; },
   get freeSpaceMb() {
     return 12 - (onlyBotsInstalled ? 4 : 0) - (firebotInstalled ? apps.firebot.downloadMb : 0) +
-      (preferences.contentOffloaded ? offloadSizeMb : 0);
+      (preferences.contentOffloaded ? offloadSizeMb : 0) - (turtleTimeInstalled ? apps.turtletime.downloadMb : 0);
   },
   installFirebot() {
     firebotInstalled = true;
     saveSetting('firebotInstalled', true);
+  },
+  installTurtleTime(installed) {
+    if (installed === turtleTimeInstalled) return true;
+    if (installed && tablet.freeSpaceMb < apps.turtletime.downloadMb) return false;
+    turtleTimeInstalled = installed;
+    saveSetting('turtleTimeInstalled', installed);
+    if (!installed) {
+      if (current === 'turtletime') open('home');
+      mounted.get('turtletime')?.view.remove();
+      mounted.delete('turtletime');
+    }
+    if (current === 'home') renderHome();
+    return true;
   },
   installOnlyBots(installed) {
     if (installed && !hasOnlyBotsAccess()) return;
@@ -106,6 +123,7 @@ function art(id, fallback = '', loading = 'lazy') {
 function renderHome() {
   homePager.render(id => {
     if (id === 'onlybots' && !onlyBotsInstalled) return null;
+    if (id === 'turtletime' && !turtleTimeInstalled) return null;
     const offloaded = id === 'botflix' || (id === 'firebot' && !firebotInstalled);
     const icon = button('', () => open(id), 'app-icon' + (offloaded ? ' offloaded' : ''));
     const tile = art(id, '', 'eager');
@@ -293,6 +311,7 @@ function showCurrent() {
 
 function open(id, replace = false) {
   if (id === 'botflix' || (id === 'firebot' && !firebotInstalled) ||
+      (id === 'turtletime' && !turtleTimeInstalled) ||
       (id === 'onlybots' && (!onlyBotsInstalled || !hasOnlyBotsAccess()))) {
     storeRequest = id;
     id = 'store';

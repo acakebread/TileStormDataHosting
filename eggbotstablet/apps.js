@@ -399,6 +399,7 @@ export function createMarket(tablet) {
 const storeListings = [
   ['scratch', 'Scratch away your savings. Win enough to try again.'],
   ['fruit', 'Two minutes of matching fruit and ignoring your problems.'],
+  ['turtletime', 'Guide hatchlings to the sea before time runs out. Free to install and play.'],
   ['love', 'Meet local bots. Run out of swipes. Try again later.'],
   ['bank', 'Your balance, updated with more bad news.'],
   ['mail', 'Bills, spam and messages that could have waited.'],
@@ -453,13 +454,20 @@ export function createStore(tablet) {
   }
 
   function download(name, size, install) {
+    function hasSpace() {
+      if (size <= tablet.freeSpaceMb) return true;
+      tablet.prompt('Insufficient memory',
+        name + ' needs ' + number.format(size) + ' MB. The tablet has ' + number.format(tablet.freeSpaceMb) + ' MB free.');
+      return false;
+    }
+    if (!hasSpace()) return;
     const progress = element('p', '', 'Downloading ' + size + ' MB…');
     progress.setAttribute('role', 'status');
     tablet.prompt('Installing ' + name, progress, [], 'Cancel');
     const dialog = progress.closest('dialog');
     setTimeout(() => {
       if (!dialog.open || !progress.isConnected) return;
-      install();
+      if (!hasSpace() || install() === false) return;
       dialog.close();
       render();
       tablet.toast(name + ' installed. Find it on page two.');
@@ -471,10 +479,10 @@ export function createStore(tablet) {
     else download('OnlyBots', 4, () => tablet.installOnlyBots(true));
   }
 
-  function requestFirebot() {
-    const {name, downloadMb} = tablet.apps.firebot;
-    const install = button('Install', () => download(name, downloadMb, tablet.installFirebot), 'primary');
-    tablet.prompt('Download Firebot', 'Free · ' + downloadMb + ' MB', [install]);
+  function requestFree(id, install) {
+    const {name, downloadMb} = tablet.apps[id];
+    const action = button('Install', () => download(name, downloadMb, install), 'primary');
+    tablet.prompt('Download ' + name, 'Free · ' + downloadMb + ' MB', [action]);
   }
 
   function askForOnlyBotsCode() {
@@ -548,7 +556,11 @@ export function createStore(tablet) {
       return;
     }
     if (id === 'firebot') {
-      requestFirebot();
+      requestFree(id, tablet.installFirebot);
+      return;
+    }
+    if (id === 'turtletime') {
+      requestFree(id, () => tablet.installTurtleTime(true));
       return;
     }
     const name = tablet.apps[id]?.name ?? id;
@@ -621,19 +633,22 @@ export function createStore(tablet) {
 
   function render() {
     const installed = tablet.onlyBotsInstalled;
-    const installedCount = 8 + Number(installed) + Number(tablet.firebotInstalled);
+    const optionalInstalled = {onlybots: installed, firebot: tablet.firebotInstalled, turtletime: tablet.turtleTimeInstalled};
+    const installedCount = 8 + Number(installed) + Number(tablet.firebotInstalled) + Number(tablet.turtleTimeInstalled);
     const header = element('header', 'app-heading', element('h2', '', 'BotStore'),
       element('p', 'store-capacity muted', installedCount + ' installed · ' + number.format(tablet.freeSpaceMb) + ' MB free'));
     const rows = storeListings.map(([id, description, size, monogram]) => {
       const name = tablet.apps[id]?.name ?? id;
-      const available = id === 'firebot' ? tablet.firebotInstalled : !size || (id === 'onlybots' && installed);
+      const download = tablet.apps[id]?.downloadMb;
+      const available = optionalInstalled[id] ?? !size;
       const action = available ? button('Open', () => tablet.open(id), 'primary') :
         button(id === 'botflix' ? 'Reinstall' : 'Install', () => request(id, size));
       const controls = element('div', 'actions', action);
-      if (id === 'onlybots' && installed) {
-        const uninstall = button('Uninstall', () => tablet.prompt('Uninstall OnlyBots?', 'This frees 4 MB on the tablet.', [
+      if (available && (id === 'onlybots' || id === 'turtletime')) {
+        const uninstall = button('Uninstall', () => tablet.prompt('Uninstall ' + name + '?', `This frees ${download ?? size} MB on the tablet.`, [
           button('Uninstall', event => {
-            tablet.installOnlyBots(false);
+            if (id === 'onlybots') tablet.installOnlyBots(false);
+            else tablet.installTurtleTime(false);
             event.currentTarget.closest('dialog').close();
             render();
           }, 'danger')

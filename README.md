@@ -31,6 +31,18 @@ the game and use the browser where you play. Scratch
 Bling coins and LoveBot credits also use browser storage. The tablet directory
 publishes with the rest of this GitHub Pages site.
 
+Turtle Time is a free BotStore install. Its rules and portrait playfield follow
+the Unity tablet version. The browser remembers the installation and high
+score locally, and fetches the game's two atlases and six sounds from the Eggbot
+Cloudflare Worker when the app opens. The game uses WebGL. Browsers that block
+autoplay start the surf loop after the first interaction with the game.
+
+When Unity's Turtle Time artwork changes, update `eggbotstablet/turtle-time-media.json`
+with the `media` entries from Unity's `TurtleTime/Media.json` and the `letters`
+from `TurtleTime/TitleLetters.json`. Publish the indexed media to Cloudflare
+using the Unity project's `Tools/Publish-EggbotContent.mjs --turtle-time-only`
+before updating the web tablet.
+
 PixelStow is available at `pixelstow.html`; its MarkerTracker lab is at `markertracker/`.
 
 These files are generated production assets. Editable PixelStow sources, tests,

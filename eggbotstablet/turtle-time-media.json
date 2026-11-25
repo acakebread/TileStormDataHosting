@@ -1,0 +1,128 @@
+{
+  "copyright": "Copyright 2026 massivehadron.com ltd.",
+  "schemaVersion": 1,
+  "media": [
+    {
+      "name": "beach.png",
+      "file": "media/46184358e86672745bc4e6db62394c6218f10c4b7be374100a219a7da6ff6f65.png",
+      "length": 560027
+    },
+    {
+      "name": "interface.png",
+      "file": "media/324015c2f348dd268b7cd83d4358cb299997aa1fa294548a82a2f012b900c3ee.png",
+      "length": 674904
+    },
+    {
+      "name": "surf.mp3",
+      "file": "media/a8d66b828d294d5491326d6f12d06936179ba59449a31ceed8599dcc2d500897.mp3",
+      "length": 73603
+    },
+    {
+      "name": "hatch.mp3",
+      "file": "media/34cdd997478c75868adb98ebb6ebd33e37230343924c217d440ebe7e5eb7ba4f.mp3",
+      "length": 8884
+    },
+    {
+      "name": "rescue.mp3",
+      "file": "media/3ba588bc9acb2d9fe2c5ba4516036ada9c5788269919ace4095a17c690562e28.mp3",
+      "length": 40281
+    },
+    {
+      "name": "lost.mp3",
+      "file": "media/34a36c451f7544f70ab8d39d7f87b81ac932fd556484a0329be1237643a2323b.mp3",
+      "length": 19802
+    },
+    {
+      "name": "pickup.mp3",
+      "file": "media/e68304c3394e4ee1fa886fe87f16fb385152657e6666326a5d4ad80a315e91cb.mp3",
+      "length": 1087
+    },
+    {
+      "name": "tsunami.mp3",
+      "file": "media/55259c5c920d854e11eea9dfc15072a237a27d7989d82c5ab5421bbc52092265.mp3",
+      "length": 384018
+    }
+  ],
+  "letters": [
+    {
+      "x": 9,
+      "y": 19,
+      "width": 93,
+      "height": 127,
+      "atlasX": 4,
+      "atlasY": 4
+    },
+    {
+      "x": 104,
+      "y": 46,
+      "width": 90,
+      "height": 101,
+      "atlasX": 100,
+      "atlasY": 4
+    },
+    {
+      "x": 201,
+      "y": 44,
+      "width": 89,
+      "height": 108,
+      "atlasX": 193,
+      "atlasY": 4
+    },
+    {
+      "x": 287,
+      "y": 45,
+      "width": 79,
+      "height": 100,
+      "atlasX": 285,
+      "atlasY": 4
+    },
+    {
+      "x": 368,
+      "y": 44,
+      "width": 63,
+      "height": 101,
+      "atlasX": 367,
+      "atlasY": 4
+    },
+    {
+      "x": 435,
+      "y": 45,
+      "width": 76,
+      "height": 101,
+      "atlasX": 433,
+      "atlasY": 4
+    },
+    {
+      "x": 84,
+      "y": 167,
+      "width": 94,
+      "height": 128,
+      "atlasX": 4,
+      "atlasY": 134
+    },
+    {
+      "x": 181,
+      "y": 193,
+      "width": 47,
+      "height": 102,
+      "atlasX": 101,
+      "atlasY": 134
+    },
+    {
+      "x": 224,
+      "y": 184,
+      "width": 136,
+      "height": 113,
+      "atlasX": 151,
+      "atlasY": 134
+    },
+    {
+      "x": 360,
+      "y": 193,
+      "width": 75,
+      "height": 101,
+      "atlasX": 290,
+      "atlasY": 134
+    }
+  ]
+}
