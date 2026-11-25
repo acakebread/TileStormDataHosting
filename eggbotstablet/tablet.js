@@ -267,7 +267,7 @@ function announceUpdate() {
   setTimeout(announceUpdate, (150 + Math.random() * 150) * 1000);
 }
 
-function mountScratchPro(tablet) {
+function mountScratchPro() {
   const view = element('section', 'scratch-pro-app');
   let app, opening, active = false;
   return {view, open() {
@@ -275,10 +275,10 @@ function mountScratchPro(tablet) {
     if (app) { app.open(); return; }
     if (opening) return;
     view.replaceChildren(element('p', 'sp-launch', 'Loading Scratch Pro…'));
-    opening = import('./scratch-pro.js?v=1').then(({createScratchPro}) => {
+    opening = import('./scratch-pro.js?v=2').then(({createScratchPro}) => {
       if (!active) return;
       view.replaceChildren();
-      app = createScratchPro(tablet, view);
+      app = createScratchPro(view);
       app.open();
     }).catch(() => {
       if (active) view.replaceChildren(element('div', 'sp-launch', element('p', '', 'Could not open Scratch Pro.'),

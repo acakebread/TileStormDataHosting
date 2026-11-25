@@ -14,7 +14,7 @@ const sideActions = [
   ['Get coins', [0, 320, 160, 160]], ['Earn coins', [0, 480, 160, 160]]
 ];
 
-export function createScratchPro(tablet, view) {
+export function createScratchPro(view) {
   view.setAttribute('aria-label', 'Scratch Pro');
   const stage = element('div', 'sp-stage');
   view.append(stage);
@@ -57,7 +57,7 @@ export function createScratchPro(tablet, view) {
       if (signal.aborted) return;
       catalogue = data;
       audio = createAudio(catalogue, name => name === 'music'
-        ? !wallet.state.muteMusic : !wallet.state.muteSound && tablet.preferences.soundsEnabled);
+        ? !wallet.state.muteMusic : !wallet.state.muteSound);
       const unlock = () => { audio.unlock(); audio.play('music', true); };
       stage.addEventListener('pointerdown', unlock, {capture: true, signal});
       stage.addEventListener('keydown', unlock, {capture: true, signal});
