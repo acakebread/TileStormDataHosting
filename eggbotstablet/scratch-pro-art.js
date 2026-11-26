@@ -8,22 +8,26 @@ const full = {x: 0, y: 0, w: 1, h: 1};
 const leading = ['ON', 'TW', 'TR', 'FR', 'FV', 'SX', 'SN', 'ET', 'NN', 'TN'];
 const magnitude = ['TEN', 'HND', 'THOU', 'TTHO', 'HHOU', 'MIL', 'TMIL'];
 
-export async function loadScratchProCatalogue(signal) {
-  const response = await fetch(new URL('scratch-pro.json', host), {cache: 'no-cache', signal});
-  if (!response.ok) throw new Error('Scratch Pro catalogue unavailable');
+export async function loadScratchCatalogue(file, title, signal) {
+  const response = await fetch(new URL(file, host), {cache: 'no-cache', signal});
+  if (!response.ok) throw new Error(title + ' catalogue unavailable');
   const data = await response.json();
   if (data.schemaVersion !== 1 || data.cards?.length !== 20 || !Array.isArray(data.sheets) || !Array.isArray(data.media))
-    throw new Error('Invalid Scratch Pro catalogue');
+    throw new Error('Invalid ' + title + ' catalogue');
   const files = new Map(data.media.filter(entry => /^media\/[a-f0-9]{64}\.(png|jpg|mp3)$/.test(entry.file))
     .map(entry => [entry.name, new URL(entry.file, host).href]));
   const sheets = new Map(data.sheets.map(sheet => [sheet.name, sheet]));
   return {cards: data.cards, sheets, url: name => files.get(name), image: (name, abort) => loadImage(files.get(name), abort)};
 }
 
+export function loadScratchProCatalogue(signal) {
+  return loadScratchCatalogue('scratch-pro.json', 'Scratch Pro', signal);
+}
+
 function loadImage(url, signal) {
   return new Promise((resolve, reject) => {
     if (!url || signal.aborted) {
-      reject(new Error('Missing Scratch Pro artwork'));
+      reject(new Error('Missing scratch artwork'));
       return;
     }
     const image = new Image();
@@ -37,7 +41,7 @@ function loadImage(url, signal) {
     function fail() {
       cleanup();
       image.removeAttribute('src');
-      reject(new Error('Could not load Scratch Pro artwork'));
+      reject(new Error('Could not load scratch artwork'));
     }
     signal.addEventListener('abort', fail, {once: true});
     image.onload = () => { cleanup(); resolve(image); };
@@ -128,7 +132,8 @@ export function createAudio(catalogue, allowed) {
 
 export async function loadTicketArt(catalogue, card, foilName, signal) {
   const sheetNames = new Set(card.games.flatMap(game => game.symbols.map(cell => catalogue.sheets.get(cell.sheet)?.file).filter(Boolean)));
-  const files = [card.art, card.print, foilName, 'ui-main.png', ...sheetNames];
+  const files = [card.art, card.print, foilName, ...sheetNames];
+  if (catalogue.url('ui-main.png')) files.push('ui-main.png');
   const loaded = await Promise.all(files.map(async file => [file, await catalogue.image(file, signal)]));
   const artwork = new Map(loaded);
   artwork.set('glow.png', await catalogue.image('glow.png', signal).catch(() => null));
@@ -182,6 +187,15 @@ function drawSerial(context, atlas, serial) {
   const serialAdvance = digit => digit === '1' ? 20 : digit === '-' ? 30 : 35;
   const {width, height} = context.canvas;
   const sx = width / 1984, sy = height / 1152;
+  if (!atlas) {
+    context.fillStyle = '#111';
+    context.font = `bold ${33 * sy}px Arial, sans-serif`;
+    context.textAlign = 'right';
+    context.textBaseline = 'middle';
+    context.fillText(serial, 1912 * sx, 1091 * sy);
+    context.fillRect(1922 * sx, 1087 * sy, 35 * sx, 40 * sy);
+    return;
+  }
   const total = Array.from(serial).reduce((sum, digit) => sum + serialAdvance(digit), 0);
   let x = 1903 - total * 1.1;
   for (const digit of serial) {
@@ -232,7 +246,7 @@ function description(value) {
   return prefix && suffix ? prefix + suffix : '';
 }
 
-export function createTicket({catalogue, card, artwork, foilName, pay, revealResult, audio, blocked}) {
+export function createTicket({catalogue, card, artwork, foilName, pay, revealResult, audio, blocked, hint = true}) {
   const lifetime = new AbortController();
   const signal = lifetime.signal;
   const paper = element('canvas');
@@ -249,7 +263,7 @@ export function createTicket({catalogue, card, artwork, foilName, pay, revealRes
   const view = button('', event => { if (!event.detail && begin()) reveal(); }, 'sp-ticket');
   view.setAttribute('aria-label', card.name + ', ' + money(card.cost) + '. Scratch, hold, or press Enter to reveal.');
   view.append(paper, foil);
-  const hintUrl = catalogue.url('finger.png');
+  const hintUrl = hint ? catalogue.url('finger.png') : '';
   if (hintUrl) {
     const hint = image(hintUrl, '', 'sp-scratch-hint');
     const box = card.games[0].area;

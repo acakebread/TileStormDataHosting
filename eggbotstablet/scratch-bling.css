@@ -1,0 +1,111 @@
+/* Copyright 2026 massivehadron.com ltd. */
+
+.app-view.scratch-bling-app {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #12110f;
+}
+.sb-launch {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 16px;
+  text-align: center;
+  color: #fff;
+  font: 28px Arial, sans-serif;
+}
+.sb-stage {
+  --sb-scale: 0;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 2048px;
+  height: 1536px;
+  overflow: hidden;
+  transform: translate(-50%, -50%) scale(var(--sb-scale));
+  background: #13110e;
+  color: #fff;
+  font: bold 44px Arial, sans-serif;
+  user-select: none;
+}
+.sb-stage button {
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  min-height: 0;
+  color: #fff;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.sb-stage button:hover:not(:disabled) { background: transparent; }
+.sb-stage button:disabled { opacity: 1; cursor: default; }
+.sb-stage button:focus-visible { outline: 4px solid #fc0; outline-offset: -4px; }
+.sb-stage button.sp-ticket {
+  appearance: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  isolation: isolate;
+  background: transparent;
+}
+.sb-stage button.sp-ticket:hover:not(:disabled) { background: transparent; }
+.sb-wallpaper { background-position: center; background-size: 133% 100%; }
+.sb-decor, .sb-header, .sb-results { pointer-events: none; }
+.sb-header { z-index: 2; }
+.sb-results { z-index: 3; }
+.sb-header button, .sb-results button, .sb-status button { pointer-events: auto; }
+.sb-label { display: grid; place-items: center; margin: 0; text-align: center; pointer-events: none; }
+.sb-cash, .sb-buy { color: #ffcc00; }
+.sb-cash { justify-content: end; padding-right: 8px; font-size: 64px; }
+.sb-buy { font-size: 62px; }
+.sb-nav { font-size: 49px; }
+.sb-timer { font-size: 44px; font-weight: bold; letter-spacing: .02em; }
+.sb-timer b { color: #ffcc00; }
+.sb-collect { font-size: 48px; }
+.sb-meter { background: #000; }
+.sb-progress { background: #ffcc00; }
+.sb-price {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  background: #fff;
+  color: #000;
+  font-weight: bold;
+  pointer-events: none;
+}
+.sb-lock { background: rgb(0 0 0 / .68); }
+.sb-label.sb-status { pointer-events: none; }
+.sb-status { text-align: center; font-size: 62px; }
+.sb-stage button.sb-status { width: 600px; height: 100px; margin: 18px auto 0; background: #21333d; }
+.sb-shade { background: rgb(0 0 0 / .78); }
+.sb-shop-shade { background: rgb(0 0 0 / .64); }
+.sb-message { font-size: 60px; white-space: pre-line; }
+.sb-option { font-size: 60px; }
+.sb-unlucky {
+  margin: 0;
+  display: grid;
+  place-items: center;
+  font-size: 86px;
+  font-weight: 900;
+  text-align: center;
+  text-shadow: 0 4px 0 #161616;
+}
+.sb-winbar { background: rgb(0 0 0 / .78); }
+.sb-winbar button { font-size: 84px; }
+.sb-plaque-amount {
+  color: #f6bd32;
+  font-size: 92px;
+  font-style: italic;
+  font-weight: bold;
+  text-shadow: 0 4px #23190a;
+}
+.sb-plaque-caption { font-size: 64px; text-shadow: 0 3px #23190a; }
+.sb-reel-window { overflow: hidden; background: #fff; }
+.sb-strip { background-repeat: repeat-y; animation: sb-spin .18s linear infinite; }
+@keyframes sb-spin { to { background-position-y: 178px; } }
+.sb-arrow:disabled { opacity: .35; }

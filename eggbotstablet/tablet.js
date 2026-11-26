@@ -4,7 +4,6 @@ import {loadCatalogue} from './catalogue.js';
 import {createChat, createMail} from './messages.js?v=mail-layout';
 import {createPhotos, createBank, createLove, createMarket, createStore} from './apps.js?v=scratch-pro';
 import {createFirebot} from './firebot.js?v=hosted';
-import {createScratch} from './games.js?v=scratch-collect';
 import {createFruit} from './fruit-burst.js?v=unity';
 import {createTurtleTime} from './turtle-time.js?v=crunch-pcm';
 import {hasOnlyBotsAccess, hasPremiumAccess} from './premium.js?v=membership-codes';
@@ -21,7 +20,7 @@ const apps = {
   settings: {name: 'Settings', art: './art/settings.png', mount: createSettings},
   store: {name: 'BotStore', art: './art/store.png', mount: createStore},
   photos: {name: 'Photos', needsContent: true, mount: createPhotos},
-  scratch: {name: 'Scratch Bling', art: './art/scratch.png', needsContent: true, mount: createScratch},
+  scratch: {name: 'Scratch Bling', art: './art/scratch.png', mount: mountScratchBling},
   scratchpro: {name: 'Scratch Pro', downloadMb: 2, mount: mountScratchPro,
     art: 'https://eggbot-content.qrh.workers.dev/media/0925f4b1259091edb6ce5669df6cd480cda2a91c44f97175ec76d3f6f68f64ec.png'},
   fruit: {name: 'Fruit Burst', art: './art/fruit.png', mount: createFruit},
@@ -267,6 +266,29 @@ function announceUpdate() {
   setTimeout(announceUpdate, (150 + Math.random() * 150) * 1000);
 }
 
+function mountScratchBling() {
+  const view = element('section', 'scratch-bling-app');
+  let app, opening, active = false;
+  return {view, open() {
+    active = true;
+    if (app) { app.open(); return; }
+    if (opening) return;
+    view.replaceChildren(element('p', 'sb-launch', 'Loading Scratch Bling…'));
+    opening = import('./scratch-bling.js?v=bling-cabinet').then(({createScratchBling}) => {
+      if (!active) return;
+      view.replaceChildren();
+      app = createScratchBling(view, () => open('home'));
+      app.open();
+    }).catch(() => {
+      if (active) view.replaceChildren(element('div', 'sb-launch', element('p', '', 'Could not open Scratch Bling.'),
+        button('Reload tablet', () => location.reload())));
+    }).finally(() => { opening = null; });
+  }, close() {
+    active = false;
+    app?.close();
+  }};
+}
+
 function mountScratchPro() {
   const view = element('section', 'scratch-pro-app');
   let app, opening, active = false;
@@ -275,7 +297,7 @@ function mountScratchPro() {
     if (app) { app.open(); return; }
     if (opening) return;
     view.replaceChildren(element('p', 'sp-launch', 'Loading Scratch Pro…'));
-    opening = import('./scratch-pro.js?v=prize-weight').then(({createScratchPro}) => {
+    opening = import('./scratch-pro.js?v=bling-cabinet').then(({createScratchPro}) => {
       if (!active) return;
       view.replaceChildren();
       app = createScratchPro(view);
