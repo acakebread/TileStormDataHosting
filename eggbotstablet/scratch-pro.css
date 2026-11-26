@@ -152,6 +152,10 @@
 .sp-bonus-panel, .sp-bonus-amount, .sp-tab { background: transparent; }
 .sp-tab { color: #dfff00; font-size: 33px; font-weight: bold; }
 .sp-bonus-title, .sp-bonus-amount { display: flex; align-items: center; font-size: 48px; text-shadow: 2px 3px #161616; }
+.sp-bonus-title.sp-gamble-loss {
+  font-family: "Futura Condensed Medium", "Arial Narrow", sans-serif;
+  font-size: 57px;
+}
 .sp-bonus-amount { justify-content: flex-end; padding-right: 14px; font-size: 61px; }
 .sp-stage button.sp-collect,
 .sp-stage button.sp-spin,
@@ -187,6 +191,14 @@
   font-family: "Futura Condensed Medium", "Arial Narrow", sans-serif;
   font-size: 42px;
   transform: translateY(0.095em);
+}
+.sp-gamble-close-icon {
+  display: grid;
+  place-items: center;
+  z-index: 1;
+  font-size: 82px;
+  line-height: 1;
+  pointer-events: none;
 }
 .sp-slot-board { background: #090909; }
 .sp-reel-window { overflow: hidden; background: transparent; }

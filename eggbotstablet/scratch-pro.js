@@ -4,7 +4,7 @@
 import {button, countdown, element, image, number} from './ui.js';
 import {createWallet, money, random} from './scratch-pro-rules.js?v=level-bonus';
 import {createAudio, createTicket, loadScratchProCatalogue, loadTicketArt, pin, sprite, wait} from './scratch-pro-art.js?v=bling-cabinet';
-import {openBonus} from './scratch-pro-bonus.js?v=bonus-slice';
+import {openBonus} from './scratch-pro-bonus.js?v=gamble-close';
 
 const width = 1300, height = 975;
 const prizeGlyphs = '$0123456789,';
@@ -275,17 +275,16 @@ export function createScratchPro(view) {
     if (winnings) {
       audio.play('win');
       winner(winnings);
-    } else resolveWinnings();
+    } else resolveWinnings(true);
   }
 
-  function resolveWinnings() {
-    const won = wallet.state.pendingWin > 0;
+  function resolveWinnings(showTicketLoss = false) {
     clearOverlay();
     const levelBonus = wallet.settle();
     refresh();
-    if (!won) showLoss();
+    if (showTicketLoss) showLoss();
     else if (!levelBonus) deal();
-    if (levelBonus > 0) showLevelUp(levelBonus, won ? deal : null);
+    if (levelBonus > 0) showLevelUp(levelBonus, showTicketLoss ? null : deal);
   }
 
   function showLevelUp(bonus, next) {

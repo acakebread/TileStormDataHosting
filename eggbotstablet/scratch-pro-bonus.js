@@ -29,19 +29,27 @@ export function openBonus(stage, catalogue, wallet, audio, finish) {
   });
   const panel = slicedChrome(pin(overlay, element('div', 'sp-bonus-panel'), 221, 129, 1057, 777), [0, 0, 512, 328], 65, 20);
   const title = pin(panel, element('div', 'sp-bonus-title', 'CHOOSE GAME..'), 42, 24, 535, 80);
+  title.setAttribute('aria-live', 'polite');
   const amount = slicedChrome(pin(panel, element('output', 'sp-bonus-amount'), 610, 13, 434, 98), [0, 336, 128, 128], 34, 20);
   const amountValue = element('span');
   amountValue.style.position = 'relative';
   amountValue.style.zIndex = '1';
   amount.append(amountValue);
-  const collect = pin(overlay, button('', () => {
-    if (busy) return;
+  function dismiss() {
+    if (busy || signal.aborted) return;
     audio.play('click');
     finish();
-  }, 'sp-collect'), 1029, 12, 253, 99);
+  }
+  const collect = pin(overlay, button('', dismiss, 'sp-collect'), 1029, 12, 253, 99);
   collect.append(element('span', 'sp-collect-label', 'COLLECT'));
   sliced(collect, new URL('./art/scratch-pro/collect-button.png', import.meta.url).href, [0, 0, 59, 58], 59, 58, 16, 16);
   collect.setAttribute('aria-label', 'Collect');
+  const close = pin(overlay, button('', dismiss, 'sp-collect'), 1029, 12, 253, 99);
+  close.setAttribute('aria-label', 'Close');
+  sliced(close, new URL('./art/scratch-pro/spin-button.png', import.meta.url).href, [0, 0, 59, 59], 59, 59, 16, 16);
+  const cross = pin(close, element('span', 'sp-gamble-close-icon', chrome ? '' : '×'), 86.5, 9.5, 80, 80);
+  cabinet(cross, [408, 336, 39, 39]);
+  close.hidden = true;
   const area = pin(panel, element('div'), 24, 117, 1014, 641);
   let game, busy = false, controls = [];
 
@@ -49,6 +57,7 @@ export function openBonus(stage, catalogue, wallet, audio, finish) {
     const canPlay = !busy && wallet.state.pendingWin > 0;
     if (!busy) amountValue.textContent = money(wallet.state.pendingWin);
     collect.hidden = !canPlay;
+    close.hidden = busy || wallet.state.pendingWin > 0;
     for (const control of [...tabs, ...controls]) control.disabled = !canPlay;
   }
 
@@ -91,10 +100,11 @@ export function openBonus(stage, catalogue, wallet, audio, finish) {
     await reveal();
     if (signal.aborted) return;
     busy = false;
-    title.textContent = multiplier === 0 ? 'UNLUCKY!' : multiplier === 1 ? 'PLAY AGAIN OR COLLECT' : 'YOU WON ×' + multiplier + '!';
+    title.textContent = multiplier === 0 ? "YOU'RE A LOSER!!!" : multiplier === 1 ? 'PLAY AGAIN OR COLLECT' : 'YOU WON ×' + multiplier + '!';
+    title.classList.toggle('sp-gamble-loss', multiplier === 0);
     refresh();
-    if (multiplier > 0) audio.play('win');
-    else if (await wait(650, signal)) finish();
+    audio.play(multiplier > 0 ? 'win' : 'lose');
+    if (multiplier === 0) close.focus({preventScroll: true});
   }
 
   function slots() {
