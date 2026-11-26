@@ -3,11 +3,13 @@
 
 import {shuffle} from '../tablet-preview/shared.js';
 import {dollars, loadScratchCard} from './scratch-card.js?v=scratch-prize-size';
-import {button, countdown, element, loadSetting, saveSetting, weighted} from './ui.js';
+import {button, element, loadSetting, saveSetting, weighted} from './ui.js';
 
 const cost = 100;
-const startingCash = 1000;
-const refillDelay = 10 * 60 * 1000;
+const startingCash = 2000;
+const collectAmount = 1000;
+const collectInterval = 4 * 60 * 60 * 1000;
+const firstCollectWait = 10 * 1000;
 const prizes = [1, 2, 3, 5, 8, 10, 20, 50].map((multiplier, index) => ({
   amount: multiplier * cost, odds: 1 / [1, 2, 5, 10, 20, 50, 100, 200][index]
 }));
@@ -79,7 +81,8 @@ function scratchAudio() {
 export function createScratch({data, open: openApp}) {
   const saved = loadSetting('scratchWallet', {});
   let cash = Number.isInteger(saved?.cash) && saved.cash >= 0 ? saved.cash : startingCash;
-  let refill = Number(saved?.refill) || 0;
+  let collectAt = Number(saved?.collectAt);
+  if (!Number.isFinite(collectAt) || collectAt > Date.now() + collectInterval) collectAt = Date.now() + firstCollectWait;
   let card;
   let round;
   let panelMode;
@@ -99,21 +102,25 @@ export function createScratch({data, open: openApp}) {
   cardButton.hidden = true;
   cardButton.setAttribute('aria-label', 'Mega Rich. Match three prizes to win. A card costs $100. ' +
     'Drag to scratch the foil or hold for one second to reveal the card. Press Enter to reveal with the keyboard.');
+  const freeTime = element('b');
+  const freeCoins = element('p', 'scratch-free', 'MORE COINS IN ', freeTime);
+  const collectCoins = button('COLLECT', collectFree, 'scratch-collect');
+  collectCoins.hidden = true;
   const cashAmount = element('output', '', dollars(cash));
-  const cashBar = element('div', 'scratch-cash', element('span', '', 'CASH'), cashAmount);
+  const cashBar = element('div', 'scratch-cash', freeCoins, collectCoins,
+    element('p', 'scratch-balance', element('span', '', 'CASH'), cashAmount));
   cashBar.hidden = true;
 
   const title = element('h2', 'scratch-headline');
   const detail = element('p', 'scratch-detail');
   const retry = button('RETRY', load, 'scratch-play');
   const again = button('PLAY AGAIN', () => { deal(); cardButton.focus(); }, 'scratch-play');
-  const moreCoins = element('p', 'scratch-countdown');
   const quit = button('QUIT', () => {
     if (card) deal();
     openApp('home');
   }, 'scratch-quit');
   const panel = element('div', 'scratch-panel',
-    element('div', 'scratch-message', title, detail), retry, again, moreCoins, quit);
+    element('div', 'scratch-message', title, detail), retry, again, quit);
   panel.firstElementChild.setAttribute('role', 'status');
   const unlucky = element('p', 'scratch-unlucky', 'UNLUCKY, TRY AGAIN!');
   unlucky.hidden = true;
@@ -122,44 +129,47 @@ export function createScratch({data, open: openApp}) {
   view.setAttribute('aria-label', 'Scratch Bling');
 
   function saveWallet() {
-    saveSetting('scratchWallet', {cash, refill});
+    saveSetting('scratchWallet', {cash, collectAt});
   }
 
-  function walletWait(now) {
-    const oldCash = cash;
-    const oldRefill = refill;
-    if (cash >= cost) {
-      refill = 0;
-    } else if (!refill || refill - now > refillDelay) {
-      refill = now + refillDelay;
-    } else if (now >= refill) {
-      cash = startingCash;
-      refill = 0;
-    }
-    if (cash !== oldCash || refill !== oldRefill) saveWallet();
-    return refill ? refill - now : 0;
+  if (saved?.collectAt !== collectAt) saveWallet();
+
+  function formatWait(milliseconds) {
+    const seconds = Math.max(0, Math.ceil(milliseconds / 1000));
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor(seconds / 60) % 60;
+    return hours + ':' + String(minutes).padStart(2, '0') + ':' + String(seconds % 60).padStart(2, '0');
   }
 
-  function showWait(wait) {
-    moreCoins.hidden = !wait;
-    again.hidden = !!wait;
-    if (wait) {
-      const text = 'MORE COINS\nIN ' + countdown(wait);
-      if (moreCoins.textContent !== text) moreCoins.textContent = text;
-    }
+  function refreshFree(now) {
+    const ready = now >= collectAt;
+    freeCoins.hidden = ready;
+    collectCoins.hidden = !ready;
+    if (ready) return;
+    const text = formatWait(collectAt - now);
+    if (freeTime.textContent !== text) freeTime.textContent = text;
   }
 
-  function showPanel(mode, message, text = '', wait = 0) {
+  function collectFree() {
+    const now = Date.now();
+    if (now < collectAt) return;
+    cash += collectAmount;
+    collectAt = now + collectInterval;
+    saveWallet();
+    refreshFree(now);
+    cashAmount.value = dollars(cash);
+  }
+
+  function showPanel(mode, message, text = '') {
     const restoreFocus = active && view.contains(document.activeElement);
     panelMode = mode;
-    const shaded = mode === 'result' || mode === 'out-of-cash';
+    const shaded = mode === 'result';
     panel.classList.toggle('shaded', shaded);
     title.textContent = message;
     title.classList.toggle('gold', mode === 'result' && !!round.winner);
     detail.textContent = text;
     retry.hidden = mode !== 'error';
-    if (shaded) showWait(wait);
-    else moreCoins.hidden = again.hidden = true;
+    again.hidden = mode !== 'result';
     panel.hidden = false;
     cardButton.inert = true;
     if (restoreFocus) {
@@ -175,19 +185,7 @@ export function createScratch({data, open: openApp}) {
   }
 
   function tick(now) {
-    if (!round) return;
-    if (!round.paid || round.phase === 'done') {
-      const wait = walletWait(now);
-      if (panelMode === 'out-of-cash' && !wait) {
-        const restoreFocus = panel.contains(document.activeElement);
-        hidePanel();
-        if (restoreFocus) cardButton.focus();
-      } else if (panelMode === 'result' || panelMode === 'out-of-cash') {
-        showWait(wait);
-      } else if (wait) {
-        showPanel('out-of-cash', 'OUT OF CASH', 'Cards cost ' + dollars(cost), wait);
-      }
-    }
+    refreshFree(now);
     const amount = dollars(cash);
     if (cashAmount.value !== amount) cashAmount.value = amount;
   }
@@ -302,9 +300,8 @@ export function createScratch({data, open: openApp}) {
       }, 1200);
       return;
     }
-    const now = Date.now();
-    showPanel('result', 'WINNER', dollars(prize.amount), walletWait(now));
-    tick(now);
+    showPanel('result', 'WINNER', dollars(prize.amount));
+    tick(Date.now());
   }
 
   function move(event) {
