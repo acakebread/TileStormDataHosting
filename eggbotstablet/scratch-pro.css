@@ -166,18 +166,20 @@
 }
 .sp-collect-label, .sp-spin-label {
   position: absolute;
+  left: 6%;
+  top: 0;
+  width: 88%;
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
+  line-height: 1;
   pointer-events: none;
 }
 .sp-collect-label {
-  left: 10.2%;
-  top: 0;
-  width: 79.6%;
-  height: 100%;
   font-family: "Futura Condensed Medium", "Arial Narrow", sans-serif;
-  font-size: 48px;
+  font-size: 42px;
+  transform: translateY(0.095em);
 }
 .sp-slot-board { background: #090909; border-radius: 7px; }
 .sp-reel-window { overflow: hidden; border-radius: 12px; background: #ececec; }
@@ -188,12 +190,9 @@
   border-image: url("./art/scratch-pro/spin-button.png") 16 fill / 16px stretch;
 }
 .sp-spin-label {
-  left: 6.1%;
-  top: 31.9%;
-  width: 87.8%;
-  height: 56.6%;
   font-family: "DIN Condensed Bold", "Arial Narrow", sans-serif;
-  font-size: 120px;
+  font-size: 76px;
+  transform: translateY(0.145em);
 }
 .sp-stage .sp-spin:disabled, .sp-stage .sp-command:disabled { opacity: .55; }
 .sp-link-cell { display: grid; place-items: center; background: #15151a; border-radius: 7px; }
