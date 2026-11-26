@@ -206,4 +206,4 @@
   3.75%, 18.75% { opacity: 1; transform: translateX(var(--sp-scratch-travel)); }
   11.25%, 26.25% { opacity: 1; transform: translateX(calc(-1 * var(--sp-scratch-travel))); }
 }
-@keyframes sp-spin { from { background-position: 0 0; } to { background-position: 0 114.2857%; } }
+@keyframes sp-spin { from { background-position: 0 0; } to { background-position: 0 -114.2857%; } }

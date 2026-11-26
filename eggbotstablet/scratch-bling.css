@@ -159,5 +159,5 @@
   background-repeat: repeat-y;
   animation: sb-spin .333s linear infinite;
 }
-@keyframes sb-spin { from { background-position: 0 0; } to { background-position: 0 114.2857%; } }
+@keyframes sb-spin { from { background-position: 0 0; } to { background-position: 0 -114.2857%; } }
 .sb-arrow:disabled { opacity: .35; }
