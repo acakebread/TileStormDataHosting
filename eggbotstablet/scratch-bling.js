@@ -3,7 +3,7 @@
 
 import {button, element, loadSetting, number, saveSetting} from './ui.js';
 import {money} from './scratch-pro-rules.js?v=level-bonus';
-import {createAudio, createTicket, loadScratchCatalogue, loadTicketArt, pin, sprite, wait} from './scratch-pro-art.js?v=bling-cabinet';
+import {createAudio, createTicket, loadScratchCatalogue, loadTicketArt, pin, sliced, sprite, wait} from './scratch-pro-art.js?v=bling-cabinet';
 import {buyStripeCoins, syncStripeCoins} from './stripe-coins.js?v=stripe-pro';
 
 const width = 2048, height = 1536;
@@ -485,7 +485,9 @@ export function createScratchBling(view, quit) {
       const cabinetWidth = 835;
       const reelWidthScale = cabinetWidth / 620;
       machine = pin(results, element('div', 'sb-slots'), (width - cabinetWidth) / 2, 543, cabinetWidth, 609);
-      machine.style.background = '#090909';
+      const backing = pin(machine, element('div', 'sb-decor'), 0, 0, cabinetWidth, 609);
+      sliced(backing, catalogue.url('gamble-reels.png'), [800, 0, 128, 128], 1024, 512, 48, 15.36);
+      backing.style.opacity = '.872';
       label(machine, 'MATCH 3 SYMBOLS', 5, 6, cabinetWidth - 10, 48);
       for (let reel = 0; reel < 3; reel++) {
         const column = pin(machine, element('div'), (9 + reel * 202.5) * reelWidthScale, 56, 203 * reelWidthScale, 533);
