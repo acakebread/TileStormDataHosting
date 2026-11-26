@@ -474,6 +474,7 @@ export function createScratchBling(view, quit) {
         const cells = [0, 1, 2].map(row => pin(window, element('div'), 11, [-96, 159, 395][row], 169, 178));
         const strip = pin(window, element('div', 'sb-strip'), 4, 4, 187, 511);
         strip.style.backgroundImage = 'url("' + catalogue.url('gamble-strip.jpg') + '")';
+        strip.style.animationDelay = (-Math.random() * .333) + 's';
         art(column, 'gamble-reels.png', [656, 0, 136, 392], 0, 0, 203, 533);
         slotReels.push({cells, strip});
       }

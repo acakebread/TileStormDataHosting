@@ -28,11 +28,13 @@ export function openBonus(stage, catalogue, wallet, audio, finish) {
   const panel = cabinet(pin(overlay, element('div', 'sp-bonus-panel'), 221, 129, 1057, 777), [0, 0, 512, 328]);
   const title = pin(panel, element('div', 'sp-bonus-title', 'CHOOSE GAME..'), 42, 24, 535, 80);
   const amount = cabinet(pin(panel, element('output', 'sp-bonus-amount'), 610, 13, 434, 98), [0, 336, 128, 128]);
-  const collect = cabinet(pin(overlay, button('COLLECT', () => {
+  const collect = pin(overlay, button('', () => {
     if (busy) return;
     audio.play('click');
     finish();
-  }, 'sp-collect'), 940, 13, 336, 98), [272, 336, 128, 128]);
+  }, 'sp-collect'), 1029, 12, 253, 99);
+  collect.append(element('span', 'sp-collect-label', 'COLLECT'));
+  collect.setAttribute('aria-label', 'Collect');
   const area = pin(panel, element('div'), 24, 117, 1014, 641);
   let game, busy = false, controls = [];
 
@@ -106,7 +108,7 @@ export function openBonus(stage, catalogue, wallet, audio, finish) {
     for (const reel of columns) for (const cell of reel.symbols) set(cell, random(1, 6));
     const tag = pin(board, element('div', 'sp-bonus-tag', chrome ? '' : 'MATCH 3 SYMBOLS'), 55, 551, 598, 66);
     cabinet(tag, [400, 480, 490, 64]);
-    const spin = command(chrome ? '' : 'SPIN', () => {
+    const spin = command('', () => {
       const prize = bonusMultiplier();
       run(prize, 'SPINNING…', async () => {
         const outcomes = columns.map(() => [random(1, 6), prize || random(1, 6), random(1, 6)]);
@@ -122,8 +124,8 @@ export function openBonus(stage, catalogue, wallet, audio, finish) {
         }
       });
     }, 809, 446, 199, 192, 'sp-spin');
+    spin.append(element('span', 'sp-spin-label', 'SPIN'));
     spin.setAttribute('aria-label', 'Spin');
-    cabinet(spin, [136, 336, 128, 128]);
   }
 
   function coin() {

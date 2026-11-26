@@ -1,5 +1,16 @@
 /* Copyright 2026 massivehadron.com ltd. */
 
+@font-face {
+  font-family: "DIN Condensed Bold";
+  src: url("./fonts/DINCondensedBold.ttf") format("truetype");
+  font-display: swap;
+}
+@font-face {
+  font-family: "Futura Condensed Medium";
+  src: url("./fonts/FuturaCondensedMedium.ttf") format("truetype");
+  font-display: swap;
+}
+
 .app-view.scratch-pro-app {
   position: absolute;
   inset: 0;
@@ -142,13 +153,48 @@
 .sp-tab { color: #dfff00; background-color: #303030; font-size: 33px; font-weight: bold; }
 .sp-bonus-title, .sp-bonus-amount { display: flex; align-items: center; font-size: 48px; text-shadow: 2px 3px #161616; }
 .sp-bonus-amount { justify-content: flex-end; padding-right: 14px; font-size: 61px; background-color: #272727; }
-.sp-stage .sp-collect { background-color: #078000; font-size: 63px; font-weight: normal; text-shadow: 2px 2px #171717; }
+.sp-stage .sp-collect, .sp-stage .sp-spin {
+  box-sizing: border-box;
+  background: transparent;
+  border-style: solid;
+  border-width: 16px;
+  color: #fff;
+  font-weight: 400;
+}
+.sp-stage .sp-collect {
+  border-image: url("./art/scratch-pro/collect-button.png") 16 fill / 16px stretch;
+}
+.sp-collect-label, .sp-spin-label {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.sp-collect-label {
+  left: 10.2%;
+  top: 0;
+  width: 79.6%;
+  height: 100%;
+  font-family: "Futura Condensed Medium", "Arial Narrow", sans-serif;
+  font-size: 48px;
+}
 .sp-slot-board { background: #090909; border-radius: 7px; }
 .sp-reel-window { overflow: hidden; border-radius: 12px; background: #ececec; }
 .sp-reel-symbol, .sp-playing-card, .sp-bonus-tag { display: grid; place-items: center; font-size: 35px; font-weight: bold; }
 .sp-reel-symbol { color: #121212; }
 .sp-reel-strip { background-size: 100% 800%; background-repeat: repeat-y; animation: sp-spin .42s linear infinite; }
-.sp-stage .sp-spin { background-color: #e20c02; font-size: 62px; }
+.sp-stage .sp-spin {
+  border-image: url("./art/scratch-pro/spin-button.png") 16 fill / 16px stretch;
+}
+.sp-spin-label {
+  left: 6.1%;
+  top: 31.9%;
+  width: 87.8%;
+  height: 56.6%;
+  font-family: "DIN Condensed Bold", "Arial Narrow", sans-serif;
+  font-size: 120px;
+}
 .sp-stage .sp-spin:disabled, .sp-stage .sp-command:disabled { opacity: .55; }
 .sp-link-cell { display: grid; place-items: center; background: #15151a; border-radius: 7px; }
 .sp-link-cell.sp-lit { background: #fc0; }
