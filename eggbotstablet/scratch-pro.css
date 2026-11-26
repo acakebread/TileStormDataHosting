@@ -149,20 +149,26 @@
 .sp-tap-fill, .sp-tap-peak { position: absolute; left: 0; right: 0; bottom: 0; background: #3b7acf; }
 .sp-tap-peak { height: 2%; background: #80bfff; }
 .sp-tap-text { position: relative; }
-.sp-bonus-panel { background-color: #363636; border-radius: 13px; }
-.sp-tab { color: #dfff00; background-color: #303030; font-size: 33px; font-weight: bold; }
+.sp-bonus-panel, .sp-bonus-amount, .sp-tab { background: transparent; }
+.sp-tab { color: #dfff00; font-size: 33px; font-weight: bold; }
 .sp-bonus-title, .sp-bonus-amount { display: flex; align-items: center; font-size: 48px; text-shadow: 2px 3px #161616; }
-.sp-bonus-amount { justify-content: flex-end; padding-right: 14px; font-size: 61px; background-color: #272727; }
-.sp-stage .sp-collect, .sp-stage .sp-spin {
-  box-sizing: border-box;
+.sp-bonus-amount { justify-content: flex-end; padding-right: 14px; font-size: 61px; }
+.sp-stage button.sp-collect,
+.sp-stage button.sp-spin,
+.sp-stage button.sp-collect:hover,
+.sp-stage button.sp-spin:hover,
+.sp-stage button.sp-tab,
+.sp-stage button.sp-tab:hover {
   background: transparent;
-  border-style: solid;
-  border-width: 16px;
+  border: 0;
+  border-radius: 0;
+}
+.sp-stage button.sp-collect,
+.sp-stage button.sp-spin,
+.sp-stage button.sp-collect:hover,
+.sp-stage button.sp-spin:hover {
   color: #fff;
   font-weight: 400;
-}
-.sp-stage .sp-collect {
-  border-image: url("./art/scratch-pro/collect-button.png") 16 fill / 16px stretch;
 }
 .sp-collect-label, .sp-spin-label {
   position: absolute;
@@ -173,6 +179,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  z-index: 1;
   line-height: 1;
   pointer-events: none;
 }
@@ -181,14 +188,11 @@
   font-size: 42px;
   transform: translateY(0.095em);
 }
-.sp-slot-board { background: #090909; border-radius: 7px; }
-.sp-reel-window { overflow: hidden; border-radius: 12px; background: #ececec; }
+.sp-slot-board { background: #090909; }
+.sp-reel-window { overflow: hidden; background: transparent; }
 .sp-reel-symbol, .sp-playing-card, .sp-bonus-tag { display: grid; place-items: center; font-size: 35px; font-weight: bold; }
 .sp-reel-symbol { color: #121212; }
 .sp-reel-strip { background-size: 100% 800%; background-repeat: repeat-y; animation: sp-spin .42s linear infinite; }
-.sp-stage .sp-spin {
-  border-image: url("./art/scratch-pro/spin-button.png") 16 fill / 16px stretch;
-}
 .sp-spin-label {
   font-family: "DIN Condensed Bold", "Arial Narrow", sans-serif;
   font-size: 76px;

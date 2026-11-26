@@ -76,6 +76,53 @@ export function sprite(node, url, [x, y, width, height], sheetWidth, sheetHeight
   return node;
 }
 
+// Draws one atlas frame as a 9-slice. border is the source inset in sheet pixels and
+// displayBorder is the inset on the element, so the corner radius stays the original size.
+export function sliced(node, url, frame, sheetWidth, sheetHeight, border, displayBorder) {
+  node.style.backgroundImage = 'none';
+  node.style.backgroundColor = 'transparent';
+  node.style.border = '0';
+  node.style.borderRadius = '0';
+  for (const old of node.querySelectorAll(':scope > .sp-slice')) old.remove();
+  if (!url || border <= 0 || displayBorder <= 0) return node;
+  const [x, y, width, height] = frame;
+  const sources = [
+    [[x, border], [y, border]],
+    [[x + border, width - border * 2], [y + border, height - border * 2]],
+    [[x + width - border, border], [y + height - border, border]]
+  ];
+  const overlap = 1;
+  const band = index => index === 1
+    ? {start: (displayBorder - overlap) + 'px', size: 'calc(100% - ' + (displayBorder * 2 - overlap * 2) + 'px)'}
+    : {edge: '0', size: displayBorder + 'px'};
+  const parts = [];
+  for (const [row, col] of [[1, 1], [0, 1], [2, 1], [1, 0], [1, 2], [0, 0], [2, 0], [0, 2], [2, 2]]) {
+    const [sx, sw] = sources[col][0];
+    const [sy, sh] = sources[row][1];
+    if (sw <= 0 || sh <= 0) continue;
+    const horizontal = band(col);
+    const vertical = band(row);
+    const slice = element('div', 'sp-slice');
+    Object.assign(slice.style, {
+      position: 'absolute', pointerEvents: 'none',
+      width: horizontal.size, height: vertical.size,
+      backgroundImage: 'url("' + url + '")', backgroundRepeat: 'no-repeat',
+      backgroundSize: 100 * sheetWidth / sw + '% ' + 100 * sheetHeight / sh + '%',
+      backgroundPosition: (sheetWidth === sw ? 0 : 100 * sx / (sheetWidth - sw)) + '% ' +
+        (sheetHeight === sh ? 0 : 100 * sy / (sheetHeight - sh)) + '%'
+    });
+    if (horizontal.start) slice.style.left = horizontal.start;
+    else if (col === 2) slice.style.right = horizontal.edge;
+    else slice.style.left = horizontal.edge;
+    if (vertical.start) slice.style.top = vertical.start;
+    else if (row === 2) slice.style.bottom = vertical.edge;
+    else slice.style.top = vertical.edge;
+    parts.push(slice);
+  }
+  node.prepend(...parts);
+  return node;
+}
+
 export function createAudio(catalogue, allowed) {
   const Audio = window.AudioContext || window.webkitAudioContext;
   const lifetime = new AbortController();

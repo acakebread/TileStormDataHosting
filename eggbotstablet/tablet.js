@@ -297,7 +297,7 @@ function mountScratchPro() {
     if (app) { app.open(); return; }
     if (opening) return;
     view.replaceChildren(element('p', 'sp-launch', 'Loading Scratch Pro…'));
-    opening = import('./scratch-pro.js?v=bonus-buttons').then(({createScratchPro}) => {
+    opening = import('./scratch-pro.js?v=bonus-slice').then(({createScratchPro}) => {
       if (!active) return;
       view.replaceChildren();
       app = createScratchPro(view);

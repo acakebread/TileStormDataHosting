@@ -3,7 +3,7 @@
 
 import {button, element} from './ui.js';
 import {money, bonusMultiplier, random} from './scratch-pro-rules.js';
-import {pin, sprite, wait} from './scratch-pro-art.js?v=2';
+import {pin, sliced, sprite, wait} from './scratch-pro-art.js?v=bonus-slice';
 
 const games = ['Slots', 'Flip Coin', 'Link Dink', 'High or Low'];
 const linkPrizes = [0, 2, 0, 3, 5, 4, 2, 1, 2];
@@ -16,6 +16,8 @@ export function openBonus(stage, catalogue, wallet, audio, finish) {
   overlay.setAttribute('aria-label', 'Gamble winnings');
   const chrome = catalogue.url('bonus-cabinet.png');
   const cabinet = (node, frame) => sprite(node, chrome, frame, 1024, 768);
+  const slicedChrome = (node, frame, border, displayBorder) =>
+    sliced(node, chrome, frame, 1024, 768, border, displayBorder);
   const tabs = games.map((name, index) => {
     const control = pin(overlay, button(chrome ? '' : name, () => {
       if (index === game || busy) return;
@@ -25,22 +27,27 @@ export function openBonus(stage, catalogue, wallet, audio, finish) {
     control.setAttribute('aria-label', name);
     return control;
   });
-  const panel = cabinet(pin(overlay, element('div', 'sp-bonus-panel'), 221, 129, 1057, 777), [0, 0, 512, 328]);
+  const panel = slicedChrome(pin(overlay, element('div', 'sp-bonus-panel'), 221, 129, 1057, 777), [0, 0, 512, 328], 65, 20);
   const title = pin(panel, element('div', 'sp-bonus-title', 'CHOOSE GAME..'), 42, 24, 535, 80);
-  const amount = cabinet(pin(panel, element('output', 'sp-bonus-amount'), 610, 13, 434, 98), [0, 336, 128, 128]);
+  const amount = slicedChrome(pin(panel, element('output', 'sp-bonus-amount'), 610, 13, 434, 98), [0, 336, 128, 128], 34, 20);
+  const amountValue = element('span');
+  amountValue.style.position = 'relative';
+  amountValue.style.zIndex = '1';
+  amount.append(amountValue);
   const collect = pin(overlay, button('', () => {
     if (busy) return;
     audio.play('click');
     finish();
   }, 'sp-collect'), 1029, 12, 253, 99);
   collect.append(element('span', 'sp-collect-label', 'COLLECT'));
+  sliced(collect, new URL('./art/scratch-pro/collect-button.png', import.meta.url).href, [0, 0, 59, 58], 59, 58, 16, 16);
   collect.setAttribute('aria-label', 'Collect');
   const area = pin(panel, element('div'), 24, 117, 1014, 641);
   let game, busy = false, controls = [];
 
   function refresh() {
     const canPlay = !busy && wallet.state.pendingWin > 0;
-    if (!busy) amount.textContent = money(wallet.state.pendingWin);
+    if (!busy) amountValue.textContent = money(wallet.state.pendingWin);
     collect.hidden = !canPlay;
     for (const control of [...tabs, ...controls]) control.disabled = !canPlay;
   }
@@ -125,6 +132,7 @@ export function openBonus(stage, catalogue, wallet, audio, finish) {
       });
     }, 809, 446, 199, 192, 'sp-spin');
     spin.append(element('span', 'sp-spin-label', 'SPIN'));
+    sliced(spin, new URL('./art/scratch-pro/spin-button.png', import.meta.url).href, [0, 0, 59, 59], 59, 59, 16, 16);
     spin.setAttribute('aria-label', 'Spin');
   }
 
