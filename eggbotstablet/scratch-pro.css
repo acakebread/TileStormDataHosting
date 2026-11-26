@@ -100,7 +100,10 @@
 .sp-lock { position: absolute; inset: 0; background: rgb(0 0 0 / .66); }
 .sp-padlock { transform: rotate(-13deg); }
 .sp-lock-level { font-weight: bold; font-size: 30px; }
-.sp-stage .sp-ticket { touch-action: none; isolation: isolate; background: transparent; }
+.sp-stage .sp-ticket {
+  touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  isolation: isolate; background: transparent;
+}
 .sp-stage .sp-ticket:active, .sp-stage .sp-card-preview:active { filter: none; }
 .sp-scratch-hint {
   position: absolute;

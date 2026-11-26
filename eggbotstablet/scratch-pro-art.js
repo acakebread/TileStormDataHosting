@@ -289,6 +289,7 @@ export function createTicket({catalogue, card, artwork, foilName, pay, revealRes
     const p = point(event);
     if (!card.games.some(({area}) => p.x >= area.x && p.x <= area.x + area.w &&
       1 - p.y >= area.y && 1 - p.y <= area.y + area.h) || !begin()) return;
+    event.preventDefault();
     view.setPointerCapture(event.pointerId);
     pointer = {id: event.pointerId, last: p, origin: p};
     stroke(p, p);

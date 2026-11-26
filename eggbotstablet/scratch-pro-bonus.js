@@ -3,7 +3,7 @@
 
 import {button, element} from './ui.js';
 import {money, bonusMultiplier, random} from './scratch-pro-rules.js';
-import {pin, sprite, wait} from './scratch-pro-art.js';
+import {pin, sprite, wait} from './scratch-pro-art.js?v=2';
 
 const games = ['Slots', 'Flip Coin', 'Link Dink', 'High or Low'];
 const linkPrizes = [0, 2, 0, 3, 5, 4, 2, 1, 2];
