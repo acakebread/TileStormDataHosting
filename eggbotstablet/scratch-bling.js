@@ -183,7 +183,12 @@ export function createScratchBling(view, quit) {
       const hosted = await loadScratchCatalogue('scratch-bling.json', 'Scratch Bling', signal);
       if (signal.aborted) return;
       catalogue = {...hosted, url: name => hosted.url(name) || localAudio.get(name)};
-      await Promise.all(['chrome.png', 'casino.jpg'].map(name => catalogue.image(name, signal)));
+      const faces = document.fonts ? Promise.all([
+        document.fonts.load('16px "Brush Script Std"'),
+        document.fonts.load('16px "Abadi Condensed Light"'),
+        document.fonts.load('16px "Abadi Condensed Extra Bold"')
+      ]).catch(() => {}) : Promise.resolve();
+      await Promise.all([...['chrome.png', 'casino.jpg'].map(name => catalogue.image(name, signal)), faces]);
       if (signal.aborted) return;
       wallet = createWallet();
       audio = createAudio(catalogue, name => name === 'music' ? !wallet.state.muteMusic : !wallet.state.muteSound);
@@ -282,7 +287,7 @@ export function createScratchBling(view, quit) {
     art(bar, 'chrome.png', [372, 0, 128, 128], 1928, 0, 112, 102);
     const buy = pin(bar, button('BUY COINS', showShop), 822, 0, 404, 96);
     buy.classList.add('sb-buy');
-    timerText = label(bar, 'MORE COINS IN ', 695, 101, 658, 78, 'sb-timer');
+    timerText = label(bar, 'MORE COINS IN', 695, 101, 658, 78, 'sb-timer');
     timerValue = element('b');
     timerText.append(timerValue);
     collectButton = artButton(bar, 'Collect coins', collectFree, 'chrome.png', [0, 164, 448, 80], 800, 95, 448, 80);
@@ -304,9 +309,10 @@ export function createScratchBling(view, quit) {
     collect.dataset.role = 'collect';
     const banner = pin(results, element('div', 'sb-plaque'), 559, 1209, 930, 300);
     banner.style.backgroundSize = '100% 100%';
-    label(banner, '', 80, 30, 770, 120, 'sb-plaque-amount');
-    label(banner, '', 80, 160, 770, 100, 'sb-plaque-caption');
-    results.win = {bar, banner, amount: banner.querySelector('.sb-plaque-amount'), caption: banner.querySelector('.sb-plaque-caption')};
+    const amount = pin(banner, element('div', 'sb-plaque-amount'), 83, 62, 763, 152);
+    const caption = pin(banner, element('div', 'sb-plaque-caption'), 133, 171, 664, 104);
+    caption.hidden = true;
+    results.win = {bar, banner, amount, caption};
   }
 
   async function showPage(index) {
@@ -408,14 +414,32 @@ export function createScratchBling(view, quit) {
     showWin(winnings, 6);
   }
 
+  function showAmount(payout) {
+    const text = money(payout);
+    const node = results.win.amount;
+    const boxWidth = 763, boxHeight = 152;
+    const probe = showAmount.context ??= document.createElement('canvas').getContext('2d');
+    let size = boxHeight * .92;
+    probe.font = size + 'px "Brush Script Std"';
+    const spacing = -0.04 * size;
+    const measured = probe.measureText(text).width + Math.max(0, text.length - 1) * spacing;
+    if (measured > boxWidth) size *= boxWidth / measured;
+    node.textContent = text;
+    node.style.fontSize = size + 'px';
+    node.style.letterSpacing = (-0.04 * size) + 'px';
+    node.style.webkitTextStroke = Math.max(3, size * 0.022) + 'px #fff';
+  }
+
   function showWin(payout, outcome) {
-    const captions = ['UNLUCKY!!!', 'SPIN AGAIN', 'x2 WINNER', 'x3 WINNER', 'x4 WINNER', 'x5 WINNER', 'WINNER'];
+    const ticketWin = outcome === 6;
     results.hidden = false;
     results.firstElementChild.hidden = true;
     results.win.bar.hidden = results.win.banner.hidden = false;
-    results.win.banner.style.backgroundImage = 'url("' + (catalogue.url(outcome === 6 ? 'winner.png' : 'gamble-plaque.png') || '') + '")';
-    results.win.amount.textContent = money(payout);
-    results.win.caption.textContent = captions[outcome] || 'WINNER';
+    results.win.banner.style.backgroundImage = 'url("' + (catalogue.url(ticketWin ? 'winner.png' : 'gamble-plaque.png') || '') + '")';
+    showAmount(payout);
+    const caption = results.win.caption;
+    caption.hidden = ticketWin;
+    if (!ticketWin) sprite(caption, catalogue.url('result-type.png'), [outcome % 2 * 512, Math.floor(outcome / 2) * 80, 512, 80], 1024, 512);
     const gambleButton = results.win.bar.querySelector('[data-role="gamble"]');
     const collect = results.win.bar.querySelector('[data-role="collect"]');
     gambleButton.hidden = outcome === 0;

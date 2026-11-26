@@ -1,5 +1,21 @@
 /* Copyright 2026 massivehadron.com ltd. */
 
+@font-face {
+  font-family: "Abadi Condensed Light";
+  src: url("./fonts/AbadiMT-CondensedLight.ttf") format("truetype");
+  font-display: swap;
+}
+@font-face {
+  font-family: "Abadi Condensed Extra Bold";
+  src: url("./fonts/AbadiMT-CondensedExtraBold.ttf") format("truetype");
+  font-display: swap;
+}
+@font-face {
+  font-family: "Brush Script Std";
+  src: url("./fonts/BrushScriptStd.ttf") format("truetype");
+  font-display: swap;
+}
+
 .app-view.scratch-bling-app {
   position: absolute;
   inset: 0;
@@ -61,12 +77,35 @@
 .sb-header button, .sb-results button, .sb-status button { pointer-events: auto; }
 .sb-label { display: grid; place-items: center; margin: 0; text-align: center; pointer-events: none; }
 .sb-cash, .sb-buy { color: #ffcc00; }
+.sb-cash, .sb-buy, .sb-collect, .sb-winbar button {
+  font-family: "Abadi Condensed Extra Bold", "Arial Narrow", sans-serif;
+  font-weight: 400;
+}
 .sb-cash { justify-content: end; padding-right: 8px; font-size: 64px; }
 .sb-buy { font-size: 62px; }
-.sb-nav { font-size: 49px; }
-.sb-timer { font-size: 44px; font-weight: bold; letter-spacing: .02em; }
-.sb-timer b { color: #ffcc00; }
-.sb-collect { font-size: 48px; }
+.sb-nav {
+  font-family: "Abadi Condensed Light", "Arial Narrow", sans-serif;
+  font-size: 49px;
+  font-weight: 400;
+}
+.sb-timer {
+  display: flex;
+  flex-flow: row nowrap;
+  align-items: center;
+  justify-content: center;
+  gap: .45em;
+  white-space: nowrap;
+  font-family: "Abadi Condensed Light", "Arial Narrow", sans-serif;
+  font-size: 48px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.sb-timer b {
+  color: #ffcc00;
+  font-family: "Abadi Condensed Extra Bold", "Arial Narrow", sans-serif;
+  font-weight: 400;
+}
+.sb-collect { font-size: 48px; color: #fff; }
 .sb-meter { background: #000; }
 .sb-progress { background: #ffcc00; }
 .sb-price {
@@ -98,13 +137,22 @@
 .sb-winbar { background: rgb(0 0 0 / .78); }
 .sb-winbar button { font-size: 84px; }
 .sb-plaque-amount {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
   color: #f6bd32;
-  font-size: 92px;
-  font-style: italic;
-  font-weight: bold;
-  text-shadow: 0 4px #23190a;
+  font-family: "Brush Script Std", cursive;
+  font-size: 140px;
+  font-style: normal;
+  font-weight: 400;
+  line-height: .8;
+  white-space: nowrap;
+  -webkit-text-stroke: 2px #fff;
+  paint-order: stroke fill;
+  text-shadow: 6px 6px 0 rgb(0 0 0 / .42);
 }
-.sb-plaque-caption { font-size: 64px; text-shadow: 0 3px #23190a; }
+.sb-plaque-caption { background-repeat: no-repeat; }
 .sb-reel-window { overflow: hidden; background: #fff; }
 .sb-strip { background-repeat: repeat-y; animation: sb-spin .18s linear infinite; }
 @keyframes sb-spin { to { background-position-y: 178px; } }
