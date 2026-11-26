@@ -482,17 +482,19 @@ export function createScratchBling(view, quit) {
   async function spinSlots(multiplier) {
     let machine = stage.querySelector('.sb-slots');
     if (!machine) {
-      machine = pin(results, element('div', 'sb-slots'), 713, 543, 620, 609);
+      const cabinetWidth = 835;
+      const reelWidthScale = cabinetWidth / 620;
+      machine = pin(results, element('div', 'sb-slots'), (width - cabinetWidth) / 2, 543, cabinetWidth, 609);
       machine.style.background = '#090909';
-      label(machine, 'MATCH 3 SYMBOLS', 5, 6, 610, 48);
+      label(machine, 'MATCH 3 SYMBOLS', 5, 6, cabinetWidth - 10, 48);
       for (let reel = 0; reel < 3; reel++) {
-        const column = pin(machine, element('div'), 9 + reel * 202.5, 56, 203, 533);
-        const window = pin(column, element('div', 'sb-reel-window'), 4, 7, 190, 514);
-        const cells = [0, 1, 2].map(row => pin(window, element('div'), 11, [-96, 159, 395][row], 169, 178));
-        const strip = pin(window, element('div', 'sb-strip'), 4, 4, 187, 511);
+        const column = pin(machine, element('div'), (9 + reel * 202.5) * reelWidthScale, 56, 203 * reelWidthScale, 533);
+        const window = pin(column, element('div', 'sb-reel-window'), 4 * reelWidthScale, 7, 190 * reelWidthScale, 514);
+        const cells = [-96, 159, 395].map(top => pin(window, element('div'), 11 * reelWidthScale, top, 169 * reelWidthScale, 178));
+        const strip = pin(window, element('div', 'sb-strip'), 4 * reelWidthScale, 4, 187 * reelWidthScale, 511);
         strip.style.backgroundImage = 'url("' + catalogue.url('gamble-strip.jpg') + '")';
         strip.style.animationDelay = (-Math.random() * .333) + 's';
-        art(column, 'gamble-reels.png', [656, 0, 136, 392], 0, 0, 203, 533);
+        art(column, 'gamble-reels.png', [656, 0, 136, 392], 0, 0, 203 * reelWidthScale, 533);
         slotReels.push({cells, strip});
       }
     }
