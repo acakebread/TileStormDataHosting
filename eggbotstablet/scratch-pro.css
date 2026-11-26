@@ -196,7 +196,6 @@
 .sp-spin-label {
   font-family: "DIN Condensed Bold", "Arial Narrow", sans-serif;
   font-size: 76px;
-  transform: translateY(0.145em);
 }
 .sp-stage .sp-spin:disabled, .sp-stage .sp-command:disabled { opacity: .55; }
 .sp-link-cell { display: grid; place-items: center; background: #15151a; border-radius: 7px; }
