@@ -1,13 +1,20 @@
 // Copyright 2026 massivehadron.com ltd.
 // Based on Scratch Bling, copyright 2016 massivehadron.com ltd. created 29/09/2016 by Andrew Cakebread
 
-import {button, element, loadSetting, saveSetting} from './ui.js';
+import {button, element, loadSetting, number, saveSetting} from './ui.js';
 import {money} from './scratch-pro-rules.js?v=level-bonus';
 import {createAudio, createTicket, loadScratchCatalogue, loadTicketArt, pin, sprite, wait} from './scratch-pro-art.js?v=bling-cabinet';
+import {buyStripeCoins, syncStripeCoins} from './stripe-coins.js';
 
 const width = 2048, height = 1536;
-const shopUrl = 'https://buymeacoffee.com/massivehadron/extras';
-const packs = ['5,000', '30,000', '75,000', '200,000', '500,000', '1,000,000'];
+const packs = [
+  ['5,000', 'scratch_bling_5000'],
+  ['30,000', 'scratch_bling_30000'],
+  ['75,000', 'scratch_bling_75000'],
+  ['200,000', 'scratch_bling_200000'],
+  ['500,000', 'scratch_bling_500000'],
+  ['1,000,000', 'scratch_bling_1000000']
+];
 const previewFrames = [[2, 2, 508, 295], [514, 2, 508, 295], [2, 302, 508, 295], [514, 302, 508, 295]];
 const chromeSize = [1024, 512];
 const dotOn = [716, 164, 66, 66], dotOff = [786, 164, 66, 66];
@@ -100,6 +107,10 @@ function createWallet() {
       return true;
     },
     untilCollect() { return Math.max(0, state.collectAt - Date.now()); },
+    applyPurchase(delta) {
+      state.cash = Math.max(0, Math.min(2147483647, state.cash + delta));
+      save();
+    },
     untilRefill(cost) {
       if (state.cash >= cost) {
         if (state.refillAt) { state.refillAt = 0; save(); }
@@ -199,6 +210,12 @@ export function createScratchBling(view, quit) {
       timer = setInterval(refreshHeader, 250);
       refreshHeader();
       showPage(wallet.state.page);
+      const coins = await syncStripeCoins(signal);
+      if (signal.aborted || !coins) return;
+      wallet.applyPurchase(coins);
+      refreshHeader();
+      showMessage('SCRATCH BLING', coins > 0 ? number.format(coins) + ' coins added.'
+        : 'The Stripe payment was refunded and ' + number.format(-coins) + ' coins were removed.');
     } catch {
       if (signal.aborted) return;
       stage.replaceChildren();
@@ -572,6 +589,35 @@ export function createScratchBling(view, quit) {
     showMessage('BASIC MEMBERSHIP', 'Collect 1,000 coins every four hours.');
   }
 
+  let buying = false;
+
+  function buyPack(product) {
+    if (buying) {
+      showMessage('BUY COINS', 'Finish or cancel checkout in your browser.');
+      return;
+    }
+    const tab = window.open('about:blank', '_blank');
+    if (!tab) {
+      showMessage('BUY COINS', 'Allow pop-ups for this site, then choose the coin pack again.');
+      return;
+    }
+    buying = true;
+    closeOverlay();
+    const signal = lifetime.signal;
+    buyStripeCoins(product, tab, signal).then(result => {
+      if (signal.aborted || !wallet) return;
+      if (result.delta) {
+        wallet.applyPurchase(result.delta);
+        refreshHeader();
+      }
+      if (result.message) showMessage('BUY COINS', result.message);
+      else if (result.delta > 0) showMessage('SCRATCH BLING', number.format(result.delta) + ' coins added.');
+      else if (result.delta < 0) showMessage('SCRATCH BLING', 'The Stripe payment was refunded and ' + number.format(-result.delta) + ' coins were removed.');
+    }).catch(() => {
+      if (!signal.aborted) showMessage('BUY COINS', 'Stripe checkout could not be opened. Try again shortly.');
+    }).finally(() => { buying = false; });
+  }
+
   function showShop() {
     audio.play('click');
     closeOverlay();
@@ -580,8 +626,8 @@ export function createScratchBling(view, quit) {
     backdrop.setAttribute('aria-label', 'Buy coins');
     const panel = pin(backdrop, element('div'), 210, 224, 1600, 1124);
     panel.style.background = 'url("' + catalogue.url('shop-coins.png') + '") center / 100% 100% no-repeat';
-    packs.forEach((pack, i) => {
-      const choice = pin(panel, button(pack + ' COINS', () => location.assign(shopUrl)), 28 + i % 3 * 524, 32 + Math.floor(i / 3) * 548, 496, 512);
+    packs.forEach(([pack, product], i) => {
+      const choice = pin(panel, button(pack + ' COINS', () => buyPack(product)), 28 + i % 3 * 524, 32 + Math.floor(i / 3) * 548, 496, 512);
       choice.style.color = 'transparent';
     });
     artButton(panel, 'Close', closeOverlay, 'chrome.png', [566, 296, 64, 64], 1553, -51, 100, 100);

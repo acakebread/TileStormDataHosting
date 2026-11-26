@@ -274,7 +274,7 @@ function mountScratchBling() {
     if (app) { app.open(); return; }
     if (opening) return;
     view.replaceChildren(element('p', 'sb-launch', 'Loading Scratch Bling…'));
-    opening = import('./scratch-bling.js?v=bling-reels').then(({createScratchBling}) => {
+    opening = import('./scratch-bling.js?v=bling-stripe').then(({createScratchBling}) => {
       if (!active) return;
       view.replaceChildren();
       app = createScratchBling(view, () => open('home'));
