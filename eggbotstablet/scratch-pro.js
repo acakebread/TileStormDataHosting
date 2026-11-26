@@ -3,7 +3,7 @@
 
 import {button, countdown, element, image, number} from './ui.js';
 import {createWallet, money, random} from './scratch-pro-rules.js?v=level-bonus';
-import {createAudio, createTicket, loadScratchProCatalogue, loadTicketArt, pin, sprite, wait} from './scratch-pro-art.js?v=2';
+import {createAudio, createTicket, loadScratchProCatalogue, loadTicketArt, pin, sprite, wait} from './scratch-pro-art.js?v=prize-weight';
 import {openBonus} from './scratch-pro-bonus.js';
 
 const width = 1300, height = 975;

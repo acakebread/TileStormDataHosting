@@ -506,6 +506,12 @@ dialog:has(.botcloud-details) .actions button { flex: 1 1 45%; }
 }
 .scratch-card:focus-visible { outline-offset: 3px; }
 .scratch-card canvas, .scratch-finger { position: absolute; pointer-events: none; }
+.scratch-unlucky {
+  position: absolute; left: 2%; right: 2%; bottom: 1.5%; z-index: 2; margin: 0;
+  color: #fff; font-weight: 900; font-size: min(5.6cqw, 9cqh); line-height: 1;
+  letter-spacing: .01em; text-align: center; pointer-events: none;
+  text-shadow: 0 .06em 0 #161616, 0 .12em .16em #000;
+}
 .scratch-finger {
   left: 36.7%; top: 20.77%; width: 60%; opacity: 0; transform-origin: 50% 303%;
   animation: scratch-point 10s 10s linear infinite, scratch-wiggle .785s ease-in-out infinite;

@@ -89,6 +89,7 @@ export function createScratch({data, open: openApp}) {
   let holdTimer;
   let raspTimer;
   let revealTimer;
+  let lossTimer;
   const audio = scratchAudio();
 
   const cardButton = button('', event => {
@@ -114,6 +115,9 @@ export function createScratch({data, open: openApp}) {
   const panel = element('div', 'scratch-panel',
     element('div', 'scratch-message', title, detail), retry, again, moreCoins, quit);
   panel.firstElementChild.setAttribute('role', 'status');
+  const unlucky = element('p', 'scratch-unlucky', 'UNLUCKY, TRY AGAIN!');
+  unlucky.hidden = true;
+  cardButton.append(unlucky);
   const view = element('section', 'scratch-app', element('div', 'scratch-card-area', cardButton), panel, cashBar);
   view.setAttribute('aria-label', 'Scratch Bling');
 
@@ -188,7 +192,13 @@ export function createScratch({data, open: openApp}) {
     if (cashAmount.value !== amount) cashAmount.value = amount;
   }
 
+  function hideUnlucky() {
+    clearTimeout(lossTimer);
+    unlucky.hidden = true;
+  }
+
   function deal() {
+    hideUnlucky();
     const winner = Math.random() < winChance ? weighted(prizes, prize => prize.odds) : null;
     const cells = dealPrizes(winner);
     const next = {winner, cells, paid: false, phase: 'playing', highlights: []};
@@ -283,8 +293,17 @@ export function createScratch({data, open: openApp}) {
     }
     round.phase = 'done';
     audio.play(prize ? 'win_0' : 'lose_0');
+    if (!prize) {
+      unlucky.hidden = false;
+      cardButton.inert = true;
+      lossTimer = setTimeout(() => {
+        if (!active) return;
+        deal();
+      }, 1200);
+      return;
+    }
     const now = Date.now();
-    showPanel('result', prize ? 'WINNER' : 'NO WIN', prize ? dollars(prize.amount) : 'One day.', walletWait(now));
+    showPanel('result', 'WINNER', dollars(prize.amount), walletWait(now));
     tick(now);
   }
 
@@ -325,6 +344,7 @@ export function createScratch({data, open: openApp}) {
   }, close() {
     active = false;
     clearTimeout(revealTimer);
+    clearTimeout(lossTimer);
     endPress();
     audio.stopAll();
   }};

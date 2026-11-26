@@ -1,7 +1,7 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {button, element, image} from './ui.js';
-import {dealContest, money} from './scratch-pro-rules.js';
+import {dealContest, money, random} from './scratch-pro-rules.js';
 
 const host = new URL('https://eggbot-content.qrh.workers.dev/');
 const full = {x: 0, y: 0, w: 1, h: 1};
@@ -128,7 +128,7 @@ export function createAudio(catalogue, allowed) {
 
 export async function loadTicketArt(catalogue, card, foilName, signal) {
   const sheetNames = new Set(card.games.flatMap(game => game.symbols.map(cell => catalogue.sheets.get(cell.sheet)?.file).filter(Boolean)));
-  const files = [card.art, card.print, foilName, ...sheetNames];
+  const files = [card.art, card.print, foilName, 'ui-main.png', ...sheetNames];
   const loaded = await Promise.all(files.map(async file => [file, await catalogue.image(file, signal)]));
   const artwork = new Map(loaded);
   artwork.set('glow.png', await catalogue.image('glow.png', signal).catch(() => null));
@@ -153,6 +153,47 @@ function draw(context, image, source, target, fit = false) {
     sourceW, sourceH, x, y, width, height);
 }
 
+function drawWinHighlight(context, image, area) {
+  const {width, height} = context.canvas;
+  const w = area.w * width, h = area.h * height;
+  const x = area.x * width, y = (1 - area.y - area.h) * height;
+  context.save();
+  context.globalCompositeOperation = 'lighter';
+  context.globalAlpha = .391;
+  if (image) {
+    const edge = Math.min(9.375 * width / 1984, w / 2, h / 2);
+    const source = [0, 48, 80, 128];
+    const xs = [x, x + edge, x + w - edge, x + w];
+    const ys = [y, y + edge, y + h - edge, y + h];
+    for (let row = 0; row < 3; row++) {
+      for (let col = 0; col < 3; col++) {
+        context.drawImage(image, source[col], source[row], source[col + 1] - source[col], source[row + 1] - source[row],
+          xs[col], ys[row], xs[col + 1] - xs[col], ys[row + 1] - ys[row]);
+      }
+    }
+  } else {
+    context.fillStyle = '#ffcc00';
+    context.fillRect(x, y, w, h);
+  }
+  context.restore();
+}
+
+function drawSerial(context, atlas, serial) {
+  const serialAdvance = digit => digit === '1' ? 20 : digit === '-' ? 30 : 35;
+  const {width, height} = context.canvas;
+  const sx = width / 1984, sy = height / 1152;
+  const total = Array.from(serial).reduce((sum, digit) => sum + serialAdvance(digit), 0);
+  let x = 1903 - total * 1.1;
+  for (const digit of serial) {
+    const index = digit === '-' ? 10 : Number(digit);
+    context.drawImage(atlas, 168 + index % 6 * 36, 352 + Math.floor(index / 6) * 46, 36, 35,
+      x * sx, 1089 * sy, 39.6 * sx, 38.5 * sy);
+    x += serialAdvance(digit) * 1.1;
+  }
+  context.fillStyle = '#000';
+  context.fillRect(1922 * sx, 1087 * sy, 35 * sx, 40 * sy);
+}
+
 function print(context, word, area, scale = .8) {
   if (!word || area.w <= 0 || area.h <= 0) return;
   const {width, height} = context.canvas;
@@ -161,6 +202,27 @@ function print(context, word, area, scale = .8) {
   context.textBaseline = 'middle';
   context.fillStyle = '#15121a';
   context.fillText(word, (area.x + area.w / 2) * width, (1 - area.y - area.h / 2) * height, area.w * width);
+}
+
+// Classic Scratch draws the amount in bold, fitted to the box, then stretches it to twice the height.
+function printAmount(context, word, area, sample) {
+  if (!word || area.w <= 0 || area.h <= 0) return;
+  const {width, height} = context.canvas;
+  const boxW = area.w * width;
+  const boxH = area.h * height;
+  context.save();
+  context.translate((area.x + area.w / 2) * width, (1 - area.y - area.h / 2) * height);
+  let size = boxH * .8;
+  context.font = `bold ${size}px Arial, sans-serif`;
+  const measured = context.measureText(sample || word).width;
+  if (measured > boxW) size *= boxW / measured;
+  context.font = `bold ${size}px Arial, sans-serif`;
+  context.fillStyle = '#15121a';
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  context.scale(1, 2);
+  context.fillText(word, 0, 0);
+  context.restore();
 }
 
 function description(value) {
@@ -191,13 +253,24 @@ export function createTicket({catalogue, card, artwork, foilName, pay, revealRes
   if (hintUrl) {
     const hint = image(hintUrl, '', 'sp-scratch-hint');
     const box = card.games[0].area;
-    Object.assign(hint.style, {left: (box.x + box.w / 2 - .11) * 100 + '%', top: (1 - box.y - .14) * 100 + '%'});
+    const height = .90, width = height * 1152 / 1984 * 588 / 616;
+    const tipY = box.y + box.h * .35;
+    Object.assign(hint.style, {
+      left: (box.x + box.w / 2 - width / 2) * 100 + '%',
+      top: (1 - tipY - height * .135) * 100 + '%',
+      width: width * 100 + '%', height: height * 100 + '%'
+    });
+    hint.style.setProperty('--sp-scratch-travel', box.w * .30 / width * 100 + '%');
     view.append(hint);
   }
   draw(beneath, front, full, full);
   draw(mask, front, full, full);
   for (const {area} of card.games) draw(beneath, artwork.get(foilName), area, area);
   draw(beneath, artwork.get(card.print), full, full);
+  const serial = String(random(0, 100000000)).padStart(8, '0') + '-' + String(random(0, 1000)).padStart(3, '0');
+  const cabinet = artwork.get('ui-main.png');
+  drawSerial(beneath, cabinet, serial);
+  drawSerial(mask, cabinet, serial);
   const zones = [];
   for (const game of card.games) {
     const sheet = catalogue.sheets.get(game.symbols[0]?.sheet);
@@ -210,9 +283,10 @@ export function createTicket({catalogue, card, artwork, foilName, pay, revealRes
       draw(beneath, artwork.get(art.file), art.frames[index], cell.value, true);
       print(beneath, art.captions[index], cell.caption);
     });
+    const widest = money(game.cost * Math.max(...game.multipliers));
     game.prizes.forEach(({area, caption}, i) => {
-      const value = {x: area.x + area.w * .045, y: area.y + area.h * .2, w: area.w * .91, h: area.h * .71};
-      print(beneath, money(deal.prizes[i]), value, .88);
+      const value = {x: area.x + area.w * .04, y: area.y + area.h * .365, w: area.w * .92, h: area.h * .4665};
+      printAmount(beneath, money(deal.prizes[i]), value, widest);
       print(beneath, description(deal.prizes[i]), caption);
     });
     game.hands.forEach((area, i) => print(beneath, deal.hands[i], area));
@@ -276,9 +350,7 @@ export function createTicket({catalogue, card, artwork, foilName, pay, revealRes
     foil.hidden = true;
     for (const area of matches) {
       if (!await wait(200, signal)) return;
-      beneath.globalAlpha = .65;
-      draw(beneath, artwork.get('glow.png'), full, area);
-      beneath.globalAlpha = 1;
+      drawWinHighlight(beneath, artwork.get('glow.png'), area);
       audio.play('match');
     }
     if (await wait(350, signal)) revealResult(winnings);

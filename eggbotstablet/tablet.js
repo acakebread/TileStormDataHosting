@@ -4,7 +4,7 @@ import {loadCatalogue} from './catalogue.js';
 import {createChat, createMail} from './messages.js?v=mail-layout';
 import {createPhotos, createBank, createLove, createMarket, createStore} from './apps.js?v=scratch-pro';
 import {createFirebot} from './firebot.js?v=hosted';
-import {createScratch} from './games.js?v=scratch-prize-size';
+import {createScratch} from './games.js?v=scratch-unlucky';
 import {createFruit} from './fruit-burst.js?v=unity';
 import {createTurtleTime} from './turtle-time.js?v=crunch-pcm';
 import {hasOnlyBotsAccess, hasPremiumAccess} from './premium.js?v=membership-codes';
@@ -275,7 +275,7 @@ function mountScratchPro() {
     if (app) { app.open(); return; }
     if (opening) return;
     view.replaceChildren(element('p', 'sp-launch', 'Loading Scratch Pro…'));
-    opening = import('./scratch-pro.js?v=5').then(({createScratchPro}) => {
+    opening = import('./scratch-pro.js?v=prize-weight').then(({createScratchPro}) => {
       if (!active) return;
       view.replaceChildren();
       app = createScratchPro(view);
