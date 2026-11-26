@@ -6,8 +6,8 @@ import {createPhotos, createBank, createLove, createMarket, createStore} from '.
 import {createFirebot} from './firebot.js?v=hosted';
 import {createFruit} from './fruit-burst.js?v=unity';
 import {createTurtleTime} from './turtle-time.js?v=crunch-pcm';
-import {hasOnlyBotsAccess, hasPremiumAccess} from './premium.js?v=membership-codes';
-import {linkPurchaseProfile, linkWebGLProfiles, syncPurchases} from './purchases.js?v=membership-codes';
+import {hasOnlyBotsAccess, hasPremiumAccess} from './premium.js?v=stripe-onlybots';
+import {linkPurchaseProfile, linkWebGLProfiles, syncPurchases} from './purchases.js?v=stripe-onlybots';
 import {createHomePager} from './home.js?v=onlybots-shop';
 import {createSettings, createTabletPreferences, offloadSizeMb, osVersion} from './settings.js?v=membership-codes';
 import {element, button, image, shortTime, loadSetting, saveSetting} from './ui.js';
@@ -31,7 +31,7 @@ const apps = {
     frame: '../instabot-preview-d31b7e4c/?tablet=1'},
   love: {name: 'LoveBot', art: './art/love.png', needsContent: true, mount: createLove},
   onlybots: {name: 'OnlyBots', art: '../onlybots-preview-8c7e4f2a/icon.jpg',
-    frame: '../onlybots-preview-8c7e4f2a/?tablet=1&v=purchase-sync'},
+    frame: '../onlybots-preview-8c7e4f2a/?tablet=1&v=stripe-onlybots'},
   market: {name: 'eBot', art: './art/market.jpg', needsContent: true, mount: createMarket},
   botflix: {name: 'BOTFLIX', art: './art/botflix.png'},
   firebot: {name: 'Firebot', art: './art/firebot.jpg', downloadMb: 2, needsContent: true, mount: createFirebot},

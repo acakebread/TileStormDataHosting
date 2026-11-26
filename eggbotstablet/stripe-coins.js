@@ -24,6 +24,15 @@ const memberships = new Map([
   ['scratch_pro_gold', 3],
   ['scratch_pro_platinum', 4]
 ]);
+const accessProducts = new Map([
+  ['onlybots', 'app'],
+  ['onlybots_goldibot', 'goldibot'],
+  ['onlybots_kelly_and_lucy', 'kelly_and_lucy']
+]);
+export const stripePrices = {app: '£30.00', goldibot: '£20.00', kelly_and_lucy: '£20.00'};
+const accessKeys = new Map(Object.entries({
+  app: 'onlybots', goldibot: 'onlybots_goldibot', kelly_and_lucy: 'onlybots_kelly_and_lucy'
+}));
 const keyPattern = /^[a-f0-9]{64}$/;
 const encoder = new TextEncoder();
 const hex = bytes => Array.from(bytes, value => value.toString(16).padStart(2, '0')).join('');
@@ -67,16 +76,17 @@ async function verifiedOffer(grant, key) {
       typeof signature !== 'string' || signature.length > 512 || typeof checkout !== 'string') return null;
   const fields = payload.split('|');
   const product = fields.length === 5 ? fields[2] : '';
-  const known = packs.has(product) || memberships.has(product);
-  const coins = packs.has(product) ? packs.get(product) : memberships.has(product) ? 0 : null;
+  const known = packs.has(product) || memberships.has(product) || accessProducts.has(product);
+  const coins = packs.has(product) ? packs.get(product) : known ? 0 : null;
   const membership = memberships.get(product) || 0;
+  const access = accessProducts.get(product) || '';
   if (!known || coins == null || fields.length !== 5 || fields[0] !== 'TSSTRIPE1' || fields[1] !== await playerId(key) ||
-      (coins === 0 && membership === 0) || fields[3] !== checkout || fields[4] !== String(coins)) return null;
+      (coins === 0 && membership === 0 && !access) || fields[3] !== checkout || fields[4] !== String(coins)) return null;
   let bytes;
   try { bytes = Uint8Array.from(atob(signature), value => value.charCodeAt(0)); }
   catch { return null; }
   return await crypto.subtle.verify('RSASSA-PKCS1-v1_5', await publicKey(), bytes, encoder.encode(payload))
-    ? {coins, membership} : null;
+    ? {coins, membership, access} : null;
 }
 
 function remembered(checkout) {
@@ -105,7 +115,14 @@ async function applyGrant(grant, key) {
     if (grant.state === 'paid' && applied === 0) sign = remember(checkout, 1) ? 1 : 0;
     else if (grant.state === 'refunded' && applied === 1) sign = remember(checkout, 2) ? -1 : 0;
     else if (grant.state === 'refunded' && applied === 0) remember(checkout, 2);
-    return {coins: sign * offer.coins, membership: sign * offer.membership, checkout};
+    if (offer.access && sign) {
+      const saved = loadSetting('stripeAccess', {});
+      const next = saved && typeof saved === 'object' ? saved : {};
+      next[checkout] = {product: offer.access, state: sign > 0 ? 1 : 2};
+      saveSetting('stripeAccess', next);
+    }
+    return {coins: sign * offer.coins, membership: sign * offer.membership, access: offer.access || '',
+      unlocked: sign > 0 && !!offer.access, removed: sign < 0 && !!offer.access, checkout};
   } finally {
     applying.delete(checkout);
   }
@@ -144,10 +161,26 @@ export async function syncStripePro(signal) {
   }
 }
 
+export function hasStripeAccess(product) {
+  const grants = loadSetting('stripeAccess', {});
+  return grants && typeof grants === 'object' &&
+    Object.values(grants).some(grant => grant?.product === product && grant.state === 1);
+}
+
+export async function syncStripeAccess(signal) {
+  const effects = await grantsFor('onlybots', signal);
+  return effects.filter(effect => effect.unlocked || effect.removed);
+}
+
+export function stripeAccessKey(product) {
+  return accessKeys.get(product) || '';
+}
+
 export async function buyStripeCoins(product, tab, signal) {
   const key = profileKey();
-  const game = String(product).startsWith('scratch_pro_') ? 'Scratch Pro' : 'Scratch Bling';
-  if ((!packs.has(product) && !memberships.has(product)) || !key) {
+  const game = String(product).startsWith('onlybots') ? 'OnlyBots' :
+    String(product).startsWith('scratch_pro_') ? 'Scratch Pro' : 'Scratch Bling';
+  if ((!packs.has(product) && !memberships.has(product) && !accessProducts.has(product)) || !key) {
     tab.close();
     return {delta: 0, membership: 0, message: 'This offer is not available.'};
   }
@@ -178,10 +211,11 @@ export async function buyStripeCoins(product, tab, signal) {
     if (status.state === 'paid' || status.state === 'refunded') {
       const already = remembered(status.checkout);
       const effect = await applyGrant(status, key);
-      if (!effect.coins && !effect.membership && !already)
+      if (!effect.coins && !effect.membership && !effect.unlocked && !effect.removed && !already)
         return {delta: 0, membership: 0, checkout: status.checkout, message: status.state === 'refunded'
           ? 'The payment was refunded before the purchase was added.' : 'TileStorm could not confirm the Stripe receipt.'};
-      return {delta: effect.coins, membership: effect.membership, checkout: status.checkout, message: ''};
+      return {delta: effect.coins, membership: effect.membership, access: effect.access,
+        unlocked: effect.unlocked, removed: effect.removed, checkout: status.checkout, message: ''};
     }
     if (status.state === 'cancelled') return {delta: 0, membership: 0, message: 'Checkout was cancelled.'};
     if (status.state === 'expired') return {delta: 0, membership: 0, message: 'The checkout timed out before Stripe confirmed payment.'};

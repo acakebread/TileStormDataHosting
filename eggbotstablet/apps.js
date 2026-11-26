@@ -1,8 +1,8 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {element, button, image, tabs, watchSwipe, money, number, countdown, loadSetting, saveSetting} from './ui.js?v=lovebot-swipe';
-import {hasOnlyBotsAccess, redeemOnlyBotsCode} from './premium.js?v=membership-codes';
-import {buyPurchase, catalogueProduct, paidLoveBotSwipes, refreshCatalogue, spendLoveBotSwipe} from './purchases.js?v=membership-codes';
+import {hasOnlyBotsAccess, redeemOnlyBotsCode} from './premium.js?v=stripe-onlybots';
+import {buyPurchase, catalogueProduct, paidLoveBotSwipes, refreshCatalogue, spendLoveBotSwipe, stripePrice} from './purchases.js?v=stripe-onlybots';
 import {createSlideGesture} from './slide.js';
 import {botOsPlusProduct, tabletProducts} from './settings.js?v=membership-codes';
 
@@ -448,10 +448,7 @@ export function createStore(tablet) {
       setTimeout(() => controller.abort(), 35 * 60 * 1000);
       tablet.toast('Continue in the checkout tab when ready.');
     }, 'action-link');
-    refreshCatalogue().then(() => {
-      const price = catalogueProduct('app')?.priceLabel;
-      if (price) buy.textContent += ` · ${price}`;
-    });
+    buy.textContent += ` · ${stripePrice('app')}`;
     return buy;
   }
 

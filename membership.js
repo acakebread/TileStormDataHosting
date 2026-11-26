@@ -1,6 +1,6 @@
 // Copyright 2026 massivehadron.com ltd.
 
-import {membershipRequest} from './eggbotstablet/purchases.js?v=membership-codes';
+import {membershipRequest} from './eggbotstablet/purchases.js?v=stripe-onlybots';
 
 const parameters = new URLSearchParams(location.hash.slice(1));
 const offer = new URLSearchParams(location.search).get('offer');

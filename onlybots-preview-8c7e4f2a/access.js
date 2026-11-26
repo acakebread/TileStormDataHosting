@@ -1,8 +1,8 @@
 // Copyright 2026 massivehadron.com ltd.
 
-import {hasOnlyBotsAccess, redeemOnlyBotsCode} from '../eggbotstablet/premium.js?v=membership-codes';
-import {refreshCatalogue, refreshPurchases} from '../eggbotstablet/purchases.js?v=membership-codes';
-import {createPurchaseForm} from './purchase-form.js?v=membership-codes';
+import {hasOnlyBotsAccess, redeemOnlyBotsCode} from '../eggbotstablet/premium.js?v=stripe-onlybots';
+import {refreshCatalogue, refreshPurchases} from '../eggbotstablet/purchases.js?v=stripe-onlybots';
+import {createPurchaseForm} from './purchase-form.js?v=stripe-onlybots';
 
 const embedded = window.parent !== window && new URLSearchParams(location.search).has('tablet');
 const gate = document.getElementById('accessGate');

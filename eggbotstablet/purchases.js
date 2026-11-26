@@ -1,6 +1,7 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {loadSetting, saveSetting} from './ui.js';
+import {buyStripeCoins, hasStripeAccess, stripeAccessKey, stripePrices, syncStripeAccess} from './stripe-coins.js?v=stripe-onlybots';
 
 const root = 'https://tilestorm-coffee-checkout.qrh.workers.dev';
 const keyPattern = /^[a-f0-9]{64}$/;
@@ -28,7 +29,11 @@ let swipeRevision = 0;
 let memberStatus, memberProfile, memberCheckedUntil = 0;
 
 export function hasPurchase(product) {
-  return purchaseStatus(product) === true;
+  return purchaseStatus(product) === true || hasStripeAccess(product);
+}
+
+export function stripePrice(product) {
+  return stripePrices[product] || '';
 }
 
 export function purchaseStatus(product) {
@@ -174,7 +179,12 @@ async function refresh(profile) {
   const saved = savedPurchases(profile);
   cachedPurchases.set(profile, unlocked);
   saveSetting('purchases.' + profile, unlocked);
-  if (unlocked.join('|') !== saved?.join('|') || hadSilver !== hasSilverBotCloud() ||
+  let accessChanged = false;
+  try {
+    const effects = await syncStripeAccess();
+    accessChanged = effects.length > 0;
+  } catch { /* Stripe access is checked again the next time purchases refresh. */ }
+  if (accessChanged || unlocked.join('|') !== saved?.join('|') || hadSilver !== hasSilverBotCloud() ||
       wasRegistered !== membershipRegistered() || previousTier !== subscriptionTier())
     window.dispatchEvent(new Event('tilestorm-purchases-changed'));
   return true;
@@ -264,7 +274,33 @@ async function retryLink() {
   return linking;
 }
 
+function buyStripeAccess(product) {
+  followWebGLProfile();
+  const existing = checkouts.get(product);
+  if (existing && !existing.tab.closed) {
+    existing.tab.focus();
+    return true;
+  }
+  const tab = window.open('about:blank', '_blank');
+  if (!tab) return false;
+  checkouts.set(product, {tab, product, profile: key});
+  const signal = AbortSignal.timeout(35 * 60 * 1000);
+  buyStripeCoins(stripeAccessKey(product), tab, signal).then(result => {
+    if (checkouts.get(product)?.tab === tab) checkouts.delete(product);
+    if (result.unlocked || result.removed) window.dispatchEvent(new Event('tilestorm-purchases-changed'));
+    else if (result.message === 'Checkout was cancelled.')
+      window.dispatchEvent(new CustomEvent('tilestorm-checkout-cancelled', {detail: product}));
+    else if (result.message)
+      window.dispatchEvent(new CustomEvent('tilestorm-checkout-error', {detail: product}));
+  }).catch(() => {
+    if (checkouts.get(product)?.tab === tab) checkouts.delete(product);
+    window.dispatchEvent(new CustomEvent('tilestorm-checkout-error', {detail: product}));
+  });
+  return true;
+}
+
 export function buyPurchase(product) {
+  if (stripeAccessKey(product)) return buyStripeAccess(product);
   if (!shopItems.has(product)) return false;
   followWebGLProfile();
   const existing = checkouts.get(product);
