@@ -2,13 +2,15 @@
 // Based on Scratch Pro, copyright 2016 massivehadron.com ltd. created 29/09/2016 by Andrew Cakebread
 
 import {button, countdown, element, image, number} from './ui.js';
-import {createWallet, money, random} from './scratch-pro-rules.js';
+import {createWallet, money, random} from './scratch-pro-rules.js?v=level-bonus';
 import {createAudio, createTicket, loadScratchProCatalogue, loadTicketArt, pin, sprite, wait} from './scratch-pro-art.js?v=2';
 import {openBonus} from './scratch-pro-bonus.js';
 
 const width = 1300, height = 975;
 const prizeGlyphs = '$0123456789,';
 const advances = [98, 102, 69, 108, 102, 104, 98, 102, 98, 108, 102, 51];
+const levelAdvances = [65, 68, 46, 72, 68, 69, 65, 68, 65, 72, 68, 34];
+const shopUrl = 'https://buymeacoffee.com/massivehadron/extras';
 const sideActions = [
   ['VIP upgrade', [0, 0, 160, 160]], ['Free coins', [0, 160, 160, 160]],
   ['Get coins', [0, 320, 160, 160]], ['Earn coins', [0, 480, 160, 160]]
@@ -263,7 +265,6 @@ export function createScratchPro(view) {
       }, revealResult});
     pin(stage, ticket.view, 283, 170.5, 1009, 586);
     ticket.view.append(price(selected.cost, true));
-    audio.play('place');
   }
 
   async function revealResult(winnings) {
@@ -280,11 +281,50 @@ export function createScratchPro(view) {
   function resolveWinnings() {
     const won = wallet.state.pendingWin > 0;
     clearOverlay();
-    const unlocked = wallet.settle();
+    const levelBonus = wallet.settle();
     refresh();
-    if (won) deal();
-    else showLoss();
-    if (unlocked && !overlay) popup('LEVEL ' + wallet.level + '!', 'Your level bonus has been added to your balance.');
+    if (!won) showLoss();
+    else if (!levelBonus) deal();
+    if (levelBonus > 0) showLevelUp(levelBonus, won ? deal : null);
+  }
+
+  function showLevelUp(bonus, next) {
+    const level = String(wallet.level), reward = money(bonus), asset = 'result-level.png';
+    const backdrop = pin(stage, element('div', 'sp-shade'), 0, 0, width, height);
+    backdrop.setAttribute('role', 'dialog');
+    backdrop.setAttribute('aria-label', 'Level ' + level + '. Coin bonus ' + reward);
+    const dismiss = () => {
+      audio.play('click');
+      clearOverlay();
+      next?.();
+    };
+    backdrop.addEventListener('click', event => { if (event.target === backdrop) dismiss(); });
+
+    function drawNumber(text, areaWidth, areaHeight, centerY, medal) {
+      const indices = Array.from(text, c => prizeGlyphs.indexOf(c));
+      const total = indices.reduce((sum, index) => sum + levelAdvances[index], 0);
+      const scale = Math.min(areaWidth / (total + 12), areaHeight / 128);
+      let x = width / 2 - (total / 2 + 6) * scale;
+      for (const index of indices) {
+        const digit = index - 1;
+        const y = medal ? 128 + Math.floor(digit / 5) * 128 : 384;
+        const glyphX = medal ? 288 + digit % 5 * 84 : index * 84;
+        art(backdrop, asset, [glyphX, y, 84, 128], x, centerY - 60 * scale, 84 * scale, 128 * scale, 1024, 512);
+        x += levelAdvances[index] * scale;
+      }
+    }
+
+    if (catalogue.url(asset)) {
+      art(backdrop, asset, [0, 0, 280, 288], 490, 129, 321, 414, 1024, 512);
+      drawNumber(level, 294, 181, 305.5, true);
+      art(backdrop, asset, [288, 0, 402, 123], 459, 415, 382, 117, 1024, 512);
+      drawNumber(reward, 920, 155, 611.5, false);
+    } else {
+      label(backdrop, 'LEVEL ' + level + '!', 447, 218, 406, 314, 'sp-level-fallback');
+      label(backdrop, reward, 190, 534, 920, 155, 'sp-level-fallback');
+    }
+    pin(backdrop, button('CONTINUE', dismiss, 'sp-level-continue'), 473, 720, 354, 91);
+    showOverlay(backdrop);
   }
 
   async function showLoss() {
@@ -364,9 +404,48 @@ export function createScratchPro(view) {
   }
 
   function unavailable(feature) { popup(feature, 'Currently unavailable'); }
-  function stub(title, labels) { popup(title, 'Currently unavailable', labels.map(name => [name.toUpperCase(), () => unavailable(name)])); }
-  function membership() { stub('VIP UPGRADE', ['Bronze', 'Silver', 'Gold', 'Platinum', 'Restore purchases']); }
-  function coinShop() { stub('GET COINS', ['6,000 coins', '25,000 coins', '80,000 coins', '250,000 coins', '450,000 coins', '1,000,000 coins', 'Restore purchases']); }
+  function membership() {
+    const choices = ['BRONZE', 'SILVER', 'GOLD', 'PLATINUM'].map(tier =>
+      [tier, () => location.assign('../membership.html?offer=' + tier.toLowerCase())]);
+    shopPanel('VIP UPGRADE', 'shop-membership.png', [244, 86, 710, 700], choices, 2, [76, 12, 306, 333], [317, 344],
+      () => location.assign('../membership.html'));
+  }
+
+  function coinShop() {
+    const choices = ['6,000', '25,000', '80,000', '250,000', '450,000', '1,000,000'].map(amount => {
+      const pack = amount + ' COINS';
+      return [pack, () => popup(pack, 'Continue to the Massive Hadron Shop on Buy Me a Coffee.', [
+        ['CONTINUE TO SHOP', () => location.assign(shopUrl)]
+      ])];
+    });
+    shopPanel('GET COINS', 'shop-coins.png', [244, 183, 944, 700], choices, 3, [74, 15, 286, 324], [287, 339],
+      () => popup('RESTORE PURCHASES', 'Coin pack restoration will be available once the shop listings are linked.'));
+  }
+
+  function shopPanel(title, asset, bounds, choices, columns, firstTile, step, restore) {
+    if (!catalogue.url(asset)) {
+      popup(title, 'Choose an offer.', [...choices, ['RESTORE PURCHASES', restore]]);
+      return;
+    }
+    clearOverlay();
+    audio.play('click');
+    const backdrop = pin(stage, element('div', 'sp-shop-overlay'), 0, 0, width, height);
+    backdrop.setAttribute('role', 'dialog');
+    backdrop.setAttribute('aria-label', title);
+    backdrop.addEventListener('click', event => { if (event.target === backdrop) clearOverlay(); });
+    const [x, y, w, h] = bounds;
+    art(backdrop, asset, [0, 0, w, h], x, y, w, h, w, h);
+    choices.forEach(([name, click], i) => {
+      const control = button('', click, 'sp-shop-choice');
+      control.setAttribute('aria-label', name);
+      pin(backdrop, control, x + firstTile[0] + i % columns * step[0],
+        y + firstTile[1] + Math.floor(i / columns) * step[1], firstTile[2], firstTile[3]);
+    });
+    pin(backdrop, button('RESTORE PURCHASES', restore, 'sp-option'), x + 65, y + h + 4, 300, 48);
+    pin(backdrop, button('CLOSE', clearOverlay, 'sp-option'), x + w - 143, y + h + 4, 141, 48);
+    showOverlay(backdrop);
+  }
+
   function earnCoins() {
     popup('EARN COINS', 'Choose how to earn coins.', [
       ['WATCH A VIDEO', () => unavailable('Watch a video')], ['FOLLOW US', () => unavailable('Follow us')],
@@ -389,11 +468,10 @@ export function createScratchPro(view) {
   }
 
   function freeCoins() {
-    if (!wallet.collectFree()) { popup('FREE COINS', 'More coins in ' + countdown(wallet.freeWait) + '.'); return; }
+    if (!wallet.collectFree()) return;
     audio.play('coins');
     refresh();
-    const action = selected && ticketArt && !ticket ? ['PLAY TICKET', () => { clearOverlay(); deal(); }] : ['OK', clearOverlay];
-    popup('FREE COINS', '$1,000 added to your Scratch Pro balance.', [action]);
+    if (selected && ticketArt && !ticket && wallet.state.balance >= selected.cost) deal();
   }
 
   function tapCash() {

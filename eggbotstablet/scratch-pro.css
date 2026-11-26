@@ -125,6 +125,11 @@
 .sp-winner-panel .sp-win-gamble { font-size: 62px; font-weight: bold; }
 .sp-win-collect { animation: sp-fade .2s .45s both; }
 .sp-winner-fallback .sp-win-gamble { background-color: #d60800; }
+.sp-level-fallback { color: #fc0; font-size: 104px; font-weight: bold; text-shadow: 0 6px #150c00; }
+.sp-stage .sp-level-continue { background-color: #3859a6; font-size: 31px; font-weight: bold; }
+.sp-shop-overlay { z-index: 1; }
+.sp-stage button.sp-shop-choice, .sp-stage button.sp-shop-choice:hover:not(:disabled) { background: transparent; }
+.sp-stage button.sp-shop-choice:active { background: rgb(0 0 0 / .12); }
 .sp-popup { background: #26262e; }
 .sp-popup-title { font-size: 46px; font-weight: bold; color: #fc0; }
 .sp-popup-body { font-size: 29px; font-weight: bold; padding: 0 12px; }

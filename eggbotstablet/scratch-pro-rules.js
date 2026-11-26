@@ -41,8 +41,9 @@ export function createWallet() {
 
   function settle() {
     const oldLevel = level;
-    if (!state.pendingCost) return false;
+    if (!state.pendingCost) return 0;
     credit(state.pendingWin);
+    const balanceBeforeBonus = state.balance;
     state.experience += Math.max(state.pendingCost, state.pendingWin);
     state.pendingCost = state.pendingWin = 0;
     refreshLevel();
@@ -51,7 +52,7 @@ export function createWallet() {
         n >= 7 ? 2000 + (n - 7) * 100 : 1000 + (n - 2) * 100);
     }
     save();
-    return level > oldLevel;
+    return state.balance - balanceBeforeBonus;
   }
 
   refreshLevel();
