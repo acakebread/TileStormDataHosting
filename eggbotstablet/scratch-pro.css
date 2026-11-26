@@ -40,7 +40,7 @@
 }
 .sp-stage button:disabled { cursor: default; }
 .sp-stage button:focus-visible, .sp-gallery:focus-visible { outline: 4px solid #fc0; outline-offset: -4px; }
-.sp-stage button:not(:disabled):active { filter: brightness(.83); }
+.sp-stage button:not(:disabled):not(.sp-ticket):not(.sp-card-preview):active { filter: brightness(.83); }
 .sp-art-button { background-color: transparent; }
 .sp-wallpaper { transform: rotate(-20deg); background-size: 40.625px 40.625px; }
 .sp-header { background: rgb(0 0 0 / .41); pointer-events: none; }
@@ -100,11 +100,12 @@
 .sp-lock { position: absolute; inset: 0; background: rgb(0 0 0 / .66); }
 .sp-padlock { transform: rotate(-13deg); }
 .sp-lock-level { font-weight: bold; font-size: 30px; }
-.sp-stage .sp-ticket {
+.sp-stage button.sp-ticket {
+  appearance: none; -webkit-tap-highlight-color: transparent;
   touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
   isolation: isolate; background: transparent;
 }
-.sp-stage .sp-ticket:active, .sp-stage .sp-card-preview:active { filter: none; }
+.sp-stage button.sp-ticket:hover:not(:disabled) { background: transparent; }
 .sp-scratch-hint {
   position: absolute;
   width: 24%;
