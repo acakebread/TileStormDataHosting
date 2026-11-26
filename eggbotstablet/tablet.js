@@ -7,7 +7,7 @@ import {createFirebot} from './firebot.js?v=hosted';
 import {createFruit} from './fruit-burst.js?v=unity';
 import {createTurtleTime} from './turtle-time.js?v=crunch-pcm';
 import {hasOnlyBotsAccess, hasPremiumAccess} from './premium.js?v=stripe-onlybots';
-import {linkPurchaseProfile, linkWebGLProfiles, syncPurchases} from './purchases.js?v=stripe-onlybots';
+import {linkPurchaseProfile, linkWebGLProfiles, syncPurchases} from './purchases.js?v=stripe-shop';
 import {createHomePager} from './home.js?v=onlybots-shop';
 import {createSettings, createTabletPreferences, offloadSizeMb, osVersion} from './settings.js?v=membership-codes';
 import {element, button, image, shortTime, loadSetting, saveSetting} from './ui.js';

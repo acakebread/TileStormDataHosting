@@ -2,7 +2,7 @@
 
 import {element, button, image, tabs, watchSwipe, money, number, countdown, loadSetting, saveSetting} from './ui.js?v=lovebot-swipe';
 import {hasOnlyBotsAccess, redeemOnlyBotsCode} from './premium.js?v=stripe-onlybots';
-import {buyPurchase, catalogueProduct, paidLoveBotSwipes, refreshCatalogue, spendLoveBotSwipe, stripePrice} from './purchases.js?v=stripe-onlybots';
+import {buyPurchase, catalogueProduct, paidLoveBotSwipes, refreshCatalogue, spendLoveBotSwipe, stripePrice, subscriptionTier} from './purchases.js?v=stripe-shop';
 import {createSlideGesture} from './slide.js';
 import {botOsPlusProduct, tabletProducts} from './settings.js?v=membership-codes';
 
@@ -581,11 +581,13 @@ export function createStore(tablet) {
       'Activated. Open Settings to offload cached media.';
     const status = element('p', 'muted');
     status.setAttribute('role', 'status');
-    const membershipInfo = isOsUpgrade ? null : element('p', '', 'Silver includes BotCloud. Verify your email to unlock it.');
+    const membershipInfo = isOsUpgrade ? null : element('p', '', 'Bronze pays £2. Silver and above include BotCloud.');
     const details = element('div', `product-details upgrade-details${isOsUpgrade ? '' : ' botcloud-details'}`,
       element('p', '', product.description), membershipInfo, status);
     const join = isOsUpgrade ? null : button('Become a member', () => {
-      if (!showOwned()) location.assign('../membership.html?offer=botcloud');
+      if (showOwned()) return;
+      const tier = subscriptionTier() === 'Basic' ? 'bronze' : 'silver';
+      status.textContent = buyPurchase(tier) ? 'Continue in the checkout tab when ready.' : 'Allow popups to open checkout.';
     });
     const buy = button('Continue to Shop', () => {
       if (showOwned()) return;
@@ -612,6 +614,13 @@ export function createStore(tablet) {
     }, {signal: controller.signal});
     window.addEventListener('tilestorm-purchases-changed', showOwned, {signal: controller.signal});
     if (showOwned()) return;
+    if (id === botOsPlusProduct || id === 'botcloud') {
+      const label = stripePrice(id === 'botcloud' && subscriptionTier() === 'Bronze' ? 'botcloud_member' : id);
+      buy.textContent = `Buy · ${label}`;
+      status.textContent = '';
+      buy.hidden = false;
+      return;
+    }
     status.textContent = 'Loading the Shop listing…';
     refreshCatalogue().then(() => {
       if (!dialog.open || !details.isConnected || showOwned()) return;

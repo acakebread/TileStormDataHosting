@@ -1,7 +1,7 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {button, element, loadSetting, number, saveSetting, shortTime} from './ui.js';
-import {hasPurchase, hasSilverBotCloud, redeemPromotionCode, subscriptionTier, syncPurchases} from './purchases.js?v=stripe-onlybots';
+import {buyPurchase, hasPurchase, hasSilverBotCloud, redeemPromotionCode, subscriptionTier, syncPurchases} from './purchases.js?v=stripe-shop';
 
 export const osVersion = '9.0';
 export const storageCapacityMb = 16000;
@@ -158,7 +158,10 @@ export function createSettings(tablet) {
   const tierName = element('strong');
   const tiers = ['Bronze', 'Silver', 'Gold', 'Platinum'];
   const tierButtons = tiers.map(tier => {
-    const control = button(tier, () => location.assign('../membership.html?offer=' + tier.toLowerCase()));
+    const control = button(tier, () => {
+      if (buyPurchase(tier.toLowerCase())) tablet.toast('Continue in the checkout tab when ready.');
+      else tablet.toast('Allow popups to open checkout.');
+    });
     control.disabled = tier === 'Gold' || tier === 'Platinum';
     return control;
   });

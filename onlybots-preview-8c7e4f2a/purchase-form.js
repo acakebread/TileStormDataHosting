@@ -1,6 +1,6 @@
 // Copyright 2026 massivehadron.com ltd.
 
-import {buyPurchase, catalogueProduct, hasPurchase, refreshCatalogue, stripePrice} from '../eggbotstablet/purchases.js?v=stripe-onlybots';
+import {buyPurchase, catalogueProduct, hasPurchase, refreshCatalogue, stripePrice} from '../eggbotstablet/purchases.js?v=stripe-shop';
 
 export function createPurchaseForm({product, buyLabel, redeem, onAccepted, invalidMessage}) {
   const form = document.getElementById('purchaseFormTemplate').content.firstElementChild.cloneNode(true);

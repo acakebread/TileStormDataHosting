@@ -1,7 +1,7 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {loadSetting, saveSetting} from './ui.js';
-import {catalogueProduct, hasPurchase, verifyProductCode} from './purchases.js?v=stripe-onlybots';
+import {catalogueProduct, hasPurchase, verifyProductCode} from './purchases.js?v=stripe-shop';
 
 const creatorProducts = new Set(['goldibot', 'kelly_and_lucy']);
 const appReceipt = 'onlyBotsAccess';

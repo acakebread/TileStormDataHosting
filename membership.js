@@ -1,11 +1,14 @@
 // Copyright 2026 massivehadron.com ltd.
 
-import {membershipRequest} from './eggbotstablet/purchases.js?v=stripe-onlybots';
+import {membershipRequest} from './eggbotstablet/purchases.js?v=stripe-shop';
+import {buyStripeCoins} from './eggbotstablet/stripe-coins.js?v=stripe-shop';
+import {saveSetting} from './eggbotstablet/ui.js?v=stripe-shop';
 
 const parameters = new URLSearchParams(location.hash.slice(1));
 const offer = new URLSearchParams(location.search).get('offer');
 const botCloudOffer = offer === 'botcloud';
-const selectedTier = offer === 'bronze' ? 'Bronze' : offer === 'silver' || botCloudOffer ? 'Silver' : null;
+const tierByOffer = {bronze: 'Bronze', silver: 'Silver', gold: 'Gold', platinum: 'Platinum', botcloud: 'Silver'};
+const selectedTier = tierByOffer[offer] ?? null;
 const suppliedProfile = parameters.get('purchase-profile');
 let activationToken = parameters.get('activation');
 const profile = suppliedProfile ?? history.state?.membershipProfile ?? undefined;
@@ -34,10 +37,19 @@ if (selectedTier) {
   document.title = document.getElementById('title').textContent = botCloudOffer
     ? 'Unlock BotCloud with Silver' : `Subscribe to ${selectedTier}`;
   document.getElementById('introduction').textContent =
-    `Choose ${selectedTier} on Buy Me a Coffee. Verify the same email here to link your subscription to TileStorm and Eggbot’s tablet.`;
-  chooseMembership.textContent = 'Open Buy Me a Coffee memberships';
-  chooseMembership.target = '_blank';
-  chooseMembership.rel = 'noopener noreferrer';
+    `Subscribe to ${selectedTier} for ${selectedTier === 'Bronze' ? '£5' : selectedTier === 'Silver' ? '£10' : selectedTier === 'Gold' ? '£15' : '£25'} a month. The subscription renews until you cancel it in Stripe.`;
+  chooseMembership.textContent = `Subscribe to ${selectedTier}`;
+  chooseMembership.href = '#';
+  if (profile) saveSetting('purchaseProfile', profile);
+  chooseMembership.addEventListener('click', event => {
+    event.preventDefault();
+    const product = 'membership_' + (botCloudOffer ? 'silver' : selectedTier.toLowerCase());
+    const tab = window.open('about:blank', '_blank');
+    if (!tab) { status.textContent = 'Allow popups to open checkout.'; return; }
+    buyStripeCoins(product, tab, AbortSignal.timeout(35 * 60 * 1000)).then(result => {
+      status.textContent = result.message || (result.unlocked ? `${selectedTier} membership is active.` : 'Return here after Stripe confirms the subscription.');
+    });
+  });
 }
 
 function showRegistration(reply) {

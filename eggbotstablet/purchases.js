@@ -1,7 +1,7 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {loadSetting, saveSetting} from './ui.js';
-import {buyStripeCoins, hasStripeAccess, stripeAccessKey, stripePrices, syncStripeAccess} from './stripe-coins.js?v=stripe-onlybots';
+import {buyStripeCoins, hasStripeAccess, stripeAccessKey, stripeIncludesBotCloud, stripeLoveBotBalance, stripeMembershipTier, stripePrices, stripeSpendLoveBotSwipe, syncStripeAccess} from './stripe-coins.js?v=stripe-shop';
 
 const root = 'https://tilestorm-coffee-checkout.qrh.workers.dev';
 const keyPattern = /^[a-f0-9]{64}$/;
@@ -64,11 +64,11 @@ function hasMembershipUntil(expiry) {
 }
 
 export function hasSilverBotCloud() {
-  return hasMembershipUntil(memberStatus?.silverUntil);
+  return stripeIncludesBotCloud();
 }
 
 export function subscriptionTier() {
-  return hasMembershipUntil(memberStatus?.subscriptionUntil) ? memberStatus.subscriptionTier : 'Basic';
+  return stripeMembershipTier();
 }
 
 export async function membershipRequest(data, profile = key) {
@@ -129,10 +129,10 @@ export async function spendLoveBotSwipe() {
   swipeRevision++;
   try {
     let result;
-    try { result = await post('/api/lovebot', {key: profile, swipe}); }
+    try { result = await stripeSpendLoveBotSwipe(); }
     catch (error) {
       if (error.status && error.status < 500) throw error;
-      result = await post('/api/lovebot', {key: profile, swipe});
+      result = await stripeSpendLoveBotSwipe();
     }
     updateLoveBotBalance(profile, result.balance);
     return profile === key && result.spent;
@@ -174,7 +174,10 @@ async function refresh(profile) {
   memberProfile = profile;
   memberStatus = membership;
   memberCheckedUntil = Date.now() + 150000;
-  if (!swipePending && revision === swipeRevision) updateLoveBotBalance(profile, balance);
+  if (!swipePending && revision === swipeRevision) {
+    try { updateLoveBotBalance(profile, await stripeLoveBotBalance()); }
+    catch { updateLoveBotBalance(profile, balance); }
+  }
   const unlocked = receipts.map(receipt => receipt.payload.split('|')[2]).sort();
   const saved = savedPurchases(profile);
   cachedPurchases.set(profile, unlocked);
@@ -300,6 +303,8 @@ function buyStripeAccess(product) {
 }
 
 export function buyPurchase(product) {
+  if (product === 'lovebot') return buyStripeAccess('lovebot');
+  if (product === 'botcloud' && stripeMembershipTier() === 'Bronze') return buyStripeAccess('botcloud_member');
   if (stripeAccessKey(product)) return buyStripeAccess(product);
   if (!shopItems.has(product)) return false;
   followWebGLProfile();

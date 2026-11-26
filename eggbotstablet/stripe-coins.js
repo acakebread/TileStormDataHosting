@@ -27,11 +27,30 @@ const memberships = new Map([
 const accessProducts = new Map([
   ['onlybots', 'app'],
   ['onlybots_goldibot', 'goldibot'],
-  ['onlybots_kelly_and_lucy', 'kelly_and_lucy']
+  ['onlybots_kelly_and_lucy', 'kelly_and_lucy'],
+  ['basic', 'basic'],
+  ['botosplus', 'botosplus'],
+  ['botcloud', 'botcloud'],
+  ['botcloud_member', 'botcloud'],
+  ['membership_bronze', 'membership/bronze'],
+  ['membership_silver', 'membership/silver'],
+  ['membership_gold', 'membership/gold'],
+  ['membership_platinum', 'membership/platinum']
 ]);
-export const stripePrices = {app: '£30.00', goldibot: '£20.00', kelly_and_lucy: '£20.00'};
+const tierRank = new Map([
+  ['membership/bronze', 1], ['membership/silver', 2], ['membership/gold', 3], ['membership/platinum', 4]
+]);
+const tierName = ['Basic', 'Bronze', 'Silver', 'Gold', 'Platinum'];
+export const stripePrices = {
+  app: '£30.00', goldibot: '£20.00', kelly_and_lucy: '£20.00', basic: '£3.00', lovebot: '£1.00',
+  botosplus: '£1.00', botcloud: '£40.00', botcloud_member: '£2.00',
+  bronze: '£5.00', silver: '£10.00', gold: '£15.00', platinum: '£25.00'
+};
 const accessKeys = new Map(Object.entries({
-  app: 'onlybots', goldibot: 'onlybots_goldibot', kelly_and_lucy: 'onlybots_kelly_and_lucy'
+  app: 'onlybots', goldibot: 'onlybots_goldibot', kelly_and_lucy: 'onlybots_kelly_and_lucy',
+  basic: 'basic', botosplus: 'botosplus', botcloud: 'botcloud', botcloud_member: 'botcloud_member',
+  bronze: 'membership_bronze', silver: 'membership_silver', gold: 'membership_gold', platinum: 'membership_platinum',
+  lovebot: 'lovebot_1000'
 }));
 const keyPattern = /^[a-f0-9]{64}$/;
 const encoder = new TextEncoder();
@@ -168,7 +187,15 @@ export function hasStripeAccess(product) {
 }
 
 export async function syncStripeAccess(signal) {
-  const effects = await grantsFor('onlybots', signal);
+  const key = profileKey();
+  if (!key) return [];
+  const {grants} = await post('/api/stripe/grants', {key}, signal);
+  if (!Array.isArray(grants)) return [];
+  const effects = [];
+  for (const grant of grants) {
+    if (!accessProducts.has(productOf(grant))) continue;
+    effects.push(await applyGrant(grant, key));
+  }
   return effects.filter(effect => effect.unlocked || effect.removed);
 }
 
@@ -176,11 +203,40 @@ export function stripeAccessKey(product) {
   return accessKeys.get(product) || '';
 }
 
+export function stripeMembershipTier() {
+  const grants = loadSetting('stripeAccess', {});
+  let tier = 0;
+  for (const grant of Object.values(grants || {}))
+    if (grant?.state === 1) tier = Math.max(tier, tierRank.get(grant.product) || 0);
+  return tierName[tier];
+}
+
+export function stripeIncludesBotCloud() {
+  const tier = tierName.indexOf(stripeMembershipTier());
+  return tier >= 2 || hasStripeAccess('botcloud');
+}
+
+export async function stripeLoveBotBalance(signal) {
+  const key = profileKey();
+  if (!key) return 0;
+  const reply = await post('/api/stripe/lovebot', {key}, signal);
+  return Number.isSafeInteger(reply.balance) ? reply.balance : 0;
+}
+
+export async function stripeSpendLoveBotSwipe(signal) {
+  const key = profileKey();
+  if (!key) return {balance: 0, spent: false};
+  const swipe = hex(crypto.getRandomValues(new Uint8Array(32)));
+  return post('/api/stripe/lovebot', {key, swipe}, signal);
+}
+
 export async function buyStripeCoins(product, tab, signal) {
   const key = profileKey();
   const game = String(product).startsWith('onlybots') ? 'OnlyBots' :
-    String(product).startsWith('scratch_pro_') ? 'Scratch Pro' : 'Scratch Bling';
-  if ((!packs.has(product) && !memberships.has(product) && !accessProducts.has(product)) || !key) {
+    String(product).startsWith('scratch_pro_') ? 'Scratch Pro' :
+    String(product).startsWith('membership_') ? 'Membership' :
+    product === 'lovebot_1000' ? 'LoveBot' : product === 'basic' ? 'TileStorm' : 'Eggbot';
+  if ((!packs.has(product) && !memberships.has(product) && !accessProducts.has(product) && product !== 'lovebot_1000') || !key) {
     tab.close();
     return {delta: 0, membership: 0, message: 'This offer is not available.'};
   }
@@ -209,6 +265,7 @@ export async function buyStripeCoins(product, tab, signal) {
       continue;
     }
     if (status.state === 'paid' || status.state === 'refunded') {
+      if (product === 'lovebot_1000') return {delta: 0, swipes: status.state === 'paid', message: status.state === 'paid' ? '' : 'The payment was refunded.'};
       const already = remembered(status.checkout);
       const effect = await applyGrant(status, key);
       if (!effect.coins && !effect.membership && !effect.unlocked && !effect.removed && !already)

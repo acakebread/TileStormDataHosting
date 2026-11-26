@@ -1,6 +1,6 @@
 // Copyright 2026 massivehadron.com ltd.
 
-import {catalogueProduct, claimShopPurchase, matchShopReturn, refreshCatalogue} from './purchases.js?v=stripe-onlybots';
+import {catalogueProduct, claimShopPurchase, matchShopReturn, refreshCatalogue} from './purchases.js?v=stripe-shop';
 
 const items = new Map([
   ['basic', 'Return to TileStorm to use Basic Access.'],
