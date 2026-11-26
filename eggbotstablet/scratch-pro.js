@@ -2,7 +2,8 @@
 // Based on Scratch Pro, copyright 2016 massivehadron.com ltd. created 29/09/2016 by Andrew Cakebread
 
 import {button, countdown, element, image, number} from './ui.js';
-import {createWallet, money, random} from './scratch-pro-rules.js?v=level-bonus';
+import {createWallet, money, random} from './scratch-pro-rules.js?v=stripe-pro';
+import {buyStripeCoins, syncStripePro} from './stripe-coins.js?v=stripe-pro';
 import {createAudio, createTicket, loadScratchProCatalogue, loadTicketArt, pin, sprite, wait} from './scratch-pro-art.js?v=bling-cabinet';
 import {openBonus} from './scratch-pro-bonus.js?v=gamble-close';
 
@@ -10,7 +11,14 @@ const width = 1300, height = 975;
 const prizeGlyphs = '$0123456789,';
 const advances = [98, 102, 69, 108, 102, 104, 98, 102, 98, 108, 102, 51];
 const levelAdvances = [65, 68, 46, 72, 68, 69, 65, 68, 65, 72, 68, 34];
-const shopUrl = 'https://buymeacoffee.com/massivehadron/extras';
+const coinProducts = ['scratch_pro_6000', 'scratch_pro_25000', 'scratch_pro_80000',
+  'scratch_pro_250000', 'scratch_pro_450000', 'scratch_pro_1000000'];
+const membershipOffers = [
+  ['scratch_pro_bronze', 'Bronze', 2],
+  ['scratch_pro_silver', 'Silver', 5],
+  ['scratch_pro_gold', 'Gold', 10],
+  ['scratch_pro_platinum', 'Platinum', 25]
+];
 const sideActions = [
   ['VIP upgrade', [0, 0, 160, 160]], ['Free coins', [0, 160, 160, 160]],
   ['Get coins', [0, 320, 160, 160]], ['Earn coins', [0, 480, 160, 160]]
@@ -65,6 +73,7 @@ export function createScratchPro(view) {
       stage.addEventListener('keydown', unlock, {capture: true, signal});
       build();
       timer = setInterval(refreshFree, 350);
+      syncPurchases(false);
     } catch {
       if (signal.aborted) return;
       stage.replaceChildren();
@@ -170,7 +179,7 @@ export function createScratchPro(view) {
     cashText.textContent = money(wallet.state.balance);
     levelText.textContent = wallet.level;
     progressRing.style.setProperty('--sp-progress', wallet.progress * 360 + 'deg');
-    locks.forEach(({card, cover}) => { cover.hidden = card.level <= wallet.level; });
+    locks.forEach(({card, cover}) => { cover.hidden = card.level <= wallet.level || wallet.cardUnlocked(card.id); });
     refreshFree();
   }
 
@@ -215,7 +224,7 @@ export function createScratchPro(view) {
 
   function choose(card) {
     audio.play('click');
-    if (card.level > wallet.level) {
+    if (card.level > wallet.level && !wallet.cardUnlocked(card.id)) {
       popup(card.name, 'This ticket unlocks at level ' + card.level + '.');
       return;
     }
@@ -404,21 +413,84 @@ export function createScratchPro(view) {
 
   function unavailable(feature) { popup(feature, 'Currently unavailable'); }
   function membership() {
-    const choices = ['BRONZE', 'SILVER', 'GOLD', 'PLATINUM'].map(tier =>
-      [tier, () => location.assign('../membership.html?offer=' + tier.toLowerCase())]);
+    const choices = membershipOffers.map(([product, tier]) =>
+      [tier.toUpperCase(), () => buyProduct(product, true)]);
     shopPanel('VIP UPGRADE', 'shop-membership.png', [244, 86, 710, 700], choices, 2, [76, 12, 306, 333], [317, 344],
-      () => location.assign('../membership.html'));
+      () => syncPurchases(true));
   }
 
   function coinShop() {
-    const choices = ['6,000', '25,000', '80,000', '250,000', '450,000', '1,000,000'].map(amount => {
-      const pack = amount + ' COINS';
-      return [pack, () => popup(pack, 'Continue to the Massive Hadron Shop on Buy Me a Coffee.', [
-        ['CONTINUE TO SHOP', () => location.assign(shopUrl)]
-      ])];
-    });
+    const amounts = ['6,000', '25,000', '80,000', '250,000', '450,000', '1,000,000'];
+    const choices = amounts.map((amount, index) => [amount + ' COINS', () => buyProduct(coinProducts[index], false)]);
     shopPanel('GET COINS', 'shop-coins.png', [244, 183, 944, 700], choices, 3, [74, 15, 286, 324], [287, 339],
-      () => popup('RESTORE PURCHASES', 'Coin pack restoration will be available once the shop listings are linked.'));
+      () => syncPurchases(true));
+  }
+
+  let buying = false;
+
+  function buyProduct(product, membership) {
+    if (buying) {
+      popup(membership ? 'VIP UPGRADE' : 'BUY COINS', 'Finish or cancel checkout in your browser.');
+      return;
+    }
+    const tab = window.open('about:blank', '_blank');
+    if (!tab) {
+      popup(membership ? 'VIP UPGRADE' : 'BUY COINS', 'Allow pop-ups for this site, then choose the offer again.');
+      return;
+    }
+    buying = true;
+    clearOverlay();
+    const signal = lifetime.signal;
+    buyStripeCoins(product, tab, signal).then(result => {
+      if (signal.aborted) return;
+      const notes = applyEffect(result);
+      refresh();
+      if (result.message) popup(membership ? 'VIP UPGRADE' : 'BUY COINS', result.message);
+      else if (notes.length) popup(result.membership ? 'VIP UPGRADE' : 'BUY COINS', notes.join(' '));
+    }).catch(() => {
+      if (!signal.aborted) popup(membership ? 'VIP UPGRADE' : 'BUY COINS', 'Stripe checkout could not be opened. Try again shortly.');
+    }).finally(() => { buying = false; });
+  }
+
+  function lockedCardIds() {
+    return (catalogue?.cards || []).filter(card => card.level > wallet.level && !wallet.cardUnlocked(card.id)).map(card => card.id);
+  }
+
+  function applyEffect(result) {
+    const notes = [];
+    if (result.delta) {
+      wallet.applyPurchase(result.delta);
+      const amount = money(Math.abs(result.delta));
+      notes.push(result.delta > 0 ? amount + ' added.' : 'The Stripe payment was refunded and ' + amount + ' were removed.');
+    }
+    if (result.membership > 0) {
+      const offer = membershipOffers[result.membership - 1];
+      const unlocked = wallet.applyMembership(result.checkout, result.membership, lockedCardIds());
+      const cards = unlocked.length ? ' Unlocked ' + unlocked.length + (unlocked.length === 1 ? ' card.' : ' cards.') : '';
+      notes.push((offer?.[1] || 'VIP') + ' membership is active. Free coins are now ' + money(1000 * (offer?.[2] || 1)) +
+        '. Collect coins is ready.' + cards);
+    } else if (result.membership < 0) {
+      wallet.revokeMembership(result.checkout);
+      notes.push('The Stripe payment was refunded and the membership benefit was removed.');
+    }
+    return notes;
+  }
+
+  async function syncPurchases(reportEmpty) {
+    try {
+      const effects = await syncStripePro(lifetime.signal);
+      if (lifetime.signal.aborted) return;
+      const notes = effects.flatMap(applyEffect);
+      refresh();
+      if (!notes.length) {
+        if (reportEmpty) popup('RESTORE PURCHASES', 'No new purchases were waiting.');
+        return;
+      }
+      popup('SCRATCH PRO', notes.join(' '));
+    } catch {
+      if (!lifetime.signal.aborted && reportEmpty)
+        popup('RESTORE PURCHASES', 'Stripe could not be checked. Try again shortly.');
+    }
   }
 
   function shopPanel(title, asset, bounds, choices, columns, firstTile, step, restore) {

@@ -20,7 +20,10 @@ export function createWallet() {
   const key = 'scratchProWallet';
   const saved = loadSetting(key, {});
   const state = {balance: 2000, experience: 0, collectAt: Date.now() + 30000, pendingCost: 0, pendingWin: 0,
-    bonusGame: 0, muteSound: false, muteMusic: false, tapLevel: 1, tapLastWin: 0, ...saved};
+    bonusGame: 0, muteSound: false, muteMusic: false, tapLevel: 1, tapLastWin: 0,
+    membership: 0, memberCards: [], memberGrants: [], ...saved};
+  if (!Array.isArray(state.memberCards)) state.memberCards = [];
+  if (!Array.isArray(state.memberGrants)) state.memberGrants = [];
   let level, progress;
   const save = () => saveSetting(key, state);
   const credit = n => { state.balance = Math.min(maxCoins, state.balance + n); };
@@ -79,9 +82,34 @@ export function createWallet() {
       save();
       return true;
     },
+    get membership() { return Math.min(4, Math.max(0, state.membership | 0)); },
+    cardUnlocked(id) { return state.memberCards.includes(id); },
+    applyPurchase(delta) {
+      state.balance = Math.min(maxCoins, Math.max(0, state.balance + delta));
+      save();
+    },
+    applyMembership(checkout, level, lockedIds) {
+      if (!checkout || level < 1 || level > 4 || state.memberGrants.some(grant => grant.checkout === checkout)) return [];
+      const count = [0, 0, 2, 5, 20][level] || 0;
+      const cards = (lockedIds || []).filter(id => !state.memberCards.includes(id)).slice(0, count);
+      state.memberGrants.push({checkout, level, cards});
+      state.memberCards.push(...cards);
+      state.membership = Math.max(this.membership, level);
+      state.collectAt = Date.now();
+      save();
+      return cards;
+    },
+    revokeMembership(checkout) {
+      if (!state.memberGrants.some(grant => grant.checkout === checkout)) return false;
+      state.memberGrants = state.memberGrants.filter(grant => grant.checkout !== checkout);
+      state.memberCards = [...new Set(state.memberGrants.flatMap(grant => grant.cards || []))];
+      state.membership = state.memberGrants.reduce((highest, grant) => Math.max(highest, grant.level || 0), 0);
+      save();
+      return true;
+    },
     collectFree() {
       if (this.freeWait) return false;
-      credit(1000);
+      credit(1000 * [1, 2, 5, 10, 25][this.membership]);
       state.collectAt = Date.now() + 3600000;
       save();
       return true;

@@ -4,7 +4,7 @@
 import {button, element, loadSetting, number, saveSetting} from './ui.js';
 import {money} from './scratch-pro-rules.js?v=level-bonus';
 import {createAudio, createTicket, loadScratchCatalogue, loadTicketArt, pin, sprite, wait} from './scratch-pro-art.js?v=bling-cabinet';
-import {buyStripeCoins, syncStripeCoins} from './stripe-coins.js';
+import {buyStripeCoins, syncStripeCoins} from './stripe-coins.js?v=stripe-pro';
 
 const width = 2048, height = 1536;
 const packs = [
