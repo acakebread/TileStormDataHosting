@@ -4,7 +4,7 @@ import {element, button, image, tabs, watchSwipe, money, number, countdown, load
 import {hasOnlyBotsAccess, redeemOnlyBotsCode} from './premium.js?v=stripe-onlybots';
 import {buyPurchase, catalogueProduct, paidLoveBotSwipes, refreshCatalogue, spendLoveBotSwipe, stripePrice, subscriptionTier} from './purchases.js?v=high-scores';
 import {createSlideGesture} from './slide.js';
-import {botOsPlusProduct, tabletProducts} from './settings.js?v=player-profile';
+import {botOsPlusProduct, tabletProducts} from './settings.js?v=settings-order';
 
 export function createPhotos({data}) {
   const photos = (data.owner?.photos ?? []).map(photo => ({
