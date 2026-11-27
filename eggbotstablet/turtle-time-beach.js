@@ -1,6 +1,6 @@
 // Copyright 2026 massivehadron.com ltd.
 
-import {clamp, columnWidth, columns, footprintLifetime, height, mix, washoutSeconds, width, worldScale} from './turtle-time-round.js';
+import {beachDeathSeconds, clamp, columnWidth, columns, footprintLifetime, height, mix, washoutSeconds, width, worldScale} from './turtle-time-round.js';
 
 export const waveIcon = [868, 68, 64, 64];
 const sand = [4, 4, 558, 744];
@@ -250,6 +250,7 @@ export function createBeach(canvas, atlas) {
     if (kind === 'ghost') tint = [1, 1, 1, clamp(1 - age / 1.4, 0, 1)];
     if (kind === 'chest') tint = [1, 1, 1, clamp((15 - age) / 2, 0, 1)];
     if (actor.sweptFor > 0) tint = [.6, .85, .97, clamp(1 - actor.sweptFor / washoutSeconds, 0, 1)];
+    if (actor.dying) tint = [tint[0], tint[1], tint[2], tint[3] * (1 - clamp(actor.dyingFor / beachDeathSeconds, 0, 1))];
     const wobbleAngle = actor.moving && Math.floor((time + actor.born) * 9) % 2 === 0 ? 7 : 0;
     sprite(x, y, size, size, angle + wobbleAngle, region, tint);
     if (actor.pickup === 'wave') {

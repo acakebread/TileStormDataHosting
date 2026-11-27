@@ -8,6 +8,7 @@ export const columns = 12;
 export const columnWidth = width / (columns - 1);
 export const footprintLifetime = 5;
 export const washoutSeconds = 1.8;
+export const beachDeathSeconds = 2.2;
 export const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 export const mix = (from, to, amount) => from + (to - from) * amount;
 
@@ -16,6 +17,11 @@ const sharkEntry = 174 * worldScale;
 const orcaEntry = height + 232 * worldScale;
 const tick = .02;
 const shoreDepth = 50 * worldScale;
+const whaleRescueReach = 150;
+const flopSpeed = 70;
+const tsunamiDrag = 240;
+const shallowDragDepth = 220;
+const lastWaveDepth = 24;
 const radians = Math.PI / 180;
 const random = (min, max) => mix(min, max, Math.random());
 const point = (x, y) => ({x, y});
@@ -176,7 +182,8 @@ export class Round {
   }
 
   add(kind, x, y, speed) {
-    const actor = {kind, x, y, speed, born: this.elapsed, angle: 0, sweptFor: 0, alertUntil: 0, eatAgain: 0};
+    const actor = {kind, x, y, speed, born: this.elapsed, angle: 0, sweptFor: 0, alertUntil: 0, eatAgain: 0,
+      beached: false, dying: false, beachedAt: 0, dyingFor: 0};
     this.actors.push(actor);
     return actor;
   }
@@ -432,7 +439,10 @@ export class Round {
     predator.moving = false;
     const inWater = aquatic(predator.kind);
     if (!inWater && this.sweepPredator(predator, delta)) return;
-    if (predator.eatAgain > this.elapsed) return;
+    if (predator.eatAgain > this.elapsed) {
+      if (inWater && (predator.beached || this.sea.waveActive)) this.moveWaterPredator(predator, delta, 0, pressure);
+      return;
+    }
     const step = predator.speed * (1 + 4 * pressure) * delta;
     if (inWater) this.moveWaterPredator(predator, delta, step, pressure);
     else {
@@ -441,7 +451,7 @@ export class Round {
       predator.angle = turn(facing, predator.angle, 540 * delta);
       if (!canBite) return;
     }
-    if (predator.removed) return;
+    if (predator.removed || predator.beached) return;
     const target = this.findTurtle(predator, inWater ? 27 : 33, inWater ? swimming : beachPrey);
     if (!target) return;
     target.removed = target.eaten = true;
@@ -470,33 +480,96 @@ export class Round {
   }
 
   moveWaterPredator(predator, delta, step, pressure) {
+    if (predator.beached) {
+      this.struggleOnBeach(predator, delta);
+      return;
+    }
     const water = this.sea.waterAt(predator.x);
-    const drift = this.sea.currentAt(predator) * delta;
     const detection = 280 * pressure;
+    let chasing = false;
     if (detection > 27) {
       const prey = this.findTurtle(predator, detection, swimming);
       if (prey) {
-        move(predator, point(prey.x, Math.max(water + 8, prey.y)), step);
-        predator.y = Math.max(this.sea.waterAt(predator.x) + 8, predator.y + drift);
-        return;
+        chasing = true;
+        const goalY = Math.max(water + 4, prey.y);
+        const chase = this.sea.waveActive && goalY < predator.y ? Math.max(step, tsunamiDrag * delta) : step;
+        move(predator, point(prey.x, goalY), chase);
       }
     }
-    if (predator.kind === 'shark') {
+    if (!chasing && predator.kind === 'shark') {
       const edge = predator.returning ? -sharkEntry : width + sharkEntry;
       move(predator, point(edge, predator.y), step);
       if (predator.x === edge) predator.returning = !predator.returning;
-      predator.y = Math.max(water + 15, predator.y + drift);
-      predator.removed = predator.y > height - 50 * worldScale;
+    } else if (!chasing) {
+      const bottom = water + 50 * worldScale;
+      if (!(this.sea.waveActive && !predator.returning)) {
+        const target = predator.returning ? orcaEntry : bottom;
+        move(predator, point(predator.x, target), step);
+        if (predator.y === target) {
+          if (predator.returning) predator.x = this.orcaLane();
+          predator.returning = !predator.returning;
+        }
+      }
+    }
+    this.followTide(predator, delta, pressure, chasing);
+    if (!predator.beached && predator.kind === 'shark' && predator.y > height - 50 * worldScale) predator.removed = true;
+  }
+
+  // The surge drags shallow swimmers and hunters up the beach. They can only swim back at their own speed.
+  followTide(predator, delta, pressure, chasing) {
+    const water = this.sea.waterAt(predator.x);
+    const margin = predator.kind === 'shark' ? 15 : 50 * worldScale;
+    const floor = water + margin;
+    const swim = predator.speed * (1 + 4 * pressure);
+    const inTheWash = predator.y - floor < shallowDragDepth;
+    if (this.sea.waveActive && predator.y > floor && (chasing || inTheWash))
+      predator.y = Math.max(floor, predator.y - tsunamiDrag * delta);
+    if (predator.y < water - lastWaveDepth) {
+      this.strand(predator);
       return;
     }
-    const bottom = water + 50 * worldScale;
-    const target = predator.returning ? orcaEntry : bottom;
-    move(predator, point(predator.x, target), step);
-    if (predator.y === target) {
-      if (predator.returning) predator.x = this.orcaLane();
-      predator.returning = !predator.returning;
+    const deficit = floor - predator.y;
+    if (deficit > 0) predator.y += this.sea.waveActive ? Math.min(deficit, swim * delta) : deficit;
+    if (predator.kind === 'orca') predator.y = Math.min(predator.y, orcaEntry);
+  }
+
+  strand(predator) {
+    if (predator.beached) return;
+    predator.beached = true;
+    predator.beachedAt = this.elapsed;
+    predator.prey = null;
+    predator.y = clamp(predator.y, 16, height - 24);
+  }
+
+  struggleOnBeach(predator, delta) {
+    predator.moving = false;
+    predator.prey = null;
+    const water = this.sea.waterAt(predator.x);
+    if (!predator.dying && predator.y >= water) {
+      predator.beached = false;
+      predator.y = Math.max(predator.y, water + 6);
+      return;
     }
-    predator.y = clamp(predator.y + drift, bottom, orcaEntry);
+    const gap = water - predator.y;
+    const canRecover = predator.kind === 'orca' && gap <= whaleRescueReach && !predator.dying;
+    if (!canRecover) {
+      if (!predator.dying) {
+        predator.dying = true;
+        predator.dyingFor = 0;
+      }
+      predator.dyingFor += delta;
+      const side = Math.abs(predator.angle) < 20 || predator.angle >= 0 ? 1 : -1;
+      predator.angle = turn(predator.angle, 92 * side, 140 * delta);
+      predator.removed = predator.dyingFor >= beachDeathSeconds;
+      return;
+    }
+    const thrash = this.elapsed - predator.beachedAt;
+    predator.angle = Math.sin(thrash * 8.5) * 78;
+    predator.y += flopSpeed * delta;
+    predator.x = clamp(predator.x + Math.cos(thrash * 8.5) * 22 * delta, 18, width - 18);
+    if (predator.y < water) return;
+    predator.beached = false;
+    predator.y = water + 8;
   }
 
   moveBeachPredator(predator, step, pressure) {
