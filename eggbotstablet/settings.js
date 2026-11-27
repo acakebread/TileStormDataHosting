@@ -2,6 +2,7 @@
 
 import {button, element, loadSetting, number, saveSetting, shortTime} from './ui.js';
 import {buyPurchase, hasPurchase, hasSilverBotCloud, redeemPromotionCode, subscriptionTier, syncPurchases} from './purchases.js?v=high-scores';
+import {acceptMoniker, playerId, playerMoniker, publishMoniker, savePlayerMoniker} from './high-scores.js?v=high-scores';
 
 export const osVersion = '9.0';
 export const storageCapacityMb = 16000;
@@ -91,6 +92,45 @@ export function createSettings(tablet) {
       element('dt', '', 'Device name'), element('dd', '', 'Eggbot’s tablet'),
       element('dt', '', 'Model number'), element('dd', '', 'BotTab 16 · BT-T16'),
       element('dt', '', 'Software'), software));
+
+  // Nickname is the profile moniker: the only public player name (nickname, handle, alias).
+  const nickname = element('input');
+  nickname.type = 'text';
+  nickname.maxLength = 48;
+  nickname.autocomplete = 'nickname';
+  nickname.placeholder = 'Nickname';
+  nickname.setAttribute('aria-label', 'Nickname');
+  nickname.value = playerMoniker();
+  const playerStatus = element('p', 'muted');
+  playerStatus.setAttribute('role', 'status');
+  const saveNickname = element('button', 'primary', 'Save nickname');
+  saveNickname.type = 'submit';
+  const nicknameForm = element('form', 'promotion-entry', nickname, saveNickname);
+  nicknameForm.addEventListener('submit', async event => {
+    event.preventDefault();
+    const moniker = acceptMoniker(nickname.value);
+    if (!moniker) {
+      playerStatus.textContent = 'Enter a nickname of up to 48 characters.';
+      return;
+    }
+    saveNickname.disabled = true;
+    playerStatus.textContent = 'Saving nickname…';
+    savePlayerMoniker(moniker);
+    try {
+      const reply = await publishMoniker(moniker);
+      playerStatus.textContent = 'Saved. High scores now show ' + (reply.label || moniker) + '.';
+    } catch {
+      playerStatus.textContent = 'Saved on this tablet. The high score table could not be reached.';
+    } finally {
+      saveNickname.disabled = false;
+    }
+  });
+  const player = element('section', 'settings-panel', element('h3', '', 'Player'),
+    element('p', 'muted', 'Your nickname is the name on the high score tables.'),
+    nicknameForm, playerStatus);
+  playerId().then(id => {
+    if (!playerMoniker()) playerStatus.textContent = 'High scores currently show ' + id.slice(0, 12) + '.';
+  }).catch(() => {});
 
   const usage = element('p', 'settings-usage');
   usage.setAttribute('role', 'status');
@@ -220,7 +260,7 @@ export function createSettings(tablet) {
 
   const view = element('section', 'settings-app', element('div', 'app-content',
     element('header', 'app-heading', tablet.art('settings'), element('h2', '', 'Settings')),
-    element('div', 'settings-grid', element('div', 'settings-column', about, storage, purchases, subscription),
+    element('div', 'settings-grid', element('div', 'settings-column', player, about, storage, purchases, subscription),
       element('div', 'settings-column', notifications, upgrade, promotion))));
 
   function refreshSubscription() {

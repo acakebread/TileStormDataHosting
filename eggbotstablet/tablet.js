@@ -9,7 +9,7 @@ import {createTurtleTime} from './turtle-time.js?v=turtle-score-share';
 import {hasOnlyBotsAccess, hasPremiumAccess} from './premium.js?v=stripe-onlybots';
 import {linkPurchaseProfile, linkWebGLProfiles, syncPurchases} from './purchases.js?v=high-scores';
 import {createHomePager} from './home.js?v=onlybots-shop';
-import {createSettings, createTabletPreferences, offloadSizeMb, osVersion} from './settings.js?v=membership-codes';
+import {createSettings, createTabletPreferences, offloadSizeMb, osVersion} from './settings.js?v=player-name';
 import {element, button, image, shortTime, loadSetting, saveSetting} from './ui.js';
 
 const pages = [
