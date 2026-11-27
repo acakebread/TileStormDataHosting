@@ -266,11 +266,9 @@ export function createSettings(tablet) {
 
   const view = element('section', 'settings-app', element('div', 'app-content',
     element('header', 'app-heading', tablet.art('settings'), element('h2', '', 'Settings')),
-    element('div', 'settings-grid', element('div', 'settings-column', about, storage),
-      element('div', 'settings-column', notifications, upgrade)),
-    element('div', 'settings-grid', element('div', 'settings-column', purchases, subscription),
-      element('div', 'settings-column', player)),
-    promotion));
+    element('div', 'settings-grid',
+      element('div', 'settings-column', about, storage, purchases, subscription),
+      element('div', 'settings-column', notifications, upgrade, player, promotion))));
 
   function refreshSubscription() {
     const tier = subscriptionTier();

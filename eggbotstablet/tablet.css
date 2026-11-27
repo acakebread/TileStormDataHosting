@@ -402,7 +402,7 @@ img { display: block; max-width: 100%; }
   display: grid; align-items: start; gap: 12px;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 350px), 1fr));
 }
-.settings-column, .settings-panel { display: grid; gap: 12px; min-width: 0; }
+.settings-column, .settings-panel { display: grid; align-content: start; gap: 12px; min-width: 0; }
 .settings-panel {
   padding: clamp(14px, 2.3vw, 22px); border: 1px solid var(--border);
   border-radius: 12px; background: var(--panel);
