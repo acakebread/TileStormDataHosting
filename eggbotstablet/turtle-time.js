@@ -170,10 +170,14 @@ export function createTurtleTime(tablet) {
   panelTap.setAttribute('aria-label', 'Return to the title screen');
   const heading = pin(element('h2', 'turtle-label'), 88, 180, 424, 80, 50);
   const message = pin(element('p', 'turtle-label'), 105, 262, 390, 377, 31);
-  const scores = region(pin(button('High scores', openScores, 'turtle-wood'), 161, 636, 278, 92, 37), boards.start, 'ui');
+  const scores = region(pin(button('High scores', openScores, 'turtle-wood'), 74, 636, 220, 92, 34), boards.start, 'ui');
   scores.hidden = true;
+  const shareScore = region(pin(button('', showShare, 'turtle-wood'), 306, 636, 220, 92, 31), boards.instructions, 'ui');
+  shareScore.append('Share to', element('br'), 'Facebook');
+  shareScore.setAttribute('aria-label', 'Share to Facebook');
+  shareScore.hidden = true;
   const action = region(pin(button('', () => dialogAction?.(), 'turtle-wood'), 161, 740, 278, 92, 37), boards.instructions, 'ui');
-  const dialog = element('div', 'turtle-overlay', panelArt, panelTap, heading, message, scores, action);
+  const dialog = element('div', 'turtle-overlay', panelArt, panelTap, heading, message, scores, shareScore, action);
   const loading = element('div', 'turtle-loading');
   loading.setAttribute('role', 'status');
   const stage = element('div', 'turtle-stage', canvas, menu, hud, dialog, loading);
@@ -229,6 +233,7 @@ export function createTurtleTime(tablet) {
     action.textContent = label;
     panelTap.hidden = true;
     scores.hidden = !showingScores;
+    shareScore.hidden = !showingScores;
     dialogAction = callback;
     screen('dialog');
   }
@@ -259,30 +264,38 @@ export function createTurtleTime(tablet) {
       `Survival time: ${timePlayed}\n${record}: ${highScore}`;
     showDialog("Time's up", summary, 'Play again', startRound, true);
     clearRound();
+    const shareDue = completedRoundIsShareDue();
+    const scoreSession = session;
     const showRank = reply => {
       if (!scorecard) return;
       if (reply?.rank > 0) message.textContent = `${summary}\nRanking: ${reply.rank}`;
     };
     const send = (setMoniker, moniker) => submitScore('turtle-time', saved, {setMoniker, moniker}).then(showRank, () => {});
+    const sendAndOfferShare = (setMoniker, moniker) => {
+      send(setMoniker, moniker);
+      if (shareDue && session === scoreSession && scorecard) showShare();
+    };
     if (newBest && !playerMoniker()) {
       playerId().then(id => {
-        if (!session) return;
+        if (session !== scoreSession) return;
+        if (!scorecard) { send(false, ''); return; }
         showNicknamePrompt(stage, {
           playerLabel: publicLabel(id),
-          onSave: moniker => send(true, savePlayerMoniker(moniker)),
-          onCancel: () => send(false, '')
+          onSave: moniker => sendAndOfferShare(true, savePlayerMoniker(moniker)),
+          onCancel: () => sendAndOfferShare(false, '')
         });
-      }, () => send(false, ''));
-    } else send(true, playerMoniker());
-    offerShare();
+      }, () => sendAndOfferShare(false, ''));
+    } else sendAndOfferShare(true, playerMoniker());
   }
 
-  function offerShare() {
+  function completedRoundIsShareDue() {
     const previous = loadSetting(roundsKey, completedRounds);
     completedRounds = Number.isSafeInteger(previous) && previous >= 0 ? previous + 1 : 1;
     saveSetting(roundsKey, completedRounds);
-    if (completedRounds !== 1 && completedRounds % 3 !== 0) return;
+    return completedRounds === 1 || completedRounds % 3 === 0;
+  }
 
+  function showShare() {
     const card = image(shareCard, 'Turtle Time logo, hatchlings on the beach, and a QR code to play on Eggbot’s tablet');
     card.width = 1200;
     card.height = 630;
