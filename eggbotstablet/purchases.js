@@ -28,6 +28,10 @@ let swipePending = false;
 let swipeRevision = 0;
 let memberStatus, memberProfile, memberCheckedUntil = 0;
 
+export function purchaseProfileKey() {
+  return key;
+}
+
 export function hasPurchase(product) {
   return purchaseStatus(product) === true || hasStripeAccess(product);
 }
