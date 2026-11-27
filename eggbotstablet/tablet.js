@@ -274,7 +274,7 @@ function mountScratchBling() {
     if (app) { app.open(); return; }
     if (opening) return;
     view.replaceChildren(element('p', 'sb-launch', 'Loading Scratch Bling…'));
-    opening = import('./scratch-bling.js?v=reel-backing').then(({createScratchBling}) => {
+    opening = import('./scratch-bling.js?v=reopen').then(({createScratchBling}) => {
       if (!active) return;
       view.replaceChildren();
       app = createScratchBling(view, () => open('home'));
@@ -286,6 +286,7 @@ function mountScratchBling() {
   }, close() {
     active = false;
     app?.close();
+    app = null;
   }};
 }
 

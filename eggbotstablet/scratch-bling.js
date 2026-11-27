@@ -161,7 +161,7 @@ export function createScratchBling(view, quit) {
   let lifetime, catalogue, audio, wallet, timer, overlay, ticket, ticketArt, ticketRequest, selected, foilName, lossTimer;
   let gallery, cardLayer, results, status, cashText, timerText, timerValue, collectButton, progressBar, levelImage;
   let previous, next, dots, slots, pageRequest = 0;
-  let shownCash = -1, shownLevel = -1, shownSeconds = -1;
+  let shownCash, shownLevel, shownSeconds;
   const slotReels = [];
 
   function art(parent, file, frame, x, y, w, h, sheet = chromeSize) {
@@ -209,7 +209,6 @@ export function createScratchBling(view, quit) {
       build();
       timer = setInterval(refreshHeader, 250);
       refreshHeader();
-      showPage(wallet.state.page);
       const coins = await syncStripeCoins(signal);
       if (signal.aborted || !coins) return;
       wallet.applyPurchase(coins);
@@ -226,6 +225,7 @@ export function createScratchBling(view, quit) {
 
   function build() {
     stage.replaceChildren();
+    shownCash = shownLevel = shownSeconds = undefined;
     const wallpaper = pin(stage, element('div', 'sb-wallpaper'), 0, 0, width, height);
     wallpaper.style.backgroundImage = 'url("' + catalogue.url('casino.jpg') + '")';
     gallery = pin(stage, element('div'), 0, 0, width, height);
@@ -334,6 +334,7 @@ export function createScratchBling(view, quit) {
 
   async function showPage(index) {
     if (!catalogue || selected || index < 0 || index > 4) return;
+    const {signal} = lifetime;
     const request = ++pageRequest;
     wallet.state.page = index;
     wallet.save();
@@ -342,8 +343,8 @@ export function createScratchBling(view, quit) {
     dots.forEach((dot, i) => sprite(dot, catalogue.url('chrome.png'), i === index ? dotOn : dotOff, 1024, 512));
     status.textContent = 'Loading cards…';
     try {
-      const image = await catalogue.image('page-0' + (index + 1) + '.jpg', lifetime.signal);
-      if (request !== pageRequest || lifetime.signal.aborted) return;
+      const image = await catalogue.image('page-0' + (index + 1) + '.jpg', signal);
+      if (signal.aborted || request !== pageRequest) return;
       slots.forEach((slot, i) => {
         const card = catalogue.cards[index * 4 + i];
         sprite(slot.face, image.src, previewFrames[i], 1024, 600);
@@ -359,7 +360,7 @@ export function createScratchBling(view, quit) {
       });
       status.textContent = '';
     } catch {
-      if (request === pageRequest && !lifetime.signal.aborted) status.textContent = 'Couldn’t load this page.';
+      if (!signal.aborted && request === pageRequest) status.textContent = 'Couldn’t load this page.';
     }
   }
 
@@ -379,8 +380,9 @@ export function createScratchBling(view, quit) {
     const request = ticketRequest = new AbortController();
     status.textContent = 'Loading ' + selected.name + '…';
     try {
-      ticketArt = await loadTicketArt(catalogue, selected, foilName, request.signal);
+      const artwork = await loadTicketArt(catalogue, selected, foilName, request.signal);
       if (request.signal.aborted) return;
+      ticketArt = artwork;
       status.textContent = '';
       deal();
     } catch {
@@ -467,19 +469,21 @@ export function createScratchBling(view, quit) {
 
   async function gamble() {
     if (!wallet.state.pendingWin || overlay) return;
+    const {signal} = lifetime;
+    const activeTicket = ticket;
     audio.play('click');
     const gambleButton = results.win.bar.querySelector('[data-role="gamble"]');
     const collect = results.win.bar.querySelector('[data-role="collect"]');
     gambleButton.disabled = collect.disabled = true;
     const multiplier = rollMultiplier();
-    await spinSlots(multiplier);
-    if (lifetime.signal.aborted) return;
+    await spinSlots(multiplier, signal);
+    if (signal.aborted || ticket !== activeTicket) return;
     wallet.applyGamble(multiplier);
     showWin(wallet.state.pendingWin, multiplier);
     audio.play(multiplier ? 'win' : 'lose');
   }
 
-  async function spinSlots(multiplier) {
+  async function spinSlots(multiplier, signal) {
     let machine = stage.querySelector('.sb-slots');
     if (!machine) {
       const cabinetWidth = 835;
@@ -511,7 +515,7 @@ export function createScratchBling(view, quit) {
     });
     audio.play('reel-spin', true);
     for (let reel = 0; reel < 3; reel++) {
-      if (!await wait(500 + Math.random() * 700, lifetime.signal)) return;
+      if (!await wait(500 + Math.random() * 700, signal) || machine.parentElement !== results) return;
       slotReels[reel].strip.hidden = true;
       audio.play('reel-stop');
     }
@@ -526,12 +530,16 @@ export function createScratchBling(view, quit) {
     wallet.collectWinnings();
     refreshHeader();
     if (!selected) return;
+    const {signal} = lifetime;
+    const activeTicket = ticket;
     foilName = 'contour' + String(1 + Math.floor(Math.random() * 10)).padStart(2, '0') + '.jpg';
     try {
-      ticketArt.set(foilName, await catalogue.image(foilName, lifetime.signal));
-      if (!lifetime.signal.aborted) deal();
+      const foil = await catalogue.image(foilName, signal);
+      if (signal.aborted || ticket !== activeTicket) return;
+      ticketArt.set(foilName, foil);
+      deal();
     } catch {
-      if (!lifetime.signal.aborted) status.textContent = 'Couldn’t load the next card.';
+      if (!signal.aborted && ticket === activeTicket) status.textContent = 'Couldn’t load the next card.';
     }
   }
 
@@ -545,6 +553,7 @@ export function createScratchBling(view, quit) {
     wallet.collectWinnings();
     ticket?.close();
     ticket = ticketArt = selected = null;
+    audio.stop('reel-spin');
     results.hidden = true;
     stage.querySelector('.sb-slots')?.remove();
     slotReels.length = 0;
