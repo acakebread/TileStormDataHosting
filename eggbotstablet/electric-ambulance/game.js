@@ -289,7 +289,7 @@ function startGame(view, city, run) {
   window.addEventListener('blur', clearGesture, {signal});
   document.addEventListener('keydown', event => {
     if (event.repeat || event.defaultPrevented || document.querySelector('dialog[open], .high-scores')) return;
-    if (state.phase === 'wasted' && (event.key === ' ' || event.key === 'Enter')) {
+    if ((state.phase === 'title' || state.phase === 'wasted') && (event.key === ' ' || event.key === 'Enter')) {
       if (event.target.closest('button, a[href], input, select, textarea, [contenteditable]')) return;
       event.preventDefault();
       begin('same');
