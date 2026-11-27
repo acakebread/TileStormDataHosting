@@ -178,14 +178,10 @@ export function createSettings(tablet) {
   certificate.setAttribute('aria-hidden', 'true');
   const tierName = element('strong');
   const tiers = ['Bronze', 'Silver', 'Gold', 'Platinum'];
-  const tierButtons = tiers.map(tier => {
-    const control = button(tier, () => {
-      if (buyPurchase(tier.toLowerCase())) tablet.toast('Continue in the checkout tab when ready.');
-      else tablet.toast('Allow popups to open checkout.');
-    });
-    control.disabled = tier === 'Gold' || tier === 'Platinum';
-    return control;
-  });
+  const tierButtons = tiers.map(tier => button(tier, () => {
+    if (buyPurchase(tier.toLowerCase())) tablet.toast('Continue in the checkout tab when ready.');
+    else tablet.toast('Allow popups to open checkout.');
+  }));
   const subscription = element('section', 'settings-panel', element('h3', '', 'Subscription'),
     element('div', 'subscription-level', certificate, tierName),
     element('p', 'muted', 'Subscriptions unlock features and apps. See BotStore for details.'),
@@ -232,8 +228,8 @@ export function createSettings(tablet) {
     if (tierName.textContent === tier) return;
     certificate.dataset.tier = tier;
     tierName.textContent = tier;
-    tierButtons[0].disabled = tier !== 'Basic';
-    tierButtons[1].disabled = tier !== 'Basic' && tier !== 'Bronze';
+    const rank = tiers.indexOf(tier);
+    tierButtons.forEach((control, index) => { control.disabled = index <= rank; });
   }
 
   function refreshStorage() {
