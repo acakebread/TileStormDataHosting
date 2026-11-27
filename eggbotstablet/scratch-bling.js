@@ -22,7 +22,8 @@ const localAudio = new Map([
   ['scratch.mp3', new URL('./art/scratch/scratch.mp3', import.meta.url).href],
   ['match.mp3', new URL('./art/scratch/match.mp3', import.meta.url).href],
   ['win.mp3', new URL('./art/scratch/win_0.mp3', import.meta.url).href],
-  ['lose.mp3', new URL('./art/scratch/lose_0.mp3', import.meta.url).href]
+  ['lose.mp3', new URL('./art/scratch/lose_0.mp3', import.meta.url).href],
+  ['payout.mp3', new URL('./art/scratch/payout.mp3', import.meta.url).href]
 ]);
 
 function createWallet() {
@@ -529,7 +530,7 @@ export function createScratchBling(view, quit) {
 
   function collectResult() {
     audio.play('click');
-    if (wallet.state.pendingWin > 0) audio.play('coins');
+    if (wallet.state.pendingWin > 0) audio.play('payout');
     redeal();
   }
 
@@ -577,7 +578,7 @@ export function createScratchBling(view, quit) {
   function collectFree() {
     if (!wallet.collect()) return;
     audio.play('click');
-    audio.play('coins');
+    audio.play('payout');
     refreshHeader();
   }
 
