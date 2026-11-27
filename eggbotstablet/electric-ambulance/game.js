@@ -1,7 +1,7 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {button, element, image, loadSetting, saveSetting} from '../ui.js';
-import {loadPlayerProfile, playerId, playerMoniker, publicLabel, savePlayerMoniker, savePlayerProfile, showNicknamePrompt, showScoreBoard, submitScore} from '../high-scores.js?v=profile-sync';
+import {loadPlayerProfile, playerId, playerMoniker, publicLabel, savePlayerMoniker, savePlayerProfile, showNicknamePrompt, showScoreBoard, submitScore} from '../high-scores.js?v=profile-keep';
 import {createAudio} from './audio.js?v=tablet-sound';
 import {createDrive} from './drive.js';
 import {createCityRenderer, loadCity, releaseCity} from './render.js';

@@ -1,7 +1,7 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {button, element, image, loadSetting, saveSetting} from './ui.js';
-import {loadPlayerProfile, playerId, playerMoniker, publicLabel, savePlayerMoniker, savePlayerProfile, showNicknamePrompt, showScoreBoard, submitScore} from './high-scores.js?v=profile-sync';
+import {loadPlayerProfile, playerId, playerMoniker, publicLabel, savePlayerMoniker, savePlayerProfile, showNicknamePrompt, showScoreBoard, submitScore} from './high-scores.js?v=profile-keep';
 
 const contentHost = 'https://eggbot-content.qrh.workers.dev/';
 const index = new URL('./turtle-time-media.json?v=unity', import.meta.url);

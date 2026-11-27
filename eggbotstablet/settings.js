@@ -2,7 +2,7 @@
 
 import {button, element, loadSetting, number, saveSetting, shortTime} from './ui.js';
 import {buyPurchase, hasPurchase, hasSilverBotCloud, redeemPromotionCode, subscriptionTier, syncPurchases} from './purchases.js?v=high-scores';
-import {acceptMoniker, loadPlayerProfile, playerId, playerMoniker, savePlayerMoniker, savePlayerProfile} from './high-scores.js?v=profile-sync';
+import {acceptMoniker, loadPlayerProfile, playerId, playerMoniker, savePlayerMoniker, savePlayerProfile} from './high-scores.js?v=profile-keep';
 
 export const osVersion = '9.0';
 export const storageCapacityMb = 16000;

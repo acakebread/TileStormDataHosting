@@ -51,9 +51,11 @@ export function registerEmailHref() {
   return '../membership.html#purchase-profile=' + purchaseProfileKey();
 }
 
-export async function submitScore(game, score, {setMoniker = true, moniker = playerMoniker()} = {}) {
+export async function submitScore(game, score, {setMoniker = false, moniker = playerMoniker()} = {}) {
   if (!games[game]) throw new Error('This game is not registered with the high score table.');
-  return post('/api/scores', {key: purchaseProfileKey(), game, score, setMoniker, moniker});
+  const body = {key: purchaseProfileKey(), game, score};
+  if (setMoniker && moniker) body.moniker = moniker;
+  return post('/api/scores', body);
 }
 
 export function profileRevision() {
@@ -74,8 +76,9 @@ export async function loadPlayerProfile() {
 }
 
 export async function savePlayerProfile({moniker, displayName} = {}) {
+  await loadPlayerProfile();
   const body = {key: purchaseProfileKey(), baseRevision: profileRevision()};
-  if (moniker !== undefined) body.moniker = moniker;
+  if (moniker) body.moniker = moniker;
   if (displayName !== undefined) body.displayName = displayName;
   return rememberProfile(await post('/api/profile', body));
 }

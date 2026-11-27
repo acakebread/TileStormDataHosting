@@ -2,15 +2,15 @@
 
 import {loadCatalogue} from './catalogue.js';
 import {createChat, createMail} from './messages.js?v=mail-layout';
-import {createPhotos, createBank, createLove, createMarket, createStore} from './apps.js?v=electric-ambulance';
+import {createPhotos, createBank, createLove, createMarket, createStore} from './apps.js?v=profile-keep';
 import {createFirebot} from './firebot.js?v=hosted';
 import {createFruit} from './fruit-burst.js?v=unity';
-import {createTurtleTime} from './turtle-time.js?v=profile-sync';
+import {createTurtleTime} from './turtle-time.js?v=profile-keep';
 import {hasOnlyBotsAccess, hasPremiumAccess} from './premium.js?v=stripe-onlybots';
 import {linkPurchaseProfile, linkWebGLProfiles, syncPurchases} from './purchases.js?v=high-scores';
 import {createHomePager} from './home.js?v=onlybots-shop';
-import {loadPlayerProfile} from './high-scores.js?v=profile-sync';
-import {createSettings, createTabletPreferences, offloadSizeMb, osVersion} from './settings.js?v=settings-packed';
+import {loadPlayerProfile} from './high-scores.js?v=profile-keep';
+import {createSettings, createTabletPreferences, offloadSizeMb, osVersion} from './settings.js?v=profile-keep';
 import {element, button, image, shortTime, loadSetting, saveSetting} from './ui.js';
 
 const pages = [
@@ -279,7 +279,7 @@ function mountElectricAmbulance() {
     const controller = new AbortController();
     opening = controller;
     view.replaceChildren(element('p', 'ambulance-loading', 'Loading Electric Ambulance…'));
-    import('./electric-ambulance/game.js?v=profile-sync').then(({createElectricAmbulance}) => {
+    import('./electric-ambulance/game.js?v=profile-keep').then(({createElectricAmbulance}) => {
       if (controller.signal.aborted) return;
       app = createElectricAmbulance(view);
       app.open();
