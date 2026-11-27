@@ -168,11 +168,11 @@ export function createTurtleTime(tablet) {
   const panelArt = region(pin(element('div', 'turtle-wood'), 56, 140, 488, 730), boards.dialog, 'ui');
   const panelTap = pin(button('', showTitle, 'turtle-score-tap'), 56, 140, 488, 730);
   panelTap.setAttribute('aria-label', 'Return to the title screen');
-  const heading = pin(element('h2', 'turtle-label'), 88, 206, 424, 80, 50);
-  const message = pin(element('p', 'turtle-label'), 105, 298, 390, 377, 31);
-  const scores = region(pin(button('High scores', openScores, 'turtle-wood'), 161, 600, 278, 92, 37), boards.start, 'ui');
+  const heading = pin(element('h2', 'turtle-label'), 88, 180, 424, 80, 50);
+  const message = pin(element('p', 'turtle-label'), 105, 262, 390, 377, 31);
+  const scores = region(pin(button('High scores', openScores, 'turtle-wood'), 161, 636, 278, 92, 37), boards.start, 'ui');
   scores.hidden = true;
-  const action = region(pin(button('', () => dialogAction?.(), 'turtle-wood'), 161, 704, 278, 92, 37), boards.instructions, 'ui');
+  const action = region(pin(button('', () => dialogAction?.(), 'turtle-wood'), 161, 740, 278, 92, 37), boards.instructions, 'ui');
   const dialog = element('div', 'turtle-overlay', panelArt, panelTap, heading, message, scores, action);
   const loading = element('div', 'turtle-loading');
   loading.setAttribute('role', 'status');
