@@ -1,6 +1,6 @@
 // Copyright 2026 massivehadron.com ltd.
 
-import {button, element, loadSetting, saveSetting} from './ui.js';
+import {button, element, image, loadSetting, saveSetting} from './ui.js';
 
 const contentHost = 'https://eggbot-content.qrh.workers.dev/';
 const index = new URL('./turtle-time-media.json?v=unity', import.meta.url);
@@ -10,6 +10,10 @@ const boards = {
   instructions: [260, 406, 250, 76], dialog: [532, 4, 330, 504]
 };
 const scoresKey = 'turtleTimeHighScore';
+const roundsKey = 'turtleTimeCompletedRounds';
+const sharePage = 'https://www.massivehadron.com/eggbotstablet/turtle-time-share/';
+const shareCard = new URL('./turtle-time-share/card.jpg', import.meta.url).href;
+const shareCaption = "I have been playing Turtle Time on Eggbot's tablet.";
 
 function pin(node, x, y, width, height, size, layoutWidth = 600, layoutHeight = 1080) {
   Object.assign(node.style, {left: `${x * 100 / layoutWidth}%`, top: `${y * 100 / layoutHeight}%`,
@@ -129,7 +133,7 @@ function createAudio(signal) {
   };
 }
 
-export function createTurtleTime() {
+export function createTurtleTime(tablet) {
   const canvas = element('canvas', 'turtle-beach');
   canvas.setAttribute('aria-label', 'Turtle Time beach');
   const title = element('h2', 'turtle-title');
@@ -174,6 +178,7 @@ export function createTurtleTime() {
 
   let session, game, beach, preview, round, pointer, dialogAction;
   let titleTime, previewTime, recordAt, lastFrame, frame;
+  let completedRounds = 0;
   let letters = [];
   const saved = Number(loadSetting(scoresKey, 0));
   let highScore = Number.isSafeInteger(saved) && saved >= 0 ? saved : 0;
@@ -239,6 +244,24 @@ export function createTurtleTime() {
     showDialog("Time's up", `Turtles saved: ${round.saved}\nTurtles lost: ${round.lost}\nTreasure chests: ${round.chests}\n` +
       `Survival time: ${timePlayed}\n${record}: ${highScore}`, 'Play again', startRound, true);
     clearRound();
+    offerShare();
+  }
+
+  function offerShare() {
+    const previous = loadSetting(roundsKey, completedRounds);
+    completedRounds = Number.isSafeInteger(previous) && previous >= 0 ? previous + 1 : 1;
+    saveSetting(roundsKey, completedRounds);
+    if (completedRounds !== 1 && completedRounds % 3 !== 0) return;
+
+    const card = image(shareCard, 'Turtle Time logo, hatchlings on the beach, and a QR code to play on Eggbot’s tablet');
+    card.width = 1200;
+    card.height = 630;
+    const share = element('a', 'action-link turtle-share-link', 'Share to Facebook');
+    share.href = 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(sharePage);
+    share.target = '_blank';
+    share.rel = 'noopener noreferrer';
+    share.addEventListener('click', () => share.closest('dialog')?.close());
+    tablet.prompt('Share Turtle Time', element('div', 'turtle-share-card', card, element('p', '', shareCaption)), [share], 'Not now');
   }
 
   function feedback(sound, change, isGolden, triple) {

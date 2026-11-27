@@ -449,6 +449,11 @@ dialog { width: min(445px, calc(100% - 28px)); max-height: 85dvh; border: 1px so
 dialog::backdrop { background: #02070bc7; }
 #prompt-text { margin: 12px 0 18px; line-height: 1.5; white-space: pre-line; }
 #prompt-text progress { width: 100%; margin-top: 10px; accent-color: var(--accent); }
+.turtle-share-card { display: grid; gap: 12px; }
+.turtle-share-card img { width: 100%; height: auto; border-radius: 8px; }
+.turtle-share-card p { text-align: center; }
+.turtle-share-link { background: #2163cd; color: white; text-decoration: none; }
+.turtle-share-link:hover { background: #2458aa; }
 .product-details { display: grid; gap: 8px; }
 .product-details p:empty { display: none; }
 .contact-card { display: flex; gap: 13px; align-items: center; }
