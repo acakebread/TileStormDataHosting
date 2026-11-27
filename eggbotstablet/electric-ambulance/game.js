@@ -7,6 +7,9 @@ import {createCityRenderer, loadCity, releaseCity} from './render.js';
 
 const media = new URL('./media/', import.meta.url);
 const key = 'electricAmbulance.';
+const swipeDistance = 16;
+const swipeRepeatDelay = 100;
+const laneSettleDistance = .05;
 const artwork = file => new URL(`${file}.png`, media).href;
 
 export function createElectricAmbulance(view) {
@@ -132,7 +135,7 @@ function startGame(view, city, run) {
     soundToggle('Sound', 'Symbol0003', 'Symbol0004'), soundToggle('Music', 'Symbol0005', 'Symbol0006'));
   const pause = icon('Pause', 'Symbol0001', togglePause);
   const hud = element('div', 'ambulance-hud', score, meter, pause);
-  const controls = element('p', 'ambulance-controls', 'Tap the road, swipe left or right anywhere, or use the arrow keys to steer.');
+  const controls = element('p', 'ambulance-controls', 'Tap the road, hold and drag left or right, or use the arrow keys to steer.');
   const bestLabel = value => `BEST ${value}`;
   const titleBest = element('p', 'ambulance-best', bestLabel(best));
   const title = element('div', 'ambulance-panel ambulance-title', image(artwork('Logo_Front'), 'Electric Ambulance', 'ambulance-logo'),
@@ -177,6 +180,11 @@ function startGame(view, city, run) {
     const phase = state.phase;
     for (let remaining = dt; remaining > 0; remaining -= .02) drive.advance(Math.min(remaining, .02));
     if (phase !== state.phase) refreshPanels();
+    if (gesture?.nextSwipeAt && now >= gesture.nextSwipeAt && Math.abs(state.lane - state.targetLane) < laneSettleDistance) {
+      gesture.originX = gesture.lastX;
+      gesture.originY = gesture.lastY;
+      gesture.nextSwipeAt = 0;
+    }
     if (shownScore !== state.score) {
       shownScore = state.score;
       score.value = String(state.score);
@@ -215,18 +223,32 @@ function startGame(view, city, run) {
 
   view.addEventListener('pointerdown', event => {
     if (state.phase !== 'playing' || gesture || !event.isPrimary || event.button !== 0 || event.target.closest('button')) return;
-    gesture = {id: event.pointerId, x: event.clientX, y: event.clientY, onRoad: event.target === canvas};
+    const {clientX, clientY} = event;
+    gesture = {id: event.pointerId, originX: clientX, originY: clientY, lastX: clientX, lastY: clientY,
+      onRoad: event.target === canvas, swiped: false, nextSwipeAt: 0};
     view.setPointerCapture(event.pointerId);
   }, {signal});
+
+  function steerOnSwipe(event) {
+    if (gesture?.id !== event.pointerId) return;
+    gesture.lastX = event.clientX;
+    gesture.lastY = event.clientY;
+    const dx = gesture.lastX - gesture.originX;
+    const dy = gesture.lastY - gesture.originY;
+    if (gesture.nextSwipeAt || Math.abs(dx) <= swipeDistance || Math.abs(dx) <= Math.abs(dy)) return;
+    gesture.swiped = true;
+    gesture.nextSwipeAt = performance.now() + swipeRepeatDelay;
+    drive.steer(Math.sign(dx));
+  }
+
+  view.addEventListener('pointermove', steerOnSwipe, {signal});
   view.addEventListener('pointerup', event => {
     if (gesture?.id !== event.pointerId) return;
+    steerOnSwipe(event);
     const {clientX, clientY} = event;
-    const {x, y, onRoad} = gesture;
-    const dx = clientX - x;
-    const dy = clientY - y;
+    const {originX, originY, onRoad, swiped} = gesture;
     clearGesture();
-    if (Math.abs(dx) > 16 && Math.abs(dx) > Math.abs(dy)) drive.steer(Math.sign(dx));
-    else if (onRoad && Math.abs(dx) < 16 && Math.abs(dy) < 16) {
+    if (!swiped && onRoad && Math.abs(clientX - originX) < swipeDistance && Math.abs(clientY - originY) < swipeDistance) {
       const bounds = canvas.getBoundingClientRect();
       if (clientX >= bounds.left && clientX < bounds.right && clientY >= bounds.top && clientY < bounds.bottom) {
         const pointerX = (clientX - bounds.left) / bounds.width;
@@ -239,6 +261,7 @@ function startGame(view, city, run) {
   }
   view.addEventListener('pointercancel', cancelGesture, {signal});
   view.addEventListener('lostpointercapture', cancelGesture, {signal});
+  window.addEventListener('blur', clearGesture, {signal});
   document.addEventListener('keydown', event => {
     if (event.repeat || event.defaultPrevented || document.querySelector('dialog[open]')) return;
     if (['ArrowLeft', 'ArrowRight'].includes(event.key) && state.phase === 'playing') {

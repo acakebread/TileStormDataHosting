@@ -278,7 +278,7 @@ function mountElectricAmbulance() {
     const controller = new AbortController();
     opening = controller;
     view.replaceChildren(element('p', 'ambulance-loading', 'Loading Electric Ambulance…'));
-    import('./electric-ambulance/game.js?v=full-width-swipe').then(({createElectricAmbulance}) => {
+    import('./electric-ambulance/game.js?v=held-steering').then(({createElectricAmbulance}) => {
       if (controller.signal.aborted) return;
       app = createElectricAmbulance(view);
       app.open();
