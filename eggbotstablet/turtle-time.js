@@ -227,7 +227,7 @@ export function createTurtleTime(tablet) {
     heading.textContent = name;
     message.textContent = text;
     action.textContent = label;
-    panelTap.hidden = !showingScores;
+    panelTap.hidden = true;
     scores.hidden = !showingScores;
     dialogAction = callback;
     screen('dialog');
