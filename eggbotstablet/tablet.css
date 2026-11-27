@@ -176,6 +176,7 @@ img { display: block; max-width: 100%; }
 .turtle-bonus { color: #b3ffab; }
 .turtle-gold { color: #ffcf63; }
 .turtle-loss { color: #ffa894; }
+.turtle-stage > .high-scores { font-family: Barlow, system-ui, sans-serif; }
 .turtle-loading {
   position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 1rem;
   padding: 1rem; color: white; background: #10202a; font: 1rem Barlow, system-ui, sans-serif; text-align: center;

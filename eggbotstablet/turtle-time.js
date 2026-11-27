@@ -1,6 +1,7 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {button, element, image, loadSetting, saveSetting} from './ui.js';
+import {playerId, playerMoniker, publicLabel, savePlayerMoniker, showNicknamePrompt, showScoreBoard, submitScore} from './high-scores.js?v=high-scores';
 
 const contentHost = 'https://eggbot-content.qrh.workers.dev/';
 const index = new URL('./turtle-time-media.json?v=unity', import.meta.url);
@@ -138,7 +139,8 @@ export function createTurtleTime(tablet) {
   canvas.setAttribute('aria-label', 'Turtle Time beach');
   const title = element('h2', 'turtle-title');
   title.setAttribute('aria-label', 'Turtle Time');
-  const highScoreBoard = region(pin(element('p', 'turtle-label turtle-wood'), 164, 921, 272, 76, 31), boards.rescues, 'ui');
+  const highScoreBoard = region(pin(button('', openScores, 'turtle-wood turtle-label'), 164, 921, 272, 76, 31), boards.rescues, 'ui');
+  highScoreBoard.setAttribute('aria-label', 'High scores');
   const menu = element('div', 'turtle-overlay', title, highScoreBoard,
     region(pin(button('Start', startRound, 'turtle-wood'), 20, 484, 260, 96, 41), boards.start, 'ui'),
     region(pin(button('Instructions', instructions, 'turtle-wood'), 320, 484, 260, 96, 36), boards.instructions, 'ui'));
@@ -168,8 +170,10 @@ export function createTurtleTime(tablet) {
   panelTap.setAttribute('aria-label', 'Return to the title screen');
   const heading = pin(element('h2', 'turtle-label'), 88, 206, 424, 80, 50);
   const message = pin(element('p', 'turtle-label'), 105, 298, 390, 377, 31);
+  const scores = region(pin(button('High scores', openScores, 'turtle-wood'), 161, 600, 278, 92, 37), boards.start, 'ui');
+  scores.hidden = true;
   const action = region(pin(button('', () => dialogAction?.(), 'turtle-wood'), 161, 704, 278, 92, 37), boards.instructions, 'ui');
-  const dialog = element('div', 'turtle-overlay', panelArt, panelTap, heading, message, action);
+  const dialog = element('div', 'turtle-overlay', panelArt, panelTap, heading, message, scores, action);
   const loading = element('div', 'turtle-loading');
   loading.setAttribute('role', 'status');
   const stage = element('div', 'turtle-stage', canvas, menu, hud, dialog, loading);
@@ -177,7 +181,7 @@ export function createTurtleTime(tablet) {
   view.setAttribute('aria-label', 'Turtle Time');
 
   let session, game, beach, preview, round, pointer, dialogAction;
-  let titleTime, previewTime, recordAt, lastFrame, frame;
+  let titleTime, previewTime, recordAt, lastFrame, frame, scorecard;
   let completedRounds = 0;
   let letters = [];
   const saved = Number(loadSetting(scoresKey, 0));
@@ -190,6 +194,10 @@ export function createTurtleTime(tablet) {
     if (highScore !== previous) saveSetting(scoresKey, highScore);
   }
 
+  function openScores() {
+    showScoreBoard(stage, 'turtle-time');
+  }
+
   function screen(mode) {
     menu.hidden = mode !== 'title';
     hud.hidden = mode !== 'play';
@@ -198,6 +206,7 @@ export function createTurtleTime(tablet) {
   }
 
   function showTitle() {
+    scorecard = false;
     saveScore();
     clearRound();
     session?.audio.stopEffects();
@@ -213,11 +222,13 @@ export function createTurtleTime(tablet) {
     preview = null;
   }
 
-  function showDialog(name, text, label, callback, scorecard = false) {
+  function showDialog(name, text, label, callback, showingScores = false) {
+    scorecard = showingScores;
     heading.textContent = name;
     message.textContent = text;
     action.textContent = label;
-    panelTap.hidden = !scorecard;
+    panelTap.hidden = !showingScores;
+    scores.hidden = !showingScores;
     dialogAction = callback;
     screen('dialog');
   }
@@ -228,6 +239,7 @@ export function createTurtleTime(tablet) {
   }
 
   function startRound() {
+    scorecard = false;
     session.audio.stopEffects();
     pops.clear();
     recordAt = -Infinity;
@@ -237,13 +249,31 @@ export function createTurtleTime(tablet) {
   }
 
   function showScore() {
+    const saved = round.saved;
+    const newBest = saved > highScore;
     saveScore();
     const seconds = Math.floor(round.elapsed);
     const timePlayed = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
     const record = recordAt === -Infinity ? 'High score' : 'New high score';
-    showDialog("Time's up", `Turtles saved: ${round.saved}\nTurtles lost: ${round.lost}\nTreasure chests: ${round.chests}\n` +
-      `Survival time: ${timePlayed}\n${record}: ${highScore}`, 'Play again', startRound, true);
+    const summary = `Turtles saved: ${saved}\nTurtles lost: ${round.lost}\nTreasure chests: ${round.chests}\n` +
+      `Survival time: ${timePlayed}\n${record}: ${highScore}`;
+    showDialog("Time's up", summary, 'Play again', startRound, true);
     clearRound();
+    const showRank = reply => {
+      if (!scorecard) return;
+      if (reply?.rank > 0) message.textContent = `${summary}\nRanking: ${reply.rank}`;
+    };
+    const send = (setMoniker, moniker) => submitScore('turtle-time', saved, {setMoniker, moniker}).then(showRank, () => {});
+    if (newBest && !playerMoniker()) {
+      playerId().then(id => {
+        if (!session) return;
+        showNicknamePrompt(stage, {
+          playerLabel: publicLabel(id),
+          onSave: moniker => send(true, savePlayerMoniker(moniker)),
+          onCancel: () => send(false, '')
+        });
+      }, () => send(false, ''));
+    } else send(true, playerMoniker());
     offerShare();
   }
 
