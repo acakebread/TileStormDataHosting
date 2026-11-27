@@ -206,7 +206,7 @@ function createNotificationChime() {
 }
 
 function notify(id, message, select) {
-  if (current === id || preferences.notificationsPausedUntil) return;
+  if (current === id || preferences.notificationsSuppressed) return;
   clearTimeout(notificationTimer);
   notificationAction = () => {
     if (apps[id].frame || apps[id].mount) open(id);

@@ -11,7 +11,7 @@ export const botCloudProduct = 'botcloud';
 export const tabletProducts = {
   [botOsPlusProduct]: {
     name: 'BotOS Plus',
-    description: 'One-time upgrade for timed notification pauses.',
+    description: 'One-time upgrade to switch notifications off until you turn them back on.',
     icon: 'settings'
   },
   [botCloudProduct]: {
@@ -29,6 +29,7 @@ export function createTabletPreferences() {
   let bannerPosition = loadSetting('notificationPosition', 'top') === 'bottom' ? 'bottom' : 'top';
   let soundsEnabled = loadSetting('notificationSoundsEnabled', true) !== false;
   let pauseUntil = loadSetting('notificationsPausedUntil', 0);
+  let notificationsDisabled = loadSetting('notificationsDisabled', false) === true;
   let contentOffloaded = loadSetting('contentOffloaded', false) === true;
 
   return {
@@ -37,9 +38,11 @@ export function createTabletPreferences() {
     get bannerPosition() { return bannerPosition; },
     get soundsEnabled() { return soundsEnabled; },
     get notificationsPausedUntil() {
-      return this.hasOsUpgrade && Number.isSafeInteger(pauseUntil) && pauseUntil <= 8.64e15 && pauseUntil > Date.now()
+      return Number.isSafeInteger(pauseUntil) && pauseUntil <= 8.64e15 && pauseUntil > Date.now()
         ? pauseUntil : 0;
     },
+    get notificationsDisabled() { return notificationsDisabled && this.hasOsUpgrade; },
+    get notificationsSuppressed() { return this.notificationsDisabled || Boolean(this.notificationsPausedUntil); },
     get contentOffloaded() { return contentOffloaded; },
     setBannerPosition(position) {
       bannerPosition = position;
@@ -50,13 +53,26 @@ export function createTabletPreferences() {
       saveSetting('notificationSoundsEnabled', enabled);
     },
     pauseNotifications(minutes) {
-      if (!this.hasOsUpgrade) return;
+      if (!Number.isFinite(minutes) || minutes <= 0) return;
+      notificationsDisabled = false;
+      saveSetting('notificationsDisabled', false);
       pauseUntil = Date.now() + minutes * 60000;
       saveSetting('notificationsPausedUntil', pauseUntil);
     },
+    setNotificationsDisabled(disabled) {
+      if (disabled && !this.hasOsUpgrade) return;
+      notificationsDisabled = disabled;
+      saveSetting('notificationsDisabled', disabled);
+      if (disabled) {
+        pauseUntil = 0;
+        saveSetting('notificationsPausedUntil', 0);
+      }
+    },
     resumeNotifications() {
       pauseUntil = 0;
+      notificationsDisabled = false;
       saveSetting('notificationsPausedUntil', 0);
+      saveSetting('notificationsDisabled', false);
     },
     offloadContent() {
       if (!this.hasCloudAccess || contentOffloaded) return;
@@ -120,11 +136,16 @@ export function createSettings(tablet) {
     refreshPause();
   });
   const durations = [[15, '15 min'], [60, '1 hour'], [480, '8 hours']];
+  const pauseOff = button('Off', () => {
+    preferences.setNotificationsDisabled(!preferences.notificationsDisabled);
+    if (preferences.notificationsDisabled) tablet.dismissNotification();
+    refreshPause();
+  });
   const pauseControls = element('div', 'actions', ...durations.map(([minutes, label]) => button(label, () => {
     preferences.pauseNotifications(minutes);
     tablet.dismissNotification();
     refreshPause();
-  })));
+  })), pauseOff);
   pauseControls.setAttribute('role', 'group');
   pauseControls.setAttribute('aria-label', 'Pause duration');
   const notifications = element('section', 'settings-panel', element('h3', '', 'Notifications'),
@@ -245,23 +266,25 @@ export function createSettings(tablet) {
 
   function refreshPause() {
     const {hasOsUpgrade} = preferences;
+    const disabled = preferences.notificationsDisabled;
     const expiry = preferences.notificationsPausedUntil;
-    const status = expiry ? 'Paused until ' + shortTime.format(expiry) :
-      hasOsUpgrade ? '' : 'Requires BotOS Plus.';
+    const status = disabled ? 'Notifications are off.' :
+      expiry ? 'Paused until ' + shortTime.format(expiry) : '';
     if (pauseStatus.textContent !== status) pauseStatus.textContent = status;
     pauseStatus.hidden = !status;
-    if (!expiry && document.activeElement === resume) {
-      const next = hasOsUpgrade ? pauseControls.firstElementChild : soundButtons[0];
-      next.focus();
-    }
-    resume.hidden = !expiry;
-    pauseControls.hidden = !hasOsUpgrade;
+    const paused = disabled || Boolean(expiry);
+    if (!paused && document.activeElement === resume) pauseControls.firstElementChild.focus();
+    if (!hasOsUpgrade && document.activeElement === pauseOff) pauseControls.firstElementChild.focus();
+    resume.textContent = disabled ? 'Turn on' : 'Resume notifications';
+    resume.hidden = !paused;
+    pauseOff.hidden = !hasOsUpgrade;
+    pauseOff.setAttribute('aria-pressed', String(disabled));
     upgradeAction.hidden = hasOsUpgrade;
     const version = 'BotOS ' + osVersion + (hasOsUpgrade ? ' Plus' : '');
     if (software.textContent !== version) {
       software.textContent = version;
-      upgradeStatus.textContent = hasOsUpgrade ? 'Installed. You can pause notifications.' :
-        'Pause banners and chimes for a set time.';
+      upgradeStatus.textContent = hasOsUpgrade ? 'Installed. You can switch notifications off.' :
+        'Switch notifications off until you turn them back on.';
     }
   }
 

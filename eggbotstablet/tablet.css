@@ -418,7 +418,8 @@ img { display: block; max-width: 100%; }
 .settings-meter { display: block; width: 100%; height: 14px; accent-color: var(--accent); }
 .settings-usage { font: 500 .82rem var(--mono); }
 .settings-toggle button { min-width: min(100px, 100%); }
-.settings-toggle button[aria-pressed="true"] { color: var(--accent); border-color: #599a89; background: #1e3a3a; }
+.settings-toggle button[aria-pressed="true"],
+.settings-panel .actions button[aria-pressed="true"] { color: var(--accent); border-color: #599a89; background: #1e3a3a; }
 .settings-app { overscroll-behavior-y: contain; }
 .subscription-level { display: flex; align-items: center; gap: 12px; }
 .subscription-certificate {

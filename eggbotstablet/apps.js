@@ -578,7 +578,7 @@ export function createStore(tablet) {
     const controls = fromSettings ? [button('Back to Settings', () => tablet.open('settings'))] : [];
     const isOsUpgrade = id === botOsPlusProduct;
     const owned = () => isOsUpgrade ? tablet.preferences.hasOsUpgrade : tablet.preferences.hasCloudAccess;
-    const installedMessage = isOsUpgrade ? 'Installed. Open Settings to pause notifications.' :
+    const installedMessage = isOsUpgrade ? 'Installed. Open Settings to switch notifications off.' :
       'Activated. Open Settings to offload cached media.';
     const status = element('p', 'muted');
     status.setAttribute('role', 'status');
