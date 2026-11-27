@@ -1,6 +1,7 @@
 // Copyright 2026 massivehadron.com ltd.
 // Based on FruitBurst, massivehadron.com ltd.
 
+import {loadPlayerProfile, playerId, playerMoniker, publicLabel, savePlayerMoniker, savePlayerProfile, showNicknamePrompt, showScoreBoard, submitScore} from './high-scores.js?v=profile-keep';
 import {button, countdown, element, loadSetting, number, saveSetting} from './ui.js';
 
 const columns = 10;
@@ -141,6 +142,7 @@ export function createFruit({open}) {
   let remaining = roundSeconds;
   let score = 0;
   let highScore = readHighScore();
+  let previousBest = highScore;
   let selected = -1;
   let hover = -1;
   let drag;
@@ -156,7 +158,7 @@ export function createFruit({open}) {
   let marble;
 
   const scoreText = element('output', 'fruit-value', '0');
-  const highScoreText = element('output', 'fruit-value fruit-gold', number.format(highScore));
+  const highScoreText = button(number.format(highScore), () => showScoreBoard(view, 'fruit-burst'), 'fruit-value fruit-gold fruit-score-link');
   const clock = element('output', 'fruit-value', countdown(roundSeconds * 1000));
   clock.setAttribute('role', 'timer');
   const stat = (label, value) => {
@@ -165,7 +167,7 @@ export function createFruit({open}) {
   };
   const panel = element('header', 'fruit-panel',
     element('h2', 'fruit-gold', 'Fruit Burst'),
-    element('div', 'fruit-stats', stat('Score', scoreText), stat('High Score', highScoreText), stat('Time', clock)));
+    element('div', 'fruit-stats', stat('Score', scoreText), stat('High scores', highScoreText), stat('Time', clock)));
   const canvas = element('canvas', 'fruit-canvas');
   canvas.setAttribute('aria-hidden', 'true');
   const context = canvas.getContext('2d');
@@ -189,6 +191,7 @@ export function createFruit({open}) {
   const headline = element('h3', 'fruit-gold');
   const detail = element('p', 'fruit-final-score');
   const record = element('p', 'fruit-gold');
+  const scores = button('High scores', () => showScoreBoard(view, 'fruit-burst'), 'fruit-scores');
   const again = button('Play again', () => {
     sound.unlock();
     deal();
@@ -198,7 +201,7 @@ export function createFruit({open}) {
     deal();
   }, 'fruit-quit');
   const result = element('div', 'fruit-result', headline, detail, record,
-    element('div', 'fruit-result-actions', again, quit));
+    element('div', 'fruit-result-actions', scores, again, quit));
   result.hidden = true;
   result.setAttribute('role', 'status');
   const view = element('section', 'fruit-app', element('div', 'fruit-layout', panel, area), result);
@@ -266,6 +269,7 @@ export function createFruit({open}) {
     drag = pair = null;
     cascade = 0;
     matched.clear();
+    previousBest = Math.max(highScore, readHighScore());
     score = 0;
     remaining = roundSeconds;
     previousTime = undefined;
@@ -401,12 +405,35 @@ export function createFruit({open}) {
   }
 
   function showResult() {
+    const finished = score;
+    const newBest = finished > previousBest;
     state = 'over';
     headline.textContent = ranOutOfMoves ? 'Game Over' : 'Time Up';
-    detail.textContent = (ranOutOfMoves ? 'Out of moves. Score ' : 'Score ') + number.format(score);
-    record.textContent = 'High score ' + number.format(highScore);
+    detail.textContent = (ranOutOfMoves ? 'Out of moves. Score ' : 'Score ') + number.format(finished);
+    const summary = 'High score ' + number.format(highScore);
+    record.textContent = summary;
     result.hidden = false;
     again.focus({preventScroll: true});
+    const showRank = reply => {
+      if (state !== 'over' || result.hidden) return;
+      if (reply?.rank > 0) record.textContent = summary + ' · Ranking ' + reply.rank;
+    };
+    const send = () => submitScore('fruit-burst', finished, {setMoniker: false}).then(showRank, () => {});
+    loadPlayerProfile().then(() => {
+      if (state !== 'over') return;
+      if (newBest && !playerMoniker()) {
+        playerId().then(id => {
+          if (state !== 'over') { send(); return; }
+          showNicknamePrompt(view, {
+            playerLabel: publicLabel(id),
+            onSave: moniker => { savePlayerProfile({moniker: savePlayerMoniker(moniker)}).finally(send); },
+            onCancel: send
+          });
+        }, send);
+        return;
+      }
+      send();
+    }, send);
   }
 
   function advance(step) {
@@ -497,7 +524,7 @@ export function createFruit({open}) {
     frame = 0;
     const elapsed = previousTime === undefined ? 0 : (now - previousTime) / 1000;
     previousTime = now;
-    if (state !== 'emptying' && state !== 'over') {
+    if (state !== 'emptying' && state !== 'over' && !view.querySelector('.high-scores')) {
       remaining = Math.max(0, remaining - elapsed);
       updateClock();
     }

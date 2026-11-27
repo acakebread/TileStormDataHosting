@@ -591,6 +591,11 @@ dialog:has(.botcloud-details) .actions button { flex: 1 1 45%; }
 .fruit-stat span { color: #fffc; font-size: clamp(.75rem, min(2.4cqw, 5cqh), 1.6rem); text-transform: uppercase; }
 .fruit-value { font-size: clamp(1.15rem, min(5.5cqw, 11cqh), 3.7rem); font-weight: 700; line-height: 1; }
 .fruit-gold { color: #ffd640; }
+button.fruit-score-link {
+  border: 0; border-radius: 0; background: transparent; color: #ffd640; padding: 0; min-height: 0;
+  font-size: clamp(1.15rem, min(5.5cqw, 11cqh), 3.7rem); font-weight: 700; line-height: 1;
+}
+button.fruit-score-link:hover:not(:disabled) { background: transparent; text-decoration: underline; }
 .fruit-hurry { color: #ff6b52; }
 .fruit-play-area { position: relative; min-width: 0; min-height: 0; }
 .fruit-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
@@ -609,11 +614,13 @@ dialog:has(.botcloud-details) .actions button { flex: 1 1 45%; }
 }
 .fruit-result h3 { font-size: clamp(2rem, min(9cqw, 17cqh), 5rem); line-height: 1.1; text-transform: uppercase; }
 .fruit-final-score { font-size: 1.25em; }
-.fruit-result-actions { display: flex; justify-content: center; gap: clamp(.6rem, 2cqw, 1.6rem); margin-top: .5em; }
+.fruit-result-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: clamp(.6rem, 2cqw, 1.6rem); margin-top: .5em; }
 .fruit-result-actions button {
-  min-width: min(27cqw, 160px); padding: .55em .7em; border: 0;
+  min-width: min(24cqw, 148px); padding: .55em .7em; border: 0;
   color: white; font-size: clamp(.9rem, min(3.1cqw, 6cqh), 1.7rem); font-weight: 700; text-transform: uppercase;
 }
+.fruit-result-actions .fruit-scores { background: #29738a; }
+.fruit-result-actions .fruit-scores:hover { background: #3489a3; }
 .fruit-result-actions .fruit-again { background: #1f8c4d; }
 .fruit-result-actions .fruit-again:hover { background: #2da661; }
 .fruit-result-actions .fruit-quit { background: #4d525c; }

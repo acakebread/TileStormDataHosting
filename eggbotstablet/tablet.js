@@ -4,7 +4,7 @@ import {loadCatalogue} from './catalogue.js';
 import {createChat, createMail} from './messages.js?v=mail-layout';
 import {createPhotos, createBank, createLove, createMarket, createStore} from './apps.js?v=profile-keep';
 import {createFirebot} from './firebot.js?v=hosted';
-import {createFruit} from './fruit-burst.js?v=unity';
+import {createFruit} from './fruit-burst.js?v=fruit-scores';
 import {createTurtleTime} from './turtle-time.js?v=profile-keep';
 import {hasOnlyBotsAccess, hasPremiumAccess} from './premium.js?v=stripe-onlybots';
 import {linkPurchaseProfile, linkWebGLProfiles, syncPurchases} from './purchases.js?v=high-scores';
