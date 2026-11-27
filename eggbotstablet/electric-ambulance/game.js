@@ -289,7 +289,11 @@ function startGame(view, city, run) {
   window.addEventListener('blur', clearGesture, {signal});
   document.addEventListener('keydown', event => {
     if (event.repeat || event.defaultPrevented || document.querySelector('dialog[open], .high-scores')) return;
-    if (['ArrowLeft', 'ArrowRight'].includes(event.key) && state.phase === 'playing') {
+    if (state.phase === 'wasted' && (event.key === ' ' || event.key === 'Enter')) {
+      if (event.target.closest('button, a[href], input, select, textarea, [contenteditable]')) return;
+      event.preventDefault();
+      begin('same');
+    } else if (['ArrowLeft', 'ArrowRight'].includes(event.key) && state.phase === 'playing') {
       event.preventDefault();
       drive.steer(event.key === 'ArrowLeft' ? -1 : 1);
     } else if (['Escape', 'p', 'P'].includes(event.key)) {
