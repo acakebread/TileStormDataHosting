@@ -159,17 +159,17 @@ function startGame(view, city, run) {
   const pause = icon('Pause', 'Symbol0001', togglePause);
   const hud = element('div', 'ambulance-hud', score, meter, pause);
   const controls = element('p', 'ambulance-controls', 'Tap the road, hold and drag left or right, or use the arrow keys to steer.');
-  const bestLabel = value => `BEST ${value}`;
-  const titleBest = button(bestLabel(best), () => showScoreBoard(view, 'electric-ambulance'), 'ambulance-best');
-  titleBest.title = 'High scores';
-  titleBest.setAttribute('aria-label', 'High scores');
+  const bestLabel = value => ranking || `BEST ${value}`;
+  const openScores = () => showScoreBoard(view, 'electric-ambulance');
+  const titleBest = element('p', 'ambulance-best', bestLabel(best));
   const title = element('div', 'ambulance-panel ambulance-title', image(artwork('Logo_Front'), 'Electric Ambulance', 'ambulance-logo'),
-    button('PLAY', () => begin('same'), 'ambulance-primary'), titleBest, toggles());
+    button('PLAY', () => begin('same'), 'ambulance-primary'), titleBest,
+    button('HIGH SCORES', openScores), toggles());
   const resume = button('RESUME', () => { togglePause(); canvas.focus({preventScroll: true}); }, 'ambulance-primary');
   const paused = element('div', 'ambulance-panel', element('h2', '', 'PAUSED'), resume, toggles());
   const reason = element('h2', '', 'YOU CRASHED');
   const result = element('output', 'ambulance-result');
-  const wasted = element('div', 'ambulance-panel', reason, result, element('div', 'ambulance-restarts',
+  const wasted = element('div', 'ambulance-panel', reason, result, button('HIGH SCORES', openScores), element('div', 'ambulance-restarts',
     button('AGAIN?', () => begin('same')), button('NEXT?', () => begin('next')), button('CONTINUE', () => begin('continue'))), toggles());
   const blast = element('div', 'ambulance-blast');
   blast.hidden = true;
