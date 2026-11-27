@@ -10,7 +10,7 @@ import {hasOnlyBotsAccess, hasPremiumAccess} from './premium.js?v=stripe-onlybot
 import {linkPurchaseProfile, linkWebGLProfiles, syncPurchases} from './purchases.js?v=high-scores';
 import {createHomePager} from './home.js?v=onlybots-shop';
 import {loadPlayerProfile} from './high-scores.js?v=profile-sync';
-import {createSettings, createTabletPreferences, offloadSizeMb, osVersion} from './settings.js?v=profile-sync';
+import {createSettings, createTabletPreferences, offloadSizeMb, osVersion} from './settings.js?v=player-profile';
 import {element, button, image, shortTime, loadSetting, saveSetting} from './ui.js';
 
 const pages = [

@@ -128,7 +128,7 @@ export function createSettings(tablet) {
       saveNickname.disabled = false;
     }
   });
-  const player = element('section', 'settings-panel', element('h3', '', 'Player'),
+  const player = element('section', 'settings-panel', element('h3', '', 'Player profile'),
     element('p', 'muted', 'Your nickname is the name on the high score tables.'),
     nicknameForm, playerStatus);
   loadPlayerProfile().then(() => {
@@ -266,7 +266,7 @@ export function createSettings(tablet) {
 
   const view = element('section', 'settings-app', element('div', 'app-content',
     element('header', 'app-heading', tablet.art('settings'), element('h2', '', 'Settings')),
-    element('div', 'settings-grid', element('div', 'settings-column', player, about, storage, purchases, subscription),
+    element('div', 'settings-grid', element('div', 'settings-column', about, player, storage, purchases, subscription),
       element('div', 'settings-column', notifications, upgrade, promotion))));
 
   function refreshSubscription() {
