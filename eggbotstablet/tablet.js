@@ -7,7 +7,7 @@ import {createFirebot} from './firebot.js?v=hosted';
 import {createFruit} from './fruit-burst.js?v=unity';
 import {createTurtleTime} from './turtle-time.js?v=crunch-pcm';
 import {hasOnlyBotsAccess, hasPremiumAccess} from './premium.js?v=stripe-onlybots';
-import {linkPurchaseProfile, linkWebGLProfiles, syncPurchases} from './purchases.js?v=stripe-shop';
+import {linkPurchaseProfile, linkWebGLProfiles, syncPurchases} from './purchases.js?v=high-scores';
 import {createHomePager} from './home.js?v=onlybots-shop';
 import {createSettings, createTabletPreferences, offloadSizeMb, osVersion} from './settings.js?v=membership-codes';
 import {element, button, image, shortTime, loadSetting, saveSetting} from './ui.js';
@@ -278,7 +278,7 @@ function mountElectricAmbulance() {
     const controller = new AbortController();
     opening = controller;
     view.replaceChildren(element('p', 'ambulance-loading', 'Loading Electric Ambulance…'));
-    import('./electric-ambulance/game.js?v=held-steering').then(({createElectricAmbulance}) => {
+    import('./electric-ambulance/game.js?v=high-scores').then(({createElectricAmbulance}) => {
       if (controller.signal.aborted) return;
       app = createElectricAmbulance(view);
       app.open();

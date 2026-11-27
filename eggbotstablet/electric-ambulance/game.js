@@ -1,6 +1,7 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {button, element, image, loadSetting, saveSetting} from '../ui.js';
+import {playerId, playerMoniker, publicLabel, savePlayerMoniker, showNicknamePrompt, showScoreBoard, submitScore} from '../high-scores.js?v=high-scores';
 import {createAudio} from './audio.js?v=tablet-sound';
 import {createDrive} from './drive.js';
 import {createCityRenderer, loadCity, releaseCity} from './render.js';
@@ -70,12 +71,34 @@ function startGame(view, city, run) {
   };
 
   let best = Math.max(0, Number(loadSetting(key + 'bestScore', 0)) || 0);
+  let ranking = '';
   const drive = createDrive(city.userData, cue => {
     audio.cue(cue);
-    if ((cue === 'power' || cue === 'crash') && state.score > best) {
-      best = state.score;
+    if (cue !== 'power' && cue !== 'crash') return;
+    const score = state.score;
+    const newBest = score > best;
+    if (newBest) {
+      best = score;
       saveSetting(key + 'bestScore', best);
     }
+    const showRank = reply => {
+      ranking = reply?.rank > 0 ? `RANKING ${reply.rank}` : '';
+      titleBest.textContent = ranking || bestLabel(best);
+      if (state.phase === 'wasted') result.textContent = `${score} · ${titleBest.textContent}`;
+    };
+    const send = (setMoniker, moniker) => submitScore('electric-ambulance', score, {setMoniker, moniker}).then(showRank, () => {});
+    if (newBest && !playerMoniker()) {
+      playerId().then(id => {
+        if (signal.aborted) return;
+        showNicknamePrompt(view, {
+          playerLabel: publicLabel(id),
+          onSave: moniker => send(true, savePlayerMoniker(moniker)),
+          onCancel: () => send(false, '')
+        });
+      }, () => send(false, ''));
+      return;
+    }
+    send(true, playerMoniker());
   });
   const {state} = drive;
   const batterySprites = city.userData.batterySprites.map(file => image(artwork(file), '', 'ambulance-meter'));
@@ -137,7 +160,9 @@ function startGame(view, city, run) {
   const hud = element('div', 'ambulance-hud', score, meter, pause);
   const controls = element('p', 'ambulance-controls', 'Tap the road, hold and drag left or right, or use the arrow keys to steer.');
   const bestLabel = value => `BEST ${value}`;
-  const titleBest = element('p', 'ambulance-best', bestLabel(best));
+  const titleBest = button(bestLabel(best), () => showScoreBoard(view, 'electric-ambulance'), 'ambulance-best');
+  titleBest.title = 'High scores';
+  titleBest.setAttribute('aria-label', 'High scores');
   const title = element('div', 'ambulance-panel ambulance-title', image(artwork('Logo_Front'), 'Electric Ambulance', 'ambulance-logo'),
     button('PLAY', () => begin('same'), 'ambulance-primary'), titleBest, toggles());
   const resume = button('RESUME', () => { togglePause(); canvas.focus({preventScroll: true}); }, 'ambulance-primary');
@@ -263,7 +288,7 @@ function startGame(view, city, run) {
   view.addEventListener('lostpointercapture', cancelGesture, {signal});
   window.addEventListener('blur', clearGesture, {signal});
   document.addEventListener('keydown', event => {
-    if (event.repeat || event.defaultPrevented || document.querySelector('dialog[open]')) return;
+    if (event.repeat || event.defaultPrevented || document.querySelector('dialog[open], .high-scores')) return;
     if (['ArrowLeft', 'ArrowRight'].includes(event.key) && state.phase === 'playing') {
       event.preventDefault();
       drive.steer(event.key === 'ArrowLeft' ? -1 : 1);

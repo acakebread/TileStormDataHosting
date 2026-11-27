@@ -2,7 +2,7 @@
 
 import {element, button, image, tabs, watchSwipe, money, number, countdown, loadSetting, saveSetting} from './ui.js?v=lovebot-swipe';
 import {hasOnlyBotsAccess, redeemOnlyBotsCode} from './premium.js?v=stripe-onlybots';
-import {buyPurchase, catalogueProduct, paidLoveBotSwipes, refreshCatalogue, spendLoveBotSwipe, stripePrice, subscriptionTier} from './purchases.js?v=stripe-shop';
+import {buyPurchase, catalogueProduct, paidLoveBotSwipes, refreshCatalogue, spendLoveBotSwipe, stripePrice, subscriptionTier} from './purchases.js?v=high-scores';
 import {createSlideGesture} from './slide.js';
 import {botOsPlusProduct, tabletProducts} from './settings.js?v=membership-codes';
 

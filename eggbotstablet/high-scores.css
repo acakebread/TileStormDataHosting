@@ -1,0 +1,47 @@
+/* Copyright 2026 massivehadron.com ltd. */
+
+.high-scores {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgb(0 0 0 / .62);
+  color: #fff;
+}
+
+.high-scores-card {
+  width: min(100%, 26rem);
+  max-height: 100%;
+  display: grid;
+  gap: .7rem;
+  margin: 0;
+  padding: 1rem;
+  overflow: auto;
+  background: #121a20;
+  border-radius: .6rem;
+  text-align: center;
+}
+
+.high-scores-card h2, .high-scores-card p { margin: 0; }
+.high-scores-card h2 { font-size: 1.4rem; }
+.high-scores-id { color: #fad15a; }
+.high-scores-error { min-height: 1.2em; color: #ff8d73; }
+.high-scores-name, .high-scores-card button {
+  font: inherit;
+  border-radius: .4rem;
+  padding: .55rem .8rem;
+}
+.high-scores-name { color: #fff; background: #243038; border: 0; }
+.high-scores-card button { border: 0; background: #29738a; color: #fff; cursor: pointer; }
+.high-scores-actions { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
+.high-scores-actions button { background: #3f474d; }
+.high-scores-list { margin: 0; padding: 0; list-style: none; text-align: left; }
+.high-scores-list li {
+  display: grid;
+  grid-template-columns: 2.5rem 1fr auto;
+  gap: .5rem;
+  padding: .35rem .2rem;
+}
+.high-scores-list li.mine { color: #fad15a; background: rgb(255 255 255 / .08); }

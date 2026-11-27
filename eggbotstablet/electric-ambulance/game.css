@@ -122,6 +122,14 @@
 }
 .ambulance-app .ambulance-panel button.ambulance-primary { font-size: max(23px, 12cqw); }
 .ambulance-app .ambulance-panel button:not(.ambulance-icon):hover { background: #313536; }
+.ambulance-app .ambulance-panel button.ambulance-best {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  font-size: 7cqw;
+  cursor: pointer;
+}
+.ambulance-app .ambulance-panel button.ambulance-best:hover { background: transparent; }
 .ambulance-options, .ambulance-restarts { display: flex; flex-wrap: wrap; justify-content: center; gap: 2.5cqw; }
 
 .ambulance-controls {
