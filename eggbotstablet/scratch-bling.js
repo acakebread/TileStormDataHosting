@@ -160,7 +160,7 @@ export function createScratchBling(view, quit) {
   const fit = new ResizeObserver(() => stage.style.setProperty('--sb-scale', Math.min(view.clientWidth / width, view.clientHeight / height)));
   let lifetime, catalogue, audio, wallet, timer, overlay, ticket, ticketArt, ticketRequest, selected, foilName, lossTimer;
   let gallery, cardLayer, results, status, cashText, timerText, timerValue, collectButton, progressBar, levelImage;
-  let previous, next, dots, slots, pageRequest = 0;
+  let previous, next, dots, slots, winnerLights, pageRequest = 0;
   let shownCash, shownLevel, shownSeconds;
   const slotReels = [];
 
@@ -199,8 +199,10 @@ export function createScratchBling(view, quit) {
         document.fonts.load('16px "Abadi Condensed Light"'),
         document.fonts.load('16px "Abadi Condensed Extra Bold"')
       ]).catch(() => {}) : Promise.resolve();
-      await Promise.all([...['chrome.png', 'casino.jpg'].map(name => catalogue.image(name, signal)), faces]);
+      const lights = catalogue.url('winner-lights.png') && catalogue.image('winner-lights.png', signal).catch(() => null);
+      const [lightFrames] = await Promise.all([lights, catalogue.image('chrome.png', signal), catalogue.image('casino.jpg', signal), faces]);
       if (signal.aborted) return;
+      winnerLights = lightFrames?.src;
       wallet = createWallet();
       audio = createAudio(catalogue, name => name === 'music' ? !wallet.state.muteMusic : !wallet.state.muteSound);
       const unlock = () => { audio.unlock(); refreshMusic(); };
@@ -322,10 +324,9 @@ export function createScratchBling(view, quit) {
     const bar = pin(results, element('div', 'sb-winbar'), 64, 1264, 1920, 195);
     const gambleButton = pin(bar, button('GAMBLE', gamble), 8, 16, 477, 164);
     gambleButton.dataset.role = 'gamble';
-    const collect = pin(bar, button('COLLECT', () => redeal()), 1435, 16, 477, 164);
+    const collect = pin(bar, button('COLLECT', collectResult), 1435, 16, 477, 164);
     collect.dataset.role = 'collect';
     const banner = pin(results, element('div', 'sb-plaque'), 559, 1209, 930, 300);
-    banner.style.backgroundSize = '100% 100%';
     const amount = pin(banner, element('div', 'sb-plaque-amount'), 83, 62, 763, 152);
     const caption = pin(banner, element('div', 'sb-plaque-caption'), 133, 171, 664, 104);
     caption.hidden = true;
@@ -451,16 +452,20 @@ export function createScratchBling(view, quit) {
 
   function showWin(payout, outcome) {
     const ticketWin = outcome === 6;
+    const captionArt = catalogue.url('result-type.png');
+    const flashing = payout > 0 && !!winnerLights && (!ticketWin || !!captionArt);
+    const plaque = flashing ? winnerLights : catalogue.url(ticketWin ? 'winner.png' : 'gamble-plaque.png');
     results.hidden = false;
     results.firstElementChild.hidden = true;
-    results.win.bar.hidden = results.win.banner.hidden = false;
-    results.win.banner.style.backgroundImage = 'url("' + (catalogue.url(ticketWin ? 'winner.png' : 'gamble-plaque.png') || '') + '")';
+    const {bar, banner, caption} = results.win;
+    bar.hidden = banner.hidden = false;
+    banner.style.backgroundImage = plaque ? 'url("' + plaque + '")' : '';
+    banner.classList.toggle('sb-plaque-flashing', flashing);
     showAmount(payout);
-    const caption = results.win.caption;
-    caption.hidden = ticketWin;
-    if (!ticketWin) sprite(caption, catalogue.url('result-type.png'), [outcome % 2 * 512, Math.floor(outcome / 2) * 80, 512, 80], 1024, 512);
-    const gambleButton = results.win.bar.querySelector('[data-role="gamble"]');
-    const collect = results.win.bar.querySelector('[data-role="collect"]');
+    caption.hidden = ticketWin && !flashing;
+    if (!caption.hidden) sprite(caption, captionArt, [outcome % 2 * 512, Math.floor(outcome / 2) * 80, 512, 80], 1024, 512);
+    const gambleButton = bar.querySelector('[data-role="gamble"]');
+    const collect = bar.querySelector('[data-role="collect"]');
     gambleButton.hidden = outcome === 0;
     gambleButton.disabled = collect.disabled = false;
     gambleButton.textContent = outcome === 6 ? 'GAMBLE' : 'SPIN AGAIN';
@@ -522,6 +527,12 @@ export function createScratchBling(view, quit) {
     audio.stop('reel-spin');
   }
 
+  function collectResult() {
+    audio.play('click');
+    if (wallet.state.pendingWin > 0) audio.play('coins');
+    redeal();
+  }
+
   async function redeal() {
     clearTimeout(lossTimer);
     results.hidden = true;
@@ -566,6 +577,7 @@ export function createScratchBling(view, quit) {
   function collectFree() {
     if (!wallet.collect()) return;
     audio.play('click');
+    audio.play('coins');
     refreshHeader();
   }
 
