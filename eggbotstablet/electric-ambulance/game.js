@@ -17,6 +17,7 @@ export function createElectricAmbulance(view) {
     session.controller.abort();
     session.dispose?.();
     session = undefined;
+    view.classList.remove('ambulance-playing');
     view.replaceChildren();
   }
 
@@ -53,11 +54,13 @@ function startGame(view, city, run) {
   canvas.setAttribute('aria-label', 'Electric Ambulance road');
   const renderer = createCityRenderer(canvas, city);
   let frame;
+  let gesture;
   let effectsOn = loadSetting(key + 'sound', true) === true;
   let musicOn = loadSetting(key + 'music', true) === true;
   const audio = createAudio(media, {sound: () => effectsOn, music: () => musicOn});
   run.dispose = () => {
     cancelAnimationFrame(frame);
+    clearGesture();
     audio.close();
     releaseCity(city);
     renderer.close();
@@ -129,7 +132,7 @@ function startGame(view, city, run) {
     soundToggle('Sound', 'Symbol0003', 'Symbol0004'), soundToggle('Music', 'Symbol0005', 'Symbol0006'));
   const pause = icon('Pause', 'Symbol0001', togglePause);
   const hud = element('div', 'ambulance-hud', score, meter, pause);
-  const controls = element('p', 'ambulance-controls', 'Tap either side of the road, swipe or use the arrow keys to steer.');
+  const controls = element('p', 'ambulance-controls', 'Tap the road, swipe left or right anywhere, or use the arrow keys to steer.');
   const bestLabel = value => `BEST ${value}`;
   const titleBest = element('p', 'ambulance-best', bestLabel(best));
   const title = element('div', 'ambulance-panel ambulance-title', image(artwork('Logo_Front'), 'Electric Ambulance', 'ambulance-logo'),
@@ -148,12 +151,14 @@ function startGame(view, city, run) {
   view.replaceChildren(stage, controls);
 
   function refreshPanels() {
+    const playing = state.phase === 'playing';
+    view.classList.toggle('ambulance-playing', playing);
+    if (!playing) clearGesture();
     title.hidden = state.phase !== 'title';
     paused.hidden = state.phase !== 'paused';
     wasted.hidden = state.phase !== 'wasted';
     hud.hidden = state.phase === 'title';
-    pause.hidden = state.phase !== 'playing';
-    controls.hidden = state.phase !== 'playing';
+    pause.hidden = controls.hidden = !playing;
     if (state.phase === 'wasted') {
       reason.textContent = state.reason === 'crash' ? 'YOU CRASHED' : 'POWER DEAD';
       result.textContent = `${state.score} · ${bestLabel(best)}`;
@@ -201,25 +206,39 @@ function startGame(view, city, run) {
     frame = requestAnimationFrame(draw);
   }
 
-  let gesture;
-  canvas.addEventListener('pointerdown', event => {
-    if (state.phase !== 'playing' || !event.isPrimary || event.button !== 0) return;
-    gesture = {id: event.pointerId, x: event.clientX, y: event.clientY};
-    canvas.setPointerCapture(event.pointerId);
-  }, {signal});
-  canvas.addEventListener('pointerup', event => {
-    if (gesture?.id !== event.pointerId) return;
-    const bounds = canvas.getBoundingClientRect();
-    const dx = event.clientX - gesture.x;
-    const dy = event.clientY - gesture.y;
+  function clearGesture() {
+    if (!gesture) return;
+    const id = gesture.id;
     gesture = undefined;
+    if (view.hasPointerCapture(id)) view.releasePointerCapture(id);
+  }
+
+  view.addEventListener('pointerdown', event => {
+    if (state.phase !== 'playing' || gesture || !event.isPrimary || event.button !== 0 || event.target.closest('button')) return;
+    gesture = {id: event.pointerId, x: event.clientX, y: event.clientY, onRoad: event.target === canvas};
+    view.setPointerCapture(event.pointerId);
+  }, {signal});
+  view.addEventListener('pointerup', event => {
+    if (gesture?.id !== event.pointerId) return;
+    const {clientX, clientY} = event;
+    const {x, y, onRoad} = gesture;
+    const dx = clientX - x;
+    const dy = clientY - y;
+    clearGesture();
     if (Math.abs(dx) > 16 && Math.abs(dx) > Math.abs(dy)) drive.steer(Math.sign(dx));
-    else if (Math.abs(dx) < 16 && Math.abs(dy) < 16) {
-      const pointerX = (event.clientX - bounds.left) / bounds.width;
-      drive.steer(pointerX < renderer.playerScreenX(state) ? -1 : 1);
+    else if (onRoad && Math.abs(dx) < 16 && Math.abs(dy) < 16) {
+      const bounds = canvas.getBoundingClientRect();
+      if (clientX >= bounds.left && clientX < bounds.right && clientY >= bounds.top && clientY < bounds.bottom) {
+        const pointerX = (clientX - bounds.left) / bounds.width;
+        drive.steer(pointerX < renderer.playerScreenX(state) ? -1 : 1);
+      }
     }
   }, {signal});
-  canvas.addEventListener('pointercancel', () => { gesture = undefined; }, {signal});
+  function cancelGesture(event) {
+    if (gesture?.id === event.pointerId) clearGesture();
+  }
+  view.addEventListener('pointercancel', cancelGesture, {signal});
+  view.addEventListener('lostpointercapture', cancelGesture, {signal});
   document.addEventListener('keydown', event => {
     if (event.repeat || event.defaultPrevented || document.querySelector('dialog[open]')) return;
     if (['ArrowLeft', 'ArrowRight'].includes(event.key) && state.phase === 'playing') {

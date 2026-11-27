@@ -14,7 +14,12 @@
   container: ambulance / size;
   color: #fff;
   background: #0b1014;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
+
+.ambulance-app.ambulance-playing { touch-action: pan-y pinch-zoom; }
 
 .ambulance-stage {
   position: relative;
