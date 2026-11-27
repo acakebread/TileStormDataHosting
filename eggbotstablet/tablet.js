@@ -268,7 +268,7 @@ function announceUpdate() {
   setTimeout(announceUpdate, (150 + Math.random() * 150) * 1000);
 }
 
-function mountElectricAmbulance(tablet) {
+function mountElectricAmbulance() {
   const view = element('section', 'ambulance-app');
   let app;
   let opening;
@@ -278,9 +278,9 @@ function mountElectricAmbulance(tablet) {
     const controller = new AbortController();
     opening = controller;
     view.replaceChildren(element('p', 'ambulance-loading', 'Loading Electric Ambulance…'));
-    import('./electric-ambulance/game.js').then(({createElectricAmbulance}) => {
+    import('./electric-ambulance/game.js?v=tablet-sound').then(({createElectricAmbulance}) => {
       if (controller.signal.aborted) return;
-      app = createElectricAmbulance(view, tablet);
+      app = createElectricAmbulance(view);
       app.open();
     }).catch(error => {
       if (controller.signal.aborted) return;

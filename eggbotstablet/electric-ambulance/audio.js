@@ -6,7 +6,13 @@ const cues = {
   pause: 'pause-button', toggle: 'mute-unmute'
 };
 const spots = ['amb-siren-spotsound-01', ...[1, 2, 3, 4, 6].map(n => `amb-siren-spotsound-doppler-final-0${n}`),
-  ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `amb-horn-spotsound-0${n}`)];
+  ...[1, 2, 3, 5, 6, 7, 8, 9].map(n => `amb-horn-spotsound-0${n}`)];
+
+function startPlayback(audio) {
+  audio.play().catch(error => {
+    if (error.name !== 'AbortError') console.warn('Electric Ambulance audio could not play', audio.src, error);
+  });
+}
 
 export function createAudio(media, preferences) {
   const tracks = new Map();
@@ -58,7 +64,7 @@ export function createAudio(media, preferences) {
     const {audio} = track(name, 'effects', volume);
     audio.currentTime = 0;
     audio.volume = context ? 1 : volume;
-    audio.play().catch(() => {});
+    startPlayback(audio);
   }
 
   function loop(name, group, volume, active) {
@@ -68,7 +74,7 @@ export function createAudio(media, preferences) {
     }
     const {audio} = track(name, group, volume, true);
     audio.volume = context ? 1 : volume * (phase === 'playing' ? 1 : .45);
-    if (audio.paused) audio.play().catch(() => {});
+    if (audio.paused) startPlayback(audio);
   }
 
   function mix() {
@@ -93,7 +99,7 @@ export function createAudio(media, preferences) {
       ensureContext();
       unlocked = true;
     }
-    context?.resume().catch(() => {});
+    context?.resume().catch(error => console.warn('Electric Ambulance audio could not start', error));
     mix();
   }, phase(value) { phase = value; mix(); }, mix,
   cue(name) { if (cues[name]) play(cues[name], name === 'pickup' ? .7 : .65); },

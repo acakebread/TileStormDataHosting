@@ -1,7 +1,7 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {button, element, image, loadSetting, saveSetting} from '../ui.js';
-import {createAudio} from './audio.js';
+import {createAudio} from './audio.js?v=tablet-sound';
 import {createDrive} from './drive.js';
 import {createCityRenderer, loadCity, releaseCity} from './render.js';
 
@@ -9,7 +9,7 @@ const media = new URL('./media/', import.meta.url);
 const key = 'electricAmbulance.';
 const artwork = file => new URL(`${file}.png`, media).href;
 
-export function createElectricAmbulance(view, tablet) {
+export function createElectricAmbulance(view) {
   let session;
 
   function close() {
@@ -32,7 +32,7 @@ export function createElectricAmbulance(view, tablet) {
       const city = await loadCity(new URL('city.glb', media), signal);
       run.dispose = () => releaseCity(city);
       signal.throwIfAborted();
-      startGame(view, city, tablet, run);
+      startGame(view, city, run);
     } catch (error) {
       run.dispose?.();
       if (session !== run) return;
@@ -47,7 +47,7 @@ export function createElectricAmbulance(view, tablet) {
   return {open, close};
 }
 
-function startGame(view, city, tablet, run) {
+function startGame(view, city, run) {
   const {signal} = run.controller;
   const canvas = element('canvas', 'ambulance-road');
   canvas.setAttribute('aria-label', 'Electric Ambulance road');
@@ -55,8 +55,7 @@ function startGame(view, city, tablet, run) {
   let frame;
   let effectsOn = loadSetting(key + 'sound', true) === true;
   let musicOn = loadSetting(key + 'music', true) === true;
-  const tabletSound = () => tablet.preferences.soundsEnabled;
-  const audio = createAudio(media, {sound: () => effectsOn && tabletSound(), music: () => musicOn && tabletSound()});
+  const audio = createAudio(media, {sound: () => effectsOn, music: () => musicOn});
   run.dispose = () => {
     cancelAnimationFrame(frame);
     audio.close();
