@@ -2,7 +2,7 @@
 
 import {button, element, loadSetting, number, saveSetting, shortTime} from './ui.js';
 import {buyPurchase, hasPurchase, hasSilverBotCloud, redeemPromotionCode, subscriptionTier, syncPurchases} from './purchases.js?v=high-scores';
-import {acceptMoniker, playerId, playerMoniker, publishMoniker, savePlayerMoniker} from './high-scores.js?v=high-scores';
+import {acceptMoniker, loadPlayerProfile, playerId, playerMoniker, savePlayerMoniker, savePlayerProfile} from './high-scores.js?v=profile-sync';
 
 export const osVersion = '9.0';
 export const storageCapacityMb = 16000;
@@ -117,8 +117,11 @@ export function createSettings(tablet) {
     playerStatus.textContent = 'Saving nickname…';
     savePlayerMoniker(moniker);
     try {
-      const reply = await publishMoniker(moniker);
-      playerStatus.textContent = 'Saved. High scores now show ' + (reply.label || moniker) + '.';
+      const reply = await savePlayerProfile({moniker});
+      nickname.value = playerMoniker();
+      playerStatus.textContent = reply.accepted
+        ? 'Saved. High scores now show ' + (reply.label || moniker) + '.'
+        : 'A newer nickname was saved on another device. This tablet is now using ' + (reply.label || 'that nickname') + '.';
     } catch {
       playerStatus.textContent = 'Saved on this tablet. The high score table could not be reached.';
     } finally {
@@ -128,8 +131,11 @@ export function createSettings(tablet) {
   const player = element('section', 'settings-panel', element('h3', '', 'Player'),
     element('p', 'muted', 'Your nickname is the name on the high score tables.'),
     nicknameForm, playerStatus);
-  playerId().then(id => {
-    if (!playerMoniker()) playerStatus.textContent = 'High scores currently show ' + id.slice(0, 12) + '.';
+  loadPlayerProfile().then(() => {
+    nickname.value = playerMoniker();
+    if (!playerMoniker()) return playerId().then(id => {
+      playerStatus.textContent = 'High scores currently show ' + id.slice(0, 12) + '.';
+    });
   }).catch(() => {});
 
   const usage = element('p', 'settings-usage');

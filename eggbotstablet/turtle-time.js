@@ -1,7 +1,7 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {button, element, image, loadSetting, saveSetting} from './ui.js';
-import {playerId, playerMoniker, publicLabel, savePlayerMoniker, showNicknamePrompt, showScoreBoard, submitScore} from './high-scores.js?v=high-scores';
+import {loadPlayerProfile, playerId, playerMoniker, publicLabel, savePlayerMoniker, savePlayerProfile, showNicknamePrompt, showScoreBoard, submitScore} from './high-scores.js?v=profile-sync';
 
 const contentHost = 'https://eggbot-content.qrh.workers.dev/';
 const index = new URL('./turtle-time-media.json?v=unity', import.meta.url);
@@ -270,22 +270,27 @@ export function createTurtleTime(tablet) {
       if (!scorecard) return;
       if (reply?.rank > 0) message.textContent = `${summary}\nRanking: ${reply.rank}`;
     };
-    const send = (setMoniker, moniker) => submitScore('turtle-time', saved, {setMoniker, moniker}).then(showRank, () => {});
-    const sendAndOfferShare = (setMoniker, moniker) => {
-      send(setMoniker, moniker);
+    const send = () => submitScore('turtle-time', saved, {setMoniker: false}).then(showRank, () => {});
+    const sendAndOfferShare = () => {
+      send();
       if (shareDue && session === scoreSession && scorecard) showShare();
     };
-    if (newBest && !playerMoniker()) {
-      playerId().then(id => {
-        if (session !== scoreSession) return;
-        if (!scorecard) { send(false, ''); return; }
-        showNicknamePrompt(stage, {
-          playerLabel: publicLabel(id),
-          onSave: moniker => sendAndOfferShare(true, savePlayerMoniker(moniker)),
-          onCancel: () => sendAndOfferShare(false, '')
-        });
-      }, () => sendAndOfferShare(false, ''));
-    } else sendAndOfferShare(true, playerMoniker());
+    loadPlayerProfile().then(() => {
+      if (session !== scoreSession) return;
+      if (newBest && !playerMoniker()) {
+        if (!scorecard) { send(); return; }
+        playerId().then(id => {
+          if (session !== scoreSession || !scorecard) { send(); return; }
+          showNicknamePrompt(stage, {
+            playerLabel: publicLabel(id),
+            onSave: moniker => { savePlayerProfile({moniker: savePlayerMoniker(moniker)}).finally(sendAndOfferShare); },
+            onCancel: sendAndOfferShare
+          });
+        }, sendAndOfferShare);
+        return;
+      }
+      sendAndOfferShare();
+    }, () => { if (session === scoreSession) sendAndOfferShare(); });
   }
 
   function completedRoundIsShareDue() {

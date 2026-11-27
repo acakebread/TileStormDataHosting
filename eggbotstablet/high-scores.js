@@ -13,6 +13,7 @@ const games = {
   'fruit-burst': 'Fruit Burst'
 };
 const monikerSetting = 'playerMoniker';
+const revisionSetting = 'playerProfileRevision';
 const encoder = new TextEncoder();
 
 export function gameTitle(game) {
@@ -55,8 +56,40 @@ export async function submitScore(game, score, {setMoniker = true, moniker = pla
   return post('/api/scores', {key: purchaseProfileKey(), game, score, setMoniker, moniker});
 }
 
+export function profileRevision() {
+  const stored = Number(loadSetting(revisionSetting, 0));
+  return Number.isSafeInteger(stored) && stored > 0 ? stored : 0;
+}
+
+function rememberProfile(reply) {
+  if (!reply) return reply;
+  saveSetting(revisionSetting, reply.revision || 0);
+  if (typeof reply.moniker === 'string') saveSetting(monikerSetting, reply.moniker);
+  if (typeof reply.displayName === 'string') saveSetting('playerDisplayName', reply.displayName);
+  return reply;
+}
+
+export async function loadPlayerProfile() {
+  return rememberProfile(await post('/api/profile', {key: purchaseProfileKey(), baseRevision: profileRevision()}));
+}
+
+export async function savePlayerProfile({moniker, displayName} = {}) {
+  const body = {key: purchaseProfileKey(), baseRevision: profileRevision()};
+  if (moniker !== undefined) body.moniker = moniker;
+  if (displayName !== undefined) body.displayName = displayName;
+  return rememberProfile(await post('/api/profile', body));
+}
+
+export async function deletePlayerProfile() {
+  const reply = await post('/api/profile/delete', {key: purchaseProfileKey()});
+  saveSetting(monikerSetting, '');
+  saveSetting('playerDisplayName', '');
+  saveSetting(revisionSetting, 0);
+  return reply;
+}
+
 export async function publishMoniker(moniker = playerMoniker()) {
-  return post('/api/moniker', {key: purchaseProfileKey(), moniker});
+  return savePlayerProfile({moniker});
 }
 
 export async function listScores(game) {

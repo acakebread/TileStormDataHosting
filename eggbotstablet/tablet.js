@@ -5,11 +5,12 @@ import {createChat, createMail} from './messages.js?v=mail-layout';
 import {createPhotos, createBank, createLove, createMarket, createStore} from './apps.js?v=electric-ambulance';
 import {createFirebot} from './firebot.js?v=hosted';
 import {createFruit} from './fruit-burst.js?v=unity';
-import {createTurtleTime} from './turtle-time.js?v=turtle-score-share';
+import {createTurtleTime} from './turtle-time.js?v=profile-sync';
 import {hasOnlyBotsAccess, hasPremiumAccess} from './premium.js?v=stripe-onlybots';
 import {linkPurchaseProfile, linkWebGLProfiles, syncPurchases} from './purchases.js?v=high-scores';
 import {createHomePager} from './home.js?v=onlybots-shop';
-import {createSettings, createTabletPreferences, offloadSizeMb, osVersion} from './settings.js?v=player-name';
+import {loadPlayerProfile} from './high-scores.js?v=profile-sync';
+import {createSettings, createTabletPreferences, offloadSizeMb, osVersion} from './settings.js?v=profile-sync';
 import {element, button, image, shortTime, loadSetting, saveSetting} from './ui.js';
 
 const pages = [
@@ -278,7 +279,7 @@ function mountElectricAmbulance() {
     const controller = new AbortController();
     opening = controller;
     view.replaceChildren(element('p', 'ambulance-loading', 'Loading Electric Ambulance…'));
-    import('./electric-ambulance/game.js?v=keyboard-play').then(({createElectricAmbulance}) => {
+    import('./electric-ambulance/game.js?v=profile-sync').then(({createElectricAmbulance}) => {
       if (controller.signal.aborted) return;
       app = createElectricAmbulance(view);
       app.open();
@@ -492,11 +493,14 @@ function tick() {
   mounted.get(current)?.tick?.(now);
 }
 
+function refreshProfile() { loadPlayerProfile().catch(() => {}); }
 window.addEventListener('tilestorm-purchases-changed', () => {
+  refreshProfile();
   if (current === 'home') renderHome();
   if (current === 'onlybots' && !hasOnlyBotsAccess()) open('onlybots');
 });
 showCurrent();
+refreshProfile();
 if (!handleLocation()) syncPurchases();
 if (onlyBotsInstalled && hasOnlyBotsAccess()) mount('onlybots');
 tick();

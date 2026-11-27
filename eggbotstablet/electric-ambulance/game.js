@@ -1,7 +1,7 @@
 // Copyright 2026 massivehadron.com ltd.
 
 import {button, element, image, loadSetting, saveSetting} from '../ui.js';
-import {playerId, playerMoniker, publicLabel, savePlayerMoniker, showNicknamePrompt, showScoreBoard, submitScore} from '../high-scores.js?v=high-scores';
+import {loadPlayerProfile, playerId, playerMoniker, publicLabel, savePlayerMoniker, savePlayerProfile, showNicknamePrompt, showScoreBoard, submitScore} from '../high-scores.js?v=profile-sync';
 import {createAudio} from './audio.js?v=tablet-sound';
 import {createDrive} from './drive.js';
 import {createCityRenderer, loadCity, releaseCity} from './render.js';
@@ -86,19 +86,22 @@ function startGame(view, city, run) {
       titleBest.textContent = ranking || bestLabel(best);
       if (state.phase === 'wasted') result.textContent = `${score} · ${titleBest.textContent}`;
     };
-    const send = (setMoniker, moniker) => submitScore('electric-ambulance', score, {setMoniker, moniker}).then(showRank, () => {});
-    if (newBest && !playerMoniker()) {
-      playerId().then(id => {
-        if (signal.aborted) return;
-        showNicknamePrompt(view, {
-          playerLabel: publicLabel(id),
-          onSave: moniker => send(true, savePlayerMoniker(moniker)),
-          onCancel: () => send(false, '')
-        });
-      }, () => send(false, ''));
-      return;
-    }
-    send(true, playerMoniker());
+    const send = () => submitScore('electric-ambulance', score, {setMoniker: false}).then(showRank, () => {});
+    loadPlayerProfile().then(() => {
+      if (signal.aborted) return;
+      if (newBest && !playerMoniker()) {
+        playerId().then(id => {
+          if (signal.aborted) return;
+          showNicknamePrompt(view, {
+            playerLabel: publicLabel(id),
+            onSave: moniker => { savePlayerProfile({moniker: savePlayerMoniker(moniker)}).finally(send); },
+            onCancel: send
+          });
+        }, send);
+        return;
+      }
+      send();
+    }, () => { if (!signal.aborted) send(); });
   });
   const {state} = drive;
   const batterySprites = city.userData.batterySprites.map(file => image(artwork(file), '', 'ambulance-meter'));
