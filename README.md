@@ -31,6 +31,18 @@ the game and use the browser where you play. Scratch
 Bling coins and LoveBot credits also use browser storage. The tablet directory
 publishes with the rest of this GitHub Pages site.
 
+Electric Ambulance opens from the third home page or BotStore. The browser game
+uses the original city's meshes, textures and audio and saves the best score in
+browser storage. The JavaScript and 3D assets load when the app opens. Returning
+Home ends the run and releases the graphics and audio resources.
+
+The initial browser release reads its media from `eggbotstablet/electric-ambulance/media`.
+Regenerate those files with `Tools/Prepare-ElectricAmbulanceWeb.py` in the Unity
+checkout. The exporter reads the existing WebGL AssetBundle for authored models
+and tuning, and copies or encodes art and audio from the imported source files.
+It needs UnityPy 1.25.4, FFmpeg and the matching Unity Editor's
+`Editor/Data/Resources/unity default resources` file for built-in meshes.
+
 Turtle Time is a free BotStore install. Its rules and portrait playfield follow
 the Unity tablet version. The browser remembers the installation and high
 score locally and fetches the game's atlases and sounds from the Eggbot

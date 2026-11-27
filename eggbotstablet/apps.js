@@ -401,6 +401,7 @@ const storeListings = [
   ['scratchpro', 'Twenty scratch tickets, poker and four bonus games. Free to install and play.'],
   ['fruit', 'Two minutes of matching fruit and ignoring your problems.'],
   ['turtletime', 'Guide hatchlings to the sea before time runs out. Free to install and play.'],
+  ['electricambulance', 'Dodge traffic and pick up batteries to keep driving.'],
   ['love', 'Meet local bots. Run out of swipes. Try again later.'],
   ['bank', 'Your balance, updated with more bad news.'],
   ['mail', 'Bills, spam and messages that could have waited.'],
@@ -643,7 +644,7 @@ export function createStore(tablet) {
     const installed = tablet.onlyBotsInstalled;
     const optionalInstalled = {onlybots: installed, firebot: tablet.firebotInstalled};
     for (const id of optionalGames) optionalInstalled[id] = tablet.gameInstalled(id);
-    const installedCount = 8 + Object.values(optionalInstalled).filter(Boolean).length;
+    const installedCount = 9 + Object.values(optionalInstalled).filter(Boolean).length;
     const header = element('header', 'app-heading', element('h2', '', 'BotStore'),
       element('p', 'store-capacity muted', installedCount + ' installed · ' + number.format(tablet.freeSpaceMb) + ' MB free'));
     const rows = storeListings.map(([id, description, size, monogram]) => {

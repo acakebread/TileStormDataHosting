@@ -2,7 +2,7 @@
 
 import {loadCatalogue} from './catalogue.js';
 import {createChat, createMail} from './messages.js?v=mail-layout';
-import {createPhotos, createBank, createLove, createMarket, createStore} from './apps.js?v=scratch-pro';
+import {createPhotos, createBank, createLove, createMarket, createStore} from './apps.js?v=electric-ambulance';
 import {createFirebot} from './firebot.js?v=hosted';
 import {createFruit} from './fruit-burst.js?v=unity';
 import {createTurtleTime} from './turtle-time.js?v=crunch-pcm';
@@ -14,7 +14,8 @@ import {element, button, image, shortTime, loadSetting, saveSetting} from './ui.
 
 const pages = [
   ['settings', 'store', 'photos', 'fruit', 'bank', 'mail', 'chat', 'instabot'],
-  ['scratch', 'love', 'onlybots', 'market', 'botflix', 'firebot', 'turtletime', 'scratchpro']
+  ['scratch', 'love', 'onlybots', 'market', 'botflix', 'firebot', 'turtletime', 'scratchpro'],
+  ['electricambulance']
 ];
 const apps = {
   settings: {name: 'Settings', art: './art/settings.png', mount: createSettings},
@@ -36,6 +37,7 @@ const apps = {
   botflix: {name: 'BOTFLIX', art: './art/botflix.png'},
   firebot: {name: 'Firebot', art: './art/firebot.jpg', downloadMb: 2, needsContent: true, mount: createFirebot},
   turtletime: {name: 'Turtle Time', art: './art/turtle-time.png', downloadMb: 2, mount: createTurtleTime},
+  electricambulance: {name: 'Electric Ambulance', art: './electric-ambulance/icon.png', mount: mountElectricAmbulance},
   snapbot: {name: 'SnapBot', art: './art/snapbot.jpg'},
   update: {name: 'Software update'}
 };
@@ -264,6 +266,35 @@ function announceUpdate() {
     notify('update', 'BotOS ' + osVersion + '.' + release + ' is available', () => offerUpdate(release));
   }
   setTimeout(announceUpdate, (150 + Math.random() * 150) * 1000);
+}
+
+function mountElectricAmbulance(tablet) {
+  const view = element('section', 'ambulance-app');
+  let app;
+  let opening;
+  function launch() {
+    if (app) { app.open(); return; }
+    if (opening) return;
+    const controller = new AbortController();
+    opening = controller;
+    view.replaceChildren(element('p', 'ambulance-loading', 'Loading Electric Ambulance…'));
+    import('./electric-ambulance/game.js').then(({createElectricAmbulance}) => {
+      if (controller.signal.aborted) return;
+      app = createElectricAmbulance(view, tablet);
+      app.open();
+    }).catch(error => {
+      if (controller.signal.aborted) return;
+      console.error('Electric Ambulance:', error);
+      view.replaceChildren(element('div', 'ambulance-loading', element('p', '', 'Electric Ambulance could not load.'),
+        button('Reload tablet', () => location.reload())));
+    }).finally(() => { if (opening === controller) opening = undefined; });
+  }
+  return {view, open: launch, close() {
+    opening?.abort();
+    opening = undefined;
+    app?.close();
+    view.replaceChildren();
+  }};
 }
 
 function mountScratchBling() {
