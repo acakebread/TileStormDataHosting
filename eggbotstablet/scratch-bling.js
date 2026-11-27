@@ -161,7 +161,7 @@ export function createScratchBling(view, quit) {
   const fit = new ResizeObserver(() => stage.style.setProperty('--sb-scale', Math.min(view.clientWidth / width, view.clientHeight / height)));
   let lifetime, catalogue, audio, wallet, timer, overlay, ticket, ticketArt, ticketRequest, selected, foilName, lossTimer;
   let gallery, cardLayer, results, status, cashText, timerText, timerValue, collectButton, progressBar, levelImage;
-  let previous, next, dots, slots, winnerLights, pageRequest = 0;
+  let previous, next, dots, slots, pageRequest = 0;
   let shownCash, shownLevel, shownSeconds;
   const slotReels = [];
 
@@ -200,10 +200,8 @@ export function createScratchBling(view, quit) {
         document.fonts.load('16px "Abadi Condensed Light"'),
         document.fonts.load('16px "Abadi Condensed Extra Bold"')
       ]).catch(() => {}) : Promise.resolve();
-      const lights = catalogue.url('winner-lights.png') && catalogue.image('winner-lights.png', signal).catch(() => null);
-      const [lightFrames] = await Promise.all([lights, catalogue.image('chrome.png', signal), catalogue.image('casino.jpg', signal), faces]);
+      await Promise.all([catalogue.image('chrome.png', signal), catalogue.image('casino.jpg', signal), faces]);
       if (signal.aborted) return;
-      winnerLights = lightFrames?.src;
       wallet = createWallet();
       audio = createAudio(catalogue, name => name === 'music' ? !wallet.state.muteMusic : !wallet.state.muteSound);
       const unlock = () => { audio.unlock(); refreshMusic(); };
@@ -454,8 +452,8 @@ export function createScratchBling(view, quit) {
   function showWin(payout, outcome) {
     const ticketWin = outcome === 6;
     const captionArt = catalogue.url('result-type.png');
-    const flashing = payout > 0 && !!winnerLights && (!ticketWin || !!captionArt);
-    const plaque = flashing ? winnerLights : catalogue.url(ticketWin ? 'winner.png' : 'gamble-plaque.png');
+    const flashing = payout > 0 && (!ticketWin || !!captionArt);
+    const plaque = flashing ? null : catalogue.url(ticketWin ? 'winner.png' : 'gamble-plaque.png');
     results.hidden = false;
     results.firstElementChild.hidden = true;
     const {bar, banner, caption} = results.win;

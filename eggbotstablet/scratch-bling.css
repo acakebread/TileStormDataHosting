@@ -137,7 +137,11 @@
 .sb-winbar { background: rgb(0 0 0 / .78); }
 .sb-winbar button { font-size: 84px; }
 .sb-plaque { background-size: 100% 100%; background-repeat: no-repeat; }
-.sb-plaque-flashing { background-size: 200% 100%; animation: sb-winner-lights 1s step-end infinite; }
+.sb-plaque-flashing {
+  background-image: url('./art/scratch/winner-lights.png');
+  background-size: 200% 100%;
+  animation: sb-winner-lights 1s step-end infinite;
+}
 @keyframes sb-winner-lights {
   from { background-position: left top; }
   50%, to { background-position: right top; }
