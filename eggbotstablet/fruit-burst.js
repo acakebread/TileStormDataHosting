@@ -2,7 +2,7 @@
 // Based on FruitBurst, massivehadron.com ltd.
 
 import {loadPlayerProfile, playerId, playerMoniker, publicLabel, savePlayerMoniker, savePlayerProfile, showNicknamePrompt, showScoreBoard, submitScore} from './high-scores.js?v=profile-keep';
-import {button, countdown, element, loadSetting, number, saveSetting} from './ui.js';
+import {button, countdown, element, image, loadSetting, number, saveSetting} from './ui.js';
 
 const columns = 10;
 const rows = 8;
@@ -21,6 +21,9 @@ const starFadeStart = .58;
 const runScores = [0, 0, 0, 10, 30, 80, 200, 500, 1000, 2000, 4000];
 const fruitNames = ['Bananas', 'Cherries', 'Eggplant', 'Lemon', 'Orange', 'Pear', 'Mangosteen'];
 const highScoreKey = 'fruitHighScore';
+const musicKey = 'fruitMusic';
+const contentHost = 'https://eggbot-content.qrh.workers.dev/';
+const musicIndex = new URL('./fruit-burst-media.json?v=soundtrack', import.meta.url);
 const soundNames = ['select', 'destroy', 'combo', 'cascade'];
 
 function rowOf(index) {
@@ -91,6 +94,45 @@ function readHighScore() {
   return Number.isSafeInteger(saved) && saved > 0 ? saved : 0;
 }
 
+function fruitMusic() {
+  let musicOn = loadSetting(musicKey, true) === true;
+  let active = false;
+  const track = new Audio();
+  track.loop = true;
+  track.preload = 'none';
+  track.volume = .35;
+  return {
+    get on() { return musicOn; },
+    setActive(value) {
+      active = value;
+      this.refresh();
+    },
+    use(file) {
+      if (!/^media\/[0-9a-f]{64}\.mp3$/.test(file)) return;
+      track.src = new URL(file, contentHost).href;
+      this.refresh();
+    },
+    toggle() {
+      musicOn = !musicOn;
+      saveSetting(musicKey, musicOn);
+      this.refresh();
+    },
+    refresh() {
+      if (!track.src || !musicOn || !active || document.hidden) {
+        track.pause();
+        return;
+      }
+      track.play().catch(() => {});
+    },
+    close() {
+      active = false;
+      track.pause();
+      track.removeAttribute('src');
+      track.load();
+    }
+  };
+}
+
 function fruitSound() {
   const audioType = window.AudioContext || window.webkitAudioContext;
   let audio;
@@ -135,6 +177,7 @@ export function createFruit({open}) {
   const matched = new Set();
   const stars = [];
   const sound = fruitSound();
+  const music = fruitMusic();
   let state = 'loading';
   let active = false;
   let frame = 0;
@@ -165,9 +208,23 @@ export function createFruit({open}) {
     value.setAttribute('aria-label', label);
     return element('div', 'fruit-stat', element('span', '', label), value);
   };
+  const musicIcon = image(new URL('./art/fruit-music-on.png', import.meta.url).href, '');
+  const musicButton = button('', () => {
+    sound.unlock();
+    music.toggle();
+    paintMusic();
+  }, 'fruit-music');
+  musicButton.append(musicIcon);
+  musicButton.setAttribute('aria-label', 'Music');
+  function paintMusic() {
+    musicButton.setAttribute('aria-pressed', String(music.on));
+    musicIcon.src = new URL(music.on ? './art/fruit-music-on.png' : './art/fruit-music-off.png', import.meta.url).href;
+  }
+  paintMusic();
   const panel = element('header', 'fruit-panel',
     element('h2', 'fruit-gold', 'Fruit Burst'),
-    element('div', 'fruit-stats', stat('Score', scoreText), stat('High scores', highScoreText), stat('Time', clock)));
+    element('div', 'fruit-stats', stat('Score', scoreText), stat('High scores', highScoreText), stat('Time', clock)),
+    musicButton);
   const canvas = element('canvas', 'fruit-canvas');
   canvas.setAttribute('aria-hidden', 'true');
   const context = canvas.getContext('2d');
@@ -621,18 +678,33 @@ export function createFruit({open}) {
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) stopFrames();
     else requestFrame();
+    music.refresh();
   });
+
+  let soundtrackListed = false;
+  function loadSoundtrack() {
+    if (soundtrackListed) return;
+    soundtrackListed = true;
+    fetch(musicIndex).then(response => response.ok ? response.json() : null).then(index => {
+      const file = index?.schemaVersion === 1 && index.media?.find(item => item.name === 'soundtrack.mp3')?.file;
+      if (file) music.use(file);
+      else soundtrackListed = false;
+    }).catch(() => { soundtrackListed = false; });
+  }
 
   return {
     view,
     open() {
       active = true;
       resize();
+      loadSoundtrack();
+      music.setActive(true);
       if (state === 'loading' && sheet.naturalWidth) deal();
       else requestFrame();
     },
     close() {
       active = false;
+      music.setActive(false);
       stopFrames();
       hover = -1;
       stars.length = 0;
