@@ -171,3 +171,31 @@
 }
 @keyframes sb-spin { from { background-position: 0 0; } to { background-position: 0 -114.2857%; } }
 .sb-arrow:disabled { opacity: .35; }
+.sb-celebration-art { background-size: 100% 100%; background-repeat: no-repeat; pointer-events: none; }
+.sb-celebration-title, .sb-celebration-body, .sb-celebration-amount {
+  display: grid;
+  place-items: center;
+  margin: 0;
+  font-weight: 900;
+  text-align: center;
+  text-shadow: 0 4px 0 #111, 4px 0 0 #111, -4px 0 0 #111, 0 -4px 0 #111;
+}
+.sb-celebration-title { color: #00fecb; font-size: 78px; }
+.sb-celebration-body { color: #fff; font-size: 108px; }
+.sb-celebration-amount { color: #ffcc00; font-size: 132px; }
+.sb-celebration-skip, .sb-celebration-share {
+  font-weight: 900;
+  background: transparent;
+  border: 0;
+  white-space: pre-line;
+}
+.sb-celebration-skip { color: #c8c8c8; font-size: 64px; }
+.sb-celebration-share {
+  color: #ffcc00;
+  font-size: 42px;
+  background: rgb(12 12 12 / .92);
+  border-radius: 18px;
+  animation: sb-share-flash 1s ease-in-out infinite;
+}
+@keyframes sb-share-flash { 50% { color: #fff6bf; } }
+.sb-cash-flash { animation: sb-share-flash .35s steps(2) infinite; }

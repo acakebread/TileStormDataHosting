@@ -42,7 +42,11 @@ function createWallet() {
   const now = Date.now();
   if (!Number.isFinite(state.collectAt) || state.collectAt > now + 4 * 60 * 60 * 1000) state.collectAt = now + 10000;
   let level = 1, progress = 0;
+  const notices = [];
   const save = () => saveSetting('scratchBlingWallet', state);
+  const levelBonus = n => n >= 35 ? 10000 + (n - 35) * 5000 : n >= 19 ? 3000 + (n - 19) * 200 :
+    n >= 7 ? 2000 + (n - 7) * 100 : 1000 + (n - 2) * 100;
+  const shareBonus = max => Math.min(2500, Math.max(100, Math.floor(Math.random() * Math.max(0, max) / 100) * 100));
   const credit = amount => { state.cash = Math.min(2147483647, state.cash + amount); };
   function refreshLevel() {
     let available = state.experience;
@@ -61,8 +65,9 @@ function createWallet() {
     state.experience = Math.min(Number.MAX_VALUE, state.experience + amount);
     refreshLevel();
     for (let n = previous + 1; n <= level; n++) {
-      credit(n >= 35 ? 10000 + (n - 35) * 5000 : n >= 19 ? 3000 + (n - 19) * 200 :
-        n >= 7 ? 2000 + (n - 7) * 100 : 1000 + (n - 2) * 100);
+      const bonus = levelBonus(n);
+      credit(bonus);
+      notices.push({title: 'AWESOMENESS', body: 'LEVEL UP', amount: bonus, share: shareBonus(n * 100)});
     }
   }
   refreshLevel();
@@ -88,6 +93,14 @@ function createWallet() {
       state.pendingCost = cost;
       save();
     },
+    noteWin() {
+      if (state.pendingCost <= 0 || Math.floor(state.pendingWin / state.pendingCost) < 5) return;
+      const multiple = Math.floor(state.pendingWin / state.pendingCost);
+      const body = multiple >= 20 ? 'GIANT WIN' : multiple >= 10 ? 'HUGE WIN' : 'BIG WIN';
+      notices.unshift({title: 'AWESOMENESS', body, amount: state.pendingWin, share: shareBonus(Math.floor(state.pendingWin / 10))});
+    },
+    drainNotices() { return notices.splice(0); },
+    creditShare(amount) { credit(amount); save(); },
     applyGamble(multiplier) {
       state.pendingWin = Math.min(2147483647, state.pendingWin * multiplier);
       if (!state.pendingWin) state.pendingCost = 0;
@@ -425,7 +438,7 @@ export function createScratchBling(view, quit) {
       results.hidden = false;
       results.win.bar.hidden = results.win.banner.hidden = true;
       results.firstElementChild.hidden = false;
-      lossTimer = setTimeout(() => { if (!lifetime.signal.aborted && selected) redeal(); }, 1200);
+      lossTimer = setTimeout(() => { if (!lifetime.signal.aborted && selected) present(() => redeal()); }, 1200);
       return;
     }
     audio.play('win');
@@ -529,7 +542,55 @@ export function createScratchBling(view, quit) {
   function collectResult() {
     audio.play('click');
     if (wallet.state.pendingWin > 0) audio.play('payout');
-    redeal();
+    present(() => redeal());
+  }
+
+  function present(next) {
+    wallet.noteWin();
+    wallet.collectWinnings();
+    refreshHeader();
+    const queue = wallet.drainNotices();
+    const step = () => {
+      if (lifetime.signal.aborted) return;
+      const notice = queue.shift();
+      if (!notice) { next(); return; }
+      showNotice(notice, step);
+    };
+    step();
+  }
+
+  function showNotice(notice, next) {
+    closeOverlay();
+    const backdrop = pin(stage, element('div', 'sb-celebration'), 0, 0, width, height);
+    backdrop.setAttribute('role', 'dialog');
+    backdrop.setAttribute('aria-label', notice.title + ', ' + notice.body);
+    const figure = pin(backdrop, element('div', 'sb-celebration-art'), (width - 2744) / 2, 0, 2744, height);
+    const character = catalogue.url('popup-character.png');
+    if (character) figure.style.backgroundImage = 'url("' + character + '")';
+    const place = (className, text, x, y, w, h) =>
+      label(backdrop, text, x * width, y * height, w * width, h * height, className);
+    place('sb-celebration-title', notice.title, .2033, .2414, .628, .0922);
+    place('sb-celebration-body', notice.body, .1922, .3337, .6522, .1663);
+    place('sb-celebration-amount', money(notice.amount), .1782, .4778, .6804, .1992);
+    pin(backdrop, button('SKIP', () => finish(false), 'sb-celebration-skip'), .1718 * width, .7265 * height, .2412 * width, .104 * height);
+    const share = pin(backdrop, button('SHARE', () => finish(true), 'sb-celebration-share'),
+      .5615 * width, .6503 * height, .3129 * width, .1477 * height);
+    share.textContent = 'SHARE >>>\nBONUS: ' + money(notice.share);
+    let done = false;
+    function finish(shared) {
+      if (done) return;
+      done = true;
+      closeOverlay();
+      if (shared) {
+        wallet.creditShare(notice.share);
+        refreshHeader();
+        cashText.classList.add('sb-cash-flash');
+        const flash = setTimeout(() => cashText?.classList.remove('sb-cash-flash'), 4000);
+        lifetime.signal.addEventListener('abort', () => clearTimeout(flash), {once: true});
+      }
+      next();
+    }
+    holdOverlay(backdrop);
   }
 
   async function redeal() {
@@ -560,17 +621,18 @@ export function createScratchBling(view, quit) {
     ticketRequest = null;
     clearTimeout(lossTimer);
     closeOverlay();
-    wallet.collectWinnings();
-    ticket?.close();
-    ticket = ticketArt = selected = null;
     audio.stop('reel-spin');
-    results.hidden = true;
-    stage.querySelector('.sb-slots')?.remove();
-    slotReels.length = 0;
-    cardLayer.hidden = true;
-    gallery.hidden = false;
-    refreshHeader();
-    showPage(wallet.state.page);
+    present(() => {
+      ticket?.close();
+      ticket = ticketArt = selected = null;
+      results.hidden = true;
+      stage.querySelector('.sb-slots')?.remove();
+      slotReels.length = 0;
+      cardLayer.hidden = true;
+      gallery.hidden = false;
+      refreshHeader();
+      showPage(wallet.state.page);
+    });
   }
 
   function collectFree() {
